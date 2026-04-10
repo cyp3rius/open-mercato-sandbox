@@ -75,9 +75,10 @@ const listQuerySchema = z
     page: z.coerce.number().min(1).default(1),
     pageSize: z.coerce.number().min(1).max(100).default(50),
     search: z.string().optional(),
-    sortField: z.enum(['code', 'name', 'createdAt', 'updatedAt']).optional(),
+    sortField: z.enum(['code', 'name', 'status', 'createdAt', 'updatedAt']).optional(),
     sortDir: z.enum(['asc', 'desc']).optional(),
     isActive: z.enum(['true', 'false']).optional(),
+    status: z.string().optional(),
   })
   .loose()
 
@@ -86,6 +87,7 @@ type InsurerRow = {
   code: string
   name: string
   description: string | null
+  status: string
   isActive: boolean
   createdAt: string | null
   updatedAt: string | null
@@ -98,6 +100,7 @@ const toRow = (row: InsuranceInsurer): InsurerRow => ({
   code: row.code,
   name: row.name,
   description: row.description ?? null,
+  status: row.status,
   isActive: !!row.isActive,
   createdAt: row.createdAt ? row.createdAt.toISOString() : null,
   updatedAt: row.updatedAt ? row.updatedAt.toISOString() : null,
@@ -120,7 +123,7 @@ export async function GET(req: Request) {
   const container = await createRequestContainer()
   const em = container.resolve('em') as EntityManager
 
-  const { id, page, pageSize, search, sortField, sortDir, isActive } = parsed.data
+  const { id, page, pageSize, search, sortField, sortDir, isActive, status: statusFilter } = parsed.data
   const filter: FilterQuery<InsuranceInsurer> = {
     tenantId: auth.tenantId,
     deletedAt: null,
@@ -138,10 +141,13 @@ export async function GET(req: Request) {
   }
   if (isActive === 'true') filter.isActive = true
   if (isActive === 'false') filter.isActive = false
+  const statusTrimmed = statusFilter?.trim()
+  if (statusTrimmed?.length) filter.status = statusTrimmed
 
   const fieldMap: Record<string, string> = {
     code: 'code',
     name: 'name',
+    status: 'status',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt',
   }
@@ -171,6 +177,7 @@ const insurerListItemSchema = z.object({
   code: z.string(),
   name: z.string(),
   description: z.string().nullable(),
+  status: z.string(),
   isActive: z.boolean(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),

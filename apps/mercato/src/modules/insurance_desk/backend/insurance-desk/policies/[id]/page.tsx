@@ -12,9 +12,12 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { resolvePolicyListRowMatchingRule, type PolicyListColorRule } from '@open-mercato/core/modules/insurance/lib/policyListColorRules'
 import {
+  loadActiveInsurerSelectOptions,
   loadCaretakerUserOptions,
   loadCatalogProductOptions,
-  loadPartnerEntityOptions,
+  mergeInsurerOptionIfMissing,
+  mergePartnerEntityOptionIfMissing,
+  searchPartnerEntityOptions,
   loadPolicyStatusDisplayEntries,
   loadPolicyStatusSelectOptions,
 } from '../../../../lib/loadPolicyFormOptions'
@@ -68,8 +71,6 @@ import {
   leadContactFormToApi,
   mergeUsageIntoCoverageOptions,
 } from '../../../../lib/leadPayloadMappers'
-
-type InsurerLite = { id: string; code: string; name: string }
 
 function shortId(value: string, len = 8) {
   if (!value.length) return '—'
@@ -132,21 +133,13 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
     blockedMessage: t('ui.forms.flash.saveBlocked', 'Save blocked by validation'),
   })
 
-  const loadInsurerOptions = React.useCallback(async () => {
-    const call = await apiCall<{ items: InsurerLite[] }>('/api/insurance/insurers?page=1&pageSize=100')
-    const items = Array.isArray(call.result?.items) ? call.result.items : []
-    return items.map((i) => ({
-      value: i.id,
-      label: `${i.code} — ${i.name}`,
-    }))
-  }, [])
-
-  const loadPartnerOptionsCb = React.useCallback(async () => {
-    return loadPartnerEntityOptions({
+  const partnerPrefixes = React.useMemo(
+    () => ({
       personPrefix: t('insurance_desk.policies.form.partnerKind.person', 'Person'),
       companyPrefix: t('insurance_desk.policies.form.partnerKind.company', 'Company'),
-    })
-  }, [t])
+    }),
+    [t],
+  )
 
   const loadProductOptionsCb = React.useCallback(async () => {
     return loadCatalogProductOptions(t('insurance_desk.policies.form.none', '— none —'))
@@ -163,16 +156,12 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
   React.useEffect(() => {
     let cancelled = false
     void Promise.all([
-      loadInsurerOptions(),
-      loadPartnerOptionsCb(),
       loadProductOptionsCb(),
       loadCaretakerOptsCb(),
       loadStatusOptsCb(),
       loadPolicyStatusDisplayEntries(),
-    ]).then(([ins, par, prod, caret, st, stDisp]) => {
+    ]).then(([prod, caret, st, stDisp]) => {
       if (cancelled) return
-      setInsurerOptions(ins)
-      setPartnerOptions(par)
       setProductOptions(prod)
       setCaretakerOptions(caret)
       setStatusOptions(st)
@@ -181,7 +170,33 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
     return () => {
       cancelled = true
     }
-  }, [loadCaretakerOptsCb, loadInsurerOptions, loadPartnerOptionsCb, loadProductOptionsCb, loadStatusOptsCb])
+  }, [loadCaretakerOptsCb, loadProductOptionsCb, loadStatusOptsCb])
+
+  React.useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const current = policySourceRow?.insurerId?.trim()
+      let opts = await loadActiveInsurerSelectOptions()
+      opts = await mergeInsurerOptionIfMissing(opts, current ?? null)
+      if (!cancelled) setInsurerOptions(opts)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [policySourceRow?.insurerId, scopeVersion])
+
+  React.useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const current = policySourceRow?.referringPartnerEntityId?.trim()
+      let opts = await searchPartnerEntityOptions(undefined, partnerPrefixes)
+      opts = await mergePartnerEntityOptionIfMissing(opts, current ?? null, partnerPrefixes)
+      if (!cancelled) setPartnerOptions(opts)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [partnerPrefixes, policySourceRow?.referringPartnerEntityId, scopeVersion])
 
   React.useEffect(() => {
     let cancelled = false
@@ -540,12 +555,12 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
           />
         ) : null}
 
-        <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
-          <div className="space-y-6">
-            <section className="space-y-3 rounded-lg border bg-card p-4 shadow-sm">
-              <h3 className="text-sm font-semibold leading-tight">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[7fr_3fr] lg:items-start">
+          <div className="min-w-0 space-y-6">
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold">
                 {t('insurance_desk.policies.form.groups.basics', 'Basics')}
-              </h3>
+              </h2>
               <PolicyBasicsInlineSection
                 form={form}
                 setForm={setForm}
@@ -557,7 +572,7 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
                 statusOptions={statusOptions}
                 statusDisplay={statusDisplayEntries}
               />
-            </section>
+            </div>
 
             <LeadVisualSectionCard
               title={t('insurance_desk.policies.detail.customer.sectionTitle', 'Customer data')}
@@ -643,7 +658,7 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
             />
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-6 min-w-0">
             <LeadVisualSectionCard
               title={t('insurance_desk.policies.detail.subject.sectionTitle', 'Subject of insurance')}
               description={t(

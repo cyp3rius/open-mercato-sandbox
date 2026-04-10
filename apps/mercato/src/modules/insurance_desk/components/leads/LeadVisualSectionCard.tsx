@@ -36,7 +36,7 @@ export function LeadVisualSectionCard({
 }: LeadVisualSectionCardProps) {
   const t = useT()
   return (
-    <section className={cn('space-y-3 rounded-lg border bg-card p-4 shadow-sm', className)}>
+    <section className={cn('space-y-3 rounded-lg border bg-card px-4 py-3', className)}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 space-y-1">
           <h3 className="text-sm font-semibold leading-tight">{title}</h3>

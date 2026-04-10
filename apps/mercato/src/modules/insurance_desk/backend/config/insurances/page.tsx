@@ -6,6 +6,7 @@ import { PolicyListColorRulesSection } from '../../../components/config/PolicyLi
 import { PolicyStatusDictionarySection } from '../../../components/config/PolicyStatusDictionarySection'
 import { LeadStatusDictionarySection } from '../../../components/config/LeadStatusDictionarySection'
 import { ProtectionScopeDictionarySection } from '../../../components/config/ProtectionScopeDictionarySection'
+import { InsurerStatusDictionarySection } from '../../../components/config/InsurerStatusDictionarySection'
 
 export default function InsuranceConfigInsurancesPage() {
   const t = useT()
@@ -27,6 +28,7 @@ export default function InsuranceConfigInsurancesPage() {
           </header>
 
           <PolicyListColorRulesSection />
+          <InsurerStatusDictionarySection />
           <PolicyStatusDictionarySection />
           <LeadStatusDictionarySection />
           <ProtectionScopeDictionarySection />

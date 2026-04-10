@@ -31,6 +31,7 @@ alwaysApply: false
 - Prefer **staying on the page after save**: success **`flash`** + reload data (and optionally a **`key`** on the form) instead of **`router.push` to the list** — unless product requirements say otherwise.
 - **Extra actions** (e.g. “Generate policy”) via **`extraActions`** on `CrudForm` — same order as `FormActionButtons`: **extras first**, then Save (extra action **to the left** of Save).
 - Consistent **breadcrumb / `page.meta.ts`**: title and last segment like “Details”, not “Edit”; i18n keys under `*.detail.*`.
+- **Two-column detail layout** (when mirroring grouped `CrudForm` for the same entity flow): **`grid grid-cols-1 gap-4 lg:grid-cols-[7fr_3fr] lg:items-start`**, **`min-w-0`** on columns, section chrome **`rounded-lg border bg-card px-4 py-3`** without **`shadow-sm`**, linked-record previews via **`PreviewFieldCell` / `PreviewFieldGrid`**. Full rules: **`.cursor/rules/detail-two-column-layout.mdc`**.
 
 ## i18n
 
@@ -43,4 +44,4 @@ alwaysApply: false
 
 ## Form controls, labels, and relation fields
 
-For **visual parity with CrudForm**, **hint placement**, **conditional dependent fields**, **EntitySearchCombobox** (+ new tab), and **safe list filters** (e.g. unlinked + search), follow **`.cursor/rules/form-ui-consistency.mdc`** — it applies to this glob and to shared `CrudForm` / input surfaces.
+For **visual parity with CrudForm**, **hint placement**, **conditional dependent fields**, **EntitySearchCombobox** (+ new tab), **detail `DetailFieldsSection` grids**, **inline `muted` editors**, and **safe list filters** (e.g. unlinked + search), follow **`.cursor/rules/form-ui-consistency.mdc`** — it applies to this glob and to shared `CrudForm` / input surfaces.

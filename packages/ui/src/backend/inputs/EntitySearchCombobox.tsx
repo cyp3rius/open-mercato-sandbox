@@ -158,11 +158,11 @@ export function EntitySearchCombobox({
         <PopoverTrigger asChild>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             disabled={disabled}
             aria-expanded={open}
             className={cn(
-              'h-9 min-w-0 flex-1 justify-between px-2 font-normal shadow-none',
+              'h-9 min-w-0 flex-1 justify-between rounded border border-input bg-transparent px-2 text-sm font-normal shadow-none hover:bg-muted/30 dark:hover:bg-muted/30',
               !value && 'text-muted-foreground',
             )}
             data-crud-focus-target=""

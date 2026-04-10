@@ -222,9 +222,9 @@ export function InsurerContactsPanel(props: InsurerContactsPanelProps) {
   }
 
   return (
-    <section className="mt-10 space-y-4 border-t pt-8">
+    <section className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg font-semibold">
+        <h2 className="text-sm font-semibold leading-tight">
           {t('insurance_desk.insurers.contacts.title', 'Contacts')}
         </h2>
         {canManage && editingId === null ? (

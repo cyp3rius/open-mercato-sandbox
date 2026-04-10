@@ -9,6 +9,7 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { renderDictionaryIcon } from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
 import { INSURANCE_DESK_BASE } from '../../backend/insurance-desk/paths'
 import type { PolicyApiRow } from '../../lib/policyDuplicatePrefill'
+import { PreviewFieldCell, PreviewFieldGrid } from './leadDetailPreviewUtils'
 
 type InsurerLite = { id: string; code: string; name: string }
 type ContactLite = { id: string; fullName: string }
@@ -102,8 +103,28 @@ export function LinkedPolicyPreviewCard(props: { policyId: string }) {
 
   const href = `${INSURANCE_DESK_BASE}/policies/${encodeURIComponent(policyId)}`
 
+  const statusValue =
+    statusDisplay != null ? (
+      <span className="inline-flex items-center gap-2">
+        {statusDisplay.icon ? (
+          <span className="shrink-0 text-muted-foreground">
+            {renderDictionaryIcon(statusDisplay.icon, 'h-4 w-4')}
+          </span>
+        ) : null}
+        {statusDisplay.color ? (
+          <span
+            className="inline-block size-2.5 shrink-0 rounded-full border border-border"
+            style={{ backgroundColor: statusDisplay.color }}
+          />
+        ) : null}
+        <span>{statusDisplay.label}</span>
+      </span>
+    ) : (
+      '—'
+    )
+
   return (
-    <section className="space-y-3 rounded-lg border bg-card p-4 shadow-sm">
+    <section className="space-y-3 rounded-lg border bg-card px-4 py-3">
       <div className="space-y-1">
         <h3 className="text-sm font-semibold leading-tight">
           {t('insurance_desk.leads.detail.linkedPolicy.title', 'Linked policy')}
@@ -119,14 +140,12 @@ export function LinkedPolicyPreviewCard(props: { policyId: string }) {
         {loading ? (
           <span className="text-muted-foreground">{t('common.loading', 'Loading…')}</span>
         ) : row ? (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-xs font-medium uppercase text-muted-foreground">
-                  {t('insurance_desk.policies.col.number', 'Policy number')}
-                </div>
-                <div className="truncate font-medium">{row.policyNumber}</div>
-              </div>
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-4">
+              <PreviewFieldCell
+                label={t('insurance_desk.policies.col.number', 'Policy number')}
+                value={row.policyNumber}
+              />
               <Button type="button" variant="outline" size="sm" asChild className="shrink-0">
                 <Link href={href} className="inline-flex items-center gap-2">
                   <BadgeCheck className="size-4 shrink-0" aria-hidden />
@@ -134,57 +153,28 @@ export function LinkedPolicyPreviewCard(props: { policyId: string }) {
                 </Link>
               </Button>
             </div>
-            <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div>
-                <dt className="text-xs font-medium uppercase text-muted-foreground">
-                  {t('insurance_desk.policies.col.status', 'Status')}
-                </dt>
-                <dd className="mt-0.5">
-                  {statusDisplay ? (
-                    <span className="inline-flex items-center gap-2">
-                      {statusDisplay.icon ? (
-                        <span className="shrink-0 text-muted-foreground">
-                          {renderDictionaryIcon(statusDisplay.icon, 'h-4 w-4')}
-                        </span>
-                      ) : null}
-                      {statusDisplay.color ? (
-                        <span
-                          className="inline-block size-2.5 shrink-0 rounded-full border border-border"
-                          style={{ backgroundColor: statusDisplay.color }}
-                        />
-                      ) : null}
-                      <span>{statusDisplay.label}</span>
-                    </span>
-                  ) : (
-                    '—'
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase text-muted-foreground">
-                  {t('insurance_desk.policies.col.insurer', 'Insurer')}
-                </dt>
-                <dd className="mt-0.5">{insurerLabel}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase text-muted-foreground">
-                  {t('insurance_desk.policies.form.insurerContact', 'Insurer contact')}
-                </dt>
-                <dd className="mt-0.5">{contactLabel}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase text-muted-foreground">
-                  {t('insurance_desk.policies.col.validFrom', 'Valid from')}
-                </dt>
-                <dd className="mt-0.5">{formatIsoDate(row.validFrom)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase text-muted-foreground">
-                  {t('insurance_desk.policies.col.validTo', 'Valid to')}
-                </dt>
-                <dd className="mt-0.5">{formatIsoDate(row.validTo)}</dd>
-              </div>
-            </dl>
+            <PreviewFieldGrid>
+              <PreviewFieldCell
+                label={t('insurance_desk.policies.col.status', 'Status')}
+                value={statusValue}
+              />
+              <PreviewFieldCell
+                label={t('insurance_desk.policies.col.insurer', 'Insurer')}
+                value={insurerLabel}
+              />
+              <PreviewFieldCell
+                label={t('insurance_desk.policies.form.insurerContact', 'Insurer contact')}
+                value={contactLabel}
+              />
+              <PreviewFieldCell
+                label={t('insurance_desk.policies.col.validFrom', 'Valid from')}
+                value={formatIsoDate(row.validFrom)}
+              />
+              <PreviewFieldCell
+                label={t('insurance_desk.policies.col.validTo', 'Valid to')}
+                value={formatIsoDate(row.validTo)}
+              />
+            </PreviewFieldGrid>
           </div>
         ) : (
           <span className="text-muted-foreground">

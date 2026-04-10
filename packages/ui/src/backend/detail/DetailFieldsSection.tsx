@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from 'react'
+import { cn } from '@open-mercato/shared/lib/utils'
 import { ComponentReplacementHandles } from '@open-mercato/shared/modules/widgets/component-registry'
 import { useRegisteredComponent } from '../injection/useRegisteredComponent'
 import {
@@ -55,6 +56,7 @@ export type DetailSelectFieldConfig = DetailFieldCommon & {
   options: InlineSelectOption[]
   hideLabel?: boolean
   renderDisplay?: InlineSelectEditorProps['renderDisplay']
+  renderEditor?: InlineSelectEditorProps['renderEditor']
 }
 
 export type DetailCustomFieldConfig = DetailFieldCommon & {
@@ -75,7 +77,7 @@ export type DetailFieldsSectionProps = {
 
 function DetailFieldsSectionImpl({ fields, className }: DetailFieldsSectionProps) {
   return (
-    <div className={['grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3', className].filter(Boolean).join(' ')}>
+    <div className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3', className)}>
       {fields.map((field) => {
         const variant = field.editorVariant ?? 'muted'
         const activateOnClick = field.activateOnClick ?? true
@@ -144,6 +146,7 @@ function DetailFieldsSectionImpl({ fields, className }: DetailFieldsSectionProps
                 triggerClassName={triggerClassName}
                 hideLabel={field.hideLabel}
                 renderDisplay={field.renderDisplay}
+                renderEditor={field.renderEditor}
               />
             </div>
           )

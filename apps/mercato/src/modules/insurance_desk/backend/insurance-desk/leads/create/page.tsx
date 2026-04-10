@@ -9,7 +9,7 @@ import { CrudForm, type CrudField, type CrudFormGroup } from '@open-mercato/ui/b
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { createCrud } from '@open-mercato/ui/backend/utils/crud'
 import { createCrudFormError } from '@open-mercato/ui/backend/utils/serverErrors'
-import { loadPartnerEntityOptions } from '../../../../lib/loadPolicyFormOptions'
+import { searchPartnerEntityOptions } from '../../../../lib/loadPolicyFormOptions'
 import { emptyPolicyCoveragesValue } from '../../../../components/policies/PolicyCoveragesField'
 import { PolicyCoverageOptionsField, emptyCoverageOptionsValue } from '../../../../components/policies/PolicyCoverageOptionsField'
 import { LeadCoverageCatalogField } from '../../../../components/leads/LeadCoverageCatalogField'
@@ -44,12 +44,14 @@ export default function InsuranceLeadCreatePage() {
   const searchParams = useSearchParams()
   const duplicateFromId = searchParams.get('duplicateFrom')
 
-  const loadPartnerOptions = React.useCallback(async () => {
-    return loadPartnerEntityOptions({
-      personPrefix: t('insurance_desk.policies.form.partnerKind.person', 'Person'),
-      companyPrefix: t('insurance_desk.policies.form.partnerKind.company', 'Company'),
-    })
-  }, [t])
+  const loadPartnerOptions = React.useCallback(
+    async (query?: string) =>
+      searchPartnerEntityOptions(query, {
+        personPrefix: t('insurance_desk.policies.form.partnerKind.person', 'Person'),
+        companyPrefix: t('insurance_desk.policies.form.partnerKind.company', 'Company'),
+      }),
+    [t],
+  )
 
   const emptyInitial = React.useMemo(
     () => ({
@@ -105,6 +107,9 @@ export default function InsuranceLeadCreatePage() {
         required: true,
         loadOptions: loadPartnerOptions,
         layout: 'full',
+        useEntitySearchCombobox: true,
+        remoteSelectSearch: true,
+        createInNewTabHref: '/backend/customers/companies/create',
         description: t(
           'insurance_desk.leads.form.referringPartyHint',
           'Only CRM records of type partner or referrer.',

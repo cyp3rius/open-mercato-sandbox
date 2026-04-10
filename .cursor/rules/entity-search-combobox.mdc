@@ -1,0 +1,53 @@
+---
+description: When and how to use EntitySearchCombobox for system entities and dictionary-backed fields (forms vs detail preview vs inline edit)
+globs:
+  - apps/**/src/modules/**/*.tsx
+  - packages/ui/src/backend/**/*.tsx
+  - packages/core/src/modules/**/components/**/*.tsx
+alwaysApply: false
+---
+
+# Entity search combobox (system entities & dictionaries)
+
+Use **`EntitySearchCombobox`** from `@open-mercato/ui/backend/inputs/EntitySearchCombobox` when the user picks a value from a **searchable catalog** — not a short static `<select>`.
+
+**Related:** `.cursor/rules/form-ui-consistency.mdc` (Crud parity, detail grids, `muted` inline editors, `+` in new tab); `.cursor/rules/detail-two-column-layout.mdc` (7fr/3fr detail shell).
+
+## When to use
+
+1. **System / CRM entities** linked by ID (insurers, partner companies/people, products, etc.) when:
+   - the list is large or **server-driven search** is required, or
+   - the same pattern is used elsewhere for that relation (stay consistent).
+2. **Dictionary-backed fields** (status, type, channel, …) when dictionary entries expose **label** plus optional **`icon`** and **`color`** — the combobox renders the same visual language as elsewhere in the app (chip in list, trigger row).
+
+**Prefer a plain Crud `select`** (without `useEntitySearchCombobox`) only for **small, static** option sets with **no** dictionary appearance and **no** remote search.
+
+## Option shape
+
+Build **`EntitySearchComboboxOption`**: `value`, `label`, optional `description`, and for dictionaries **`icon`**, **`color`** (see `loadInsurerStatusSelectOptions` / dictionary loaders). Merge the **current value** into options when editing legacy/inactive rows so the trigger can resolve the label.
+
+## Trigger appearance (forms + inline edit)
+
+- The combobox **trigger** uses **`Button variant="ghost"`** with **`border border-input`**, **`bg-transparent`**, and a light **`hover:bg-muted/30`** so it matches **Crud-height** controls and **`Inline*Editor`** **`muted`** **`bg-background`** tiles — avoid **`variant="outline"`**’s solid **`bg-background`** on the trigger, which reads as a different “patch” next to plain inputs.
+
+## CrudForm (`select`)
+
+- Set **`useEntitySearchCombobox: true`**.
+- Use **`remoteSelectSearch: true`** and **`loadOptions`** that accept a **search string** when the API is query-driven; otherwise load once and rely on local cmdk filter.
+- Optional **`createInNewTabHref`** / **`createInNewTabAriaLabel`** for the square `+` (opens `noopener,noreferrer` tab).
+- Reuse **`useEntitySearchCombobox` hook** from CrudForm when wiring custom field components.
+
+## Detail pages — preview (read-only)
+
+- Show the same **icon + color + label** as in the combobox list when the field is dictionary-backed: e.g. small icon + colored dot/badge + text in **`renderDisplay`** (or a shared dictionary display helper).
+- For entity FKs, show **title + optional subtitle** and links to the target entity when product rules allow.
+
+## Detail pages — inline edit
+
+- Use **`DetailFieldsSection`** / **`InlineSelectEditor`** with **`renderEditor`** that renders **`EntitySearchCombobox`** (same `options` / **`onRemoteSearch`** contract as on the create form).
+- Persist via the same **`onSave`** / patch API as other inline fields; keep **`merge*OptionIfMissing`** so the current ID always resolves when opening the editor.
+
+## Do not
+
+- Use a native `<select>` for **dictionary-with-appearance** or **search-backed entity** pickers in new UI — it drifts from platform patterns and loses icon/color/search.
+- Duplicate bespoke Popover+cmdk pickers; extend **`EntitySearchCombobox`** or shared helpers instead.

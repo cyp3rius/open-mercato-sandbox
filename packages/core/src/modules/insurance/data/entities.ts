@@ -23,6 +23,9 @@ export class InsuranceInsurer {
   @Property({ type: 'text', nullable: true })
   description?: string | null
 
+  @Property({ type: 'text', default: 'active' })
+  status: string = 'active'
+
   @Property({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean = true
 

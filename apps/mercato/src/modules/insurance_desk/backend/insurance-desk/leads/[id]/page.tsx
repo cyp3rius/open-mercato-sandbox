@@ -19,7 +19,11 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useGuardedMutation } from '@open-mercato/ui/backend/injection/useGuardedMutation'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { loadPartnerEntityOptions } from '../../../../lib/loadPolicyFormOptions'
+import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
+import {
+  mergePartnerEntityOptionIfMissing,
+  searchPartnerEntityOptions,
+} from '../../../../lib/loadPolicyFormOptions'
 import { emptyPolicyCoveragesValue } from '../../../../components/policies/PolicyCoveragesField'
 import { PolicyCoverageOptionsField, emptyCoverageOptionsValue } from '../../../../components/policies/PolicyCoverageOptionsField'
 import { LeadCoverageCatalogField } from '../../../../components/leads/LeadCoverageCatalogField'
@@ -115,22 +119,27 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
     blockedMessage: t('ui.forms.flash.saveBlocked', 'Save blocked by validation'),
   })
 
-  const loadPartnerOptions = React.useCallback(async () => {
-    return loadPartnerEntityOptions({
+  const partnerPrefixes = React.useMemo(
+    () => ({
       personPrefix: t('insurance_desk.policies.form.partnerKind.person', 'Person'),
       companyPrefix: t('insurance_desk.policies.form.partnerKind.company', 'Company'),
-    })
-  }, [t])
+    }),
+    [t],
+  )
 
   React.useEffect(() => {
+    if (!form) return
     let cancelled = false
-    void loadPartnerOptions().then((opts) => {
+    const entityId = typeof form.referringPartnerEntityId === 'string' ? form.referringPartnerEntityId : null
+    void (async () => {
+      let opts = await searchPartnerEntityOptions(undefined, partnerPrefixes)
+      opts = await mergePartnerEntityOptionIfMissing(opts, entityId, partnerPrefixes)
       if (!cancelled) setPartnerOptions(opts)
-    })
+    })()
     return () => {
       cancelled = true
     }
-  }, [loadPartnerOptions])
+  }, [form?.referringPartnerEntityId, partnerPrefixes])
 
   React.useEffect(() => {
     let cancelled = false
@@ -374,7 +383,6 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
         value: statusValue,
         emptyLabel: empty,
         options: statusOptions,
-        gridClassName: 'md:col-span-2 xl:col-span-3',
         activateOnClick: !locked,
         showEditTrigger: !locked,
         renderDisplay: ({ value: v, emptyLabel: el }) => {
@@ -437,9 +445,22 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
         value: typeof form.referringPartnerEntityId === 'string' ? form.referringPartnerEntityId : '',
         emptyLabel: empty,
         options: partnerOptions,
-        gridClassName: 'md:col-span-2 xl:col-span-3',
         activateOnClick: !locked,
         showEditTrigger: !locked,
+        renderEditor: ({ value: draft, onChange }) => (
+          <EntitySearchCombobox
+            value={draft}
+            onChange={onChange}
+            options={partnerOptions.map((o) => ({ ...o }))}
+            onRemoteSearch={(q) => searchPartnerEntityOptions(q, partnerPrefixes)}
+            placeholder={empty}
+            createInNewTabHref="/backend/customers/companies/create"
+            createInNewTabAriaLabel={t(
+              'insurance_desk.policies.form.addPartnerInNewTab',
+              'Add referring party in a new tab',
+            )}
+          />
+        ),
         onSave: async (next) => {
           const id = (next ?? '').trim()
           if (!id.length) {
@@ -459,6 +480,7 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
     leadId,
     linkedPolicyId,
     partnerOptions,
+    partnerPrefixes,
     persistLead,
     retryLastMutation,
     runMutation,
@@ -544,11 +566,14 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
           }
         />
 
-        <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
-          <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[7fr_3fr] lg:items-start">
+          <div className="min-w-0 space-y-6">
             <div className="space-y-3">
               <h2 className="text-sm font-semibold">{t('insurance_desk.leads.form.groups.basics', 'Basics')}</h2>
-              <DetailFieldsSection fields={basicsFields} />
+              <DetailFieldsSection
+                fields={basicsFields}
+                className="sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2"
+              />
             </div>
 
             <LeadVisualSectionCard
@@ -624,7 +649,7 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
             />
           </div>
 
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
             <LeadVisualSectionCard
               title={t('insurance_desk.policies.form.subject.title', 'Subject of insurance')}
               description={t(

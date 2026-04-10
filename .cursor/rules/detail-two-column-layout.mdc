@@ -1,0 +1,37 @@
+---
+description: Two-column detail page layout (7fr/3fr), section chrome, linked-record preview cards — align with CrudForm groups
+globs:
+  - apps/mercato/src/modules/**/*.tsx
+  - packages/ui/src/backend/detail/**/*.tsx
+alwaysApply: false
+---
+
+# Detail pages — two-column layout & section chrome
+
+Use when building **backend detail** screens that mirror **grouped `CrudForm`** (e.g. insurance desk: inquiry, policy, insurer).
+
+**References:** `packages/ui/src/backend/CrudForm.tsx` (grouped layout grid), `.cursor/rules/module-backend-ui.mdc`, `.cursor/rules/form-ui-consistency.mdc`.
+
+## Shell grid (main + sidebar)
+
+- Match CrudForm’s two-column body: **`grid grid-cols-1 gap-4 lg:grid-cols-[7fr_3fr] lg:items-start`**.
+- Put **`min-w-0`** on **each** column so wide tables / long tokens do not blow out the grid.
+
+## Section chrome (no ad-hoc shadows)
+
+- Bordered blocks should match **CrudForm group** styling: **`rounded-lg border bg-card px-4 py-3`** — **do not** add **`shadow-sm`** on those shells unless a spec explicitly requires elevation.
+- **`LeadVisualSectionCard`** follows the same outer chrome (no shadow); the inner **dashed** preview panel is intentional and separate.
+
+## “Basics” without an extra card
+
+- When aligning with **inquiry / policy / insurer** details: **Basics** can be **`space-y-3`** + **`h2.text-sm.font-semibold`** + fields — **no** redundant bordered+shadow wrapper around Basics only.
+
+## Linked record previews (policy ↔ inquiry)
+
+- Cards such as **`LinkedPolicyPreviewCard`** and **`LinkedLeadPreviewCard`** must use **`PreviewFieldCell`** + **`PreviewFieldGrid`** from **`leadDetailPreviewUtils.tsx`** (same labels, value typography, and **`gap-x-4` / `gap-y-5`** as e.g. contact preview).
+- Outer section: **`rounded-lg border bg-card px-4 py-3`**, no **`shadow-sm`**; avoid one-off **`dl`** + **`uppercase`** label stacks for the same information.
+
+## Do not
+
+- Use **`lg:grid-cols-2`** (50/50) for these product detail pages when the create/edit form for the same flow uses **`7fr_3fr`** — keep parity.
+- Move a sidebar-only section (e.g. “Other / Pozostałe”) full-width **only** to fix a **single field** grid bug — fix **`DetailFieldsSection`** / **`gridClassName`** instead (see **`.cursor/rules/form-ui-consistency.mdc`** → Detail grids).

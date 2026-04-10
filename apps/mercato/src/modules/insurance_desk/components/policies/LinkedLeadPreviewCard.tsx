@@ -7,6 +7,7 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { INSURANCE_DESK_BASE } from '../../backend/insurance-desk/paths'
+import { PreviewFieldCell, PreviewFieldGrid } from '../leads/leadDetailPreviewUtils'
 
 type LeadLite = {
   id: string
@@ -47,8 +48,18 @@ export function LinkedLeadPreviewCard(props: { policyId: string }) {
 
   const href = row ? `${INSURANCE_DESK_BASE}/leads/${encodeURIComponent(row.id)}` : ''
 
+  const titleValue = row ? (row.title.trim().length ? row.title : row.id) : ''
+  const createdValue = row
+    ? row.createdAt
+      ? (() => {
+          const d = new Date(row.createdAt)
+          return Number.isNaN(d.getTime()) ? row.createdAt : d.toLocaleString()
+        })()
+      : '—'
+    : ''
+
   return (
-    <section className="space-y-3 rounded-lg border bg-card p-4 shadow-sm">
+    <section className="space-y-3 rounded-lg border bg-card px-4 py-3">
       <div className="space-y-1">
         <h3 className="text-sm font-semibold leading-tight">
           {t('insurance_desk.policies.detail.linkedLead.title', 'Related inquiry')}
@@ -64,29 +75,18 @@ export function LinkedLeadPreviewCard(props: { policyId: string }) {
         {loading ? (
           <span className="text-muted-foreground">{t('common.loading', 'Loading…')}</span>
         ) : row ? (
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-8">
-              <div className="min-w-0">
-                <div className="text-xs font-medium uppercase text-muted-foreground">
-                  {t('insurance_desk.leads.col.title', 'Inquiry subject')}
-                </div>
-                <div className="mt-0.5 truncate font-medium">{row.title.trim().length ? row.title : row.id}</div>
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs font-medium uppercase text-muted-foreground">
-                  {t('insurance_desk.leads.col.created', 'Received')}
-                </div>
-                <div className="mt-0.5 font-medium">
-                  {row.createdAt
-                    ? (() => {
-                        const d = new Date(row.createdAt)
-                        return Number.isNaN(d.getTime()) ? row.createdAt : d.toLocaleString()
-                      })()
-                    : '—'}
-                </div>
-              </div>
-            </div>
-            <Button type="button" variant="outline" size="sm" asChild className="shrink-0 self-start sm:self-center">
+          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-4">
+            <PreviewFieldGrid className="min-w-0 flex-1 lg:grid-cols-2">
+              <PreviewFieldCell
+                label={t('insurance_desk.leads.col.title', 'Inquiry subject')}
+                value={titleValue}
+              />
+              <PreviewFieldCell
+                label={t('insurance_desk.leads.col.created', 'Received')}
+                value={createdValue}
+              />
+            </PreviewFieldGrid>
+            <Button type="button" variant="outline" size="sm" asChild className="shrink-0">
               <Link href={href} className="inline-flex items-center gap-2">
                 <MessageSquare className="size-4 shrink-0" aria-hidden />
                 {t('insurance_desk.policies.detail.linkedLead.open', 'Open')}

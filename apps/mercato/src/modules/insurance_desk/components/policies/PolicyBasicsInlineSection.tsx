@@ -6,7 +6,13 @@ import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/u
 import type { InlineSelectOption } from '@open-mercato/ui/backend/detail'
 import { InlineSelectEditor, InlineTextEditor } from '@open-mercato/ui/backend/detail'
 import { renderDictionaryIcon } from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
-import { loadInsurerContactOptions } from '../../lib/loadPolicyFormOptions'
+import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
+import {
+  loadActiveInsurerSelectOptions,
+  loadInsurerContactOptions,
+  searchPartnerEntityOptions,
+} from '../../lib/loadPolicyFormOptions'
+import { INSURANCE_DESK_BASE } from '../../backend/insurance-desk/paths'
 
 export type PolicyStatusDisplayEntry = {
   value: string
@@ -40,6 +46,13 @@ export function PolicyBasicsInlineSection({
 }: Props) {
   const t = useT()
   const scopeVersion = useOrganizationScopeVersion()
+  const partnerPrefixes = React.useMemo(
+    () => ({
+      personPrefix: t('insurance_desk.policies.form.partnerKind.person', 'Person'),
+      companyPrefix: t('insurance_desk.policies.form.partnerKind.company', 'Company'),
+    }),
+    [t],
+  )
   const emptyLabel = t('insurance_desk.detail.emptyField', '—')
   const noneLabel = t('insurance_desk.policies.form.none', '— none —')
   const pickInsurerFirst = t('insurance_desk.policies.form.insurerContact.pickInsurerFirst', 'Select an insurer first.')
@@ -121,6 +134,17 @@ export function PolicyBasicsInlineSection({
         }}
         variant="muted"
         activateOnClick
+        renderEditor={({ value: draft, onChange }) => (
+          <EntitySearchCombobox
+            value={draft}
+            onChange={onChange}
+            options={insurerOptions.map((o) => ({ ...o }))}
+            onRemoteSearch={(q) => loadActiveInsurerSelectOptions(q)}
+            placeholder={emptyLabel}
+            createInNewTabHref={`${INSURANCE_DESK_BASE}/insurers/create`}
+            createInNewTabAriaLabel={t('insurance_desk.policies.form.addInsurerInNewTab', 'Add insurer in a new tab')}
+          />
+        )}
       />
 
       <InlineSelectEditor
@@ -168,6 +192,20 @@ export function PolicyBasicsInlineSection({
         }}
         variant="muted"
         activateOnClick
+        renderEditor={({ value: draft, onChange }) => (
+          <EntitySearchCombobox
+            value={draft}
+            onChange={onChange}
+            options={partnerOptions.map((o) => ({ ...o }))}
+            onRemoteSearch={(q) => searchPartnerEntityOptions(q, partnerPrefixes)}
+            placeholder={emptyLabel}
+            createInNewTabHref="/backend/customers/companies/create"
+            createInNewTabAriaLabel={t(
+              'insurance_desk.policies.form.addPartnerInNewTab',
+              'Add referring party in a new tab',
+            )}
+          />
+        )}
       />
 
       <InlineSelectEditor

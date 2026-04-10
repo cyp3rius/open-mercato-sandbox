@@ -11,6 +11,8 @@ import { InsuranceInsurer } from '../data/entities'
 import {
   insuranceInsurerCreateSchema,
   insuranceInsurerUpdateSchema,
+  resolveInsurerStatusFromInput,
+  resolveInsurerStatusOnUpdate,
   type InsuranceInsurerCreateInput,
   type InsuranceInsurerUpdateInput,
 } from '../data/validators'
@@ -33,6 +35,7 @@ type InsurerSnapshot = {
   code: string
   name: string
   description: string | null
+  status: string
   isActive: boolean
   metadata: Record<string, unknown> | null
   createdAt: string
@@ -51,6 +54,7 @@ async function loadInsurerSnapshot(em: EntityManager, id: string): Promise<Insur
     code: record.code,
     name: record.name,
     description: record.description ?? null,
+    status: record.status,
     isActive: !!record.isActive,
     metadata: record.metadata ? { ...record.metadata } : null,
     createdAt: record.createdAt.toISOString(),
@@ -72,13 +76,15 @@ const createInsurerCommand: CommandHandler<InsuranceInsurerCreateInput, { insure
     if (existing) {
       throw new CrudHttpError(400, { error: 'insurance.insurers.errors.duplicateCode' })
     }
+    const status = resolveInsurerStatusFromInput(parsed)
     const record = em.create(InsuranceInsurer, {
       organizationId: parsed.organizationId,
       tenantId: parsed.tenantId,
       code: parsed.code,
       name: parsed.name,
       description: parsed.description ?? null,
-      isActive: parsed.isActive ?? true,
+      status,
+      isActive: status !== 'inactive',
       metadata: parsed.metadata ?? null,
     })
     em.persist(record)
@@ -124,6 +130,7 @@ const createInsurerCommand: CommandHandler<InsuranceInsurerCreateInput, { insure
     if (!record) return
     record.deletedAt = new Date()
     record.isActive = false
+    record.status = 'inactive'
     await em.flush()
   },
 }
@@ -160,13 +167,21 @@ const updateInsurerCommand: CommandHandler<InsuranceInsurerUpdateInput, { insure
       'code',
       'name',
       'description',
-      'isActive',
       'metadata',
     ])
     for (const [key, change] of Object.entries(changes)) {
       if (change.to !== undefined) {
         ;(record as unknown as Record<string, unknown>)[key] = change.to
       }
+    }
+    const statusTouched = parsed.status !== undefined || parsed.isActive !== undefined
+    if (statusTouched) {
+      const nextStatus = resolveInsurerStatusOnUpdate(record.status, {
+        status: parsed.status,
+        isActive: parsed.isActive,
+      })
+      record.status = nextStatus
+      record.isActive = nextStatus !== 'inactive'
     }
     record.updatedAt = new Date()
     await em.flush()
@@ -214,6 +229,7 @@ const updateInsurerCommand: CommandHandler<InsuranceInsurerUpdateInput, { insure
     record.code = before.code
     record.name = before.name
     record.description = before.description
+    record.status = before.status
     record.isActive = before.isActive
     record.metadata = before.metadata ? { ...before.metadata } : null
     record.updatedAt = new Date()
@@ -238,6 +254,7 @@ const deleteInsurerCommand: CommandHandler<{ id: string; organizationId?: string
     }
     record.deletedAt = new Date()
     record.isActive = false
+    record.status = 'inactive'
     await em.flush()
     const dataEngine = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({
@@ -275,6 +292,7 @@ const deleteInsurerCommand: CommandHandler<{ id: string; organizationId?: string
     const record = await em.findOne(InsuranceInsurer, { id: before.id })
     if (!record) return
     record.deletedAt = null
+    record.status = before.status
     record.isActive = before.isActive
     record.updatedAt = new Date()
     await em.flush()

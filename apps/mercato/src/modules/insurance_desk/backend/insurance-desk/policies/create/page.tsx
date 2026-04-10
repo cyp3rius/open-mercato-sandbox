@@ -13,9 +13,10 @@ import { createCrudFormError } from '@open-mercato/ui/backend/utils/serverErrors
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import {
+  loadActiveInsurerSelectOptions,
   loadCaretakerUserOptions,
   loadCatalogProductOptions,
-  loadPartnerEntityOptions,
+  searchPartnerEntityOptions,
   loadPolicyStatusSelectOptions,
 } from '../../../../lib/loadPolicyFormOptions'
 import {
@@ -52,8 +53,6 @@ import {
 import { buildPolicyCreateInitialValuesFromLead } from '../../../../lib/buildPolicyCreateValuesFromLead'
 import { createInsuranceExternalVehicleResource } from '../../../../lib/externalVehicleResource'
 import { provisionPolicyInsuredEntities } from '../../../../lib/provisionPolicyInsuredEntities'
-
-type InsurerLite = { id: string; code: string; name: string }
 
 type LeadListResponse = {
   items: Array<{
@@ -157,21 +156,16 @@ export default function InsurancePolicyCreatePage() {
     }
   }, [duplicateFromPolicyId, emptyInitial, leadIdFromUrl, t])
 
-  const loadInsurerOptions = React.useCallback(async () => {
-    const call = await apiCall<{ items: InsurerLite[] }>('/api/insurance/insurers?page=1&pageSize=100')
-    const items = Array.isArray(call.result?.items) ? call.result.items : []
-    return items.map((i) => ({
-      value: i.id,
-      label: `${i.code} — ${i.name}`,
-    }))
-  }, [])
+  const loadInsurerOptions = React.useCallback(async (query?: string) => loadActiveInsurerSelectOptions(query), [])
 
-  const loadPartnerOptions = React.useCallback(async () => {
-    return loadPartnerEntityOptions({
-      personPrefix: t('insurance_desk.policies.form.partnerKind.person', 'Person'),
-      companyPrefix: t('insurance_desk.policies.form.partnerKind.company', 'Company'),
-    })
-  }, [t])
+  const loadPartnerOptions = React.useCallback(
+    async (query?: string) =>
+      searchPartnerEntityOptions(query, {
+        personPrefix: t('insurance_desk.policies.form.partnerKind.person', 'Person'),
+        companyPrefix: t('insurance_desk.policies.form.partnerKind.company', 'Company'),
+      }),
+    [t],
+  )
 
   const loadProductOptions = React.useCallback(async () => {
     return loadCatalogProductOptions(t('insurance_desk.policies.form.none', '— none —'))
@@ -247,6 +241,7 @@ export default function InsurancePolicyCreatePage() {
         loadOptions: loadInsurerOptions,
         layout: 'third',
         useEntitySearchCombobox: true,
+        remoteSelectSearch: true,
         createInNewTabHref: `${INSURANCE_DESK_BASE}/insurers/create`,
       },
       {
@@ -273,6 +268,7 @@ export default function InsurancePolicyCreatePage() {
         loadOptions: loadPartnerOptions,
         layout: 'third',
         useEntitySearchCombobox: true,
+        remoteSelectSearch: true,
         createInNewTabHref: '/backend/customers/companies/create',
         description: t(
           'insurance_desk.leads.form.referringPartyHint',

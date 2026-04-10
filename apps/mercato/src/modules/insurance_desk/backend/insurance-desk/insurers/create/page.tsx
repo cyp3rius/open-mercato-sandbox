@@ -15,6 +15,7 @@ import {
   type InsurerContactDraft,
 } from '../../../../components/insurers/InsurerContactDraftTiles'
 import { joinFullName } from '../../../../lib/insurerContactName'
+import { loadInsurerStatusSelectOptions } from '../../../../lib/loadPolicyFormOptions'
 
 function duplicateInsurerCode(base: string): string {
   const suffix = '-copy'
@@ -41,6 +42,8 @@ export default function InsuranceInsurerCreatePage() {
   const searchParams = useSearchParams()
   const duplicateFromId = searchParams.get('duplicateFrom')
 
+  const loadStatusOptions = React.useCallback(async () => loadInsurerStatusSelectOptions(), [])
+
   const fields = React.useMemo<CrudField[]>(
     () => [
       {
@@ -48,14 +51,23 @@ export default function InsuranceInsurerCreatePage() {
         label: t('insurance_desk.insurers.form.code', 'Code'),
         type: 'text',
         required: true,
-        layout: 'half',
+        layout: 'third',
       },
       {
         id: 'name',
         label: t('insurance_desk.insurers.form.name', 'Name'),
         type: 'text',
         required: true,
-        layout: 'half',
+        layout: 'third',
+      },
+      {
+        id: 'status',
+        label: t('insurance_desk.insurers.form.status', 'Status'),
+        type: 'select',
+        required: true,
+        layout: 'third',
+        loadOptions: loadStatusOptions,
+        useEntitySearchCombobox: true,
       },
       {
         id: 'description',
@@ -71,7 +83,7 @@ export default function InsuranceInsurerCreatePage() {
         component: InsurerContactDraftTiles,
       },
     ],
-    [t],
+    [loadStatusOptions, t],
   )
 
   const groups = React.useMemo<CrudFormGroup[]>(
@@ -80,19 +92,19 @@ export default function InsuranceInsurerCreatePage() {
         id: 'basics',
         title: t('insurance_desk.insurers.form.group.basics', 'Basics'),
         column: 1,
-        fields: ['code', 'name'],
-      },
-      {
-        id: 'details',
-        title: t('insurance_desk.insurers.form.group.details', 'Details'),
-        column: 1,
-        fields: ['description'],
+        fields: ['code', 'name', 'status'],
       },
       {
         id: 'contacts',
         title: t('insurance_desk.insurers.contacts.title', 'Contacts'),
-        column: 2,
+        column: 1,
         fields: ['insurerContacts'],
+      },
+      {
+        id: 'remainder',
+        title: t('insurance_desk.insurers.form.group.remainder', 'Other'),
+        column: 2,
+        fields: ['description'],
       },
     ],
     [t],
@@ -102,6 +114,7 @@ export default function InsuranceInsurerCreatePage() {
     () => ({
       code: '',
       name: '',
+      status: 'active',
       description: '',
       insurerContacts: [] as InsurerContactDraft[],
     }),
@@ -123,13 +136,15 @@ export default function InsuranceInsurerCreatePage() {
       const id = fromId
       if (!id) return
       const call = await apiCall<{
-        items?: Array<{ code: string; name: string; description: string | null }>
+        items?: Array<{ code: string; name: string; description: string | null; status?: string }>
       }>(`/api/insurance/insurers?id=${encodeURIComponent(id)}&page=1&pageSize=1`)
       const row = call.result?.items?.[0]
       if (cancelled || !row) return
+      const st = typeof row.status === 'string' && row.status.trim().length ? row.status.trim() : 'active'
       setInitialValues({
         code: duplicateInsurerCode(row.code),
         name: row.name,
+        status: st,
         description: row.description ?? '',
         insurerContacts: [],
       })
@@ -159,6 +174,8 @@ export default function InsuranceInsurerCreatePage() {
         typeof values.description === 'string' && values.description.trim().length
           ? values.description.trim()
           : null
+      const statusRaw = typeof values.status === 'string' ? values.status.trim() : ''
+      const status = statusRaw.length ? statusRaw : 'active'
       const rawContacts = values.insurerContacts
       const contactRows = Array.isArray(rawContacts) ? (rawContacts as InsurerContactDraft[]) : []
       for (const c of contactRows) {
@@ -173,7 +190,7 @@ export default function InsuranceInsurerCreatePage() {
         code,
         name,
         description,
-        isActive: true,
+        status,
       })
       const newId =
         created.result && typeof created.result === 'object' && created.result !== null && 'id' in created.result

@@ -11,6 +11,7 @@ export const insuranceInsurerCreateSchema = scoped.extend({
   code: z.string().trim().min(1).max(100),
   name: z.string().trim().min(1).max(255),
   description: z.string().trim().max(4000).optional().nullable(),
+  status: z.string().trim().min(1).max(100).optional(),
   isActive: z.boolean().optional(),
   metadata: z.record(z.string(), z.unknown()).optional().nullable(),
 })
@@ -87,3 +88,27 @@ export type InsurancePolicyCreateInput = z.infer<typeof insurancePolicyCreateSch
 export type InsurancePolicyUpdateInput = z.infer<typeof insurancePolicyUpdateSchema>
 export type InsuranceLeadCreateInput = z.infer<typeof insuranceLeadCreateSchema>
 export type InsuranceLeadUpdateInput = z.infer<typeof insuranceLeadUpdateSchema>
+
+export function resolveInsurerStatusFromInput(input: {
+  status?: string | null | undefined
+  isActive?: boolean | undefined
+}): string {
+  const trimmed = typeof input.status === 'string' ? input.status.trim() : ''
+  if (trimmed.length) return trimmed
+  if (input.isActive === false) return 'inactive'
+  if (input.isActive === true) return 'active'
+  return 'active'
+}
+
+export function resolveInsurerStatusOnUpdate(
+  current: string,
+  input: { status?: string | null | undefined; isActive?: boolean | undefined },
+): string {
+  if (input.status !== undefined && input.status !== null) {
+    const trimmed = String(input.status).trim()
+    if (trimmed.length) return trimmed
+  }
+  if (input.isActive === false) return 'inactive'
+  if (input.isActive === true) return 'active'
+  return current
+}

@@ -120,7 +120,7 @@ export function InlineTextEditor({
   const containerClasses = cn(
     'group overflow-hidden',
     variant === 'muted'
-      ? 'relative rounded border bg-muted/20 p-3'
+      ? 'relative rounded border border-border bg-background p-3'
       :     variant === 'plain'
         ? 'relative flex items-center gap-3 rounded-none border-0 p-0'
         : 'rounded-lg border p-4',
@@ -570,8 +570,8 @@ export function InlineMultilineEditor({
   )
 
   const containerClasses = cn(
-    'group rounded-lg border p-4',
-    variant === 'muted' ? 'bg-muted/20' : null,
+    'group overflow-hidden',
+    variant === 'muted' ? 'relative rounded border border-border bg-background p-3' : 'rounded-lg border p-4',
     showEditTrigger && activateOnClick && !editing ? 'cursor-pointer' : null,
     containerClassName ?? null,
   )
@@ -799,9 +799,9 @@ export function InlineSelectEditor({
   }, [editing, showEditTrigger])
 
   const containerClasses = cn(
-    'group',
+    'group overflow-hidden',
     variant === 'muted'
-      ? 'relative rounded border bg-muted/30 p-3'
+      ? 'relative rounded border border-border bg-background p-3'
       : variant === 'plain'
         ? 'relative flex flex-col gap-1 rounded-none border-0 p-0'
         : 'rounded-lg border bg-card p-4',

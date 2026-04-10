@@ -14,6 +14,8 @@ Use these rules when building or refactoring **backend forms**, **custom CrudFor
 
 **Platform references:** `packages/ui/AGENTS.md`, `packages/ui/src/backend/AGENTS.md`, root `AGENTS.md` (UI & HTTP sections).
 
+**Related Cursor rules:** `.cursor/rules/entity-search-combobox.mdc`, `.cursor/rules/detail-two-column-layout.mdc`, `.cursor/rules/module-backend-ui.mdc`.
+
 ## Control styling (parity with CrudForm)
 
 - **Source of truth:** export and use **`CRUD_FORM_TEXT_INPUT_CLASS`**, **`CRUD_FORM_SELECT_CLASS`**, **`CRUD_FORM_TEXTAREA_CLASS`** from `@open-mercato/ui/backend/CrudForm` for native `<input>`, `<select>`, `<textarea>` in custom fields and embedded editors.
@@ -39,6 +41,7 @@ Use these rules when building or refactoring **backend forms**, **custom CrudFor
 
 ## Relation / lookup fields (search + “add in new tab”)
 
+- **System entities, dictionary-backed status fields (icon/color/label), forms vs detail preview vs inline:** see `.cursor/rules/entity-search-combobox.mdc`.
 - For entity pickers that need **search** and an optional **create/manage** action, use **`EntitySearchCombobox`** from `@open-mercato/ui/backend/inputs/EntitySearchCombobox` (Popover + **cmdk**), not ad-hoc dropdowns, when the pattern is already adopted for that flow.
 - The **square `+` control** opens **`window.open(url, '_blank', 'noopener,noreferrer')`** — new tab for **create** or **settings** URLs configured per field (`createInNewTabHref` on Crud `select` when `useEntitySearchCombobox` is set, or props on custom usage).
 - **Special case — “child” entity managed on parent:** e.g. **insurer contacts**: `+` should open the **selected parent’s** admin page (edit insurer) to add contacts, not a generic create URL when no parent is selected — hide or omit `+` until the parent is chosen if there is no valid target.
@@ -55,3 +58,12 @@ Use these rules when building or refactoring **backend forms**, **custom CrudFor
 ## Buttons
 
 - Non-submit controls: **`type="button"`** explicitly; use **`Button`** / **`IconButton`** from UI primitives per `packages/ui/AGENTS.md` — no raw `<button>` for interactive controls.
+
+## Detail grids (`DetailFieldsSection` + inline editors)
+
+- **`DetailFieldsSection`** merges **`className`** with **`cn()`** / **tailwind-merge** — prefer overrides like **`md:grid-cols-2`** instead of duplicating the full grid class string.
+- **Full-width field inside the default grid** (`grid-cols-1` / `sm:grid-cols-2` / `md:grid-cols-3`): set **`gridClassName: 'sm:col-span-2 md:col-span-3'`** on that **`DetailFieldConfig`** (e.g. a single multiline “Description” in a narrow sidebar). **Do not** move the whole section out of its column just to widen one control.
+- **`InlineTextEditor`**, **`InlineSelectEditor`**, **`InlineMultilineEditor`** — **`variant="muted"`** uses **`border border-border bg-background p-3`** and **`overflow-hidden`** on the container so **text** and **select / entity search** preview tiles look identical; do not reintroduce **`bg-muted/20`** vs **`bg-muted/30`** splits between field kinds.
+- **Entity search trigger** styling inside inline edit: see **`.cursor/rules/entity-search-combobox.mdc`** (ghost + border + transparent fill).
+
+**Detail page shell** (7fr/3fr, section cards): **`.cursor/rules/detail-two-column-layout.mdc`**.
