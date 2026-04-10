@@ -37,6 +37,7 @@ import {
 } from '../../../../components/detail/InlineEditors'
 import { DetailFieldsSection, type DetailFieldConfig } from '@open-mercato/ui/backend/detail'
 import { isValidSocialUrl } from '@open-mercato/core/modules/customers/lib/detailHelpers'
+import { isValidPesel, normalizePeselDigits } from '@open-mercato/core/modules/customers/lib/pesel'
 import type { ActivitySummary, DealSummary, TagSummary, TodoLinkSummary } from '../../../../components/detail/types'
 import { CustomDataSection } from '../../../../components/detail/CustomDataSection'
 import { createTranslatorWithFallback } from '@open-mercato/shared/lib/i18n/translate'
@@ -79,6 +80,11 @@ type PersonOverview = {
     linkedInUrl?: string | null
     twitterUrl?: string | null
     companyEntityId?: string | null
+    pesel?: string | null
+    residenceStreet?: string | null
+    residencePostalCode?: string | null
+    residenceCity?: string | null
+    residenceCountry?: string | null
   } | null
   customFields: Record<string, unknown>
   tags: TagSummary[]
@@ -95,7 +101,17 @@ type PersonOverview = {
 
 type SectionKey = 'notes' | 'activities' | 'deals' | 'addresses' | 'tasks' | string
 
-type ProfileEditableField = 'firstName' | 'lastName' | 'jobTitle' | 'department' | 'linkedInUrl' | 'twitterUrl'
+type ProfileEditableField =
+  | 'firstName'
+  | 'lastName'
+  | 'jobTitle'
+  | 'department'
+  | 'linkedInUrl'
+  | 'twitterUrl'
+  | 'residenceStreet'
+  | 'residencePostalCode'
+  | 'residenceCity'
+  | 'residenceCountry'
 
 
 export default function CustomerPersonDetailPage({ params }: { params?: { id?: string } }) {
@@ -159,6 +175,19 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
       return isValidSocialUrl(candidate, { hosts: ['twitter.com', 'x.com'], pathRequired: true })
         ? null
         : t('customers.people.detail.inline.twitterInvalid')
+    },
+    pesel: (value: string) => {
+      if (!value?.trim()) return null
+      const digits = normalizePeselDigits(value)
+      if (!digits || digits.length !== 11 || !isValidPesel(digits)) {
+        return t('customers.people.form.peselInvalid')
+      }
+      return null
+    },
+    residenceCountry: (value: string) => {
+      if (!value?.trim()) return null
+      const u = value.trim().toUpperCase()
+      return /^[A-Z]{2}$/.test(u) ? null : t('customers.people.form.residenceCountryInvalid')
     },
   }), [t])
 
@@ -518,6 +547,84 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
         placeholder: t('customers.people.form.lastName'),
         emptyLabel: t('customers.people.detail.noValue'),
         onSave: (next) => updateProfileField('lastName', next),
+      },
+      {
+        key: 'pesel',
+        kind: 'text',
+        label: t('customers.people.form.pesel'),
+        value: profile?.pesel ?? null,
+        placeholder: t('customers.people.form.peselPlaceholder'),
+        emptyLabel: t('customers.people.detail.noValue'),
+        validator: validators.pesel,
+        onSave: async (next) => {
+          const digits = normalizePeselDigits(typeof next === 'string' ? next : '')
+          await savePerson(
+            { pesel: digits && digits.length ? digits : null },
+            (prev) => {
+              if (!prev.profile) return prev
+              return {
+                ...prev,
+                profile: {
+                  ...prev.profile,
+                  pesel: digits && digits.length ? digits : null,
+                },
+              }
+            },
+          )
+        },
+      },
+      {
+        key: 'residenceStreet',
+        kind: 'text',
+        label: t('customers.people.form.residenceStreet'),
+        value: profile?.residenceStreet ?? null,
+        placeholder: t('customers.people.form.residenceStreetPlaceholder'),
+        emptyLabel: t('customers.people.detail.noValue'),
+        gridClassName: 'sm:col-span-2 xl:col-span-3',
+        onSave: (next) => updateProfileField('residenceStreet', next),
+      },
+      {
+        key: 'residencePostalCode',
+        kind: 'text',
+        label: t('customers.people.form.residencePostalCode'),
+        value: profile?.residencePostalCode ?? null,
+        placeholder: t('customers.people.form.residencePostalCodePlaceholder'),
+        emptyLabel: t('customers.people.detail.noValue'),
+        onSave: (next) => updateProfileField('residencePostalCode', next),
+      },
+      {
+        key: 'residenceCity',
+        kind: 'text',
+        label: t('customers.people.form.residenceCity'),
+        value: profile?.residenceCity ?? null,
+        placeholder: t('customers.people.form.residenceCityPlaceholder'),
+        emptyLabel: t('customers.people.detail.noValue'),
+        onSave: (next) => updateProfileField('residenceCity', next),
+      },
+      {
+        key: 'residenceCountry',
+        kind: 'text',
+        label: t('customers.people.form.residenceCountry'),
+        value: profile?.residenceCountry ?? null,
+        placeholder: t('customers.people.form.residenceCountryPlaceholder'),
+        emptyLabel: t('customers.people.detail.noValue'),
+        validator: validators.residenceCountry,
+        onSave: async (next) => {
+          const send = typeof next === 'string' ? next.trim().toUpperCase() : ''
+          await savePerson(
+            { residenceCountry: send.length ? send : null },
+            (prev) => {
+              if (!prev.profile) return prev
+              return {
+                ...prev,
+                profile: {
+                  ...prev.profile,
+                  residenceCountry: send.length ? send : null,
+                },
+              }
+            },
+          )
+        },
       },
       {
         key: 'jobTitle',

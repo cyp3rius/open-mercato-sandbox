@@ -54,6 +54,7 @@ import { buildFormFieldsFromCustomFields, buildFormFieldFromCustomFieldDef } fro
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { TagsInput } from './inputs/TagsInput'
 import { ComboboxInput } from './inputs/ComboboxInput'
+import { EntitySearchCombobox } from './inputs/EntitySearchCombobox'
 import { format, parseISO } from 'date-fns'
 import type { Locale } from 'date-fns'
 import { DateTimePicker } from './inputs/DateTimePicker'
@@ -118,6 +119,12 @@ function buildResolvedEntityIdsKey(entityId?: string, entityIds?: string[]): str
   return list.join('\0')
 }
 
+/** Native control classes for CrudForm text/number/select rows (see TextInput / TextAreaInput below). */
+export const CRUD_FORM_TEXT_INPUT_CLASS = 'w-full h-9 rounded border px-2 text-sm'
+export const CRUD_FORM_TEXTAREA_CLASS =
+  'w-full rounded border px-2 py-2 min-h-[80px] sm:min-h-[120px] text-sm'
+export const CRUD_FORM_SELECT_CLASS = CRUD_FORM_TEXT_INPUT_CLASS
+
 export type CrudFieldBase = {
   id: string
   label: string
@@ -129,7 +136,14 @@ export type CrudFieldBase = {
   readOnly?: boolean
 }
 
-export type CrudFieldOption = { value: string; label: string }
+export type CrudFieldOption = {
+  value: string
+  label: string
+  /** Dictionary / catalog: optional icon token (`lucide:…`, emoji, or legacy PascalCase Lucide id). */
+  icon?: string
+  /** Dictionary / catalog: optional CSS color (e.g. hex). */
+  color?: string
+}
 
 export type CrudBuiltinField = CrudFieldBase & {
   type:
@@ -154,6 +168,19 @@ export type CrudBuiltinField = CrudFieldBase & {
   listbox?: boolean
   // for relation/select style fields; if provided, options are loaded on mount
   loadOptions?: (query?: string) => Promise<CrudFieldOption[]>
+  /**
+   * With `type: 'select'`, use cmdk popover combobox (+ optional “add” opens new tab).
+   */
+  useEntitySearchCombobox?: boolean
+  /**
+   * With `useEntitySearchCombobox` and `loadOptions`, refetch on each search query instead of client-side filter.
+   */
+  remoteSelectSearch?: boolean
+  /**
+   * Square “+” opens this URL in a new tab (create record / settings). Omit to hide the control.
+   */
+  createInNewTabHref?: string | ((formValues: Record<string, unknown>) => string | undefined)
+  createInNewTabAriaLabel?: string
   // when type === 'richtext', choose editor implementation
   editor?: 'simple' | 'uiw' | 'html'
   // for text fields; provides datalist suggestions while allowing free-text input
@@ -173,6 +200,8 @@ export type CrudCustomFieldRenderProps = {
   id: string
   value: unknown
   error?: string
+  /** All field errors (e.g. read sibling `referralCode` while rendering `crmRecordType`). */
+  formErrors?: Record<string, string>
   autoFocus?: boolean
   disabled?: boolean
   values?: Record<string, unknown>
@@ -270,6 +299,8 @@ export type CrudFormGroup = {
   title?: string
   column?: 1 | 2
   description?: string
+  /** Rendered in the top-right of the group card (e.g. link to related settings). */
+  headerActions?: React.ReactNode
   // Either list field ids, inline field configs, or mix of both
   fields?: (CrudField | string)[]
   // Inject a custom component into the group card
@@ -2330,6 +2361,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
               field={f}
               value={values[f.id]}
               error={errors[f.id]}
+              formErrors={errors}
               options={fieldOptionsById.get(f.id) || EMPTY_OPTIONS}
               setValue={setValue}
               onBlurRequest={(fieldId) => { void validateFieldOnBlur(fieldId) }}
@@ -2616,10 +2648,19 @@ export function CrudForm<TValues extends Record<string, unknown>>({
         const groupFields = resolveGroupFields(g)
         nodes.push(
           <div key={g.id} className="rounded-lg border bg-card px-4 py-3 space-y-3">
-            {g.title ? (
-              <div className="text-sm font-medium">{t(g.title, g.title)}</div>
+            {g.title || g.description || g.headerActions ? (
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1 space-y-1">
+                  {g.title ? (
+                    <div className="text-sm font-semibold">{t(g.title, g.title)}</div>
+                  ) : null}
+                  {g.description ? (
+                    <div className="text-xs text-muted-foreground">{t(g.description, g.description)}</div>
+                  ) : null}
+                </div>
+                {g.headerActions ? <div className="shrink-0">{g.headerActions}</div> : null}
+              </div>
             ) : null}
-            {g.description ? <div className="text-xs text-muted-foreground">{t(g.description, g.description)}</div> : null}
             {componentNode ? (
               <div>{componentNode}</div>
             ) : null}
@@ -2770,6 +2811,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
                     field={f}
                     value={values[f.id]}
                     error={errors[f.id]}
+                    formErrors={errors}
                     options={fieldOptionsById.get(f.id) || EMPTY_OPTIONS}
                     setValue={setValue}
                     onBlurRequest={(fieldId) => { void validateFieldOnBlur(fieldId) }}
@@ -2937,7 +2979,7 @@ function TextInput({
     <>
       <input
         type={inputType}
-        className="w-full h-9 rounded border px-2 text-sm"
+        className={CRUD_FORM_TEXT_INPUT_CLASS}
         placeholder={placeholder}
         value={local}
         onChange={handleChange}
@@ -3018,7 +3060,7 @@ function NumberInput({
   return (
     <input
       type="number"
-      className="w-full h-9 rounded border px-2 text-sm"
+      className={CRUD_FORM_TEXT_INPUT_CLASS}
       placeholder={placeholder}
       value={local}
       onChange={handleChange}
@@ -3068,7 +3110,7 @@ function TextAreaInput({
 
   return (
     <textarea
-      className="w-full rounded border px-2 py-2 min-h-[80px] sm:min-h-[120px] text-sm"
+      className={CRUD_FORM_TEXTAREA_CLASS}
       placeholder={placeholder}
       value={local}
       onChange={handleChange}
@@ -3272,6 +3314,7 @@ type FieldControlProps = {
   field: CrudField
   value: unknown
   error?: string
+  formErrors: Record<string, string>
   options: CrudFieldOption[]
   setValue: (id: string, v: unknown) => void
   onBlurRequest: (fieldId: string) => void
@@ -3368,6 +3411,7 @@ const FieldControl = React.memo(function FieldControlImpl({
   field,
   value,
   error,
+  formErrors,
   options,
   setValue,
   onBlurRequest,
@@ -3582,7 +3626,46 @@ const FieldControl = React.memo(function FieldControlImpl({
           <span className="text-sm">{field.label}</span>
         </label>
       )}
-      {field.type === 'select' && !builtin?.multiple && (
+      {field.type === 'select' && !builtin?.multiple && Boolean(builtin?.useEntitySearchCombobox) && (
+        <EntitySearchCombobox
+          value={
+            Array.isArray(value)
+              ? String(value[0] ?? '')
+              : value == null
+                ? ''
+                : String(value)
+          }
+          onChange={(next) => setValue(field.id, next || undefined)}
+          options={options.map((opt) => ({
+            value: opt.value,
+            label: opt.label,
+            icon: opt.icon,
+            color: opt.color,
+          }))}
+          placeholder={placeholder ?? t('ui.forms.select.emptyOption', '—')}
+          disabled={disabled}
+          onRemoteSearch={
+            typeof builtin?.loadOptions === 'function' && builtin?.remoteSelectSearch
+              ? async (q) => {
+                  const opts = await loadFieldOptions(field, q)
+                  return opts.map((opt) => ({
+                    value: opt.value,
+                    label: opt.label,
+                    icon: opt.icon,
+                    color: opt.color,
+                  }))
+                }
+              : undefined
+          }
+          createInNewTabHref={
+            typeof builtin?.createInNewTabHref === 'function'
+              ? builtin.createInNewTabHref(values) ?? null
+              : builtin?.createInNewTabHref ?? null
+          }
+          createInNewTabAriaLabel={builtin?.createInNewTabAriaLabel}
+        />
+      )}
+      {field.type === 'select' && !builtin?.multiple && !builtin?.useEntitySearchCombobox && (
         <select
           className="w-full h-9 rounded border pl-3 pr-8 text-sm"
           value={
@@ -3664,6 +3747,7 @@ const FieldControl = React.memo(function FieldControlImpl({
             id: field.id,
             value,
             error,
+            formErrors,
             setValue: fieldSetValue,
             setFormValue,
             values,
@@ -3699,7 +3783,8 @@ const FieldControl = React.memo(function FieldControlImpl({
   prev.wrapperClassName === next.wrapperClassName &&
   prev.entityIdForField === next.entityIdForField &&
   prev.recordId === next.recordId &&
+  prev.values === next.values &&
   (prev.field.type !== 'custom' ||
-    (prev.values === next.values &&
+    (prev.formErrors === next.formErrors &&
       prev.field.component === (next.field as CrudCustomField).component))
 )

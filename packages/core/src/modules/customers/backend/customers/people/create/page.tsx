@@ -36,6 +36,7 @@ export default function CreatePersonPage() {
   }, [companyParam])
   const initialValues = React.useMemo<Partial<PersonFormValues>>(
     () => ({
+      crmRecordType: 'customer',
       addresses: [] as PersonFormValues['addresses'],
       ...(companyEntityId ? { companyEntityId } : {}),
     }),
@@ -64,6 +65,10 @@ export default function CreatePersonPage() {
               if (err instanceof Error && err.message === 'DISPLAY_NAME_REQUIRED') {
                 const message = t('customers.people.form.displayName.error')
                 throw createCrudFormError(message, { displayName: message })
+              }
+              if (err instanceof Error && err.message === 'PESEL_INVALID') {
+                const message = t('customers.people.form.peselInvalid')
+                throw createCrudFormError(message, { pesel: message })
               }
               throw err
             }

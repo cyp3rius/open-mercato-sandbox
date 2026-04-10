@@ -37,6 +37,13 @@ export type TaxRateSummary = {
   isDefault: boolean;
 };
 
+export type ServiceLineSummary = {
+  id: string;
+  code: string;
+  title: string;
+  isActive: boolean;
+};
+
 export type ProductOptionInput = {
   id: string;
   title: string;
@@ -116,6 +123,7 @@ export type ProductFormValues = {
   channelIds: string[];
   tags: string[];
   optionSchemaId?: string | null;
+  serviceLineId: string | null;
 };
 
 const optionalPositiveNumberInput = z.preprocess((value) => {
@@ -210,6 +218,7 @@ export const productFormSchema = z
     channelIds: z.array(z.string().uuid()).optional(),
     tags: z.array(z.string().trim().min(1).max(100)).optional(),
     optionSchemaId: z.string().uuid().nullable().optional(),
+    serviceLineId: z.string().uuid().nullable().optional(),
   })
   .passthrough()
   .refine(
@@ -261,6 +270,7 @@ export const BASE_INITIAL_VALUES: ProductFormValues = {
   channelIds: [],
   tags: [],
   optionSchemaId: null,
+  serviceLineId: null,
 };
 
 export const isConfigurableProductType = (type: string): boolean =>

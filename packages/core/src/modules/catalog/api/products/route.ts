@@ -16,6 +16,7 @@ import {
   CatalogProductUnitConversion,
   CatalogProductVariant,
   CatalogProductTagAssignment,
+  CatalogProductServiceLineExtension,
 } from "../../data/entities";
 import { CATALOG_PRODUCT_TYPES } from "../../data/types";
 import type { CatalogProductType } from "../../data/types";
@@ -49,6 +50,8 @@ import {
 } from "../openapi";
 import { findWithDecryption } from "@open-mercato/shared/lib/encryption/find";
 import { canonicalizeUnitCode, toUnitLookupKey } from "../../lib/unitCodes";
+import { cloneJson } from "../../commands/shared";
+import { flattenServiceLineAttributesForList } from "../../lib/serviceLineListColumns";
 const rawBodySchema = z.object({}).passthrough();
 
 const UUID_REGEX =
@@ -80,6 +83,7 @@ const listSchema = z
     sortDir: z.enum(["asc", "desc"]).optional(),
     withDeleted: z.coerce.boolean().optional(),
     customFieldset: z.string().regex(fieldsetCodeRegex).optional(),
+    serviceLineId: z.string().uuid().optional(),
   })
   .passthrough();
 
@@ -250,6 +254,25 @@ export async function buildProductFilters(
       .filter((id): id is string => !!id);
     intersectProductIds(productIds);
   }
+
+  if (query.serviceLineId && UUID_REGEX.test(query.serviceLineId)) {
+    const extensions = await findWithDecryption(
+      em,
+      CatalogProductServiceLineExtension,
+      { serviceLine: query.serviceLineId, ...scope },
+      { fields: ["id", "product"] },
+      scope,
+    );
+    const productIds = extensions
+      .map((row) =>
+        typeof row.product === "string"
+          ? row.product
+          : (row.product?.id ?? null),
+      )
+      .filter((id): id is string => !!id);
+    intersectProductIds(productIds);
+  }
+
   const customFieldset =
     typeof query.customFieldset === "string" &&
     query.customFieldset.trim().length
@@ -327,6 +350,8 @@ type ProductListItem = Record<string, unknown> & {
   categories?: Array<Record<string, unknown>>;
   categoryIds?: string[];
   tags?: string[];
+  service_line_id?: string | null;
+  service_line_attributes?: Record<string, unknown> | null;
 };
 
 async function decorateProductsAfterList(
@@ -345,6 +370,40 @@ async function decorateProductsAfterList(
       organizationId: ctx.selectedOrganizationId ?? ctx.auth?.orgId ?? null,
       tenantId: ctx.auth?.tenantId ?? null,
     };
+    const serviceLineExtensions = await findWithDecryption(
+      em,
+      CatalogProductServiceLineExtension,
+      { product: { $in: productIds }, ...scope },
+      { populate: ["serviceLine"] },
+      scope,
+    );
+    const serviceLineIdByProductId = new Map<string, string>();
+    const serviceLineCodeByProductId = new Map<string, string | null>();
+    const attributesByProductId = new Map<string, Record<string, unknown> | null>();
+    for (const row of serviceLineExtensions) {
+      const productId =
+        typeof row.product === "string"
+          ? row.product
+          : (row.product?.id ?? null);
+      const line = row.serviceLine;
+      const lineId =
+        typeof line === "string" ? line : (line?.id ?? null);
+      if (productId && lineId) serviceLineIdByProductId.set(productId, lineId);
+      if (productId) {
+        const code =
+          line && typeof line === "object" && "code" in line
+            ? ((line as { code?: string | null }).code ?? null)
+            : null;
+        serviceLineCodeByProductId.set(productId, code);
+        const rawAttrs = row.attributes;
+        attributesByProductId.set(
+          productId,
+          rawAttrs && typeof rawAttrs === "object" && !Array.isArray(rawAttrs)
+            ? (cloneJson(rawAttrs) as Record<string, unknown>)
+            : null,
+        );
+      }
+    }
     const offers = await findWithDecryption(
       em,
       CatalogOffer,
@@ -612,6 +671,14 @@ async function decorateProductsAfterList(
     for (const item of items) {
       const id = typeof item.id === "string" ? item.id : null;
       if (!id) continue;
+      item.service_line_id = serviceLineIdByProductId.get(id) ?? null;
+      const lineCode = serviceLineCodeByProductId.get(id) ?? null;
+      const lineAttrs = attributesByProductId.get(id) ?? null;
+      item.service_line_attributes = lineAttrs;
+      Object.assign(
+        item,
+        flattenServiceLineAttributesForList(lineCode, lineAttrs),
+      );
       const offerEntries = offersByProduct.get(id) ?? [];
       item.offers = offerEntries;
       const channelIds = Array.from(
@@ -846,6 +913,7 @@ const productListItemSchema = z.object({
   description: z.string().nullable().optional(),
   sku: z.string().nullable().optional(),
   handle: z.string().nullable().optional(),
+  service_line_id: z.string().uuid().nullable().optional(),
   product_type: z.string().nullable().optional(),
   status_entry_id: z.string().uuid().nullable().optional(),
   primary_currency_code: z.string().nullable().optional(),

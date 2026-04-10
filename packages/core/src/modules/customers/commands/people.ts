@@ -40,6 +40,9 @@ import {
   ensureDictionaryEntry,
   emitQueryIndexDeleteEvents,
   emitQueryIndexUpsertEvents,
+  ensureReferralCodeAvailable,
+  handleCustomerReferralCodeUniqueError,
+  normalizeCustomerReferralCode,
   type QueryIndexEventEntry,
 } from './shared'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
@@ -129,6 +132,8 @@ type PersonSnapshot = {
     id: string
     organizationId: string
     tenantId: string
+    crmRecordType: string
+    referralCode: string | null
     displayName: string
     description: string | null
     ownerUserId: string | null
@@ -156,6 +161,11 @@ type PersonSnapshot = {
     linkedInUrl: string | null
     twitterUrl: string | null
     companyEntityId: string | null
+    pesel: string | null
+    residenceStreet: string | null
+    residencePostalCode: string | null
+    residenceCity: string | null
+    residenceCountry: string | null
   }
   tagIds: string[]
   addresses: PersonAddressSnapshot[]
@@ -226,6 +236,8 @@ function serializePersonSnapshot(
       id: entity.id,
       organizationId: entity.organizationId,
       tenantId: entity.tenantId,
+      crmRecordType: entity.crmRecordType ?? 'customer',
+      referralCode: entity.referralCode ?? null,
       displayName: entity.displayName,
       description: entity.description ?? null,
       ownerUserId: entity.ownerUserId ?? null,
@@ -257,6 +269,11 @@ function serializePersonSnapshot(
           ? profile.company
           : profile.company.id
         : null,
+      pesel: profile.pesel ?? null,
+      residenceStreet: profile.residenceStreet ?? null,
+      residencePostalCode: profile.residencePostalCode ?? null,
+      residenceCity: profile.residenceCity ?? null,
+      residenceCountry: profile.residenceCountry ?? null,
     },
     tagIds,
     addresses: addresses.map((address) => ({
@@ -494,11 +511,19 @@ const createPersonCommand: CommandHandler<PersonCreateInput, { entityId: string;
     const timezone = normalizeOptionalString(parsed.timezone)
     const linkedInUrl = normalizeOptionalString(parsed.linkedInUrl)
     const twitterUrl = normalizeOptionalString(parsed.twitterUrl)
+    const pesel = parsed.pesel ?? null
+    const residenceStreet = normalizeOptionalString(parsed.residenceStreet)
+    const residencePostalCode = normalizeOptionalString(parsed.residencePostalCode)
+    const residenceCity = normalizeOptionalString(parsed.residenceCity)
+    const residenceCountryRaw = normalizeOptionalString(parsed.residenceCountry)
+    const residenceCountry = residenceCountryRaw ? residenceCountryRaw.toUpperCase() : null
     const displayName = parsed.displayName?.trim() ?? ''
     const nextInteractionName = parsed.nextInteraction?.name ? parsed.nextInteraction.name.trim() : null
     const nextInteractionRefId = normalizeOptionalString(parsed.nextInteraction?.refId)
     const nextInteractionIcon = normalizeOptionalString(parsed.nextInteraction?.icon)
     const nextInteractionColor = normalizeHexColor(parsed.nextInteraction?.color)
+    const crmRecordType = parsed.crmRecordType ?? 'customer'
+    const referralCode = normalizeCustomerReferralCode(parsed.referralCode)
     if (!firstName || !lastName) {
       throw new CrudHttpError(400, { error: 'First and last name are required' })
     }
@@ -506,10 +531,17 @@ const createPersonCommand: CommandHandler<PersonCreateInput, { entityId: string;
       throw new CrudHttpError(400, { error: 'Display name is required' })
     }
 
+    await ensureReferralCodeAvailable(em, {
+      organizationId: parsed.organizationId,
+      tenantId: parsed.tenantId,
+      referralCode,
+    })
     const entity = em.create(CustomerEntity, {
       organizationId: parsed.organizationId,
       tenantId: parsed.tenantId,
       kind: 'person',
+      crmRecordType,
+      referralCode,
       displayName,
       description,
       ownerUserId: parsed.ownerUserId ?? null,
@@ -541,6 +573,11 @@ const createPersonCommand: CommandHandler<PersonCreateInput, { entityId: string;
       timezone,
       linkedInUrl,
       twitterUrl,
+      pesel,
+      residenceStreet,
+      residencePostalCode,
+      residenceCity,
+      residenceCountry,
       company,
     })
 
@@ -570,7 +607,11 @@ const createPersonCommand: CommandHandler<PersonCreateInput, { entityId: string;
         value: source,
       })
     }
-    await em.flush()
+    try {
+      await em.flush()
+    } catch (err) {
+      handleCustomerReferralCodeUniqueError(err)
+    }
 
     const tenantId = entity.tenantId
     const organizationId = entity.organizationId
@@ -708,6 +749,11 @@ const updatePersonCommand: CommandHandler<PersonUpdateInput, { entityId: string 
       record.nextInteractionColor = null
     }
 
+    if (parsed.crmRecordType !== undefined) record.crmRecordType = parsed.crmRecordType
+    if (parsed.referralCode !== undefined) {
+      record.referralCode = normalizeCustomerReferralCode(parsed.referralCode)
+    }
+
     if (parsed.firstName !== undefined) profile.firstName = normalizeOptionalString(parsed.firstName)
     if (parsed.lastName !== undefined) profile.lastName = normalizeOptionalString(parsed.lastName)
     if (parsed.preferredName !== undefined) profile.preferredName = normalizeOptionalString(parsed.preferredName)
@@ -728,6 +774,16 @@ const updatePersonCommand: CommandHandler<PersonUpdateInput, { entityId: string 
     if (parsed.timezone !== undefined) profile.timezone = normalizeOptionalString(parsed.timezone)
     if (parsed.linkedInUrl !== undefined) profile.linkedInUrl = normalizeOptionalString(parsed.linkedInUrl)
     if (parsed.twitterUrl !== undefined) profile.twitterUrl = normalizeOptionalString(parsed.twitterUrl)
+    if (parsed.pesel !== undefined) profile.pesel = parsed.pesel ?? null
+    if (parsed.residenceStreet !== undefined) profile.residenceStreet = normalizeOptionalString(parsed.residenceStreet)
+    if (parsed.residencePostalCode !== undefined) {
+      profile.residencePostalCode = normalizeOptionalString(parsed.residencePostalCode)
+    }
+    if (parsed.residenceCity !== undefined) profile.residenceCity = normalizeOptionalString(parsed.residenceCity)
+    if (parsed.residenceCountry !== undefined) {
+      const rc = normalizeOptionalString(parsed.residenceCountry)
+      profile.residenceCountry = rc ? rc.toUpperCase() : null
+    }
 
     if (parsed.companyEntityId !== undefined) {
       profile.company = await resolveCompanyReference(em, parsed.companyEntityId, record.organizationId, record.tenantId)
@@ -736,7 +792,8 @@ const updatePersonCommand: CommandHandler<PersonUpdateInput, { entityId: string 
     const profileFieldsUpdated = [
       parsed.firstName, parsed.lastName, parsed.preferredName, parsed.jobTitle,
       parsed.department, parsed.seniority, parsed.timezone, parsed.linkedInUrl,
-      parsed.twitterUrl, parsed.companyEntityId,
+      parsed.twitterUrl, parsed.companyEntityId, parsed.pesel, parsed.residenceStreet,
+      parsed.residencePostalCode, parsed.residenceCity, parsed.residenceCountry,
     ].some((v) => v !== undefined)
     if (profileFieldsUpdated) {
       record.updatedAt = new Date()
@@ -750,7 +807,17 @@ const updatePersonCommand: CommandHandler<PersonUpdateInput, { entityId: string 
       record.displayName = nextDisplayName
     }
 
-    await em.flush()
+    await ensureReferralCodeAvailable(em, {
+      organizationId: record.organizationId,
+      tenantId: record.tenantId,
+      excludeEntityId: record.id,
+      referralCode: record.referralCode,
+    })
+    try {
+      await em.flush()
+    } catch (err) {
+      handleCustomerReferralCodeUniqueError(err)
+    }
     await syncEntityTags(em, record, parsed.tags)
     await em.flush()
 
@@ -812,6 +879,8 @@ const updatePersonCommand: CommandHandler<PersonUpdateInput, { entityId: string 
         organizationId: before.entity.organizationId,
         tenantId: before.entity.tenantId,
         kind: 'person',
+        crmRecordType: before.entity.crmRecordType ?? 'customer',
+        referralCode: before.entity.referralCode ?? null,
         displayName: before.entity.displayName,
         description: before.entity.description,
         ownerUserId: before.entity.ownerUserId,
@@ -842,6 +911,11 @@ const updatePersonCommand: CommandHandler<PersonUpdateInput, { entityId: string 
         timezone: before.profile.timezone,
         linkedInUrl: before.profile.linkedInUrl,
         twitterUrl: before.profile.twitterUrl,
+        pesel: before.profile.pesel,
+        residenceStreet: before.profile.residenceStreet,
+        residencePostalCode: before.profile.residencePostalCode,
+        residenceCity: before.profile.residenceCity,
+        residenceCountry: before.profile.residenceCountry,
       })
       em.persist(profile)
       if (before.profile.companyEntityId) {
@@ -856,6 +930,8 @@ const updatePersonCommand: CommandHandler<PersonUpdateInput, { entityId: string 
       await syncEntityTags(em, newEntity, before.tagIds)
       await em.flush()
     } else {
+      entity.crmRecordType = before.entity.crmRecordType ?? 'customer'
+      entity.referralCode = before.entity.referralCode ?? null
       entity.displayName = before.entity.displayName
       entity.description = before.entity.description
       entity.ownerUserId = before.entity.ownerUserId
@@ -882,6 +958,11 @@ const updatePersonCommand: CommandHandler<PersonUpdateInput, { entityId: string 
         profile.timezone = before.profile.timezone
         profile.linkedInUrl = before.profile.linkedInUrl
         profile.twitterUrl = before.profile.twitterUrl
+        profile.pesel = before.profile.pesel
+        profile.residenceStreet = before.profile.residenceStreet
+        profile.residencePostalCode = before.profile.residencePostalCode
+        profile.residenceCity = before.profile.residenceCity
+        profile.residenceCountry = before.profile.residenceCountry
         profile.company = before.profile.companyEntityId
           ? await resolveCompanyReference(
               em,
@@ -1048,6 +1129,8 @@ const deletePersonCommand: CommandHandler<{ body?: Record<string, unknown>; quer
           organizationId: before.entity.organizationId,
           tenantId: before.entity.tenantId,
           kind: 'person',
+          crmRecordType: before.entity.crmRecordType ?? 'customer',
+          referralCode: before.entity.referralCode ?? null,
           displayName: before.entity.displayName,
           description: before.entity.description,
           ownerUserId: before.entity.ownerUserId,
@@ -1066,6 +1149,8 @@ const deletePersonCommand: CommandHandler<{ body?: Record<string, unknown>; quer
         em.persist(entity)
       }
 
+      entity.crmRecordType = before.entity.crmRecordType ?? 'customer'
+      entity.referralCode = before.entity.referralCode ?? null
       entity.displayName = before.entity.displayName
       entity.description = before.entity.description
       entity.ownerUserId = before.entity.ownerUserId
@@ -1098,6 +1183,11 @@ const deletePersonCommand: CommandHandler<{ body?: Record<string, unknown>; quer
           timezone: before.profile.timezone,
           linkedInUrl: before.profile.linkedInUrl,
           twitterUrl: before.profile.twitterUrl,
+          pesel: before.profile.pesel,
+          residenceStreet: before.profile.residenceStreet,
+          residencePostalCode: before.profile.residencePostalCode,
+          residenceCity: before.profile.residenceCity,
+          residenceCountry: before.profile.residenceCountry,
         })
       } else {
         profile.firstName = before.profile.firstName
@@ -1109,6 +1199,11 @@ const deletePersonCommand: CommandHandler<{ body?: Record<string, unknown>; quer
         profile.timezone = before.profile.timezone
         profile.linkedInUrl = before.profile.linkedInUrl
         profile.twitterUrl = before.profile.twitterUrl
+        profile.pesel = before.profile.pesel
+        profile.residenceStreet = before.profile.residenceStreet
+        profile.residencePostalCode = before.profile.residencePostalCode
+        profile.residenceCity = before.profile.residenceCity
+        profile.residenceCountry = before.profile.residenceCountry
       }
 
       if (before.profile.companyEntityId) {

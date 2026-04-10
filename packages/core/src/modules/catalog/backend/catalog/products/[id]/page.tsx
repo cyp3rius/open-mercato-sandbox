@@ -45,6 +45,7 @@ import {
 } from "../optionSchemaClient";
 import {
   type ProductFormValues,
+  type ServiceLineSummary,
   type TaxRateSummary,
   type ProductOptionInput,
   type PriceKindSummary,
@@ -297,6 +298,9 @@ export default function EditCatalogProductPage({
   const t = useT();
   const router = useRouter();
   const [taxRates, setTaxRates] = React.useState<TaxRateSummary[]>([]);
+  const [serviceLines, setServiceLines] = React.useState<ServiceLineSummary[]>(
+    [],
+  );
   const [variants, setVariants] = React.useState<VariantSummary[]>([]);
   const [priceKinds, setPriceKinds] = React.useState<PriceKindSummary[]>([]);
   const [initialValues, setInitialValues] =
@@ -460,6 +464,52 @@ export default function EditCatalogProductPage({
   }, [t]);
 
   React.useEffect(() => {
+    let cancelled = false;
+    async function loadServiceLines() {
+      try {
+        const payload = await readApiResultOrThrow<{
+          items?: Array<Record<string, unknown>>;
+        }>("/api/catalog/service-lines?pageSize=100", undefined, {
+          errorMessage: t(
+            "catalog.serviceLines.errors.load",
+            "Failed to load service lines.",
+          ),
+          fallback: { items: [] },
+        });
+        if (cancelled) return;
+        const items = Array.isArray(payload.items) ? payload.items : [];
+        setServiceLines(
+          items.map((item) => ({
+            id: String(item.id ?? ""),
+            code:
+              typeof item.code === "string" && item.code.trim().length
+                ? item.code
+                : "",
+            title:
+              typeof item.title === "string" && item.title.trim().length
+                ? item.title
+                : "",
+            isActive: Boolean(
+              typeof item.is_active === "boolean"
+                ? item.is_active
+                : typeof item.isActive === "boolean"
+                  ? item.isActive
+                  : true,
+            ),
+          })).filter((entry) => entry.id.length > 0),
+        );
+      } catch (err) {
+        console.error("catalog.service-lines.fetch failed", err);
+        if (!cancelled) setServiceLines([]);
+      }
+    }
+    loadServiceLines().catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
+
+  React.useEffect(() => {
     if (!productId) {
       setLoading(false);
       setError(
@@ -517,6 +567,12 @@ export default function EditCatalogProductPage({
             ? record.tax_rate_id
             : typeof record.taxRateId === "string"
               ? record.taxRateId
+              : null;
+        const serviceLineId =
+          typeof record.service_line_id === "string"
+            ? record.service_line_id
+            : typeof record.serviceLineId === "string"
+              ? record.serviceLineId
               : null;
         const optionSchemaTemplate = optionSchemaId
           ? await fetchOptionSchemaTemplate(optionSchemaId)
@@ -625,6 +681,7 @@ export default function EditCatalogProductPage({
           categoryIds,
           channelIds,
           tags: tagValues,
+          serviceLineId,
         };
         if (!cancelled) {
           setInitialValues({ ...initial, ...customValues });
@@ -795,6 +852,7 @@ export default function EditCatalogProductPage({
             errors={errors}
             taxRates={taxRates}
             isLoadingProduct={loading}
+            serviceLines={serviceLines}
           />
         ),
       },
@@ -827,10 +885,12 @@ export default function EditCatalogProductPage({
     [
       categorizeOptions,
       handleVariantDeleted,
+      loading,
       priceKinds,
       productId,
       refreshVariants,
       t,
+      serviceLines,
       taxRates,
       variants,
     ],
@@ -925,6 +985,7 @@ export default function EditCatalogProductPage({
         channelIds: parsed.data.channelIds ?? [],
         tags: parsed.data.tags ?? [],
         optionSchemaId: parsed.data.optionSchemaId ?? null,
+        serviceLineId: parsed.data.serviceLineId ?? null,
       };
       const title = values.title?.trim();
       if (!title) {
@@ -1060,6 +1121,7 @@ export default function EditCatalogProductPage({
         productType: values.productType || "simple",
         taxRateId: values.taxRateId ?? null,
         taxRate: productTaxRateValue ?? null,
+        serviceLineId: values.serviceLineId ?? null,
         isConfigurable: isConfigurableProductType(
           values.productType || "simple",
         ),
@@ -1294,6 +1356,7 @@ type ProductDetailsSectionProps = ProductFormGroupProps & { productId: string };
 type ProductMetaSectionProps = ProductFormGroupProps & {
   taxRates: TaxRateSummary[];
   isLoadingProduct?: boolean;
+  serviceLines: ServiceLineSummary[];
 };
 
 type ProductVariantsSectionProps = Omit<
@@ -2243,6 +2306,7 @@ function ProductMetaSection({
   errors,
   taxRates,
   isLoadingProduct = false,
+  serviceLines,
 }: ProductMetaSectionProps) {
   const t = useT();
   const handleValue = typeof values.handle === "string" ? values.handle : "";
@@ -2408,6 +2472,91 @@ function ProductMetaSection({
           <p className="text-xs text-red-600">
             {errors.productType}
           </p>
+        ) : null}
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <Label>
+            {t(
+              "catalog.products.form.serviceLine",
+              "Service line",
+            )}
+          </Label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.open(
+                  "/backend/config/catalog",
+                  "_blank",
+                  "noopener,noreferrer",
+                );
+              }
+            }}
+            title={t(
+              "catalog.products.form.serviceLineManage",
+              "Manage service lines",
+            )}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <Layers className="h-4 w-4" />
+            <span className="sr-only">
+              {t(
+                "catalog.products.form.serviceLineManage",
+                "Manage service lines",
+              )}
+            </span>
+          </Button>
+        </div>
+        <select
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          value={
+            typeof values.serviceLineId === "string"
+              ? values.serviceLineId
+              : ""
+          }
+          onChange={(event) =>
+            setValue("serviceLineId", event.target.value || null)
+          }
+          disabled={!serviceLines.length}
+        >
+          <option value="">
+            {serviceLines.length
+              ? t(
+                  "catalog.products.form.serviceLineNone",
+                  "No service line",
+                )
+              : t(
+                  "catalog.products.form.serviceLineEmpty",
+                  "No service lines defined",
+                )}
+          </option>
+          {serviceLines
+            .filter(
+              (line) =>
+                line.isActive ||
+                line.id ===
+                  (typeof values.serviceLineId === "string"
+                    ? values.serviceLineId
+                    : null),
+            )
+            .map((line) => (
+              <option key={line.id} value={line.id}>
+                {line.code ? `${line.code} — ${line.title}` : line.title}
+              </option>
+            ))}
+        </select>
+        <p className="text-xs text-muted-foreground">
+          {t(
+            "catalog.products.form.serviceLineHelp",
+            "Optional business classification (e.g. financing, insurance).",
+          )}
+        </p>
+        {errors.serviceLineId ? (
+          <p className="text-xs text-red-600">{errors.serviceLineId}</p>
         ) : null}
       </div>
 

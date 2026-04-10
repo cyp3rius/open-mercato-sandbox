@@ -40,6 +40,9 @@ import {
   loadEntityTagIds,
   emitQueryIndexDeleteEvents,
   emitQueryIndexUpsertEvents,
+  ensureReferralCodeAvailable,
+  handleCustomerReferralCodeUniqueError,
+  normalizeCustomerReferralCode,
   type QueryIndexEventEntry,
 } from './shared'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
@@ -144,6 +147,8 @@ type CompanySnapshot = {
     id: string
     organizationId: string
     tenantId: string
+    crmRecordType: string
+    referralCode: string | null
     displayName: string
     description: string | null
     ownerUserId: string | null
@@ -168,6 +173,8 @@ type CompanySnapshot = {
     industry: string | null
     sizeBucket: string | null
     annualRevenue: string | null
+    nip: string | null
+    regon: string | null
   }
   tagIds: string[]
   custom?: Record<string, unknown>
@@ -240,6 +247,8 @@ async function loadCompanySnapshot(em: EntityManager, id: string): Promise<Compa
       id: entity.id,
       organizationId: entity.organizationId,
       tenantId: entity.tenantId,
+      crmRecordType: entity.crmRecordType ?? 'customer',
+      referralCode: entity.referralCode ?? null,
       displayName: entity.displayName,
       description: entity.description ?? null,
       ownerUserId: entity.ownerUserId ?? null,
@@ -264,6 +273,8 @@ async function loadCompanySnapshot(em: EntityManager, id: string): Promise<Compa
       industry: profile.industry ?? null,
       sizeBucket: profile.sizeBucket ?? null,
       annualRevenue: profile.annualRevenue ?? null,
+      nip: profile.nip ?? null,
+      regon: profile.regon ?? null,
     },
     tagIds,
     custom,
@@ -408,10 +419,19 @@ const createCompanyCommand: CommandHandler<CompanyCreateInput, { entityId: strin
     const nextInteractionIcon = normalizeOptionalString(parsed.nextInteraction?.icon)
     const nextInteractionColor = normalizeHexColor(parsed.nextInteraction?.color)
     const primaryPhone = normalizeOptionalString(parsed.primaryPhone)
+    const crmRecordType = parsed.crmRecordType ?? 'customer'
+    const referralCode = normalizeCustomerReferralCode(parsed.referralCode)
+    await ensureReferralCodeAvailable(em, {
+      organizationId: parsed.organizationId,
+      tenantId: parsed.tenantId,
+      referralCode,
+    })
     const entity = em.create(CustomerEntity, {
       organizationId: parsed.organizationId,
       tenantId: parsed.tenantId,
       kind: 'company',
+      crmRecordType,
+      referralCode,
       displayName: parsed.displayName,
       description: parsed.description ?? null,
       ownerUserId: parsed.ownerUserId ?? null,
@@ -439,11 +459,17 @@ const createCompanyCommand: CommandHandler<CompanyCreateInput, { entityId: strin
       industry: parsed.industry ?? null,
       sizeBucket: parsed.sizeBucket ?? null,
       annualRevenue: parsed.annualRevenue !== undefined ? String(parsed.annualRevenue) : null,
+      nip: parsed.nip ?? null,
+      regon: parsed.regon ?? null,
     })
 
     em.persist(entity)
     em.persist(profile)
-    await em.flush()
+    try {
+      await em.flush()
+    } catch (err) {
+      handleCustomerReferralCodeUniqueError(err)
+    }
 
     await syncEntityTags(em, entity, parsed.tags)
     await em.flush()
@@ -550,12 +576,17 @@ const updateCompanyCommand: CommandHandler<CompanyUpdateInput, { entityId: strin
       record.nextInteractionRefId = normalizeOptionalString(parsed.nextInteraction.refId) ?? null
       record.nextInteractionIcon = normalizeOptionalString(parsed.nextInteraction.icon)
       record.nextInteractionColor = normalizeHexColor(parsed.nextInteraction.color)
-    } else if (parsed.nextInteraction === null) {
+    } else     if (parsed.nextInteraction === null) {
       record.nextInteractionAt = null
       record.nextInteractionName = null
       record.nextInteractionRefId = null
       record.nextInteractionIcon = null
       record.nextInteractionColor = null
+    }
+
+    if (parsed.crmRecordType !== undefined) record.crmRecordType = parsed.crmRecordType
+    if (parsed.referralCode !== undefined) {
+      record.referralCode = normalizeCustomerReferralCode(parsed.referralCode)
     }
 
     if (parsed.legalName !== undefined) profile.legalName = parsed.legalName ?? null
@@ -567,8 +598,20 @@ const updateCompanyCommand: CommandHandler<CompanyUpdateInput, { entityId: strin
     if (parsed.annualRevenue !== undefined) {
       profile.annualRevenue = parsed.annualRevenue !== null && parsed.annualRevenue !== undefined ? String(parsed.annualRevenue) : null
     }
+    if (parsed.nip !== undefined) profile.nip = parsed.nip ?? null
+    if (parsed.regon !== undefined) profile.regon = parsed.regon ?? null
 
-    await em.flush()
+    await ensureReferralCodeAvailable(em, {
+      organizationId: record.organizationId,
+      tenantId: record.tenantId,
+      excludeEntityId: record.id,
+      referralCode: record.referralCode,
+    })
+    try {
+      await em.flush()
+    } catch (err) {
+      handleCustomerReferralCodeUniqueError(err)
+    }
     await syncEntityTags(em, record, parsed.tags)
     await em.flush()
 
@@ -630,6 +673,8 @@ const updateCompanyCommand: CommandHandler<CompanyUpdateInput, { entityId: strin
         organizationId: before.entity.organizationId,
         tenantId: before.entity.tenantId,
         kind: 'company',
+        crmRecordType: before.entity.crmRecordType ?? 'customer',
+        referralCode: before.entity.referralCode ?? null,
         displayName: before.entity.displayName,
         description: before.entity.description,
         ownerUserId: before.entity.ownerUserId,
@@ -647,6 +692,8 @@ const updateCompanyCommand: CommandHandler<CompanyUpdateInput, { entityId: strin
       })
       em.persist(entity)
     } else {
+      entity.crmRecordType = before.entity.crmRecordType ?? 'customer'
+      entity.referralCode = before.entity.referralCode ?? null
       entity.displayName = before.entity.displayName
       entity.description = before.entity.description
       entity.ownerUserId = before.entity.ownerUserId
@@ -678,6 +725,8 @@ const updateCompanyCommand: CommandHandler<CompanyUpdateInput, { entityId: strin
         industry: before.profile.industry,
         sizeBucket: before.profile.sizeBucket,
         annualRevenue: before.profile.annualRevenue,
+        nip: before.profile.nip,
+        regon: before.profile.regon,
       })
       em.persist(profile)
     } else {
@@ -688,6 +737,8 @@ const updateCompanyCommand: CommandHandler<CompanyUpdateInput, { entityId: strin
       profile.industry = before.profile.industry
       profile.sizeBucket = before.profile.sizeBucket
       profile.annualRevenue = before.profile.annualRevenue
+      profile.nip = before.profile.nip
+      profile.regon = before.profile.regon
     }
 
     await em.flush()
@@ -935,35 +986,39 @@ const deleteCompanyCommand: CommandHandler<{ body?: Record<string, unknown>; que
 
       let profile = await em.findOne(CustomerCompanyProfile, { entity })
       if (!profile) {
-        profile = em.create(CustomerCompanyProfile, {
-          id: before.profile.id,
-          organizationId: before.entity.organizationId,
-          tenantId: before.entity.tenantId,
-          entity,
-          legalName: before.profile.legalName,
-          brandName: before.profile.brandName,
-          domain: before.profile.domain,
-          websiteUrl: before.profile.websiteUrl,
-          industry: before.profile.industry,
-          sizeBucket: before.profile.sizeBucket,
-          annualRevenue: before.profile.annualRevenue,
-        })
-        em.persist(profile)
-      } else {
-        profile.legalName = before.profile.legalName
-        profile.brandName = before.profile.brandName
-        profile.domain = before.profile.domain
-        profile.websiteUrl = before.profile.websiteUrl
-        profile.industry = before.profile.industry
-        profile.sizeBucket = before.profile.sizeBucket
-        profile.annualRevenue = before.profile.annualRevenue
-      }
+      profile = em.create(CustomerCompanyProfile, {
+        id: before.profile.id,
+        organizationId: before.entity.organizationId,
+        tenantId: before.entity.tenantId,
+        entity,
+        legalName: before.profile.legalName,
+        brandName: before.profile.brandName,
+        domain: before.profile.domain,
+        websiteUrl: before.profile.websiteUrl,
+        industry: before.profile.industry,
+        sizeBucket: before.profile.sizeBucket,
+        annualRevenue: before.profile.annualRevenue,
+        nip: before.profile.nip,
+        regon: before.profile.regon,
+      })
+      em.persist(profile)
+    } else {
+      profile.legalName = before.profile.legalName
+      profile.brandName = before.profile.brandName
+      profile.domain = before.profile.domain
+      profile.websiteUrl = before.profile.websiteUrl
+      profile.industry = before.profile.industry
+      profile.sizeBucket = before.profile.sizeBucket
+      profile.annualRevenue = before.profile.annualRevenue
+      profile.nip = before.profile.nip
+      profile.regon = before.profile.regon
+    }
 
-      await em.flush()
-      await syncEntityTags(em, entity, before.tagIds)
-      await em.flush()
+    await em.flush()
+    await syncEntityTags(em, entity, before.tagIds)
+    await em.flush()
 
-      const beforeDeals = before.deals ?? []
+    const beforeDeals = before.deals ?? []
       const beforeMembers = before.members ?? []
       const beforeActivities = (before as { activities?: CompanyActivitySnapshot[] }).activities ?? []
       const beforeComments = (before as { comments?: CompanyCommentSnapshot[] }).comments ?? []

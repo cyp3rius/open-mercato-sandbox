@@ -240,6 +240,17 @@ export const RESOURCES_RESOURCE_CUSTOM_FIELD_SETS: FieldSetInput[] = [
       fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
       group: { code: 'identity' },
     }),
+    cf.text('vehicle_vin_number', {
+      label: 'VIN',
+      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+      group: { code: 'identity' },
+      filterable: true,
+    }),
+    cf.integer('vehicle_year_of_manufacture', {
+      label: 'Year of manufacture',
+      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+      group: { code: 'specs' },
+    }),
     cf.select('vehicle_fuel_type', ['petrol', 'diesel', 'hybrid', 'electric'], {
       label: 'Fuel type',
       fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
@@ -247,6 +258,12 @@ export const RESOURCES_RESOURCE_CUSTOM_FIELD_SETS: FieldSetInput[] = [
     }),
     cf.integer('vehicle_mileage_km', {
       label: 'Mileage (km)',
+      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+      group: { code: 'specs' },
+    }),
+    cf.text('vehicle_registration_date', {
+      label: 'Registration date',
+      description: 'YYYY-MM-DD',
       fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
       group: { code: 'specs' },
     }),
@@ -293,6 +310,8 @@ export function resolveResourcesResourceFieldsetCode(name?: string | null): stri
   if (normalized.includes('seat')) return RESOURCES_RESOURCE_FIELDSET_SEAT
   if (normalized.includes('hair')) return RESOURCES_RESOURCE_FIELDSET_HAIR_KIT
   if (normalized.includes('dental')) return RESOURCES_RESOURCE_FIELDSET_DENTAL_CHAIR
-  if (normalized.includes('car') || normalized.includes('vehicle')) return RESOURCES_RESOURCE_FIELDSET_VEHICLE
+  if (normalized.includes('car') || normalized.includes('vehicle') || normalized.includes('pojazd')) {
+    return RESOURCES_RESOURCE_FIELDSET_VEHICLE
+  }
   return RESOURCES_RESOURCE_FIELDSET_DEFAULT
 }

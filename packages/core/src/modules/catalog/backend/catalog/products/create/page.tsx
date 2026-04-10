@@ -48,6 +48,7 @@ import {
   type VariantPriceValue,
   type VariantDraft,
   type ProductFormValues,
+  type ServiceLineSummary,
   type ProductUnitConversionDraft,
   type ProductUnitPriceReferenceUnit,
   type ProductUnitRoundingMode,
@@ -135,6 +136,7 @@ const STEP_FIELD_MATCHERS: Record<
     matchField("title"),
     matchField("sku"),
     matchField("productType"),
+    matchField("serviceLineId"),
     matchField("description"),
     matchField("mediaItems"),
     matchField("mediaDraftId"),
@@ -229,6 +231,9 @@ export default function CreateCatalogProductPage() {
   }
   const [priceKinds, setPriceKinds] = React.useState<PriceKindSummary[]>([]);
   const [taxRates, setTaxRates] = React.useState<TaxRateSummary[]>([]);
+  const [serviceLines, setServiceLines] = React.useState<ServiceLineSummary[]>(
+    [],
+  );
   React.useEffect(() => {
     const loadPriceKinds = async () => {
       try {
@@ -303,6 +308,45 @@ export default function CreateCatalogProductPage() {
     loadTaxRates().catch(() => {});
   }, [t]);
 
+  React.useEffect(() => {
+    const loadServiceLines = async () => {
+      try {
+        const payload = await readApiResultOrThrow<{
+          items?: Array<Record<string, unknown>>;
+        }>("/api/catalog/service-lines?pageSize=100", undefined, {
+          errorMessage: t(
+            "catalog.serviceLines.errors.load",
+            "Failed to load service lines.",
+          ),
+          fallback: { items: [] },
+        });
+        const items = Array.isArray(payload.items) ? payload.items : [];
+        setServiceLines(
+          items.map((item) => ({
+            id: String(item.id ?? ""),
+            code:
+              typeof item.code === "string" && item.code.trim().length
+                ? item.code
+                : "",
+            title:
+              typeof item.title === "string" && item.title.trim().length
+                ? item.title
+                : "",
+            isActive: resolveBooleanFlag(
+              typeof item.is_active !== "undefined"
+                ? item.is_active
+                : item.isActive,
+            ),
+          })).filter((entry) => entry.id.length > 0),
+        );
+      } catch (err) {
+        console.error("catalog.service-lines.fetch failed", err);
+        setServiceLines([]);
+      }
+    };
+    loadServiceLines().catch(() => {});
+  }, [t]);
+
   const groups = React.useMemo<CrudFormGroup[]>(
     () => [
       {
@@ -340,11 +384,12 @@ export default function CreateCatalogProductPage() {
             setValue={setValue}
             errors={errors}
             taxRates={taxRates}
+            serviceLines={serviceLines}
           />
         ),
       },
     ],
-    [priceKinds, taxRates, t],
+    [priceKinds, serviceLines, taxRates, t],
   );
 
   return (
@@ -526,6 +571,7 @@ export default function CreateCatalogProductPage() {
               handle,
               sku: formValues.sku?.trim() || undefined,
               productType: formValues.productType || "simple",
+              serviceLineId: formValues.serviceLineId ?? null,
               taxRateId: formValues.taxRateId ?? null,
               taxRate: productTaxRate ?? null,
               isConfigurable: isConfigurableProductType(
@@ -842,6 +888,7 @@ type ProductMetaSectionProps = {
   setValue: (id: string, value: unknown) => void;
   errors: Record<string, string>;
   taxRates: TaxRateSummary[];
+  serviceLines: ServiceLineSummary[];
 };
 
 type ProductDimensionsSectionProps = {
@@ -1854,6 +1901,7 @@ function ProductMetaSection({
   setValue,
   errors,
   taxRates,
+  serviceLines,
 }: ProductMetaSectionProps) {
   const t = useT();
   const handleValue = typeof values.handle === "string" ? values.handle : "";
@@ -2006,6 +2054,91 @@ function ProductMetaSection({
           <p className="text-xs text-red-600">
             {errors.productType}
           </p>
+        ) : null}
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <Label>
+            {t(
+              "catalog.products.form.serviceLine",
+              "Service line",
+            )}
+          </Label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.open(
+                  "/backend/config/catalog",
+                  "_blank",
+                  "noopener,noreferrer",
+                );
+              }
+            }}
+            title={t(
+              "catalog.products.form.serviceLineManage",
+              "Manage service lines",
+            )}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <Settings className="h-4 w-4" />
+            <span className="sr-only">
+              {t(
+                "catalog.products.form.serviceLineManage",
+                "Manage service lines",
+              )}
+            </span>
+          </Button>
+        </div>
+        <select
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          value={
+            typeof values.serviceLineId === "string"
+              ? values.serviceLineId
+              : ""
+          }
+          onChange={(event) =>
+            setValue("serviceLineId", event.target.value || null)
+          }
+          disabled={!serviceLines.length}
+        >
+          <option value="">
+            {serviceLines.length
+              ? t(
+                  "catalog.products.form.serviceLineNone",
+                  "No service line",
+                )
+              : t(
+                  "catalog.products.form.serviceLineEmpty",
+                  "No service lines defined",
+                )}
+          </option>
+          {serviceLines
+            .filter(
+              (line) =>
+                line.isActive ||
+                line.id ===
+                  (typeof values.serviceLineId === "string"
+                    ? values.serviceLineId
+                    : null),
+            )
+            .map((line) => (
+              <option key={line.id} value={line.id}>
+                {line.code ? `${line.code} — ${line.title}` : line.title}
+              </option>
+            ))}
+        </select>
+        <p className="text-xs text-muted-foreground">
+          {t(
+            "catalog.products.form.serviceLineHelp",
+            "Optional business classification (e.g. financing, insurance).",
+          )}
+        </p>
+        {errors.serviceLineId ? (
+          <p className="text-xs text-red-600">{errors.serviceLineId}</p>
         ) : null}
       </div>
 

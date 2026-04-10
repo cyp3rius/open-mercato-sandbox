@@ -1,0 +1,46 @@
+---
+description: Open Mercato — backend module UI (list, detail, create) for app modules
+globs: apps/mercato/src/modules/**/*.tsx
+alwaysApply: false
+---
+
+# Backend module UI (app modules)
+
+**Reference implementation:** `packages/core/src/modules/customers/backend/customers/companies` — detail at `[id]/page.tsx`, create at `create/page.tsx`. New module screens under `apps/mercato/src/modules/<module>/backend/...` should use the **same URL semantics and the same mechanisms** (CrudForm, groups, actions) unless a spec says otherwise.
+
+## Routing and files
+
+- **Entity detail**: a single route **`.../<entity>/[id]/page.tsx`**. Do **not** add a separate **`[id]/edit/`** folder — avoid `/…/id/edit` in the URL (same idea as CRM: `/backend/customers/companies/{id}`).
+- After moving or adding pages in the module tree, always run **`yarn generate`** so `apps/mercato/.mercato/generated/modules.generated.ts` stays in sync and you avoid `Module not found` on build.
+
+## List (DataTable)
+
+- Prefer **“View details”** over “Edit” (i18n key pattern `*.viewDetails`) — navigate to **`…/{id}`**.
+- **Row click** (if enabled): same destination as “view details”, not `/edit`.
+- **Duplicate**: **prefill the create form only** — link **`…/create?duplicateFrom={id}`** (or equivalent query). Do **not** create a record immediately on duplicate.
+
+## Create
+
+- **`CrudForm` as a full page** (default **without** `embedded`): **`title`**, **`backHref`** (list), **`cancelHref`** (same list as back), **`submitLabel`** — header with **Save / Cancel** at the top and bottom right, matching **`customers/companies/create`**.
+- Do **not** stack a separate **`FormHeader`** above the form if `CrudForm` already provides the title and action bar.
+- **Sections**: use **`groups`** with **`column: 1` / `column: 2`** (two-column layout like core). Add a **“Basics”** group (`*.form.groups.basics`) for primary fields (ids, status, etc.); put the rest in further groups (“Details”, etc.).
+- **Child records** (e.g. company addresses, **insurer contact drafts**): **`type: 'custom'`** field in the **right column**, value = draft array in form state; after a successful **`POST`** of the parent entity, create child records in a loop (same idea as addresses after company create). On partial failures: user-facing message + redirect to the new record’s detail page.
+
+## Detail
+
+- Prefer **staying on the page after save**: success **`flash`** + reload data (and optionally a **`key`** on the form) instead of **`router.push` to the list** — unless product requirements say otherwise.
+- **Extra actions** (e.g. “Generate policy”) via **`extraActions`** on `CrudForm` — same order as `FormActionButtons`: **extras first**, then Save (extra action **to the left** of Save).
+- Consistent **breadcrumb / `page.meta.ts`**: title and last segment like “Details”, not “Edit”; i18n keys under `*.detail.*`.
+
+## i18n
+
+- Lists: `*.viewDetails`; detail meta: `*.detail.pageTitle`, `*.detail.breadcrumb`, `*.detail.notFound`; sections: `*.form.groups.basics` (plus existing group keys). **No** hard-coded user-visible strings.
+
+## Platform docs
+
+- Field conventions, CrudForm, UI package: **`packages/ui/AGENTS.md`** and **`packages/ui/src/backend/AGENTS.md`**.
+- Core modules: **`packages/core/AGENTS.md`** and the target module’s `AGENTS.md` if present.
+
+## Form controls, labels, and relation fields
+
+For **visual parity with CrudForm**, **hint placement**, **conditional dependent fields**, **EntitySearchCombobox** (+ new tab), and **safe list filters** (e.g. unlinked + search), follow **`.cursor/rules/form-ui-consistency.mdc`** — it applies to this glob and to shared `CrudForm` / input surfaces.

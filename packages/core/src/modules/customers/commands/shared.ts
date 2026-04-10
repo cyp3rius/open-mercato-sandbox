@@ -1,5 +1,13 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { CustomerDeal, CustomerEntity, CustomerTag, CustomerTagAssignment, CustomerDictionaryEntry, type CustomerEntityKind } from '../data/entities'
+import { UniqueConstraintViolationException } from '@mikro-orm/core'
+import {
+  CustomerDeal,
+  CustomerEntity,
+  CustomerTag,
+  CustomerTagAssignment,
+  CustomerDictionaryEntry,
+  type CustomerEntityKind,
+} from '../data/entities'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import { ensureOrganizationScope, ensureSameScope } from '@open-mercato/shared/lib/commands/scope'
@@ -37,6 +45,51 @@ export async function requireCustomerEntity(
     throw new CrudHttpError(400, { error: 'Invalid entity type' })
   }
   return entity
+}
+
+export function normalizeCustomerReferralCode(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  return trimmed.length ? trimmed : null
+}
+
+/**
+ * Ensures no other row uses this referral code for the org/tenant scope.
+ * For **new** records, call this **before** `em.persist` / before the new `CustomerEntity` is queued:
+ * `findOne` can trigger `tryFlush()`, which inserts pending entities first and can violate the unique
+ * index or hide the real duplicate check.
+ */
+export async function ensureReferralCodeAvailable(
+  em: EntityManager,
+  params: {
+    organizationId: string
+    tenantId: string
+    excludeEntityId?: string
+    referralCode: string | null | undefined
+  },
+): Promise<void> {
+  const code = normalizeCustomerReferralCode(params.referralCode)
+  if (!code) return
+  const existing = await em.findOne(CustomerEntity, {
+    organizationId: params.organizationId,
+    tenantId: params.tenantId,
+    referralCode: code,
+    deletedAt: null,
+    ...(params.excludeEntityId ? { id: { $ne: params.excludeEntityId } } : {}),
+  })
+  if (existing) {
+    throw new CrudHttpError(409, { error: 'This referral code is already in use.' })
+  }
+}
+
+export function handleCustomerReferralCodeUniqueError(err: unknown): never {
+  if (err instanceof UniqueConstraintViolationException) {
+    const msg = err.message ?? ''
+    if (msg.includes('referral_code')) {
+      throw new CrudHttpError(409, { error: 'This referral code is already in use.' })
+    }
+  }
+  throw err
 }
 
 export async function syncEntityTags(

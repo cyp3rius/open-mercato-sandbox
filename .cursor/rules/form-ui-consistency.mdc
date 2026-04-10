@@ -1,0 +1,57 @@
+---
+description: CrudForm-aligned controls, labels, hints, conditional fields, relation combobox, list API filters
+globs:
+  - apps/mercato/src/modules/**/*.tsx
+  - packages/ui/src/backend/CrudForm.tsx
+  - packages/ui/src/backend/inputs/**/*.tsx
+  - packages/core/src/modules/**/components/**/*.tsx
+alwaysApply: false
+---
+
+# Form UI consistency (Mercato modules + shared form surfaces)
+
+Use these rules when building or refactoring **backend forms**, **custom CrudForm fields**, and **CRM-style editors** so the UI stays aligned with **`CrudForm`** and avoids one-off “design system drift”.
+
+**Platform references:** `packages/ui/AGENTS.md`, `packages/ui/src/backend/AGENTS.md`, root `AGENTS.md` (UI & HTTP sections).
+
+## Control styling (parity with CrudForm)
+
+- **Source of truth:** export and use **`CRUD_FORM_TEXT_INPUT_CLASS`**, **`CRUD_FORM_SELECT_CLASS`**, **`CRUD_FORM_TEXTAREA_CLASS`** from `@open-mercato/ui/backend/CrudForm` for native `<input>`, `<select>`, `<textarea>` in custom fields and embedded editors.
+- **Do not** use long shadcn-style utility stacks on plain form controls (e.g. `shadow-sm`, `border-input`, `focus-visible:ring-*`, `ring-offset-2`) when the field should look like a standard Crud row — keep the same minimal pattern as built-in Crud inputs (`w-full h-9 rounded border px-2 text-sm` family).
+- Prefer **native elements + Crud constants** over `@open-mercato/ui/primitives/input` for controls that must **match CrudForm** visually; use primitives where the design intentionally differs (dialogs, special widgets).
+- Merge error / invalid states with `cn` / `cnTw` from `@open-mercato/shared/lib/utils` (e.g. `border-red-500`) without reintroducing heavy focus rings for parity fields.
+
+## Labels and typography
+
+- Field labels in custom blocks should match CrudForm’s label treatment: **`block text-sm font-medium`** on a native `<label>` (or equivalent), **not** `text-xs text-muted-foreground` label styling for primary field labels.
+- **Section titles** come from **`CrudForm` `groups[].title`** (and optional `description`). Avoid duplicating a second “group subtitle” above the same field grid (e.g. drop redundant “vehicle / subject details” line when the group already describes the section).
+- Intro / hint copy may stay as **`text-sm text-muted-foreground`** paragraphs where it is **explanatory**, not a substitute for a field label.
+
+## Hints and `description`
+
+- **`field.description`** on CrudForm fields is rendered **below** the control (after the field component). Prefer that for help text when it applies to the whole field.
+- For **custom** widgets, place **inline hints under the control** (e.g. under `<select>`) when the hint refers to the control itself (“select insurer first…”), so the order is: **label → control → hint** — unless product copy explicitly requires otherwise.
+
+## Conditional and dependent fields
+
+- Show dependent controls only when the parent value requires them (e.g. financing only for **business** usage; leasing company only for **leasing** financing).
+- When the parent value changes, **clear stale dependent values** in form state (e.g. switching away from business clears financing and leasing company; switching away from leasing clears leasing company) so saved payloads do not retain obsolete data.
+
+## Relation / lookup fields (search + “add in new tab”)
+
+- For entity pickers that need **search** and an optional **create/manage** action, use **`EntitySearchCombobox`** from `@open-mercato/ui/backend/inputs/EntitySearchCombobox` (Popover + **cmdk**), not ad-hoc dropdowns, when the pattern is already adopted for that flow.
+- The **square `+` control** opens **`window.open(url, '_blank', 'noopener,noreferrer')`** — new tab for **create** or **settings** URLs configured per field (`createInNewTabHref` on Crud `select` when `useEntitySearchCombobox` is set, or props on custom usage).
+- **Special case — “child” entity managed on parent:** e.g. **insurer contacts**: `+` should open the **selected parent’s** admin page (edit insurer) to add contacts, not a generic create URL when no parent is selected — hide or omit `+` until the parent is chosen if there is no valid target.
+
+## CrudForm `select` + entity search
+
+- Optional builtin flags (see `CrudForm` types): **`useEntitySearchCombobox`**, **`remoteSelectSearch`** (server refetch per query), **`createInNewTabHref`** (string or `(values) => string | undefined`), **`createInNewTabAriaLabel`**.
+- Prefer **client-side filtering** on loaded options when the loader returns a full list; use **`remoteSelectSearch`** when the API is **search-driven** (e.g. unlinked leads with `search` query param).
+
+## List APIs and filters (example: insurance leads)
+
+- When combining **“only unlinked records”** with **text search**, express the search clause under **`$and`** (e.g. append `{ $or: [...] }` to `filter.$and`) so it **always ANDs** with `linkedPolicy: null` (or equivalent) — avoid ambiguous top-level `$or` that can weaken the unlinked constraint depending on ORM composition.
+
+## Buttons
+
+- Non-submit controls: **`type="button"`** explicitly; use **`Button`** / **`IconButton`** from UI primitives per `packages/ui/AGENTS.md` — no raw `<button>` for interactive controls.

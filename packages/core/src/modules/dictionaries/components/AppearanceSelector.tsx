@@ -26,6 +26,8 @@ type AppearanceSelectorProps = {
   onColorChange: (next: string | null) => void
   labels: AppearanceSelectorLabels
   disabled?: boolean
+  /** When true, only icon selection is shown (no color controls). Preview shows the icon only. */
+  iconOnly?: boolean
   iconSuggestions?: IconOption[]
   iconLibrary?: IconOption[]
   className?: string
@@ -40,13 +42,16 @@ export function AppearanceSelector({
   onColorChange,
   labels,
   disabled = false,
+  iconOnly = false,
   iconSuggestions = ICON_SUGGESTIONS,
   iconLibrary,
   className,
 }: AppearanceSelectorProps) {
   const normalizedIcon = icon ?? ''
   const normalizedColor = color ?? '#000000'
-  const hasAppearance = Boolean(icon) || Boolean(color)
+  const hasAppearance = iconOnly
+    ? Boolean((icon ?? '').trim())
+    : Boolean(icon) || Boolean(color)
   const iconOptions = React.useMemo(() => (iconLibrary && iconLibrary.length ? iconLibrary : ICON_LIBRARY), [iconLibrary])
   const [pickerOpen, setPickerOpen] = React.useState(false)
   const [iconSearch, setIconSearch] = React.useState('')
@@ -112,31 +117,33 @@ export function AppearanceSelector({
 
   return (
     <div className={['space-y-4', className].filter(Boolean).join(' ')}>
-      <div className="space-y-2">
-        <label className="flex items-center gap-2 text-sm font-medium">
-          {labels.colorLabel}
-          {labels.colorHelp ? <span className="text-xs font-normal text-muted-foreground">{labels.colorHelp}</span> : null}
-        </label>
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="color"
-            value={normalizedColor}
-            onChange={(event) => onColorChange(event.target.value)}
-            disabled={disabled}
-            className="h-10 w-12 cursor-pointer rounded border border-border bg-background"
-            aria-label={labels.colorLabel}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => onColorChange(null)}
-            disabled={disabled || !color}
-          >
-            {labels.colorClearLabel}
-          </Button>
+      {!iconOnly ? (
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            {labels.colorLabel}
+            {labels.colorHelp ? <span className="text-xs font-normal text-muted-foreground">{labels.colorHelp}</span> : null}
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="color"
+              value={normalizedColor}
+              onChange={(event) => onColorChange(event.target.value)}
+              disabled={disabled}
+              className="h-10 w-12 cursor-pointer rounded border border-border bg-background"
+              aria-label={labels.colorLabel}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onColorChange(null)}
+              disabled={disabled || !color}
+            >
+              {labels.colorClearLabel}
+            </Button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="space-y-2">
         <label className="text-sm font-medium">{labels.iconLabel}</label>
@@ -244,7 +251,7 @@ export function AppearanceSelector({
           {hasAppearance ? (
             <>
               {renderDictionaryIcon(icon, 'h-5 w-5')}
-              {renderDictionaryColor(color, 'h-4 w-4 rounded-full')}
+              {iconOnly ? null : renderDictionaryColor(color, 'h-4 w-4 rounded-full')}
             </>
           ) : (
             <span className="text-sm text-muted-foreground">{labels.previewEmptyLabel}</span>

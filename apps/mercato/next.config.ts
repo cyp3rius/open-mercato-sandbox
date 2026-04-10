@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
     turbopackMinify: false,
   },
   turbopack: {
-    // Monorepo root is two levels up from apps/mercato
+    // Monorepo root is two levels up from apps/<app>
     root: path.resolve(process.cwd(), "../.."),
   },
   // Externalize packages that are only used in CLI context, not Next.js

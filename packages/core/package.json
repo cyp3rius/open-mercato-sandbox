@@ -41,6 +41,22 @@
       "types": "./src/modules/customers/commands/index.ts",
       "default": "./dist/modules/customers/commands/index.js"
     },
+    "./modules/customers/lib/pesel": {
+      "types": "./src/modules/customers/lib/pesel.ts",
+      "default": "./dist/modules/customers/lib/pesel.js"
+    },
+    "./modules/customers/lib/nip": {
+      "types": "./src/modules/customers/lib/nip.ts",
+      "default": "./dist/modules/customers/lib/nip.js"
+    },
+    "./modules/customers/lib/regon": {
+      "types": "./src/modules/customers/lib/regon.ts",
+      "default": "./dist/modules/customers/lib/regon.js"
+    },
+    "./modules/customers/lib/mfVatRegistry": {
+      "types": "./src/modules/customers/lib/mfVatRegistry.ts",
+      "default": "./dist/modules/customers/lib/mfVatRegistry.js"
+    },
     "./modules/sales": {
       "types": "./src/modules/sales/index.ts",
       "default": "./dist/modules/sales/index.js"

@@ -80,6 +80,7 @@ describe('BASE_INITIAL_VALUES UoM defaults', () => {
     expect(BASE_INITIAL_VALUES.unitPriceReferenceUnit).toBeNull()
     expect(BASE_INITIAL_VALUES.unitPriceBaseQuantity).toBe('')
     expect(BASE_INITIAL_VALUES.unitConversions).toEqual([])
+    expect(BASE_INITIAL_VALUES.serviceLineId).toBeNull()
   })
 })
 

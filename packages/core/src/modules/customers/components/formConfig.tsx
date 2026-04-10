@@ -2,11 +2,16 @@
 
 import * as React from 'react'
 import { z } from 'zod'
+import { isValidNip, normalizeNipDigits } from '../lib/nip'
+import { isValidPesel, normalizePeselDigits } from '../lib/pesel'
+import { isValidRegon, normalizeRegonDigits } from '../lib/regon'
 import Link from 'next/link'
 import { Check, Pencil, Plus, Settings } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { cn as cnTw } from '@open-mercato/shared/lib/utils'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { IconButton } from '@open-mercato/ui/primitives/icon-button'
 import {
   Dialog,
   DialogContent,
@@ -21,11 +26,13 @@ import { apiCall, apiCallOrThrow, readApiResultOrThrow } from '@open-mercato/ui/
 import { collectCustomFieldValues } from '@open-mercato/ui/backend/utils/customFieldValues'
 import { PhoneNumberField } from '@open-mercato/ui/backend/inputs/PhoneNumberField'
 import { isValidPhoneNumber } from '@open-mercato/shared/lib/phone'
-import type {
-  CrudCustomFieldRenderProps,
-  CrudField,
-  CrudFormGroup,
-  CrudFormGroupComponentProps,
+import {
+  CRUD_FORM_SELECT_CLASS,
+  CRUD_FORM_TEXT_INPUT_CLASS,
+  type CrudCustomFieldRenderProps,
+  type CrudField,
+  type CrudFormGroup,
+  type CrudFormGroupComponentProps,
 } from '@open-mercato/ui/backend/CrudForm'
 import {
   DictionaryEntrySelect,
@@ -42,6 +49,7 @@ import {
 import type { CustomerDictionaryKind } from '../lib/dictionaries'
 import { normalizeCustomFieldSubmitValue } from './detail/customFieldUtils'
 import { CUSTOMER_PHONE_INVALID_MESSAGE_KEY } from '../data/validators'
+import { createCompanyRegistrySyncBridgeField } from './companyRegistrySync'
 
 export const metadata = {
   navHidden: true,
@@ -49,6 +57,86 @@ export const metadata = {
 
 function cn(...values: Array<string | null | undefined | false>) {
   return values.filter(Boolean).join(' ')
+}
+
+function createCrmRecordTypeAndReferralField(t: Translator, variant: 'company' | 'person'): CrudField {
+  const pf = variant === 'company' ? 'customers.companies.form' : 'customers.people.form'
+  const hintKey =
+    variant === 'company'
+      ? 'customers.companies.form.referralCode.hint'
+      : 'customers.people.form.referralCode.hint'
+  return {
+    id: 'crmRecordType',
+    label: '',
+    type: 'custom',
+    layout: 'third',
+    component: ({
+      value,
+      values,
+      setValue,
+      setFormValue,
+      error,
+      formErrors,
+      autoFocus,
+      disabled,
+    }: CrudCustomFieldRenderProps) => {
+      const crmRaw = typeof value === 'string' && value.length ? value : 'customer'
+      const referral = typeof values?.referralCode === 'string' ? values.referralCode : ''
+      const showReferral = crmRaw === 'partner' || crmRaw === 'referrer'
+      React.useEffect(() => {
+        if (!showReferral && referral.length > 0) {
+          setFormValue?.('referralCode', '')
+        }
+      }, [showReferral, referral, setFormValue])
+      const referralError = formErrors?.referralCode
+      return (
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:gap-4">
+          <div className="min-w-0 flex-1 space-y-1">
+            <label className="block text-sm font-medium" htmlFor={`crm-record-type-${variant}`}>
+              {t(`${pf}.crmRecordType`, 'Record type')}
+            </label>
+            <select
+              id={`crm-record-type-${variant}`}
+              className={CRUD_FORM_SELECT_CLASS}
+              value={crmRaw}
+              onChange={(event) => setValue(event.target.value)}
+              disabled={disabled}
+              autoFocus={autoFocus}
+              data-crud-focus-target=""
+            >
+              <option value="customer">{t(`${pf}.crmRecordType.customer`, 'Customer')}</option>
+              <option value="partner">{t(`${pf}.crmRecordType.partner`, 'Partner')}</option>
+              <option value="referrer">{t(`${pf}.crmRecordType.referrer`, 'Referrer')}</option>
+            </select>
+            {error ? <div className="text-xs text-red-600">{error}</div> : null}
+          </div>
+          {showReferral ? (
+            <div className="min-w-0 flex-1 space-y-1">
+              <label className="block text-sm font-medium" htmlFor={`referral-code-${variant}`}>
+                {t(`${pf}.referralCode`, 'Referral code')}
+              </label>
+              <input
+                id={`referral-code-${variant}`}
+                className={CRUD_FORM_TEXT_INPUT_CLASS}
+                value={referral}
+                onChange={(event) => setFormValue?.('referralCode', event.target.value)}
+                disabled={disabled}
+                autoComplete="off"
+                data-crud-focus-target=""
+              />
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  hintKey,
+                  'Unique code for partners/referrers: 3–64 alphanumeric characters when set.',
+                )}
+              </p>
+              {referralError ? <div className="text-xs text-red-600">{referralError}</div> : null}
+            </div>
+          ) : null}
+        </div>
+      )
+    },
+  }
 }
 
 export type Translator = (
@@ -61,6 +149,11 @@ export type PersonFormValues = {
   displayName: string
   firstName: string
   lastName: string
+  pesel?: string
+  residenceStreet?: string
+  residencePostalCode?: string
+  residenceCity?: string
+  residenceCountry?: string
   jobTitle?: string
   companyEntityId?: string | null
   primaryEmail?: string
@@ -68,6 +161,8 @@ export type PersonFormValues = {
   status?: string
   lifecycleStage?: string
   source?: string
+  crmRecordType?: string
+  referralCode?: string
   description?: string
   addresses?: CustomerAddressValue[]
 } & Record<string, unknown>
@@ -79,13 +174,17 @@ export type CompanyFormValues = {
   status?: string
   lifecycleStage?: string
   source?: string
+  crmRecordType?: string
+  referralCode?: string
   legalName?: string
   brandName?: string
   domain?: string
   websiteUrl?: string
   industry?: string
   sizeBucket?: string
-  annualRevenue?: string
+   annualRevenue?: string
+  nip?: string
+  regon?: string
   description?: string
   addresses?: CustomerAddressValue[]
 } & Record<string, unknown>
@@ -455,6 +554,575 @@ function normalizeCompanyOption(raw: unknown): CompanyOption | null {
   return { value: id, label: displayName }
 }
 
+type CustomerEntityPickerOption = {
+  id: string
+  label: string
+  subtitle?: string | null
+}
+
+function sanitizeCustomerEntityIds(ids: string[]): string[] {
+  const set = new Set<string>()
+  ids.forEach((candidate) => {
+    const trimmed = typeof candidate === 'string' ? candidate.trim() : ''
+    if (trimmed.length) set.add(trimmed)
+  })
+  return Array.from(set)
+}
+
+function extractCustomerPersonOption(record: Record<string, unknown>): CustomerEntityPickerOption | null {
+  const id = typeof record.id === 'string' ? record.id : null
+  if (!id) return null
+  const displayName =
+    typeof record.displayName === 'string' && record.displayName.trim().length
+      ? record.displayName.trim()
+      : typeof record.display_name === 'string' && record.display_name.trim().length
+        ? (record.display_name as string).trim()
+        : null
+  const email =
+    typeof record.primaryEmail === 'string' && record.primaryEmail.trim().length
+      ? record.primaryEmail.trim()
+      : typeof record.primary_email === 'string' && record.primary_email.trim().length
+        ? (record.primary_email as string).trim()
+        : null
+  const label = displayName ?? email ?? id
+  const subtitle = email && email !== label ? email : null
+  return { id, label, subtitle }
+}
+
+function extractCustomerCompanyOption(record: Record<string, unknown>): CustomerEntityPickerOption | null {
+  const id = typeof record.id === 'string' ? record.id : null
+  if (!id) return null
+  const displayName =
+    typeof record.displayName === 'string' && record.displayName.trim().length
+      ? record.displayName.trim()
+      : typeof record.display_name === 'string' && record.display_name.trim().length
+        ? (record.display_name as string).trim()
+        : null
+  const domain =
+    typeof record.domain === 'string' && record.domain.trim().length
+      ? record.domain.trim()
+      : typeof record.websiteUrl === 'string' && record.websiteUrl.trim().length
+        ? record.websiteUrl.trim()
+        : typeof record.website_url === 'string' && record.website_url.trim().length
+          ? (record.website_url as string).trim()
+          : null
+  const label = displayName ?? domain ?? id
+  const subtitle = domain && domain !== label ? domain : null
+  return { id, label, subtitle }
+}
+
+async function searchCustomerPeopleApi(query: string): Promise<CustomerEntityPickerOption[]> {
+  const params = new URLSearchParams({
+    pageSize: '20',
+    sortField: 'name',
+    sortDir: 'asc',
+  })
+  if (query.trim().length) params.set('search', query.trim())
+  const call = await apiCall<Record<string, unknown>>(`/api/customers/people?${params.toString()}`)
+  if (!call.ok) {
+    throw new Error(typeof call.result?.error === 'string' ? String(call.result?.error) : 'Failed to search people')
+  }
+  const payload = call.result ?? {}
+  const items = Array.isArray(payload.items) ? payload.items : []
+  return items
+    .map((item: unknown) =>
+      item && typeof item === 'object' ? extractCustomerPersonOption(item as Record<string, unknown>) : null,
+    )
+    .filter((entry: CustomerEntityPickerOption | null): entry is CustomerEntityPickerOption => entry !== null)
+}
+
+async function fetchCustomerPeopleByIdsApi(ids: string[]): Promise<CustomerEntityPickerOption[]> {
+  const unique = sanitizeCustomerEntityIds(ids)
+  if (!unique.length) return []
+  const results = await Promise.all(
+    unique.map(async (id) => {
+      try {
+        const call = await apiCall<Record<string, unknown>>(
+          `/api/customers/people?id=${encodeURIComponent(id)}&pageSize=1`,
+        )
+        if (!call.ok) throw new Error()
+        const payload = call.result ?? {}
+        const items = Array.isArray(payload.items) ? payload.items : []
+        const option = items
+          .map((item: unknown) =>
+            item && typeof item === 'object' ? extractCustomerPersonOption(item as Record<string, unknown>) : null,
+          )
+          .find((candidate: CustomerEntityPickerOption | null): candidate is CustomerEntityPickerOption => candidate !== null)
+        return option ?? { id, label: id }
+      } catch {
+        return { id, label: id }
+      }
+    }),
+  )
+  return results
+}
+
+async function searchCustomerCompaniesApi(query: string): Promise<CustomerEntityPickerOption[]> {
+  const params = new URLSearchParams({
+    pageSize: '20',
+    sortField: 'name',
+    sortDir: 'asc',
+  })
+  if (query.trim().length) params.set('search', query.trim())
+  const call = await apiCall<Record<string, unknown>>(`/api/customers/companies?${params.toString()}`)
+  if (!call.ok) {
+    throw new Error(
+      typeof call.result?.error === 'string' ? String(call.result?.error) : 'Failed to search companies',
+    )
+  }
+  const payload = call.result ?? {}
+  const items = Array.isArray(payload.items) ? payload.items : []
+  return items
+    .map((item: unknown) =>
+      item && typeof item === 'object' ? extractCustomerCompanyOption(item as Record<string, unknown>) : null,
+    )
+    .filter((entry: CustomerEntityPickerOption | null): entry is CustomerEntityPickerOption => entry !== null)
+}
+
+async function fetchCustomerCompaniesByIdsApi(ids: string[]): Promise<CustomerEntityPickerOption[]> {
+  const unique = sanitizeCustomerEntityIds(ids)
+  if (!unique.length) return []
+  const results = await Promise.all(
+    unique.map(async (id) => {
+      try {
+        const call = await apiCall<Record<string, unknown>>(
+          `/api/customers/companies?id=${encodeURIComponent(id)}&pageSize=1`,
+        )
+        if (!call.ok) throw new Error()
+        const payload = call.result ?? {}
+        const items = Array.isArray(payload.items) ? payload.items : []
+        const option = items
+          .map((item: unknown) =>
+            item && typeof item === 'object' ? extractCustomerCompanyOption(item as Record<string, unknown>) : null,
+          )
+          .find((candidate: CustomerEntityPickerOption | null): candidate is CustomerEntityPickerOption => candidate !== null)
+        return option ?? { id, label: id }
+      } catch {
+        return { id, label: id }
+      }
+    }),
+  )
+  return results
+}
+
+export type CustomerEntitySinglePickerLabels = {
+  searchPlaceholder: string
+  loadingLabel: string
+  noResultsLabel: string
+  errorLabel: string
+  addLabel: string
+  companyDialogTitle: string
+  companyDialogDescription?: string
+  companyNameLabel: string
+  companyNamePlaceholder: string
+  personDialogTitle: string
+  personDialogDescription?: string
+  personFirstNameLabel: string
+  personLastNameLabel: string
+  cancelLabel: string
+  saveLabel: string
+  emptyError: string
+  errorSave: string
+  removeSelectionAria: string
+}
+
+type CustomerEntitySinglePickerProps = {
+  kind: 'person' | 'company'
+  value?: string | null
+  onChange: (next: string | undefined) => void
+  labels: CustomerEntitySinglePickerLabels
+  disabled?: boolean
+}
+
+/**
+ * Searchable single-select for a CRM person or company (same search/list API as deal associations),
+ * with a quick-add (+) dialog matching company/person create shortcuts on customer forms.
+ */
+export function CustomerEntitySinglePicker({
+  kind,
+  value,
+  onChange,
+  labels,
+  disabled = false,
+}: CustomerEntitySinglePickerProps) {
+  const scopeVersion = useOrganizationScopeVersion()
+  const normalized = typeof value === 'string' && value.trim().length ? value.trim() : undefined
+  const [input, setInput] = React.useState('')
+  const [suggestions, setSuggestions] = React.useState<CustomerEntityPickerOption[]>([])
+  const [cache, setCache] = React.useState<Map<string, CustomerEntityPickerOption>>(() => new Map())
+  const [loading, setLoading] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+  const [dialogOpen, setDialogOpen] = React.useState(false)
+  const [newCompanyName, setNewCompanyName] = React.useState('')
+  const [newPersonFirst, setNewPersonFirst] = React.useState('')
+  const [newPersonLast, setNewPersonLast] = React.useState('')
+  const [saving, setSaving] = React.useState(false)
+  const [formError, setFormError] = React.useState<string | null>(null)
+
+  const search = React.useMemo(
+    () => (kind === 'person' ? searchCustomerPeopleApi : searchCustomerCompaniesApi),
+    [kind],
+  )
+  const fetchByIds = React.useMemo(
+    () => (kind === 'person' ? fetchCustomerPeopleByIdsApi : fetchCustomerCompaniesByIdsApi),
+    [kind],
+  )
+
+  React.useEffect(() => {
+    setCache(new Map())
+    setSuggestions([])
+    setInput('')
+    setError(null)
+  }, [scopeVersion])
+
+  React.useEffect(() => {
+    if (!normalized) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const entries = await fetchByIds([normalized])
+        if (cancelled) return
+        setCache((prev) => {
+          const next = new Map(prev)
+          entries.forEach((entry) => {
+            if (entry?.id) next.set(entry.id, entry)
+          })
+          return next
+        })
+      } catch {
+        if (!cancelled) setError(labels.errorLabel)
+      }
+    })().catch(() => {})
+       return () => {
+      cancelled = true
+    }
+  }, [fetchByIds, labels.errorLabel, normalized, scopeVersion])
+
+  React.useEffect(() => {
+    if (disabled) {
+      setLoading(false)
+      return
+    }
+    let cancelled = false
+    const handler = window.setTimeout(async () => {
+      setLoading(true)
+      try {
+        const results = await search(input.trim())
+        if (cancelled) return
+        setSuggestions(results)
+        setCache((prev) => {
+          const next = new Map(prev)
+          results.forEach((entry) => {
+            if (entry?.id) next.set(entry.id, entry)
+          })
+          return next
+        })
+        setError(null)
+      } catch {
+        if (!cancelled) {
+          setError(labels.errorLabel)
+          setSuggestions([])
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }, 200)
+    return () => {
+      cancelled = true
+      window.clearTimeout(handler)
+    }
+  }, [disabled, input, labels.errorLabel, scopeVersion, search])
+
+  const selected = normalized ? (cache.get(normalized) ?? { id: normalized, label: normalized }) : null
+
+  const filteredSuggestions = React.useMemo(
+    () => suggestions.filter((option) => option.id !== normalized),
+    [normalized, suggestions],
+  )
+
+  const pickOption = React.useCallback(
+    (option: CustomerEntityPickerOption) => {
+      if (!option?.id) return
+      onChange(option.id)
+      setCache((prev) => {
+        const next = new Map(prev)
+        next.set(option.id, option)
+        return next
+      })
+      setInput('')
+      setSuggestions([])
+    },
+    [onChange],
+  )
+
+  const clearSelection = React.useCallback(() => {
+    onChange(undefined)
+    setInput('')
+    setSuggestions([])
+  }, [onChange])
+
+  const handleDialogChange = React.useCallback((open: boolean) => {
+    setDialogOpen(open)
+    if (!open) {
+      setNewCompanyName('')
+      setNewPersonFirst('')
+      setNewPersonLast('')
+      setFormError(null)
+      setSaving(false)
+    }
+  }, [])
+
+  const handleQuickCreate = React.useCallback(async () => {
+    if (saving) return
+    if (kind === 'company') {
+      const trimmed = newCompanyName.trim()
+      if (!trimmed) {
+        setFormError(labels.emptyError)
+        return
+      }
+      setSaving(true)
+      try {
+        const call = await apiCallOrThrow<{ id?: string; entityId?: string }>(
+          '/api/customers/companies',
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ displayName: trimmed }),
+          },
+          { errorMessage: labels.errorSave },
+        )
+        const payload = call.result ?? {}
+        const createdId =
+          typeof payload?.id === 'string'
+            ? payload.id
+            : typeof payload?.entityId === 'string'
+              ? payload.entityId
+              : null
+        if (createdId) {
+          const label = trimmed
+          pickOption({ id: createdId, label })
+        }
+        setDialogOpen(false)
+        setNewCompanyName('')
+        setFormError(null)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : labels.errorSave
+        flash(message, 'error')
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+
+    const fn = newPersonFirst.trim()
+    const ln = newPersonLast.trim()
+    if (!fn.length || !ln.length) {
+      setFormError(labels.emptyError)
+      return
+    }
+    const displayName = `${fn} ${ln}`.trim()
+    setSaving(true)
+    try {
+      const call = await apiCallOrThrow<{ id?: string; entityId?: string }>(
+        '/api/customers/people',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            firstName: fn,
+            lastName: ln,
+            displayName,
+          }),
+        },
+        { errorMessage: labels.errorSave },
+      )
+      const payload = call.result ?? {}
+      const createdId =
+        typeof payload?.id === 'string'
+          ? payload.id
+          : typeof payload?.entityId === 'string'
+            ? payload.entityId
+            : null
+      if (createdId) {
+        pickOption({ id: createdId, label: displayName })
+      }
+      setDialogOpen(false)
+      setNewPersonFirst('')
+      setNewPersonLast('')
+      setFormError(null)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : labels.errorSave
+      flash(message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }, [
+    kind,
+    labels.emptyError,
+    labels.errorSave,
+    newCompanyName,
+    newPersonFirst,
+    newPersonLast,
+    pickOption,
+    saving,
+  ])
+
+  const busy = disabled || saving
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex flex-wrap items-center gap-2 rounded border px-2 py-1">
+            {selected ? (
+              <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs">
+                {selected.label}
+                <IconButton
+                  variant="ghost"
+                  size="xs"
+                  className="opacity-60 hover:opacity-100"
+                  onClick={() => clearSelection()}
+                  aria-label={labels.removeSelectionAria}
+                  disabled={busy}
+                >
+                  ×
+                </IconButton>
+              </span>
+            ) : null}
+            <input
+              type="text"
+              className="min-w-[140px] flex-1 border-0 bg-transparent py-1 text-sm outline-none"
+              value={input}
+              placeholder={labels.searchPlaceholder}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  const nextOption = filteredSuggestions[0]
+                  if (nextOption) pickOption(nextOption)
+                }
+              }}
+              disabled={busy}
+            />
+          </div>
+          {loading ? <div className="text-xs text-muted-foreground">{labels.loadingLabel}</div> : null}
+          {!loading && filteredSuggestions.length ? (
+            <div className="flex flex-wrap gap-2">
+              {filteredSuggestions.slice(0, 10).map((option) => (
+                <Button
+                  key={option.id}
+                  variant="outline"
+                  size="sm"
+                  className="h-auto px-2 py-1 text-xs font-normal"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => pickOption(option)}
+                  disabled={busy}
+                >
+                  <span className="flex flex-col items-start">
+                    <span>{option.label}</span>
+                    {option.subtitle ? (
+                      <span className="text-[10px] text-muted-foreground">{option.subtitle}</span>
+                    ) : null}
+                  </span>
+                </Button>
+              ))}
+            </div>
+          ) : null}
+          {!loading && !filteredSuggestions.length && input.trim().length ? (
+            <div className="text-xs text-muted-foreground">{labels.noResultsLabel}</div>
+          ) : null}
+          {error ? <div className="text-xs text-red-600">{error}</div> : null}
+        </div>
+        <Dialog open={dialogOpen} onOpenChange={handleDialogChange}>
+          <DialogTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="shrink-0"
+              disabled={busy}
+              aria-label={labels.addLabel}
+              title={labels.addLabel}
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{kind === 'company' ? labels.companyDialogTitle : labels.personDialogTitle}</DialogTitle>
+              {kind === 'company' && labels.companyDialogDescription ? (
+                <DialogDescription>{labels.companyDialogDescription}</DialogDescription>
+              ) : null}
+              {kind === 'person' && labels.personDialogDescription ? (
+                <DialogDescription>{labels.personDialogDescription}</DialogDescription>
+              ) : null}
+            </DialogHeader>
+            <div className="space-y-4">
+              {kind === 'company' ? (
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">{labels.companyNameLabel}</label>
+                  <input
+                    className={CRUD_FORM_TEXT_INPUT_CLASS}
+                    placeholder={labels.companyNamePlaceholder}
+                    value={newCompanyName}
+                    onChange={(event) => {
+                      setNewCompanyName(event.target.value)
+                      if (formError) setFormError(null)
+                    }}
+                    disabled={saving}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        handleQuickCreate().catch(() => {})
+                      }
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">{labels.personFirstNameLabel}</label>
+                    <input
+                      className={CRUD_FORM_TEXT_INPUT_CLASS}
+                      value={newPersonFirst}
+                      onChange={(event) => {
+                        setNewPersonFirst(event.target.value)
+                        if (formError) setFormError(null)
+                      }}
+                      disabled={saving}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">{labels.personLastNameLabel}</label>
+                    <input
+                      className={CRUD_FORM_TEXT_INPUT_CLASS}
+                      value={newPersonLast}
+                      onChange={(event) => {
+                        setNewPersonLast(event.target.value)
+                        if (formError) setFormError(null)
+                      }}
+                      disabled={saving}
+                    />
+                  </div>
+                </div>
+              )}
+              {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
+                  {labels.cancelLabel}
+                </Button>
+                <Button type="button" onClick={() => handleQuickCreate().catch(() => {})} disabled={saving}>
+                  {saving ? `${labels.saveLabel}…` : labels.saveLabel}
+                </Button>
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </div>
+  )
+}
+
 export function CompanySelectField({ value, onChange, labels }: CompanySelectFieldProps) {
   const [options, setOptions] = React.useState<CompanyOption[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -692,8 +1360,68 @@ export const createPersonFormSchema = () =>
         .or(z.literal(''))
         .transform((val) => (val === '' ? undefined : val))
         .optional(),
+      crmRecordType: z.enum(['customer', 'partner', 'referrer']).optional(),
+      referralCode: z
+        .string()
+        .trim()
+        .optional()
+        .or(z.literal(''))
+        .transform((val) => (val === '' ? undefined : val))
+        .optional(),
+      pesel: z
+        .string()
+        .optional()
+        .or(z.literal(''))
+        .transform((val) => (val === '' ? undefined : val)),
+      residenceStreet: z
+        .string()
+        .trim()
+        .optional()
+        .or(z.literal(''))
+        .transform((val) => (val === '' ? undefined : val)),
+      residencePostalCode: z
+        .string()
+        .trim()
+        .optional()
+        .or(z.literal(''))
+        .transform((val) => (val === '' ? undefined : val)),
+      residenceCity: z
+        .string()
+        .trim()
+        .optional()
+        .or(z.literal(''))
+        .transform((val) => (val === '' ? undefined : val)),
+      residenceCountry: z
+        .string()
+        .trim()
+        .optional()
+        .or(z.literal(''))
+        .transform((val) => (val === '' ? undefined : val.toUpperCase())),
     })
     .passthrough()
+    .superRefine((data, ctx) => {
+      const raw = data.pesel
+      if (raw === undefined || raw === '') return
+      const digits = normalizePeselDigits(String(raw))
+      if (!digits || digits.length !== 11 || !isValidPesel(digits)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['pesel'],
+          message: 'Invalid PESEL',
+        })
+      }
+    })
+    .superRefine((data, ctx) => {
+      const c = data.residenceCountry
+      if (c === undefined || c === '') return
+      if (!/^[A-Z]{2}$/.test(String(c))) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['residenceCountry'],
+          message: 'Use2-letter country code',
+        })
+      }
+    })
 
 export const createDisplayNameSection = (t: Translator) =>
   function DisplayNameSection({ values, setValue, errors }: CrudFormGroupComponentProps) {
@@ -792,6 +1520,10 @@ export const createDisplayNameSection = (t: Translator) =>
 
 export const createPersonFormFields = (t: Translator): CrudField[] => {
   const contactSection = createSectionHeadingField('__contactInformationSection', t('customers.people.form.sections.contactInformation'))
+  const registeredAddressSection = createSectionHeadingField(
+    '__registeredAddressSection',
+    t('customers.people.form.sections.registeredAddress'),
+  )
   const companySection = createSectionHeadingField('__companyInformationSection', t('customers.people.form.sections.companyInformation'))
 const dictionaryFields: CrudField[] = dictionaryFieldDefinitions.map((definition) => ({
   id: definition.id,
@@ -815,6 +1547,61 @@ const dictionaryFields: CrudField[] = dictionaryFieldDefinitions.map((definition
     contactSection,
     createPrimaryEmailField(t),
     createPrimaryPhoneField(t),
+    registeredAddressSection,
+    {
+      id: 'pesel',
+      label: t('customers.people.form.pesel'),
+      type: 'custom',
+      layout: 'half',
+      component: ({ value, setValue, disabled, error }) => {
+        const raw = typeof value === 'string' ? value : ''
+        const digits = raw.trim().length ? normalizePeselDigits(raw) : null
+        const liveInvalid =
+          raw.trim().length > 0 && (!digits || digits.length !== 11 || !isValidPesel(digits))
+        const liveMessage = liveInvalid ? t('customers.people.form.peselInvalid') : null
+        return (
+          <div className="space-y-1">
+            <input
+              className={cnTw(CRUD_FORM_TEXT_INPUT_CLASS, (liveMessage || error) && 'border-destructive')}
+              value={raw}
+              onChange={(e) => setValue(e.target.value)}
+              disabled={disabled}
+              placeholder={t('customers.people.form.peselPlaceholder')}
+              data-crud-focus-target=""
+            />
+            {liveMessage ? <p className="text-sm text-destructive">{liveMessage}</p> : null}
+          </div>
+        )
+      },
+    },
+    {
+      id: 'residenceStreet',
+      label: t('customers.people.form.residenceStreet'),
+      type: 'text',
+      layout: 'full',
+      placeholder: t('customers.people.form.residenceStreetPlaceholder'),
+    },
+    {
+      id: 'residencePostalCode',
+      label: t('customers.people.form.residencePostalCode'),
+      type: 'text',
+      layout: 'half',
+      placeholder: t('customers.people.form.residencePostalCodePlaceholder'),
+    },
+    {
+      id: 'residenceCity',
+      label: t('customers.people.form.residenceCity'),
+      type: 'text',
+      layout: 'half',
+      placeholder: t('customers.people.form.residenceCityPlaceholder'),
+    },
+    {
+      id: 'residenceCountry',
+      label: t('customers.people.form.residenceCountry'),
+      type: 'text',
+      layout: 'half',
+      placeholder: t('customers.people.form.residenceCountryPlaceholder'),
+    },
     companySection,
     {
       id: 'companyEntityId',
@@ -843,6 +1630,7 @@ const dictionaryFields: CrudField[] = dictionaryFieldDefinitions.map((definition
       ),
     },
     ...dictionaryFields,
+    createCrmRecordTypeAndReferralField(t, 'person'),
     { id: 'description', label: t('customers.people.form.description'), type: 'textarea' },
     {
       id: 'addresses',
@@ -930,12 +1718,19 @@ export const createPersonFormGroups = (t: Translator): CrudFormGroup[] => [
       '__contactInformationSection',
       'primaryEmail',
       'primaryPhone',
+      '__registeredAddressSection',
+      'pesel',
+      'residenceStreet',
+      'residencePostalCode',
+      'residenceCity',
+      'residenceCountry',
       '__companyInformationSection',
       'jobTitle',
       'companyEntityId',
       'status',
       'lifecycleStage',
       'source',
+      'crmRecordType',
     ],
     component: createDisplayNameSection(t),
   },
@@ -988,6 +1783,11 @@ export function buildPersonPayload(
   assign('status', typeof values.status === 'string' ? values.status : undefined)
   assign('lifecycleStage', typeof values.lifecycleStage === 'string' ? values.lifecycleStage : undefined)
   assign('source', typeof values.source === 'string' ? values.source : undefined)
+  assign('crmRecordType', typeof values.crmRecordType === 'string' ? values.crmRecordType : undefined)
+  const personCrm = typeof values.crmRecordType === 'string' ? values.crmRecordType : 'customer'
+  if (personCrm === 'partner' || personCrm === 'referrer') {
+    assign('referralCode', typeof values.referralCode === 'string' ? values.referralCode : undefined)
+  }
   assign(
     'companyEntityId',
     typeof values.companyEntityId === 'string'
@@ -997,6 +1797,24 @@ export function buildPersonPayload(
         : undefined,
   )
   assign('description', typeof values.description === 'string' ? values.description : undefined)
+
+  const peselDigits = normalizePeselDigits(typeof values.pesel === 'string' ? values.pesel : undefined)
+  if (peselDigits) {
+    if (!isValidPesel(peselDigits)) {
+      throw new Error('PESEL_INVALID')
+    }
+    payload.pesel = peselDigits
+  } else if (typeof values.pesel === 'string' && values.pesel.trim() === '') {
+    payload.pesel = null
+  }
+  assign('residenceStreet', typeof values.residenceStreet === 'string' ? values.residenceStreet : undefined)
+  assign('residencePostalCode', typeof values.residencePostalCode === 'string' ? values.residencePostalCode : undefined)
+  assign('residenceCity', typeof values.residenceCity === 'string' ? values.residenceCity : undefined)
+  const rc = typeof values.residenceCountry === 'string' ? values.residenceCountry.trim().toUpperCase() : undefined
+  if (rc !== undefined) {
+    if (rc === '') payload.residenceCountry = null
+    else payload.residenceCountry = rc
+  }
 
   const customFields = collectCustomFieldValues(values, {
     transform: (value) => normalizeCustomFieldSubmitValue(value),
@@ -1101,10 +1919,60 @@ export const createCompanyFormSchema = () =>
         .or(z.literal(''))
         .transform((val) => (val === '' ? undefined : val))
         .optional(),
+      crmRecordType: z.enum(['customer', 'partner', 'referrer']).optional(),
+      referralCode: z
+        .string()
+        .trim()
+        .optional()
+        .or(z.literal(''))
+        .transform((val) => (val === '' ? undefined : val))
+        .optional(),
+      nip: z
+        .string()
+        .trim()
+        .optional()
+        .or(z.literal(''))
+        .transform((val) => (val === '' ? undefined : val))
+        .optional(),
+      regon: z
+        .string()
+        .trim()
+        .optional()
+        .or(z.literal(''))
+        .transform((val) => (val === '' ? undefined : val))
+        .optional(),
+    })
+    .superRefine((data, ctx) => {
+      const rawNip = data.nip
+      if (rawNip !== undefined && rawNip !== '') {
+        const digits = normalizeNipDigits(String(rawNip))
+        if (!digits || digits.length !== 10 || !isValidNip(digits)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['nip'],
+            message: 'Invalid NIP',
+          })
+        }
+      }
+      const rawRegon = data.regon
+      if (rawRegon !== undefined && rawRegon !== '') {
+        const digits = normalizeRegonDigits(String(rawRegon))
+        if (!digits || !isValidRegon(digits)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['regon'],
+            message: 'Invalid REGON',
+          })
+        }
+      }
     })
     .passthrough()
 
-export const createCompanyFormFields = (t: Translator): CrudField[] => {
+export type CompanyFormFieldOptions = {
+  companySyncApplyRef?: React.MutableRefObject<((patch: Record<string, unknown>) => void) | null>
+}
+
+export const createCompanyFormFields = (t: Translator, options?: CompanyFormFieldOptions): CrudField[] => {
   const dictionaryFields: CrudField[] = companyDictionaryFieldDefinitions.map((definition) => ({
     id: definition.id,
     label: t(definition.labelKey),
@@ -1166,6 +2034,64 @@ export const createCompanyFormFields = (t: Translator): CrudField[] => {
       layout: 'half',
     },
     {
+      id: 'nip',
+      label: t('customers.companies.form.nip', 'NIP'),
+      type: 'custom',
+      layout: 'half',
+      placeholder: t('customers.companies.form.nipPlaceholder', '10-digit tax number'),
+      component: ({ value, setValue, disabled, error }) => {
+        const raw = typeof value === 'string' ? value : ''
+        const digits = raw.trim().length ? normalizeNipDigits(raw) : null
+        const liveInvalid =
+          raw.trim().length > 0 && (!digits || digits.length !== 10 || !isValidNip(digits))
+        const liveMessage = liveInvalid
+          ? t('customers.companies.form.nipInvalid', 'Invalid NIP.')
+          : null
+        return (
+          <div className="space-y-1">
+            <input
+              className={cnTw(CRUD_FORM_TEXT_INPUT_CLASS, (liveMessage || error) && 'border-destructive')}
+              value={raw}
+              onChange={(e) => setValue(e.target.value)}
+              disabled={disabled}
+              placeholder={t('customers.companies.form.nipPlaceholder', '10-digit tax number')}
+              data-crud-focus-target=""
+            />
+            {liveMessage ? <p className="text-sm text-destructive">{liveMessage}</p> : null}
+          </div>
+        )
+      },
+    },
+    {
+      id: 'regon',
+      label: t('customers.companies.form.regon', 'REGON'),
+      type: 'custom',
+      layout: 'half',
+      placeholder: t('customers.companies.form.regonPlaceholder', '9 or 14 digits'),
+      component: ({ value, setValue, disabled, error }) => {
+        const raw = typeof value === 'string' ? value : ''
+        const digits = raw.trim().length ? normalizeRegonDigits(raw) : null
+        const liveInvalid =
+          raw.trim().length > 0 && (!digits || !isValidRegon(digits))
+        const liveMessage = liveInvalid
+          ? t('customers.companies.form.regonInvalid', 'Invalid REGON.')
+          : null
+        return (
+          <div className="space-y-1">
+            <input
+              className={cnTw(CRUD_FORM_TEXT_INPUT_CLASS, (liveMessage || error) && 'border-destructive')}
+              value={raw}
+              onChange={(e) => setValue(e.target.value)}
+              disabled={disabled}
+              placeholder={t('customers.companies.form.regonPlaceholder', '9 or 14 digits')}
+              data-crud-focus-target=""
+            />
+            {liveMessage ? <p className="text-sm text-destructive">{liveMessage}</p> : null}
+          </div>
+        )
+      },
+    },
+    {
       id: 'domain',
       label: t('customers.companies.detail.fields.domain', 'Domain'),
       type: 'text',
@@ -1200,6 +2126,7 @@ export const createCompanyFormFields = (t: Translator): CrudField[] => {
       layout: 'half',
       placeholder: t('customers.companies.detail.highlights.annualRevenuePlaceholder', 'Enter amount'),
     },
+    createCrmRecordTypeAndReferralField(t, 'company'),
     {
       id: 'description',
       label: t('customers.companies.detail.fields.description', 'Description'),
@@ -1277,21 +2204,45 @@ export const createCompanyFormFields = (t: Translator): CrudField[] => {
         )
       },
     },
+    ...(options?.companySyncApplyRef ? [createCompanyRegistrySyncBridgeField(options.companySyncApplyRef)] : []),
   ]
 }
 
-export const createCompanyFormGroups = (t: Translator): CrudFormGroup[] => [
+export type CompanyFormGroupOptions = {
+  includeRegistrySyncBridge?: boolean
+}
+
+export const createCompanyFormGroups = (t: Translator, groupOptions?: CompanyFormGroupOptions): CrudFormGroup[] => [
   {
     id: 'details',
     title: t('customers.companies.form.groups.details'),
     column: 1,
-    fields: ['displayName', 'primaryEmail', 'primaryPhone', 'status', 'lifecycleStage', 'source'],
+    fields: [
+      'displayName',
+      'primaryEmail',
+      'primaryPhone',
+      'status',
+      'lifecycleStage',
+      'source',
+      'crmRecordType',
+    ],
   },
   {
     id: 'profile',
     title: t('customers.companies.form.groups.profile'),
     column: 1,
-    fields: ['legalName', 'brandName', 'domain', 'websiteUrl', 'industry', 'sizeBucket', 'annualRevenue'],
+    fields: [
+      'legalName',
+      'brandName',
+      'nip',
+      'regon',
+      'domain',
+      'websiteUrl',
+      'industry',
+      'sizeBucket',
+      'annualRevenue',
+      ...(groupOptions?.includeRegistrySyncBridge ? (['__companyRegistrySyncBridge'] as const) : []),
+    ],
   },
   {
     id: 'addresses',
@@ -1337,8 +2288,34 @@ export function buildCompanyPayload(
   assign('status', typeof values.status === 'string' ? values.status : undefined)
   assign('lifecycleStage', typeof values.lifecycleStage === 'string' ? values.lifecycleStage : undefined)
   assign('source', typeof values.source === 'string' ? values.source : undefined)
+  assign('crmRecordType', typeof values.crmRecordType === 'string' ? values.crmRecordType : undefined)
+  const companyCrm = typeof values.crmRecordType === 'string' ? values.crmRecordType : 'customer'
+  if (companyCrm === 'partner' || companyCrm === 'referrer') {
+    assign('referralCode', typeof values.referralCode === 'string' ? values.referralCode : undefined)
+  }
   assign('legalName', typeof values.legalName === 'string' ? values.legalName : undefined)
   assign('brandName', typeof values.brandName === 'string' ? values.brandName : undefined)
+
+  const nipDigits = normalizeNipDigits(typeof values.nip === 'string' ? values.nip : undefined)
+  if (nipDigits) {
+    if (!isValidNip(nipDigits)) {
+      throw new Error('NIP_INVALID')
+    }
+    payload.nip = nipDigits
+  } else if (typeof values.nip === 'string' && values.nip.trim() === '') {
+    payload.nip = null
+  }
+
+  const regonDigits = normalizeRegonDigits(typeof values.regon === 'string' ? values.regon : undefined)
+  if (regonDigits) {
+    if (!isValidRegon(regonDigits)) {
+      throw new Error('REGON_INVALID')
+    }
+    payload.regon = regonDigits
+  } else if (typeof values.regon === 'string' && values.regon.trim() === '') {
+    payload.regon = null
+  }
+
   assign('domain', typeof values.domain === 'string' ? values.domain?.toLowerCase() : undefined)
   assign('websiteUrl', typeof values.websiteUrl === 'string' ? values.websiteUrl : undefined)
   assign('industry', typeof values.industry === 'string' ? values.industry : undefined)

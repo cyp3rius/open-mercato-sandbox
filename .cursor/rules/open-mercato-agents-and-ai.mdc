@@ -1,0 +1,45 @@
+---
+description: Open Mercato — mandatory AGENTS.md, Task Router, and .ai/ docs
+globs:
+alwaysApply: true
+---
+
+# Open Mercato — documentation and expertise
+
+**Always follow the workflow defined in root [`AGENTS.md`](../../AGENTS.md)** (`Before Writing Code`, `Workflow Orchestration`, `Documentation and Specifications`). Do not skip steps for convenience.
+
+## Before writing code (AGENTS.md)
+
+1. Match the task to the **Task Router** table — read **all** matching row guides (one task can require multiple guides).
+2. Check `.ai/specs/` and `.ai/specs/enterprise/` for existing specs on the area you change.
+3. Use **plan mode** for non-trivial work (3+ steps or architectural decisions).
+4. For CRUD-style features, use **customers** (or the guide’s reference module) as the pattern source.
+
+## Workflow orchestration (AGENTS.md)
+
+1. **Spec-first**: non-trivial work → plan; check specs before coding; naming per `.ai/specs/AGENTS.md`. Use **spec-writing** (`.ai/skills/spec-writing/SKILL.md`) when writing or structuring specs. For complex specs: **pre-implement-spec** before coding, **implement-spec** for phased delivery. Small fixes can skip spec creation.
+2. **Subagents**: delegate parallel research / heavy exploration; one focused task per subagent.
+3. **Self-improvement**: after meaningful corrections, consider `.ai/lessons.md` or AGENTS updates.
+4. **Verification**: run tests/build where appropriate; quality bar = staff-engineer approval.
+5. **Elegance**: for non-trivial changes, consider a simpler or more consistent approach.
+6. **Bugs**: diagnose from evidence, fix root cause, minimal hand-holding.
+
+## Documentation and specifications (AGENTS.md)
+
+- Prefer updating specs when implementing significant behavior or contract changes.
+- New features: spec should cover integration points (API + key UI); integration tests per spec and `.ai/qa/AGENTS.md`; tests self-contained (fixtures, teardown).
+
+For every task in this repository (especially platform work, new modules, CRUD, integrations, contract changes):
+
+1. **Treat root [`AGENTS.md`](../../AGENTS.md) as the entry point** — Task Router, module conventions, critical rules, commands, imports, backward compatibility.
+
+2. **Follow the Task Router literally**: for the topic at hand, read **all** referenced `AGENTS.md` files (e.g. `packages/core/AGENTS.md`, `packages/core/src/modules/<module>/AGENTS.md`, `packages/ui/AGENTS.md`, `packages/shared/AGENTS.md`, etc.). Do not improvise patterns that are documented elsewhere.
+
+3. **Use the `.ai/` tree according to the kind of work**:
+   - **Specs**: `.ai/specs/`, `.ai/specs/enterprise/` — check existing specs before larger changes; new features per `AGENTS.md` and `.ai/specs/AGENTS.md`.
+   - **QA / integration tests**: `.ai/qa/AGENTS.md` and the integration-testing skill referenced there.
+   - **Skills** (e.g. `pre-implement-spec`, `implement-spec`, `spec-writing`, `integration-tests`, `code-review`) — when `AGENTS.md` or a spec points to them, read them and follow that workflow.
+
+4. **Contract surfaces** — for API, events, widgets, entities, CLI changes: [`BACKWARD_COMPATIBILITY.md`](../../BACKWARD_COMPATIBILITY.md) and the BC section in `AGENTS.md`.
+
+5. **Bar for execution**: work like a **senior platform engineer** — minimal change scope, align with existing patterns from reference modules (e.g. customers for CRUD), run build/tests where appropriate.

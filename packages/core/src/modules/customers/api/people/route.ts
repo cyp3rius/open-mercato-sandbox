@@ -36,6 +36,7 @@ const listSchema = z
     createdTo: z.string().optional(),
     sortField: z.string().optional(),
     sortDir: z.enum(['asc', 'desc']).optional(),
+    crmRecordTypes: z.string().optional(),
     id: z.string().uuid().optional(),
     tagIds: z.string().optional(),
     tagIdsEmpty: z.string().optional(),
@@ -82,6 +83,8 @@ const crud = makeCrudRoute({
       'organization_id',
       'tenant_id',
       'kind',
+      'crm_record_type',
+      'referral_code',
       'created_at',
     ],
     sortFieldMap: {
@@ -92,6 +95,15 @@ const crud = makeCrudRoute({
     buildFilters: async (query: any, ctx) => {
       const filters: Record<string, any> = { kind: { $eq: 'person' } }
       if (query.id) filters.id = { $eq: query.id }
+      const crmAllowed = new Set(['customer', 'partner', 'referrer'])
+      const crmTypesRaw = typeof query.crmRecordTypes === 'string' ? query.crmRecordTypes : ''
+      const crmTypes = crmTypesRaw
+        .split(',')
+        .map((v: string) => v.trim())
+        .filter((v: string) => crmAllowed.has(v))
+      if (crmTypes.length) {
+        filters.crm_record_type = { $in: crmTypes }
+      }
       if (query.search) {
         filters.display_name = { $ilike: `%${escapeLikePattern(query.search)}%` }
       }

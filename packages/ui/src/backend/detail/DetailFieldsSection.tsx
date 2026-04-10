@@ -8,6 +8,7 @@ import {
   InlineSelectEditor,
   InlineTextEditor,
   type InlineSelectOption,
+  type InlineSelectEditorProps,
   type InlineTextEditorProps,
   type InlineMultilineEditorProps,
 } from './InlineEditors'
@@ -21,6 +22,8 @@ type DetailFieldCommon = {
   gridClassName?: string
   editorVariant?: EditorVariant
   activateOnClick?: boolean
+  /** When false, inline field is display-only (no pencil). Default true. */
+  showEditTrigger?: boolean
   containerClassName?: string
   triggerClassName?: string
 }
@@ -50,6 +53,8 @@ export type DetailSelectFieldConfig = DetailFieldCommon & {
   value: string | null | undefined
   onSave: (value: string | null) => Promise<void>
   options: InlineSelectOption[]
+  hideLabel?: boolean
+  renderDisplay?: InlineSelectEditorProps['renderDisplay']
 }
 
 export type DetailCustomFieldConfig = DetailFieldCommon & {
@@ -74,6 +79,7 @@ function DetailFieldsSectionImpl({ fields, className }: DetailFieldsSectionProps
       {fields.map((field) => {
         const variant = field.editorVariant ?? 'muted'
         const activateOnClick = field.activateOnClick ?? true
+        const showEditTrigger = field.showEditTrigger ?? true
         const containerClassName = field.containerClassName ?? undefined
         const triggerClassName = field.triggerClassName ?? undefined
         const wrapperClassName = field.gridClassName ?? undefined
@@ -91,6 +97,7 @@ function DetailFieldsSectionImpl({ fields, className }: DetailFieldsSectionProps
                 validator={field.validator}
                 variant={variant}
                 activateOnClick={activateOnClick}
+                showEditTrigger={showEditTrigger}
                 containerClassName={containerClassName}
                 triggerClassName={triggerClassName}
                 hideLabel={field.hideLabel}
@@ -112,6 +119,7 @@ function DetailFieldsSectionImpl({ fields, className }: DetailFieldsSectionProps
                 validator={field.validator}
                 variant={variant === 'plain' ? 'default' : variant}
                 activateOnClick={activateOnClick}
+                showEditTrigger={showEditTrigger}
                 containerClassName={containerClassName}
                 triggerClassName={triggerClassName}
                 renderDisplay={field.renderDisplay}
@@ -131,8 +139,11 @@ function DetailFieldsSectionImpl({ fields, className }: DetailFieldsSectionProps
                 options={field.options}
                 variant={variant}
                 activateOnClick={activateOnClick}
+                showEditTrigger={showEditTrigger}
                 containerClassName={containerClassName}
                 triggerClassName={triggerClassName}
+                hideLabel={field.hideLabel}
+                renderDisplay={field.renderDisplay}
               />
             </div>
           )

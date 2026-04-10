@@ -10,6 +10,7 @@ import { E } from '#generated/entities.ids.generated'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeDetail } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
+import type { MfRegistryCompanyData } from '../../../../lib/mfVatRegistry'
 import {
   buildCompanyPayload,
   createCompanyFormFields,
@@ -17,17 +18,29 @@ import {
   createCompanyFormSchema,
   type CompanyFormValues,
 } from '../../../../components/formConfig'
+import { CompanyRegistrySyncToolbarButton } from '../../../../components/companyRegistrySync'
 
 export default function CreateCompanyPage() {
   const t = useT()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { organizationId } = useOrganizationScopeDetail()
+  const companySyncApplyRef = React.useRef<((patch: Record<string, unknown>) => void) | null>(null)
 
   const formSchema = React.useMemo(() => createCompanyFormSchema(), [])
-  const fields = React.useMemo(() => createCompanyFormFields(t), [t])
-  const groups = React.useMemo(() => createCompanyFormGroups(t), [t])
   const returnTo = searchParams.get('returnTo')
+  const fields = React.useMemo(() => createCompanyFormFields(t, { companySyncApplyRef }), [t])
+  const groups = React.useMemo(() => createCompanyFormGroups(t, { includeRegistrySyncBridge: true }), [t])
+
+  const applyRegistryToForm = React.useCallback((data: MfRegistryCompanyData) => {
+    const patch: Record<string, unknown> = {
+      displayName: data.displayName,
+      legalName: data.legalName,
+    }
+    if (data.nip) patch.nip = data.nip
+    if (data.regon) patch.regon = data.regon
+    companySyncApplyRef.current?.(patch)
+  }, [])
 
   return (
     <Page>
@@ -37,10 +50,11 @@ export default function CreateCompanyPage() {
           backHref={returnTo ?? '/backend/customers/companies'}
           fields={fields}
           groups={groups}
-          initialValues={{ addresses: [] as CompanyFormValues['addresses'] }}
+          initialValues={{ crmRecordType: 'customer', addresses: [] as CompanyFormValues['addresses'] }}
           entityIds={[E.customers.customer_entity, E.customers.customer_company_profile]}
           submitLabel={t('customers.companies.form.submit')}
           cancelHref={returnTo ?? '/backend/customers/companies'}
+          extraActions={<CompanyRegistrySyncToolbarButton onSuccess={applyRegistryToForm} />}
           schema={formSchema}
           onSubmit={async (values) => {
             const addresses = Array.isArray(values.addresses) ? values.addresses : []
@@ -56,6 +70,14 @@ export default function CreateCompanyPage() {
                 if (err.message === 'ANNUAL_REVENUE_INVALID') {
                   const message = t('customers.companies.form.annualRevenue.error')
                   throw createCrudFormError(message, { annualRevenue: message })
+                }
+                if (err.message === 'NIP_INVALID') {
+                  const message = t('customers.companies.form.nipInvalid', 'Invalid NIP.')
+                  throw createCrudFormError(message, { nip: message })
+                }
+                if (err.message === 'REGON_INVALID') {
+                  const message = t('customers.companies.form.regonInvalid', 'Invalid REGON.')
+                  throw createCrudFormError(message, { regon: message })
                 }
               }
               throw err

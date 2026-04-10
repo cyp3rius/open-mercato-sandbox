@@ -50,11 +50,17 @@ import { InjectionSpot, useInjectionWidgets } from '@open-mercato/ui/backend/inj
 import { DetailTabsLayout } from '../../../../components/detail/DetailTabsLayout'
 import { useGuardedMutation } from '@open-mercato/ui/backend/injection/useGuardedMutation'
 import { SendObjectMessageDialog } from '@open-mercato/ui/backend/messages'
+import { CompanyRegistrySyncToolbarButton } from '../../../../components/companyRegistrySync'
+import type { MfRegistryCompanyData } from '../../../../lib/mfVatRegistry'
+import { isValidNip, normalizeNipDigits } from '../../../../lib/nip'
+import { isValidRegon, normalizeRegonDigits } from '../../../../lib/regon'
 
 type CompanyOverview = {
   company: {
     id: string
     displayName: string
+    crmRecordType?: string | null
+    referralCode?: string | null
     description?: string | null
     ownerUserId?: string | null
     primaryEmail?: string | null
@@ -78,6 +84,8 @@ type CompanyOverview = {
     industry?: string | null
     sizeBucket?: string | null
     annualRevenue?: string | null
+    nip?: string | null
+    regon?: string | null
   } | null
   customFields: Record<string, unknown>
   tags: TagSummary[]
@@ -235,6 +243,32 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
       }
       return null
     },
+    referralCode: (value: string) => {
+      const raw = value.trim()
+      if (!raw.length) return null
+      if (!/^[a-zA-Z0-9]{3,64}$/.test(raw)) {
+        return t('customers.companies.detail.inline.referralCodeInvalid', 'Use 3–64 letters or numbers only.')
+      }
+      return null
+    },
+    nip: (value: string) => {
+      const raw = value.trim()
+      if (!raw.length) return null
+      const digits = normalizeNipDigits(raw)
+      if (!digits || digits.length !== 10 || !isValidNip(digits)) {
+        return t('customers.companies.form.nipInvalid', 'Invalid NIP.')
+      }
+      return null
+    },
+    regon: (value: string) => {
+      const raw = value.trim()
+      if (!raw.length) return null
+      const digits = normalizeRegonDigits(raw)
+      if (!digits || !isValidRegon(digits)) {
+        return t('customers.companies.form.regonInvalid', 'Invalid REGON.')
+      }
+      return null
+    },
   }), [t])
 
   const { widgets: injectedTabWidgets } = useInjectionWidgets('customers.company.detail:tabs', {
@@ -368,9 +402,54 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
     [saveCompany],
   )
 
+  const updateCrmRecordType = React.useCallback(
+    async (next: string | null) => {
+      const nextType: 'customer' | 'partner' | 'referrer' =
+        next === 'partner' || next === 'referrer' ? next : 'customer'
+      const patch: Record<string, unknown> = { crmRecordType: nextType }
+      if (nextType === 'customer') {
+        patch.referralCode = null
+      }
+      await saveCompany(patch, (prev) => ({
+        ...prev,
+        company: {
+          ...prev.company,
+          crmRecordType: nextType,
+          referralCode: nextType === 'customer' ? null : prev.company.referralCode ?? null,
+        },
+      }))
+    },
+    [saveCompany],
+  )
+
+  const updateReferralCode = React.useCallback(
+    async (next: string | null) => {
+      const trimmed = typeof next === 'string' ? next.trim() : ''
+      await saveCompany(
+        { referralCode: trimmed.length ? trimmed : null },
+        (prev) => ({
+          ...prev,
+          company: {
+            ...prev.company,
+            referralCode: trimmed.length ? trimmed : null,
+          },
+        }),
+      )
+    },
+    [saveCompany],
+  )
+
   const updateProfileField = React.useCallback(
     async (
-      field: 'brandName' | 'legalName' | 'websiteUrl' | 'industry' | 'domain' | 'sizeBucket',
+      field:
+        | 'brandName'
+        | 'legalName'
+        | 'websiteUrl'
+        | 'industry'
+        | 'domain'
+        | 'sizeBucket'
+        | 'nip'
+        | 'regon',
       next: string | null,
     ) => {
       const send = typeof next === 'string' ? next : ''
@@ -390,6 +469,48 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
       )
     },
     [saveCompany],
+  )
+
+  const refreshCompanyDetail = React.useCallback(async () => {
+    if (!id) return
+    const search = new URLSearchParams()
+    search.append('include', 'todos')
+    search.append('include', 'people')
+    const payload = await readApiResultOrThrow<CompanyOverview>(
+      `/api/customers/companies/${encodeURIComponent(id)}?${search.toString()}`,
+      undefined,
+      { errorMessage: t('customers.companies.detail.error.load', 'Failed to load company.') },
+    )
+    setData(payload as CompanyOverview)
+  }, [id, t])
+
+  const applyRegistrySync = React.useCallback(
+    async (registry: MfRegistryCompanyData) => {
+      if (!data?.company?.id) return
+      const body: Record<string, unknown> = {
+        id: data.company.id,
+        displayName: registry.displayName,
+        legalName: registry.legalName,
+        nip: registry.nip,
+        regon: registry.regon,
+      }
+      await runMutationWithContext(
+        () =>
+          apiCallOrThrow(
+            '/api/customers/companies',
+            {
+              method: 'PUT',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(body),
+            },
+            { errorMessage: t('customers.companies.detail.inline.error', 'Unable to update company.') },
+          ),
+        body,
+      )
+      await refreshCompanyDetail()
+      flash(t('customers.companies.form.registrySync.applied', 'Company data updated from the registry.'), 'success')
+    },
+    [data?.company?.id, refreshCompanyDetail, runMutationWithContext, t],
   )
 
   const submitCustomFields = React.useCallback(
@@ -572,6 +693,23 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
       ? (data.customFields.cf_annual_revenue_currency as string)
       : null
 
+  const crmRecordTypeValue = company.crmRecordType ?? 'customer'
+  const companyDetailReferralFields: DetailFieldConfig[] =
+    crmRecordTypeValue === 'partner' || crmRecordTypeValue === 'referrer'
+      ? [
+          {
+            key: 'referralCode',
+            kind: 'text',
+            label: t('customers.companies.form.referralCode', 'Referral code'),
+            value: company.referralCode ?? null,
+            placeholder: t('customers.companies.form.referralCode', 'Referral code'),
+            emptyLabel: t('customers.companies.detail.noValue', 'Not provided'),
+            validator: validators.referralCode,
+            onSave: updateReferralCode,
+          },
+        ]
+      : []
+
   const detailFields: DetailFieldConfig[] = [
     {
       key: 'displayName',
@@ -602,6 +740,26 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
       onSave: (value) => updateProfileField('brandName', value),
     },
     {
+      key: 'nip',
+      kind: 'text',
+      label: t('customers.companies.form.nip', 'NIP'),
+      value: profile?.nip ?? null,
+      placeholder: t('customers.companies.form.nipPlaceholder', '10-digit tax number'),
+      emptyLabel: t('customers.companies.detail.noValue', 'Not provided'),
+      validator: validators.nip,
+      onSave: (value) => updateProfileField('nip', value),
+    },
+    {
+      key: 'regon',
+      kind: 'text',
+      label: t('customers.companies.form.regon', 'REGON'),
+      value: profile?.regon ?? null,
+      placeholder: t('customers.companies.form.regonPlaceholder', '9 or 14 digits'),
+      emptyLabel: t('customers.companies.detail.noValue', 'Not provided'),
+      validator: validators.regon,
+      onSave: (value) => updateProfileField('regon', value),
+    },
+    {
       key: 'description',
       kind: 'multiline',
       label: t('customers.companies.detail.fields.description', 'Description'),
@@ -621,6 +779,20 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
         )
       },
     },
+    {
+      key: 'crmRecordType',
+      kind: 'select',
+      label: t('customers.companies.form.crmRecordType', 'Record type'),
+      value: crmRecordTypeValue,
+      emptyLabel: t('customers.companies.detail.noValue', 'Not provided'),
+      options: [
+        { value: 'customer', label: t('customers.companies.form.crmRecordType.customer', 'Customer') },
+        { value: 'partner', label: t('customers.companies.form.crmRecordType.partner', 'Partner') },
+        { value: 'referrer', label: t('customers.companies.form.crmRecordType.referrer', 'Referrer') },
+      ],
+      onSave: (next) => updateCrmRecordType(next),
+    },
+    ...companyDetailReferralFields,
     {
       key: 'lifecycleStage',
       kind: 'custom',
@@ -732,22 +904,25 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
             validators={validators}
             onDisplayNameSave={updateDisplayName}
             utilityActions={(
-              <SendObjectMessageDialog
-                object={{
-                  entityModule: 'customers',
-                  entityType: 'company',
-                  entityId: companyId,
-                  previewData: {
-                    title: company.displayName,
-                    subtitle: company.primaryEmail ?? undefined,
-                    metadata: {
-                      [t('customers.companies.detail.highlights.primaryPhone')]: company.primaryPhone ?? '-',
-                      [t('customers.companies.detail.fields.industry')]: profile?.industry ?? '-',
+              <>
+                <CompanyRegistrySyncToolbarButton onSuccess={applyRegistrySync} />
+                <SendObjectMessageDialog
+                  object={{
+                    entityModule: 'customers',
+                    entityType: 'company',
+                    entityId: companyId,
+                    previewData: {
+                      title: company.displayName,
+                      subtitle: company.primaryEmail ?? undefined,
+                      metadata: {
+                        [t('customers.companies.detail.highlights.primaryPhone')]: company.primaryPhone ?? '-',
+                        [t('customers.companies.detail.fields.industry')]: profile?.industry ?? '-',
+                      },
                     },
-                  },
-                }}
-                viewHref={`/backend/customers/companies/${companyId}`}
-              />
+                  }}
+                  viewHref={`/backend/customers/companies/${companyId}`}
+                />
+              </>
             )}
             onPrimaryEmailSave={(value) => updateCompanyField('primaryEmail', value)}
             onPrimaryPhoneSave={(value) => updateCompanyField('primaryPhone', value)}

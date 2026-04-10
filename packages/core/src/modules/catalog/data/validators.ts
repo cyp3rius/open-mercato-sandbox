@@ -218,6 +218,8 @@ const productBaseSchema = scoped.extend({
   offers: z.array(offerInputSchema.omit({ id: true })).optional(),
   categoryIds: z.array(uuid()).max(100).optional(),
   tags: z.array(tagLabelSchema).max(100).optional(),
+  serviceLineId: uuid().nullable().optional(),
+  serviceLineAttributes: z.record(z.string(), z.unknown()).nullable().optional(),
 })
 
 export const productCreateSchema = productBaseSchema
@@ -287,6 +289,20 @@ export const optionSchemaTemplateUpdateSchema = z
   .merge(optionSchemaTemplateCreateSchema.partial())
 
 const priceDisplayModeSchema = z.enum(CATALOG_PRICE_DISPLAY_MODES)
+
+export const serviceLineCreateSchema = scoped.extend({
+  code: slugSchema,
+  title: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(4000).optional(),
+  sortOrder: z.coerce.number().int().min(0).max(1_000_000).optional(),
+  isActive: z.boolean().optional(),
+})
+
+export const serviceLineUpdateSchema = z
+  .object({
+    id: uuid(),
+  })
+  .merge(serviceLineCreateSchema.partial())
 
 export const priceKindCreateSchema = tenantScoped.extend({
   code: slugSchema,
@@ -370,6 +386,8 @@ export type VariantCreateInput = z.infer<typeof variantCreateSchema>
 export type VariantUpdateInput = z.infer<typeof variantUpdateSchema>
 export type OptionSchemaTemplateCreateInput = z.infer<typeof optionSchemaTemplateCreateSchema>
 export type OptionSchemaTemplateUpdateInput = z.infer<typeof optionSchemaTemplateUpdateSchema>
+export type ServiceLineCreateInput = z.infer<typeof serviceLineCreateSchema>
+export type ServiceLineUpdateInput = z.infer<typeof serviceLineUpdateSchema>
 export type PriceKindCreateInput = z.infer<typeof priceKindCreateSchema>
 export type PriceKindUpdateInput = z.infer<typeof priceKindUpdateSchema>
 export type PriceCreateInput = z.infer<typeof priceCreateSchema>

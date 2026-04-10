@@ -40,6 +40,8 @@ import {
   CatalogProductCategoryAssignment,
   CatalogProductTag,
   CatalogProductTagAssignment,
+  CatalogProductServiceLineExtension,
+  CatalogServiceLine,
 } from "../data/entities";
 import { SalesTaxRate } from "@open-mercato/core/modules/sales/data/entities";
 import {
@@ -114,6 +116,9 @@ type ProductSnapshot = {
   tags: string[];
   categoryIds: string[];
   custom: Record<string, unknown> | null;
+  serviceLineId: string | null;
+  /** Present from snapshots after service-line JSON attributes; omit in older undo payloads. */
+  serviceLineAttributes?: Record<string, unknown> | null;
 };
 
 async function resolveProductUnitDefaults(
@@ -145,6 +150,79 @@ async function resolveProductUnitDefaults(
       })
     : null;
   return { defaultUnit, defaultSalesUnit };
+}
+
+async function resolveServiceLineForProduct(
+  em: EntityManager,
+  serviceLineId: string | null | undefined,
+  organizationId: string,
+  tenantId: string,
+  translate: (key: string, fallback: string) => string,
+): Promise<CatalogServiceLine | null> {
+  if (!serviceLineId) return null;
+  const line = await em.findOne(CatalogServiceLine, {
+    id: serviceLineId,
+    organizationId,
+    tenantId,
+    deletedAt: null,
+  });
+  if (!line) {
+    throw new CrudHttpError(400, {
+      error: translate(
+        "catalog.errors.serviceLineNotFound",
+        "Service line not found.",
+      ),
+    });
+  }
+  return line;
+}
+
+function sanitizeServiceLineAttributes(
+  input: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  if (input == null) return null;
+  if (typeof input !== "object" || Array.isArray(input)) return null;
+  const cloned = cloneJson(input) as Record<string, unknown>;
+  if (!Object.keys(cloned).length) return null;
+  return cloned;
+}
+
+async function syncProductServiceLineExtension(
+  em: EntityManager,
+  product: CatalogProduct,
+  resolvedLine: CatalogServiceLine | null,
+  attributes?: Record<string, unknown> | null | undefined,
+): Promise<void> {
+  const existing = await em.findOne(CatalogProductServiceLineExtension, {
+    product: product.id,
+  });
+  if (!resolvedLine) {
+    if (existing) em.remove(existing);
+    return;
+  }
+  const nextAttrs =
+    attributes !== undefined
+      ? sanitizeServiceLineAttributes(attributes)
+      : undefined;
+  if (existing) {
+    existing.serviceLine = resolvedLine;
+    existing.organizationId = product.organizationId;
+    existing.tenantId = product.tenantId;
+    if (nextAttrs !== undefined) {
+      existing.attributes = nextAttrs;
+    }
+    existing.updatedAt = new Date();
+    return;
+  }
+  em.persist(
+    em.create(CatalogProductServiceLineExtension, {
+      organizationId: product.organizationId,
+      tenantId: product.tenantId,
+      product,
+      serviceLine: resolvedLine,
+      attributes: nextAttrs ?? null,
+    }),
+  );
 }
 
 async function ensureBaseUnitCanBeRemoved(
@@ -1092,6 +1170,23 @@ async function loadProductSnapshot(
     typeof optionSchemaTemplate === "string"
       ? optionSchemaTemplate
       : (optionSchemaTemplate?.id ?? null);
+  const serviceLineExt = await findOneWithDecryption(
+    em,
+    CatalogProductServiceLineExtension,
+    { product: record.id },
+    { populate: ["serviceLine"] },
+    { tenantId: record.tenantId, organizationId: record.organizationId },
+  );
+  const serviceLineRef = serviceLineExt?.serviceLine;
+  const serviceLineId =
+    typeof serviceLineRef === "string"
+      ? serviceLineRef
+      : (serviceLineRef?.id ?? null);
+  const serviceLineAttributes = serviceLineExt?.attributes
+    ? sanitizeServiceLineAttributes(
+        serviceLineExt.attributes as Record<string, unknown>,
+      )
+    : null;
   const measurements = extractMeasurementsFromMetadata(
     record.metadata ? cloneJson(record.metadata) : null,
   );
@@ -1148,6 +1243,8 @@ async function loadProductSnapshot(
     tags,
     categoryIds,
     custom: Object.keys(custom).length ? custom : null,
+    serviceLineId,
+    serviceLineAttributes,
   };
 }
 
@@ -1242,6 +1339,13 @@ const createProductCommand: CommandHandler<
       defaultUnit: parsed.defaultUnit ?? null,
       defaultSalesUnit: parsed.defaultSalesUnit ?? parsed.defaultUnit ?? null,
     });
+    const serviceLine = await resolveServiceLineForProduct(
+      em,
+      parsed.serviceLineId ?? null,
+      parsed.organizationId,
+      parsed.tenantId,
+      translate,
+    );
     const productId = randomUUID();
     const record = em.create(CatalogProduct, {
       id: productId,
@@ -1305,6 +1409,25 @@ const createProductCommand: CommandHandler<
       );
     }
     em.persist(record);
+    try {
+      await em.flush();
+    } catch (error) {
+      await rethrowProductUniqueConstraint(error);
+    }
+    if (parsed.serviceLineAttributes !== undefined && !serviceLine) {
+      throw new CrudHttpError(400, {
+        error: translate(
+          "catalog.errors.serviceLineRequiredForAttributes",
+          "Assign a service line before setting service line attributes.",
+        ),
+      });
+    }
+    await syncProductServiceLineExtension(
+      em,
+      record,
+      serviceLine,
+      parsed.serviceLineAttributes,
+    );
     try {
       await em.flush();
     } catch (error) {
@@ -1616,6 +1739,54 @@ const updateProductCommand: CommandHandler<
     } catch (error) {
       await rethrowProductUniqueConstraint(error);
     }
+    if (
+      parsed.serviceLineId !== undefined ||
+      parsed.serviceLineAttributes !== undefined
+    ) {
+      let line: CatalogServiceLine | null;
+      if (parsed.serviceLineId !== undefined) {
+        line = await resolveServiceLineForProduct(
+          lookupEm,
+          parsed.serviceLineId ?? null,
+          organizationId,
+          tenantId,
+          translate,
+        );
+      } else {
+        const ext = await findOneWithDecryption(
+          em,
+          CatalogProductServiceLineExtension,
+          { product: record.id },
+          { populate: ["serviceLine"] },
+          { tenantId, organizationId },
+        );
+        const lineRef = ext?.serviceLine;
+        line = lineRef
+          ? typeof lineRef === "string"
+            ? await em.findOne(CatalogServiceLine, { id: lineRef })
+            : lineRef
+          : null;
+      }
+      if (parsed.serviceLineAttributes !== undefined && !line) {
+        throw new CrudHttpError(400, {
+          error: translate(
+            "catalog.errors.serviceLineRequiredForAttributes",
+            "Assign a service line before setting service line attributes.",
+          ),
+        });
+      }
+      await syncProductServiceLineExtension(
+        em,
+        record,
+        line,
+        parsed.serviceLineAttributes,
+      );
+      try {
+        await em.flush();
+      } catch (error) {
+        await rethrowProductUniqueConstraint(error);
+      }
+    }
     await syncOffers(em, record, parsed.offers);
     await syncCategoryAssignments(em, record, parsed.categoryIds);
     await syncProductTags(em, record, parsed.tags);
@@ -1671,6 +1842,7 @@ const updateProductCommand: CommandHandler<
         "unitPriceEnabled",
         "unitPriceReferenceUnit",
         "unitPriceBaseQuantity",
+        "serviceLineId",
         "isActive",
       ]),
       snapshotBefore: before,
@@ -1729,7 +1901,21 @@ const updateProductCommand: CommandHandler<
     }
     ensureTenantScope(ctx, before.tenantId);
     ensureOrganizationScope(ctx, before.organizationId);
+    const { translate: translateUndo } = await resolveTranslations();
     applyProductSnapshot(em, record, before);
+    await em.flush();
+    await syncProductServiceLineExtension(
+      em,
+      record,
+      await resolveServiceLineForProduct(
+        em,
+        before.serviceLineId,
+        before.organizationId,
+        before.tenantId,
+        translateUndo,
+      ),
+      before.serviceLineAttributes,
+    );
     await em.flush();
 
     const relationEm = em.fork();
@@ -1905,7 +2091,21 @@ const deleteProductCommand: CommandHandler<
     }
     ensureTenantScope(ctx, before.tenantId);
     ensureOrganizationScope(ctx, before.organizationId);
+    const { translate: translateDeleteUndo } = await resolveTranslations();
     applyProductSnapshot(em, record, before);
+    await em.flush();
+    await syncProductServiceLineExtension(
+      em,
+      record,
+      await resolveServiceLineForProduct(
+        em,
+        before.serviceLineId,
+        before.organizationId,
+        before.tenantId,
+        translateDeleteUndo,
+      ),
+      before.serviceLineAttributes,
+    );
     await em.flush();
 
     const relationEm = em.fork();

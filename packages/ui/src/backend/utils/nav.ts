@@ -22,6 +22,8 @@ export type AdminNavItem = {
   icon?: ReactNode
   children?: AdminNavItem[]
   pageContext?: 'main' | 'admin' | 'settings' | 'profile'
+  /** When true, this item was not path-nested under a group sibling (see ModuleRoute.navFlat). */
+  navFlat?: boolean
 }
 
 export type AdminNavFeatureChecker = (features: string[]) => Promise<Iterable<string> | null | undefined>
@@ -100,11 +102,29 @@ export type SettingsSectionItem = {
   children?: SettingsSectionItem[]
 }
 
+function collectAdminNavItemsDeep(roots: AdminNavItem[]): AdminNavItem[] {
+  const out: AdminNavItem[] = []
+  const walk = (nodes: AdminNavItem[]) => {
+    for (const n of nodes) {
+      out.push(n)
+      if (n.children?.length) walk(n.children)
+    }
+  }
+  walk(roots)
+  return out
+}
+
 export function buildSettingsSections(
   entries: AdminNavItem[],
   sectionOrder: Record<string, number>
 ): SettingsSection[] {
-  const settingsItems = entries.filter(e => e.pageContext === 'settings')
+  const settingsFlat = collectAdminNavItemsDeep(entries).filter((e) => e.pageContext === 'settings')
+  const settingsSeen = new Set<string>()
+  const settingsItems = settingsFlat.filter((e) => {
+    if (settingsSeen.has(e.href)) return false
+    settingsSeen.add(e.href)
+    return true
+  })
 
   const sectionMap = new Map<string, SettingsSection>()
 
@@ -316,6 +336,7 @@ export async function buildAdminNav(
         priority,
         icon,
         pageContext,
+        navFlat: r.navFlat,
       })
     }
   }
@@ -328,11 +349,13 @@ export async function buildAdminNav(
     // Walk up the href segments to find the longest matching parent in the same group
     let parent: AdminNavItem | undefined
     const segments = e.href.split('/')
-    for (let i = segments.length - 1; i >= 2; i--) {
-      const candidate = byHref.get(segments.slice(0, i).join('/'))
-      if (candidate && candidate !== e && candidate.groupId === e.groupId) {
-        parent = candidate
-        break
+    if (!e.navFlat) {
+      for (let i = segments.length - 1; i >= 2; i--) {
+        const candidate = byHref.get(segments.slice(0, i).join('/'))
+        if (candidate && candidate !== e && candidate.groupId === e.groupId) {
+          parent = candidate
+          break
+        }
       }
     }
     byHref.set(e.href, e)
@@ -343,6 +366,28 @@ export async function buildAdminNav(
       roots.push(e)
     }
   }
+
+  const promoteNavFlatDescendants = (navRoots: AdminNavItem[]) => {
+    const detachFrom = (node: AdminNavItem) => {
+      if (!node.children?.length) return
+      for (const ch of [...node.children]) {
+        detachFrom(ch)
+      }
+      const kept: AdminNavItem[] = []
+      for (const ch of node.children) {
+        if (ch.navFlat) {
+          navRoots.push(ch)
+        } else {
+          kept.push(ch)
+        }
+      }
+      node.children = kept.length ? kept : undefined
+    }
+    for (let i = 0; i < navRoots.length; i++) {
+      detachFrom(navRoots[i])
+    }
+  }
+  promoteNavFlatDescendants(roots)
 
   // Add dynamic user entities to the navigation
   if (userEntities && userEntities.length > 0) {

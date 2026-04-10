@@ -1,0 +1,48 @@
+---
+description: Rules for running shell commands in this project
+globs:
+alwaysApply: true
+---
+
+# Shell Commands
+
+When running shell commands in this project:
+
+1. **Always use `nvm use`** before running Node.js commands to ensure the correct Node version (defined in `.nvmrc`)
+
+2. **Always use `yarn`** (Yarn Classic 1.x) instead of `npm` for package management:
+   - Use `yarn` instead of `npm install`
+   - Use `yarn add` instead of `npm install <package>`
+   - Use `yarn add -D` instead of `npm install -D <package>`
+   - Use `yarn test` instead of `npm test`
+   - Use `yarn test:run` instead of `npm run test:run`
+
+3. **Command pattern**: When running commands, use this pattern:
+   ```bash
+   . ~/.nvm/nvm.sh && nvm use && yarn <command>
+   ```
+
+## Examples
+
+```bash
+# Installing dependencies
+. ~/.nvm/nvm.sh && nvm use && yarn
+
+# Adding a new package
+. ~/.nvm/nvm.sh && nvm use && yarn add <package>
+
+# Running tests
+. ~/.nvm/nvm.sh && nvm use && yarn test:run
+
+# Running dev server
+. ~/.nvm/nvm.sh && nvm use && yarn dev
+
+# Building the project
+. ~/.nvm/nvm.sh && nvm use && yarn build
+```
+
+## Notes
+
+- This project uses Yarn Classic (1.x), configured in `.yarnrc`
+- Node version is specified in `.nvmrc` (v20)
+- Always source nvm before using it in non-interactive shells

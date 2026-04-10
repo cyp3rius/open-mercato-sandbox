@@ -639,6 +639,8 @@ export async function GET(_req: Request, ctx: { params?: { id?: string } }) {
       interactionMode,
       person: {
         id: person.id,
+        crmRecordType: person.crmRecordType ?? 'customer',
+        referralCode: person.referralCode ?? null,
         displayName: person.displayName,
         description: person.description,
         ownerUserId: person.ownerUserId,
@@ -671,6 +673,11 @@ export async function GET(_req: Request, ctx: { params?: { id?: string } }) {
             linkedInUrl: profile.linkedInUrl,
             twitterUrl: profile.twitterUrl,
             companyEntityId: profile.company ? (typeof profile.company === 'string' ? profile.company : profile.company.id) : null,
+            pesel: profile.pesel ?? null,
+            residenceStreet: profile.residenceStreet ?? null,
+            residencePostalCode: profile.residencePostalCode ?? null,
+            residenceCity: profile.residenceCity ?? null,
+            residenceCountry: profile.residenceCountry ?? null,
             updatedAt: profile.updatedAt.toISOString(),
           }
         : null,
@@ -859,6 +866,8 @@ const personDetailResponseSchema = z.object({
   interactionMode: z.enum(['canonical', 'legacy']),
   person: z.object({
     id: z.string().uuid(),
+    crmRecordType: z.enum(['customer', 'partner', 'referrer']).optional(),
+    referralCode: z.string().nullable().optional(),
     displayName: z.string().nullable().optional(),
     description: z.string().nullable().optional(),
     ownerUserId: z.string().uuid().nullable().optional(),
@@ -891,6 +900,11 @@ const personDetailResponseSchema = z.object({
       linkedInUrl: z.string().nullable().optional(),
       twitterUrl: z.string().nullable().optional(),
       companyEntityId: z.string().uuid().nullable().optional(),
+      pesel: z.string().nullable().optional(),
+      residenceStreet: z.string().nullable().optional(),
+      residencePostalCode: z.string().nullable().optional(),
+      residenceCity: z.string().nullable().optional(),
+      residenceCountry: z.string().nullable().optional(),
       updatedAt: z.string(),
     })
     .nullable(),

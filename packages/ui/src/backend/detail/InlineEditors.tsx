@@ -44,9 +44,11 @@ export type InlineTextEditorProps = {
   onSave: (value: string | null) => Promise<void>
   type?: InlineFieldType
   inputType?: React.HTMLInputTypeAttribute
-  validator?: (value: string) => string | null
+   validator?: (value: string) => string | null
   variant?: EditorVariant
   activateOnClick?: boolean
+  /** When false, hide the pencil/cancel trigger (fully read-only). Default true. */
+  showEditTrigger?: boolean
   containerClassName?: string
   triggerClassName?: string
   hideLabel?: boolean
@@ -75,6 +77,7 @@ export function InlineTextEditor({
   validator,
   variant = 'default',
   activateOnClick = false,
+  showEditTrigger = true,
   containerClassName,
   triggerClassName,
   hideLabel = false,
@@ -118,15 +121,15 @@ export function InlineTextEditor({
     'group overflow-hidden',
     variant === 'muted'
       ? 'relative rounded border bg-muted/20 p-3'
-      : variant === 'plain'
+      :     variant === 'plain'
         ? 'relative flex items-center gap-3 rounded-none border-0 p-0'
         : 'rounded-lg border p-4',
-    activateOnClick && !editing ? 'cursor-pointer' : null,
+    showEditTrigger && activateOnClick && !editing ? 'cursor-pointer' : null,
     containerClassName ?? null,
   )
   const readOnlyWrapperClasses = cn(
     'flex-1 min-w-0',
-    activateOnClick && !editing ? 'cursor-pointer' : null,
+    showEditTrigger && activateOnClick && !editing ? 'cursor-pointer' : null,
     variant === 'plain' ? 'flex items-center gap-2' : null,
   )
   const triggerClasses = cn(
@@ -147,13 +150,21 @@ export function InlineTextEditor({
     [onEditingChange],
   )
 
+  React.useEffect(() => {
+    if (!showEditTrigger && editing) {
+      setEditingSafe(false)
+      setError(null)
+    }
+  }, [editing, setEditingSafe, showEditTrigger])
+
   const handleActivate = React.useCallback(() => {
+    if (!showEditTrigger) return
     if (!editing) setEditingSafe(true)
-  }, [editing, setEditingSafe])
+  }, [editing, setEditingSafe, showEditTrigger])
 
   const handleInteractiveClick = React.useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!activateOnClick || editing) return
+      if (!showEditTrigger || !activateOnClick || editing) return
       const target = event.target as HTMLElement
       const interactiveElement = target.closest('button, input, select, textarea, a, [role="link"]')
       if (interactiveElement) {
@@ -169,18 +180,18 @@ export function InlineTextEditor({
       }
       handleActivate()
     },
-    [activateOnClick, editing, handleActivate],
+    [activateOnClick, editing, handleActivate, showEditTrigger],
   )
 
   const handleContainerKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (!activateOnClick || editing) return
+      if (!showEditTrigger || !activateOnClick || editing) return
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault()
         handleActivate()
       }
     },
-    [activateOnClick, editing, handleActivate],
+    [activateOnClick, editing, handleActivate, showEditTrigger],
   )
 
   const handleSave = React.useCallback(async () => {
@@ -205,7 +216,7 @@ export function InlineTextEditor({
   }, [draft, fallbackError, onSave, setEditingSafe, validator])
 
   const interactiveProps: React.HTMLAttributes<HTMLDivElement> =
-    activateOnClick && !editing
+    showEditTrigger && activateOnClick && !editing
       ? {
           role: 'button' as const,
           tabIndex: 0,
@@ -334,19 +345,21 @@ export function InlineTextEditor({
           )}
         </div>
         {renderActions ? <div className="flex items-center gap-2">{renderActions}</div> : null}
-        <Button
-          type="button"
-          variant="ghost"
-          size={triggerSize}
-          className={triggerClasses}
-          onClick={(event) => {
-            event.stopPropagation()
-            const next = !editing
-            setEditingSafe(next)
-          }}
-        >
-          {editing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-        </Button>
+        {showEditTrigger ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size={triggerSize}
+            className={triggerClasses}
+            onClick={(event) => {
+              event.stopPropagation()
+              const next = !editing
+              setEditingSafe(next)
+            }}
+          >
+            {editing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+          </Button>
+        ) : null}
       </div>
     </div>
   )
@@ -361,6 +374,8 @@ export type InlineMultilineEditorProps = {
   validator?: (value: string) => string | null
   variant?: EditorVariant
   activateOnClick?: boolean
+  /** When false, hide the pencil/cancel trigger (fully read-only). Default true. */
+  showEditTrigger?: boolean
   containerClassName?: string
   triggerClassName?: string
   renderDisplay?: (params: { value: string | null | undefined; emptyLabel: string }) => React.ReactNode
@@ -432,6 +447,7 @@ export function InlineMultilineEditor({
   validator,
   variant = 'default',
   activateOnClick = true,
+  showEditTrigger = true,
   containerClassName,
   triggerClassName,
   renderDisplay,
@@ -500,13 +516,21 @@ export function InlineMultilineEditor({
     }
   }, [editing, value])
 
+  React.useEffect(() => {
+    if (!showEditTrigger && editing) {
+      setEditing(false)
+      setError(null)
+    }
+  }, [editing, showEditTrigger])
+
   const handleActivate = React.useCallback(() => {
+    if (!showEditTrigger) return
     if (!editing) setEditing(true)
-  }, [editing])
+  }, [editing, showEditTrigger])
 
   const handleInteractiveClick = React.useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!activateOnClick || editing) return
+      if (!showEditTrigger || !activateOnClick || editing) return
       const target = event.target as HTMLElement
       const interactiveElement = target.closest('button, input, select, textarea, a, [role="link"]')
       if (interactiveElement) {
@@ -522,18 +546,18 @@ export function InlineMultilineEditor({
       }
       handleActivate()
     },
-    [activateOnClick, editing, handleActivate],
+    [activateOnClick, editing, handleActivate, showEditTrigger],
   )
 
   const handleContainerKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (!activateOnClick || editing) return
+      if (!showEditTrigger || !activateOnClick || editing) return
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault()
         handleActivate()
       }
     },
-    [activateOnClick, editing, handleActivate],
+    [activateOnClick, editing, handleActivate, showEditTrigger],
   )
 
   const adjustError = React.useCallback(
@@ -548,7 +572,7 @@ export function InlineMultilineEditor({
   const containerClasses = cn(
     'group rounded-lg border p-4',
     variant === 'muted' ? 'bg-muted/20' : null,
-    activateOnClick && !editing ? 'cursor-pointer' : null,
+    showEditTrigger && activateOnClick && !editing ? 'cursor-pointer' : null,
     containerClassName ?? null,
   )
   const triggerClasses = cn(
@@ -581,8 +605,11 @@ export function InlineMultilineEditor({
     <div className={containerClasses} onClick={handleInteractiveClick}>
       <div className="flex items-start justify-between gap-2">
         <div
-          className={cn('flex-1 min-w-0', activateOnClick && !editing ? 'cursor-pointer' : null)}
-          {...(activateOnClick && !editing
+          className={cn(
+            'flex-1 min-w-0',
+            showEditTrigger && activateOnClick && !editing ? 'cursor-pointer' : null,
+          )}
+          {...(showEditTrigger && activateOnClick && !editing
             ? { role: 'button' as const, tabIndex: 0, onKeyDown: handleContainerKeyDown }
             : {})}
         >
@@ -685,7 +712,7 @@ export function InlineMultilineEditor({
               className={cn(
                 'mt-1 text-sm break-words',
                 renderDisplay ? null : 'whitespace-pre-wrap',
-                activateOnClick && !editing ? 'cursor-pointer' : null,
+                showEditTrigger && activateOnClick && !editing ? 'cursor-pointer' : null,
               )}
             >
               {renderDisplay ? (
@@ -703,18 +730,20 @@ export function InlineMultilineEditor({
             </div>
           )}
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className={triggerClasses}
-          onClick={(event) => {
-            event.stopPropagation()
-            setEditing((state) => !state)
-          }}
-        >
-          {editing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-        </Button>
+        {showEditTrigger ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={triggerClasses}
+            onClick={(event) => {
+              event.stopPropagation()
+              setEditing((state) => !state)
+            }}
+          >
+            {editing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+          </Button>
+        ) : null}
       </div>
     </div>
   )
@@ -730,6 +759,8 @@ export type InlineSelectEditorProps = {
   onSave: (value: string | null) => Promise<void>
   variant?: EditorVariant
   activateOnClick?: boolean
+  /** When false, hide the pencil/cancel trigger (fully read-only). Default true. */
+  showEditTrigger?: boolean
   containerClassName?: string
   triggerClassName?: string
   hideLabel?: boolean
@@ -745,6 +776,7 @@ export function InlineSelectEditor({
   onSave,
   variant = 'default',
   activateOnClick = false,
+  showEditTrigger = true,
   containerClassName,
   triggerClassName,
   hideLabel = false,
@@ -760,6 +792,12 @@ export function InlineSelectEditor({
     if (!editing) setDraft(value ?? '')
   }, [editing, value])
 
+  React.useEffect(() => {
+    if (!showEditTrigger && editing) {
+      setEditing(false)
+    }
+  }, [editing, showEditTrigger])
+
   const containerClasses = cn(
     'group',
     variant === 'muted'
@@ -767,7 +805,7 @@ export function InlineSelectEditor({
       : variant === 'plain'
         ? 'relative flex flex-col gap-1 rounded-none border-0 p-0'
         : 'rounded-lg border bg-card p-4',
-    activateOnClick && !editing ? 'cursor-pointer' : null,
+    showEditTrigger && activateOnClick && !editing ? 'cursor-pointer' : null,
     containerClassName ?? null,
   )
   const triggerClasses = cn(
@@ -795,7 +833,7 @@ export function InlineSelectEditor({
   const selected = options.find((option) => option.value === value)
 
   const interactiveProps: React.HTMLAttributes<HTMLDivElement> =
-    activateOnClick && !editing
+    showEditTrigger && activateOnClick && !editing
       ? {
           role: 'button' as const,
           tabIndex: 0,
@@ -859,18 +897,20 @@ export function InlineSelectEditor({
             </div>
           )}
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size={variant === 'plain' ? 'icon' : 'sm'}
-          className={triggerClasses}
-          onClick={(event) => {
-            event.stopPropagation()
-            setEditing((state) => !state)
-          }}
-        >
-          {editing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-        </Button>
+        {showEditTrigger ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size={variant === 'plain' ? 'icon' : 'sm'}
+            className={triggerClasses}
+            onClick={(event) => {
+              event.stopPropagation()
+              setEditing((state) => !state)
+            }}
+          >
+            {editing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+          </Button>
+        ) : null}
       </div>
     </div>
   )

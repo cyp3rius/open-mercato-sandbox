@@ -395,6 +395,32 @@ function detectAppDir(rootDir: string, isMonorepo: boolean): string {
   return rootDir
 }
 
+/**
+ * When multiple apps exist under apps/*, prefer the app that matches the current working
+ * directory (e.g. apps/mercato vs apps/docs) so Next.js .mercato cache and dev lock stay per-app.
+ */
+function resolveMonorepoAppDir(rootDir: string, cwd: string): string {
+  const resolvedCwd = path.resolve(cwd)
+  const resolvedRoot = path.resolve(rootDir)
+  const rootWithSep = resolvedRoot.endsWith(path.sep) ? resolvedRoot : `${resolvedRoot}${path.sep}`
+  if (resolvedCwd !== resolvedRoot && !resolvedCwd.startsWith(rootWithSep)) {
+    return detectAppDir(rootDir, true)
+  }
+  const rel = path.relative(resolvedRoot, resolvedCwd)
+  if (!rel || rel.startsWith('..')) {
+    return detectAppDir(rootDir, true)
+  }
+  const segments = rel.split(path.sep).filter(Boolean)
+  if (segments[0] === 'apps' && segments.length >= 2) {
+    const candidate = path.join(resolvedRoot, 'apps', segments[1])
+    const modulesTs = path.join(candidate, 'src', 'modules.ts')
+    if (fs.existsSync(modulesTs)) {
+      return candidate
+    }
+  }
+  return detectAppDir(rootDir, true)
+}
+
 function findNodeModulesRoot(startDir: string): string | null {
   // Walk up to find node_modules/@open-mercato/core
   let dir = startDir
@@ -451,7 +477,7 @@ export function createResolver(cwd: string = process.cwd()): PackageResolver {
   // - In monorepo: use detectAppDir to find apps/mercato or similar
   // - When symlinks not detected (e.g. Docker volume node_modules): still use apps/mercato if present at rootDir
   // - Otherwise: app is at cwd
-  const candidateAppDir = shouldResolveAppFromRoot ? detectAppDir(rootDir, true) : rootDir
+  const candidateAppDir = shouldResolveAppFromRoot ? resolveMonorepoAppDir(rootDir, cwd) : rootDir
   const appDir =
     _isMonorepo
       ? candidateAppDir

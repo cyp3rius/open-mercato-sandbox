@@ -32,6 +32,8 @@ export type PageMetadata = {
   pageOrder?: number
   icon?: ReactNode
   navHidden?: boolean
+  /** When true, do not nest under a shorter-path route in the same nav group (sidebar siblings). */
+  navFlat?: boolean
   // Dynamic flags
   visible?: (ctx: RouteVisibilityContext) => boolean | Promise<boolean>
   enabled?: (ctx: RouteVisibilityContext) => boolean | Promise<boolean>
@@ -74,6 +76,8 @@ export type ModuleRoute = {
   order?: number
   priority?: number
   navHidden?: boolean
+  /** When true, do not nest under a shorter-path route in the same nav group (sidebar siblings). */
+  navFlat?: boolean
   visible?: (ctx: RouteVisibilityContext) => boolean | Promise<boolean>
   enabled?: (ctx: RouteVisibilityContext) => boolean | Promise<boolean>
   breadcrumb?: Array<{ label: string; labelKey?: string; href?: string }>

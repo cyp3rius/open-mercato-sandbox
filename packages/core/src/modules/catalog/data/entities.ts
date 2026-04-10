@@ -66,6 +66,52 @@ export class CatalogOptionSchemaTemplate {
   deletedAt?: Date | null
 }
 
+@Entity({ tableName: 'catalog_service_lines' })
+@Index({
+  name: 'catalog_service_lines_org_tenant_idx',
+  properties: ['organizationId', 'tenantId'],
+})
+@Unique({
+  name: 'catalog_service_lines_code_scope_unique',
+  properties: ['organizationId', 'tenantId', 'code'],
+})
+export class CatalogServiceLine {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ type: 'text' })
+  code!: string
+
+  @Property({ type: 'text' })
+  title!: string
+
+  @Property({ type: 'text', nullable: true })
+  description?: string | null
+
+  @Property({ name: 'sort_order', type: 'int', default: 0 })
+  sortOrder: number = 0
+
+  @Property({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean = true
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
 @Entity({ tableName: 'catalog_products' })
 @Index({ name: 'catalog_products_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
 @Unique({ name: 'catalog_products_sku_scope_unique', properties: ['organizationId', 'tenantId', 'sku'] })
@@ -205,6 +251,49 @@ export class CatalogProduct {
 
   @OneToMany(() => CatalogProductUnitConversion, (conversion) => conversion.product)
   unitConversions = new Collection<CatalogProductUnitConversion>(this)
+}
+
+@Entity({ tableName: 'catalog_product_service_line_extensions' })
+@Index({
+  name: 'catalog_pdt_svc_line_ext_scope_idx',
+  properties: ['organizationId', 'tenantId'],
+})
+@Unique({
+  name: 'catalog_pdt_svc_line_ext_product_unique',
+  properties: ['product'],
+})
+export class CatalogProductServiceLineExtension {
+  [OptionalProps]?: 'createdAt' | 'updatedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @ManyToOne(() => CatalogProduct, {
+    fieldName: 'product_id',
+    deleteRule: 'cascade',
+  })
+  product!: CatalogProduct
+
+  @ManyToOne(() => CatalogServiceLine, {
+    fieldName: 'service_line_id',
+    deleteRule: 'restrict',
+  })
+  serviceLine!: CatalogServiceLine
+
+  @Property({ name: 'attributes', type: 'jsonb', nullable: true })
+  attributes?: Record<string, unknown> | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
 }
 
 @Entity({ tableName: 'catalog_product_unit_conversions' })

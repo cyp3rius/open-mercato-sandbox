@@ -12,6 +12,8 @@ import {
 } from '@mikro-orm/core'
 
 export type CustomerEntityKind = 'person' | 'company'
+/** CRM segment: default customers; partners/referrers can carry a unique referral code. */
+export type CustomerCrmRecordType = 'customer' | 'partner' | 'referrer'
 export type CustomerAddressFormat = 'line_first' | 'street_first'
 
 @Entity({ tableName: 'customer_entities' })
@@ -36,6 +38,10 @@ export type CustomerAddressFormat = 'line_first' | 'street_first'
   expression:
     `create index "idx_ce_tenant_person_id" on "customer_entities" ("tenant_id", "id") where deleted_at is null and kind = 'person'`,
 })
+@Index({
+  name: 'customer_entities_crm_record_type_idx',
+  properties: ['organizationId', 'tenantId', 'crmRecordType'],
+})
 export class CustomerEntity {
   [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt'
 
@@ -50,6 +56,13 @@ export class CustomerEntity {
 
   @Property({ type: 'text' })
   kind!: CustomerEntityKind
+
+  @Property({ name: 'crm_record_type', type: 'text', default: 'customer' })
+  crmRecordType: CustomerCrmRecordType = 'customer'
+
+  /** Unique per organization when set; used for partner/referrer programs. */
+  @Property({ name: 'referral_code', type: 'text', nullable: true })
+  referralCode?: string | null
 
   @Property({ name: 'display_name', type: 'text' })
   displayName!: string
@@ -182,6 +195,21 @@ export class CustomerPersonProfile {
   @Property({ name: 'twitter_url', type: 'text', nullable: true })
   twitterUrl?: string | null
 
+  @Property({ name: 'pesel', type: 'text', nullable: true })
+  pesel?: string | null
+
+  @Property({ name: 'residence_street', type: 'text', nullable: true })
+  residenceStreet?: string | null
+
+  @Property({ name: 'residence_postal_code', type: 'text', nullable: true })
+  residencePostalCode?: string | null
+
+  @Property({ name: 'residence_city', type: 'text', nullable: true })
+  residenceCity?: string | null
+
+  @Property({ name: 'residence_country', type: 'text', nullable: true })
+  residenceCountry?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 
@@ -240,6 +268,12 @@ export class CustomerCompanyProfile {
 
   @Property({ name: 'annual_revenue', type: 'numeric', precision: 16, scale: 2, nullable: true })
   annualRevenue?: string | null
+
+  @Property({ name: 'nip', type: 'text', nullable: true })
+  nip?: string | null
+
+  @Property({ name: 'regon', type: 'text', nullable: true })
+  regon?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

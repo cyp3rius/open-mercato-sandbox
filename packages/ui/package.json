@@ -78,6 +78,10 @@
       "types": "./src/backend/version-history/index.ts",
       "default": "./dist/backend/version-history/index.js"
     },
+    "./primitives/brand-icons": {
+      "types": "./src/primitives/brand-icons/index.tsx",
+      "default": "./dist/primitives/brand-icons/index.js"
+    },
     "./*.ts": {
       "types": "./src/*.ts",
       "default": "./dist/*.js"
@@ -116,8 +120,10 @@
     }
   },
   "dependencies": {
+    "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-popover": "^1.1.6",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "cmdk": "^1.0.0",
     "date-fns": "^4.1.0",
     "react-big-calendar": "^1.19.4",
     "react-day-picker": "^9.6.4",

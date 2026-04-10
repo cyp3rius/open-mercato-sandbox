@@ -166,6 +166,8 @@ export type DataTableProps<T> = {
   rowClickActionIds?: string[]
   // Disable row click navigation when rowActions are present.
   disableRowClick?: boolean
+  /** Optional per-row background / layout (e.g. conditional list coloring). */
+  rowStyle?: (row: T) => React.CSSProperties | undefined
 
   // Auto FilterBar options (rendered as toolbar when provided and no custom toolbar passed)
   searchValue?: string
@@ -640,6 +642,7 @@ export function DataTable<T>({
   onRowClick,
   rowClickActionIds,
   disableRowClick = false,
+  rowStyle,
   searchValue,
   onSearchChange,
   searchPlaceholder,
@@ -1964,7 +1967,12 @@ export function DataTable<T>({
                   const columnMeta = (header.column.columnDef as any)?.meta
                   const priority = resolvePriority(header.column)
                   return (
-                    <TableHead key={header.id} className={responsiveClass(priority, columnMeta?.hidden)}>
+                    <TableHead
+                      key={header.id}
+                      className={[responsiveClass(priority, columnMeta?.hidden), columnMeta?.className]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
                       {header.isPlaceholder ? null : (
                         <Button
                           variant="ghost"
@@ -2010,11 +2018,13 @@ export function DataTable<T>({
                 const defaultRowAction = onRowClick ? null : pickDefaultRowAction(rowActionsElement, resolvedRowClickActionIds)
                 const isClickable = !disableRowClick && (onRowClick || defaultRowAction)
                 
+                const rowExtraStyle = rowStyle?.(row.original as T)
                 return (
                   <TableRow 
                     key={row.id} 
                     data-state={row.getIsSelected() && 'selected'}
                     className={isClickable ? 'cursor-pointer hover:bg-muted/50 transition-colors' : ''}
+                    style={rowExtraStyle}
                     onClick={isClickable ? (e) => {
                       // Don't trigger row click if clicking on actions cell
                       if ((e.target as HTMLElement).closest('[data-actions-cell]')) {
@@ -2083,7 +2093,12 @@ export function DataTable<T>({
                       ) : content
 
                       return (
-                        <TableCell key={cell.id} className={responsiveClass(priority, columnMeta?.hidden)}>
+                        <TableCell
+                          key={cell.id}
+                          className={[responsiveClass(priority, columnMeta?.hidden), columnMeta?.className]
+                            .filter(Boolean)
+                            .join(' ')}
+                        >
                           {wrappedContent}
                         </TableCell>
                       )

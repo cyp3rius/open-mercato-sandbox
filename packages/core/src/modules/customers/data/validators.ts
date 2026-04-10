@@ -1,5 +1,8 @@
 import { z } from 'zod'
 import { isValidPhoneNumber } from '@open-mercato/shared/lib/phone'
+import { isValidNip, normalizeNipDigits } from '../lib/nip'
+import { isValidPesel, normalizePeselDigits } from '../lib/pesel'
+import { isValidRegon, normalizeRegonDigits } from '../lib/regon'
 
 const uuid = () => z.string().uuid()
 
@@ -31,6 +34,9 @@ const nextInteractionSchema = z
 
 const displayNameSchema = z.string().trim().min(1).max(200)
 
+const crmRecordTypeFieldSchema = z.enum(['customer', 'partner', 'referrer']).optional()
+const referralCodeFieldSchema = z.string().trim().max(64).optional().nullable()
+
 const baseEntitySchema = {
   displayName: displayNameSchema,
   description: z.string().trim().max(4000).optional(),
@@ -48,7 +54,72 @@ const baseEntitySchema = {
   isActive: z.boolean().optional(),
   nextInteraction: nextInteractionSchema.nullable().optional(),
   tags: z.array(uuid()).optional(),
+  crmRecordType: crmRecordTypeFieldSchema,
+  referralCode: referralCodeFieldSchema,
 }
+
+function refineCrmReferral<T extends { crmRecordType?: string | null | undefined; referralCode?: string | null | undefined }>(
+  val: T,
+  ctx: z.RefinementCtx,
+  pathPrefix: (string | number)[] = [],
+): void {
+  const rt = val.crmRecordType ?? 'customer'
+  const raw = typeof val.referralCode === 'string' ? val.referralCode.trim() : ''
+  if (raw.length > 0 && rt === 'customer') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Referral code is only allowed for partner or referrer records.',
+      path: pathPrefix.length ? [...pathPrefix, 'referralCode'] : ['referralCode'],
+    })
+  }
+  if (!raw.length) return
+  if (!/^[a-zA-Z0-9]{3,64}$/.test(raw)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Referral code must be 3–64 alphanumeric characters.',
+      path: pathPrefix.length ? [...pathPrefix, 'referralCode'] : ['referralCode'],
+    })
+  }
+}
+
+const optionalPeselField = z
+  .union([z.string(), z.null(), z.undefined()])
+  .transform((v) => {
+    if (v === undefined) return undefined
+    if (v === null || v === '') return null
+    return normalizePeselDigits(String(v))
+  })
+  .refine(
+    (v) => v === undefined || v === null || (typeof v === 'string' && v.length === 11 && isValidPesel(v)),
+    { message: 'Invalid PESEL' },
+  )
+
+const optionalNipField = z
+  .union([z.string(), z.null(), z.undefined()])
+  .transform((v) => {
+    if (v === undefined) return undefined
+    if (v === null || v === '') return null
+    return normalizeNipDigits(String(v))
+  })
+  .refine(
+    (v) => v === undefined || v === null || (typeof v === 'string' && v.length === 10 && isValidNip(v)),
+    { message: 'Invalid NIP' },
+  )
+
+const optionalRegonField = z
+  .union([z.string(), z.null(), z.undefined()])
+  .transform((v) => {
+    if (v === undefined) return undefined
+    if (v === null || v === '') return null
+    return normalizeRegonDigits(String(v))
+  })
+  .refine(
+    (v) =>
+      v === undefined ||
+      v === null ||
+      (typeof v === 'string' && (v.length === 9 || v.length === 14) && isValidRegon(v)),
+    { message: 'Invalid REGON' },
+  )
 
 const personDetailsSchema = {
   preferredName: z.string().trim().max(120).optional(),
@@ -59,6 +130,21 @@ const personDetailsSchema = {
   linkedInUrl: z.string().trim().url().max(300).optional(),
   twitterUrl: z.string().trim().url().max(300).optional(),
   companyEntityId: uuid().nullable().optional(),
+  pesel: optionalPeselField.optional(),
+  residenceStreet: z.string().trim().max(500).optional().nullable(),
+  residencePostalCode: z.string().trim().max(16).optional().nullable(),
+  residenceCity: z.string().trim().max(120).optional().nullable(),
+  residenceCountry: z
+    .union([z.string(), z.null(), z.undefined()])
+    .transform((v) => {
+      if (v === undefined) return undefined
+      if (v === null || v === '') return null
+      return String(v).trim().toUpperCase()
+    })
+    .refine(
+      (v) => v === undefined || v === null || /^[A-Z]{2}$/.test(v),
+      { message: 'Country must be a2-letter ISO code' },
+    ),
 }
 
 const personFirstNameSchema = z.string().trim().min(1).max(120)
@@ -72,15 +158,19 @@ const companyDetailsSchema = {
   industry: z.string().trim().max(150).optional(),
   sizeBucket: z.string().trim().max(100).optional(),
   annualRevenue: z.coerce.number().min(0).optional(),
+  nip: optionalNipField.optional(),
+  regon: optionalRegonField.optional(),
 }
 
-export const personCreateSchema = scopedSchema.extend({
-  ...baseEntitySchema,
-  displayName: displayNameSchema.optional(),
-  firstName: personFirstNameSchema,
-  lastName: personLastNameSchema,
-  ...personDetailsSchema,
-})
+export const personCreateSchema = scopedSchema
+  .extend({
+    ...baseEntitySchema,
+    displayName: displayNameSchema.optional(),
+    firstName: personFirstNameSchema,
+    lastName: personLastNameSchema,
+    ...personDetailsSchema,
+  })
+  .superRefine((val, ctx) => refineCrmReferral(val, ctx))
 
 export const personUpdateSchema = z
   .object({
@@ -92,20 +182,24 @@ export const personUpdateSchema = z
       ...personDetailsSchema,
       firstName: personFirstNameSchema.optional(),
       lastName: personLastNameSchema.optional(),
-    }).partial()
+    }).partial(),
   )
+  .superRefine((val, ctx) => refineCrmReferral(val, ctx))
 
-export const companyCreateSchema = scopedSchema.extend({
-  ...baseEntitySchema,
-  displayName: displayNameSchema,
-  ...companyDetailsSchema,
-})
+export const companyCreateSchema = scopedSchema
+  .extend({
+    ...baseEntitySchema,
+    displayName: displayNameSchema,
+    ...companyDetailsSchema,
+  })
+  .superRefine((val, ctx) => refineCrmReferral(val, ctx))
 
 export const companyUpdateSchema = z
   .object({
     id: uuid(),
   })
   .merge(companyCreateSchema.partial())
+  .superRefine((val, ctx) => refineCrmReferral(val, ctx))
 
 export const dealCreateSchema = scopedSchema.extend({
   title: z.string().min(1).max(200),

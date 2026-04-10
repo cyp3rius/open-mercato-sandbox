@@ -1,39 +1,32 @@
-"use client";
-import * as React from "react";
-import { useT } from "@open-mercato/shared/lib/i18n/context";
-import { Button } from "@open-mercato/ui/primitives/button";
-import { IconButton } from "../../primitives/icon-button";
-import { cn } from "@open-mercato/shared/lib/utils";
-import { Loader2, X } from "lucide-react";
+"use client"
+
+import * as React from "react"
+import { useT } from "@open-mercato/shared/lib/i18n/context"
+import { Button } from "@open-mercato/ui/primitives/button"
+import { Loader2 } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "../../primitives/alert-dialog"
 
 export type ConfirmDialogProps = {
-  /** Whether the dialog is open (controlled mode — used by useConfirmDialog) */
-  open?: boolean;
-  /** Callback when open state changes (controlled mode) */
-  onOpenChange?: (open: boolean) => void;
-  /** Callback when user confirms */
-  onConfirm: () => void | Promise<void>;
-  /** Callback when user cancels (optional, defaults to closing) */
-  onCancel?: () => void;
-  /** Dialog title. Defaults to i18n key "ui.dialogs.confirm.defaultTitle" ("Are you sure?") */
-  title?: string;
-  /** Dialog body text / description */
-  text?: string;
-  /** Confirm button label. Defaults to i18n "ui.dialogs.confirm.confirmText" ("Confirm").
-   *  Pass `false` to hide the confirm button entirely. */
-  confirmText?: string | false;
-  /** Cancel button label. Defaults to i18n "ui.dialogs.confirm.cancelText" ("Cancel").
-   *  Pass `false` to hide the cancel button entirely. */
-  cancelText?: string | false;
-  /** Visual variant — "destructive" renders the confirm button in red */
-  variant?: "default" | "destructive";
-  /** Whether the confirm button shows a loading spinner.
-   *  Useful for async onConfirm handlers (e.g., waiting for API response before closing). */
-  loading?: boolean;
-  /** Trigger element — when provided, component manages its own open state (declarative mode).
-   *  Clicking the trigger opens the dialog. */
-  trigger?: React.ReactNode;
-};
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  onConfirm: () => void | Promise<void>
+  onCancel?: () => void
+  title?: string
+  text?: string
+  confirmText?: string | false
+  cancelText?: string | false
+  variant?: "default" | "destructive"
+  loading?: boolean
+  trigger?: React.ReactNode
+}
 
 export function ConfirmDialog({
   open: controlledOpen,
@@ -48,228 +41,121 @@ export function ConfirmDialog({
   loading = false,
   trigger,
 }: ConfirmDialogProps) {
-  const t = useT();
-  const dialogRef = React.useRef<HTMLDialogElement>(null);
-  const [internalOpen, setInternalOpen] = React.useState(false);
-  const cancelButtonRef = React.useRef<HTMLButtonElement>(null);
-  const confirmButtonRef = React.useRef<HTMLButtonElement>(null);
+  const t = useT()
+  const [internalOpen, setInternalOpen] = React.useState(false)
 
-  // Determine if we're in controlled mode (open prop provided) or declarative mode (trigger provided)
-  const isControlled = controlledOpen !== undefined;
-  const open = isControlled ? controlledOpen : internalOpen;
-  const setOpen = isControlled
-    ? onOpenChange || (() => {})
-    : setInternalOpen;
-  const handleCancelCallback = React.useCallback(() => {
-    if (!isControlled) {
-      onCancel?.();
-    }
-  }, [isControlled, onCancel]);
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen : internalOpen
+  const setOpen = React.useCallback(
+    (next: boolean) => {
+      if (isControlled) {
+        onOpenChange?.(next)
+      } else {
+        setInternalOpen(next)
+        if (!next) {
+          onCancel?.()
+        }
+      }
+    },
+    [isControlled, onOpenChange, onCancel],
+  )
 
-  // Default text values from i18n
   const resolvedTitle =
-    title ?? t("ui.dialogs.confirm.defaultTitle", "Are you sure?");
+    title ?? t("ui.dialogs.confirm.defaultTitle", "Are you sure?")
   const resolvedConfirmText =
     confirmText === false
       ? false
-      : confirmText ?? t("ui.dialogs.confirm.confirmText", "Confirm");
+      : confirmText ?? t("ui.dialogs.confirm.confirmText", "Confirm")
   const resolvedCancelText =
     cancelText === false
       ? false
-      : cancelText ?? t("ui.dialogs.confirm.cancelText", "Cancel");
-  const closeAriaLabel = t("ui.dialog.close.ariaLabel", "Close");
+      : cancelText ?? t("ui.dialogs.confirm.cancelText", "Cancel")
+
   const requestClose = React.useCallback(() => {
-    setOpen(false);
-    handleCancelCallback();
-  }, [setOpen, handleCancelCallback]);
-
-  // Handle dialog open/close with native showModal/close
-  React.useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-
-    if (open) {
-      if (!dialog.open) {
-        dialog.showModal();
-        // Focus cancel button (safe default) or confirm if no cancel
-        setTimeout(() => {
-          if (resolvedCancelText !== false && cancelButtonRef.current) {
-            cancelButtonRef.current.focus();
-          } else if (confirmButtonRef.current) {
-            confirmButtonRef.current.focus();
-          }
-        }, 0);
-      }
-    } else {
-      if (dialog.open) {
-        dialog.close();
-      }
+    if (!loading) {
+      setOpen(false)
     }
-  }, [open, resolvedCancelText]);
+  }, [loading, setOpen])
 
-  // Handle native cancel event (Escape key)
-  React.useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-
-    const handleCancel = (e: Event) => {
-      // Prevent close if loading
-      if (loading) {
-        e.preventDefault();
-        return;
-      }
-      requestClose();
-    };
-
-    dialog.addEventListener("cancel", handleCancel);
-    return () => dialog.removeEventListener("cancel", handleCancel);
-  }, [loading, requestClose]);
-
-  // Handle backdrop click
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDialogElement>) => {
-    // Only close if clicking directly on the dialog (backdrop), not its children
-    if (e.target === dialogRef.current && !loading) {
-      requestClose();
+  const handleConfirm = React.useCallback(async () => {
+    await onConfirm()
+    if (!loading) {
+      setOpen(false)
     }
-  };
+  }, [loading, onConfirm, setOpen])
 
-  // Handle keyboard shortcuts
   React.useEffect(() => {
-    if (!open) return;
+    if (!open) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl+Enter confirms
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !loading) {
-        e.preventDefault();
-        handleConfirm();
+        e.preventDefault()
+        void handleConfirm()
       }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, loading]);
-
-  const handleConfirm = async () => {
-    await onConfirm();
-    // Don't auto-close if loading — let the parent control when to close
-    if (!loading) {
-      setOpen(false);
     }
-  };
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [open, loading, handleConfirm])
 
   const handleCancel = () => {
-    requestClose();
-  };
-
-  const handleTriggerClick = () => {
-    if (trigger) {
-      setOpen(true);
-    }
-  };
+    requestClose()
+  }
 
   return (
-    <>
-      {trigger && (
-        <div onClick={handleTriggerClick} className="inline-block" role="presentation">
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (loading) return
+        setOpen(next)
+      }}
+    >
+      {trigger ? (
+        <AlertDialogTrigger asChild className="inline-block">
           {trigger}
-        </div>
-      )}
-
-      <dialog
-        ref={dialogRef}
-        role="alertdialog"
-        aria-labelledby="confirm-dialog-title"
-        aria-describedby={text ? "confirm-dialog-description" : undefined}
-        onClick={handleBackdropClick}
-        className={cn(
-          // Reset dialog defaults
-          "m-0 p-0 max-w-none bg-transparent border-none",
-          // Backdrop styling
-          "backdrop:bg-black/50 backdrop:backdrop-blur-sm backdrop:transition-opacity",
-          // Mobile: bottom sheet
-          "fixed inset-x-0 bottom-0 top-auto w-full",
-          // Desktop: centered
-          "sm:inset-auto sm:mx-auto sm:my-auto sm:max-w-md sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2",
-          // Animation with reduced motion support
-          "motion-safe:open:animate-in motion-safe:open:fade-in-0 motion-safe:open:slide-in-from-bottom-4",
-          "sm:motion-safe:open:slide-in-from-bottom-0 sm:motion-safe:open:zoom-in-95",
-          // Duration
-          "motion-safe:open:duration-300"
-        )}
+        </AlertDialogTrigger>
+      ) : null}
+      <AlertDialogContent
+        onEscapeKeyDown={(e) => {
+          if (loading) e.preventDefault()
+        }}
       >
-        <div
-          role="document"
-          className={cn(
-            // Panel container
-            "flex flex-col gap-4 rounded-t-2xl border-t bg-card p-6 text-foreground shadow-lg",
-            "sm:rounded-xl sm:border",
-            // Relative positioning for close button
-            "relative"
+        <AlertDialogHeader>
+          <AlertDialogTitle>{resolvedTitle}</AlertDialogTitle>
+          {text ? (
+            <AlertDialogDescription>{text}</AlertDialogDescription>
+          ) : (
+            <AlertDialogDescription className="sr-only">
+              {resolvedTitle}
+            </AlertDialogDescription>
           )}
-        >
-          {/* Close button */}
-          <IconButton
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={handleCancel}
-            disabled={loading}
-            aria-label={closeAriaLabel}
-            className="absolute right-4 top-4 opacity-70 hover:opacity-100"
-          >
-            <X className="h-4 w-4" />
-          </IconButton>
-
-          {/* Title */}
-          <h2
-            id="confirm-dialog-title"
-            className={cn(
-              "text-sm font-medium leading-snug tracking-tight pr-6",
-              // Mobile: centered, Desktop: left-aligned
-              "text-center sm:text-left"
-            )}
-          >
-            {resolvedTitle}
-          </h2>
-
-          {/* Description (optional) */}
-          {text && (
-            <p
-              id="confirm-dialog-description"
-              className="text-sm font-medium leading-snug text-muted-foreground"
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          {resolvedCancelText !== false && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancel}
+              disabled={loading}
+              className="w-full sm:w-auto"
             >
-              {text}
-            </p>
+              {resolvedCancelText}
+            </Button>
           )}
-
-          {/* Actions */}
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            {resolvedCancelText !== false && (
-              <Button
-                ref={cancelButtonRef}
-                variant="outline"
-                onClick={handleCancel}
-                disabled={loading}
-                className="w-full sm:w-auto"
-              >
-                {resolvedCancelText}
-              </Button>
-            )}
-            {resolvedConfirmText !== false && (
-              <Button
-                ref={confirmButtonRef}
-                variant={variant === "destructive" ? "destructive" : "default"}
-                onClick={handleConfirm}
-                disabled={loading}
-                className="w-full sm:w-auto"
-              >
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {resolvedConfirmText}
-              </Button>
-            )}
-          </div>
-        </div>
-      </dialog>
-    </>
-  );
+          {resolvedConfirmText !== false && (
+            <Button
+              type="button"
+              variant={variant === "destructive" ? "destructive" : "default"}
+              onClick={() => void handleConfirm()}
+              disabled={loading}
+              className="w-full sm:w-auto"
+            >
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {resolvedConfirmText}
+            </Button>
+          )}
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
 }

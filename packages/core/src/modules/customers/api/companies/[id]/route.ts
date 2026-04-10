@@ -504,6 +504,8 @@ export async function GET(_req: Request, ctx: { params?: { id?: string } }) {
     interactionMode,
     company: {
       id: company.id,
+      crmRecordType: company.crmRecordType ?? 'customer',
+      referralCode: company.referralCode ?? null,
       displayName: company.displayName,
       description: company.description,
       ownerUserId: company.ownerUserId,
@@ -533,6 +535,8 @@ export async function GET(_req: Request, ctx: { params?: { id?: string } }) {
           industry: profile.industry,
           sizeBucket: profile.sizeBucket,
           annualRevenue: profile.annualRevenue,
+          nip: profile.nip ?? null,
+          regon: profile.regon ?? null,
         }
       : null,
     customFields,
@@ -704,6 +708,8 @@ const companyDetailResponseSchema = z.object({
   interactionMode: z.enum(['canonical', 'legacy']),
   company: z.object({
     id: z.string().uuid(),
+    crmRecordType: z.enum(['customer', 'partner', 'referrer']).optional(),
+    referralCode: z.string().nullable().optional(),
     displayName: z.string().nullable().optional(),
     description: z.string().nullable().optional(),
     ownerUserId: z.string().uuid().nullable().optional(),
@@ -733,6 +739,8 @@ const companyDetailResponseSchema = z.object({
       industry: z.string().nullable().optional(),
       sizeBucket: z.string().nullable().optional(),
       annualRevenue: z.number().nullable().optional(),
+      nip: z.string().nullable().optional(),
+      regon: z.string().nullable().optional(),
     })
     .nullable(),
   customFields: z.record(z.string(), z.unknown()),

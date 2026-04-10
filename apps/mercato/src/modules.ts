@@ -10,6 +10,7 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'auth', from: '@open-mercato/core' },
   { id: 'directory', from: '@open-mercato/core' },
   { id: 'customers', from: '@open-mercato/core' },
+  { id: 'insurance', from: '@open-mercato/core' },
   { id: 'perspectives', from: '@open-mercato/core' },
   { id: 'entities', from: '@open-mercato/core' },
   { id: 'configs', from: '@open-mercato/core' },
@@ -49,6 +50,7 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'webhooks', from: '@open-mercato/webhooks' },
   { id: 'customer_accounts', from: '@open-mercato/core' },
   { id: 'portal', from: '@open-mercato/core' },
+  { id: 'insurance_desk', from: '@app' },
   { id: 'example', from: '@app' },
 ]
 

@@ -2,8 +2,9 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { Loader2, Linkedin, Pencil, Twitter, X } from 'lucide-react'
+import { Loader2, Pencil, X } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import { BrandIconLinkedIn, BrandIconX } from '@open-mercato/ui/primitives/brand-icons'
 import { Button } from '@open-mercato/ui/primitives/button'
 import type { PluggableList } from 'unified'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -174,7 +175,9 @@ export const InlineSelectEditor = UiInlineSelectEditor
 
 const MARKDOWN_PREVIEW_PLUGINS: PluggableList = [remarkGfm]
 
-function createSocialRenderDisplay(IconComponent: typeof Linkedin): NonNullable<InlineFieldProps['renderDisplay']> {
+function createSocialRenderDisplay(
+  IconComponent: React.ComponentType<React.SVGProps<SVGSVGElement>>,
+): NonNullable<InlineFieldProps['renderDisplay']> {
   // eslint-disable-next-line react/display-name
   return ({ value, emptyLabel }) => {
     const raw = typeof value === 'string' ? value.trim() : ''
@@ -196,8 +199,8 @@ function createSocialRenderDisplay(IconComponent: typeof Linkedin): NonNullable<
   }
 }
 
-export const renderLinkedInDisplay = createSocialRenderDisplay(Linkedin)
-export const renderTwitterDisplay = createSocialRenderDisplay(Twitter)
+export const renderLinkedInDisplay = createSocialRenderDisplay(BrandIconLinkedIn)
+export const renderTwitterDisplay = createSocialRenderDisplay(BrandIconX)
 
 export const renderMultilineMarkdownDisplay: InlineMultilineDisplayRenderer = ({ value, emptyLabel }) => {
   const raw = typeof value === 'string' ? value : ''

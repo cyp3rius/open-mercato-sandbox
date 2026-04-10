@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { Plus, Settings } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { Input } from '@open-mercato/ui/primitives/input'
+import { cn } from '@open-mercato/shared/lib/utils'
+import { CRUD_FORM_SELECT_CLASS, CRUD_FORM_TEXT_INPUT_CLASS } from '@open-mercato/ui/backend/CrudForm'
 import {
   Dialog,
   DialogContent,
@@ -150,26 +151,24 @@ export function AddressEditor({
     [createType, t, typeValue],
   )
 
-  const inputClass = (field: AddressEditorField) =>
-    [
-      'w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring',
-      errors[field] ? 'border-red-500 focus:ring-red-500' : 'border-input bg-background',
-    ].join(' ')
+  const fieldClass = (field: AddressEditorField) =>
+    cn(CRUD_FORM_TEXT_INPUT_CLASS, errors[field] && 'border-red-500')
 
   return (
     <div className="space-y-3">
       <div className="grid gap-2 sm:grid-cols-2">
-        <Input
-          className={inputClass('name')}
+        <input
+          className={fieldClass('name')}
           placeholder={t('customers.people.detail.addresses.fields.label', 'Label')}
           value={current.name}
           onChange={(evt) => update('name', evt.target.value)}
           disabled={disabled}
           aria-invalid={errors.name ? 'true' : undefined}
+          data-crud-focus-target=""
         />
         <div className="flex gap-2">
           <select
-            className={inputClass('purpose')}
+            className={cn(CRUD_FORM_SELECT_CLASS, errors.purpose && 'border-red-500')}
             value={current.purpose}
             onChange={(evt) => update('purpose', evt.target.value)}
             disabled={disabled}
@@ -200,8 +199,9 @@ export function AddressEditor({
                 </DialogDescription>
               </DialogHeader>
               <form className="space-y-3" onSubmit={handleTypeSubmit}>
-                <Input
+                <input
                   autoFocus
+                  className={cn(CRUD_FORM_TEXT_INPUT_CLASS, typeFormError && 'border-red-500')}
                   value={typeValue}
                   onChange={(evt) => {
                     setTypeValue(evt.target.value)
@@ -210,6 +210,7 @@ export function AddressEditor({
                   placeholder={t('customers.people.detail.addresses.types.placeholder', 'Address type')}
                   disabled={disabled}
                   aria-invalid={typeFormError ? 'true' : undefined}
+                  data-crud-focus-target=""
                 />
                 {typeFormError ? <p className="text-sm text-destructive">{typeFormError}</p> : null}
                 <DialogFooter>
@@ -243,13 +244,14 @@ export function AddressEditor({
       </div>
       {errors.purpose ? <p className="text-xs text-destructive">{errors.purpose}</p> : null}
       {addressTypeError ? <p className="text-xs text-destructive">{addressTypeError}</p> : null}
-      <Input
-        className={inputClass('companyName')}
+      <input
+        className={fieldClass('companyName')}
         placeholder={t('customers.people.detail.addresses.fields.companyName', 'Company name')}
         value={current.companyName}
         onChange={(evt) => update('companyName', evt.target.value)}
         disabled={disabled}
         aria-invalid={errors.companyName ? 'true' : undefined}
+        data-crud-focus-target=""
       />
       {showFormatHint ? (
         <p className="text-xs text-muted-foreground">
@@ -259,8 +261,8 @@ export function AddressEditor({
         </p>
       ) : null}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <Input
-          className={inputClass('addressLine1')}
+        <input
+          className={fieldClass('addressLine1')}
           placeholder={
             format === 'street_first'
               ? t('customers.people.detail.addresses.fields.street', 'Street')
@@ -270,74 +272,82 @@ export function AddressEditor({
           onChange={(evt) => update('addressLine1', evt.target.value)}
           disabled={disabled}
           aria-invalid={errors.addressLine1 ? 'true' : undefined}
+          data-crud-focus-target=""
         />
         {errors.addressLine1 ? <p className="text-xs text-destructive sm:col-span-2">{errors.addressLine1}</p> : null}
         {format === 'street_first' ? (
           <>
-            <Input
-              className={inputClass('buildingNumber')}
+            <input
+              className={fieldClass('buildingNumber')}
               placeholder={t('customers.people.detail.addresses.fields.buildingNumber', 'Building number')}
               value={current.buildingNumber}
               onChange={(evt) => update('buildingNumber', evt.target.value)}
               disabled={disabled}
               aria-invalid={errors.buildingNumber ? 'true' : undefined}
+              data-crud-focus-target=""
             />
-            <Input
-              className={inputClass('flatNumber')}
+            <input
+              className={fieldClass('flatNumber')}
               placeholder={t('customers.people.detail.addresses.fields.flatNumber', 'Flat number')}
               value={current.flatNumber}
               onChange={(evt) => update('flatNumber', evt.target.value)}
               disabled={disabled}
               aria-invalid={errors.flatNumber ? 'true' : undefined}
+              data-crud-focus-target=""
             />
-            <Input
-              className={inputClass('addressLine2')}
+            <input
+              className={fieldClass('addressLine2')}
               placeholder={t('customers.people.detail.addresses.fields.streetExtra', 'Address line 2')}
               value={current.addressLine2}
               onChange={(evt) => update('addressLine2', evt.target.value)}
               disabled={disabled}
               aria-invalid={errors.addressLine2 ? 'true' : undefined}
+              data-crud-focus-target=""
             />
             {errors.addressLine2 ? <p className="text-xs text-destructive sm:col-span-2">{errors.addressLine2}</p> : null}
           </>
         ) : (
           <>
-            <Input
-              className={inputClass('addressLine2')}
+            <input
+              className={fieldClass('addressLine2')}
               placeholder={t('customers.people.detail.addresses.fields.line2', 'Address line 2')}
               value={current.addressLine2}
               onChange={(evt) => update('addressLine2', evt.target.value)}
               disabled={disabled}
               aria-invalid={errors.addressLine2 ? 'true' : undefined}
+              data-crud-focus-target=""
             />
             {errors.addressLine2 ? <p className="text-xs text-destructive sm:col-span-2">{errors.addressLine2}</p> : null}
           </>
         )}
-        <Input
-          className={inputClass('city')}
+        <input
+          className={fieldClass('city')}
           placeholder={t('customers.people.detail.addresses.fields.city', 'City')}
           value={current.city}
           onChange={(evt) => update('city', evt.target.value)}
           disabled={disabled}
           aria-invalid={errors.city ? 'true' : undefined}
+          data-crud-focus-target=""
         />
         {errors.city ? <p className="text-xs text-destructive">{errors.city}</p> : null}
-        <Input
-          className={inputClass('region')}
+        <input
+          className={fieldClass('region')}
           placeholder={t('customers.people.detail.addresses.fields.region', 'Region/state')}
           value={current.region}
           onChange={(evt) => update('region', evt.target.value)}
           disabled={disabled}
           aria-invalid={errors.region ? 'true' : undefined}
+          data-crud-focus-target=""
         />
         {errors.region ? <p className="text-xs text-destructive">{errors.region}</p> : null}
-        <Input
-          className={inputClass('postalCode')}
+        <input
+          className={fieldClass('postalCode')}
           placeholder={t('customers.people.detail.addresses.fields.postalCode', 'Postal code')}
           value={current.postalCode}
           onChange={(evt) => update('postalCode', evt.target.value)}
           disabled={disabled}
           aria-invalid={errors.postalCode ? 'true' : undefined}
+          data-crud-focus-target=""
         />
         {errors.postalCode ? <p className="text-xs text-destructive">{errors.postalCode}</p> : null}
         <Dialog
@@ -351,7 +361,11 @@ export function AddressEditor({
             <Button
               type="button"
               variant="outline"
-              className={`${inputClass('country')} h-10 w-full justify-between`}
+              className={cn(
+                CRUD_FORM_TEXT_INPUT_CLASS,
+                'h-9 justify-between font-normal shadow-none',
+                errors.country && 'border-red-500',
+              )}
               disabled={disabled}
               aria-invalid={errors.country ? 'true' : undefined}
             >
@@ -373,10 +387,12 @@ export function AddressEditor({
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
-              <Input
+              <input
+                className={CRUD_FORM_TEXT_INPUT_CLASS}
                 placeholder={t('customers.people.detail.addresses.countrySearch', 'Search country')}
                 value={countryQuery}
                 onChange={(evt) => setCountryQuery(evt.target.value)}
+                data-crud-focus-target=""
               />
               <div className="max-h-64 overflow-y-auto rounded border divide-y">
                 {filteredCountryOptions.length === 0 ? (

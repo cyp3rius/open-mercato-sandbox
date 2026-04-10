@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
+import '@/.mercato/generated/module-package-sources.css'
 import { bootstrap } from '@/bootstrap'
 import { AppProviders } from '@/components/AppProviders'
 
