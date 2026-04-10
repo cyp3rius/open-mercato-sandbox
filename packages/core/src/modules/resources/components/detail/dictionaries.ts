@@ -17,7 +17,15 @@ type DictionarySummary = {
 
 const RESOURCE_DICTIONARY_KEYS = {
   activityTypes: 'resources.activity-types',
+  serviceTypes: 'resources.service_type',
+  serviceActivities: 'resources.service_activity',
 } as const
+
+const RESOURCE_DICTIONARY_DISPLAY_NAMES: Record<keyof typeof RESOURCE_DICTIONARY_KEYS, string> = {
+  activityTypes: 'Resource activity types',
+  serviceTypes: 'Resource service types',
+  serviceActivities: 'Resource service activities',
+}
 
 async function ensureDictionary(key: string, name: string): Promise<DictionarySummary | null> {
   const listCall = await apiCall<{ items?: DictionarySummary[] }>('/api/dictionaries')
@@ -49,7 +57,7 @@ export async function loadResourceDictionary(
   kind: keyof typeof RESOURCE_DICTIONARY_KEYS,
 ): Promise<{ dictionary: DictionarySummary | null; entries: DictionaryEntryOption[] }> {
   const key = RESOURCE_DICTIONARY_KEYS[kind]
-  const name = 'Resource activity types'
+  const name = RESOURCE_DICTIONARY_DISPLAY_NAMES[kind]
   const dictionary = await ensureDictionary(key, name)
   if (!dictionary) return { dictionary: null, entries: [] }
   const entriesCall = await apiCall<{ items?: Record<string, unknown>[] }>(`/api/dictionaries/${dictionary.id}/entries`)
@@ -75,7 +83,7 @@ export async function createResourceDictionaryEntry(
   input: { value: string; label?: string; color?: string | null; icon?: string | null },
 ): Promise<DictionaryEntryOption | null> {
   const key = RESOURCE_DICTIONARY_KEYS[kind]
-  const name = 'Resource activity types'
+  const name = RESOURCE_DICTIONARY_DISPLAY_NAMES[kind]
   const dictionary = await ensureDictionary(key, name)
   if (!dictionary) return null
   const response = await apiCallOrThrow<Record<string, unknown>>(

@@ -4351,60 +4351,7 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {
-        "catalog_pdt_svc_line_ext_line_fk": {
-          "columnNames": [
-            "service_line_id"
-          ],
-          "constraintName": "catalog_pdt_svc_line_ext_line_fk",
-          "localTableName": "public.catalog_product_service_line_extensions",
-          "referencedTableName": "public.catalog_service_lines",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "restrict"
-        },
-        "catalog_pdt_svc_line_ext_product_fk": {
-          "columnNames": [
-            "product_id"
-          ],
-          "constraintName": "catalog_pdt_svc_line_ext_product_fk",
-          "localTableName": "public.catalog_product_service_line_extensions",
-          "referencedTableName": "public.catalog_products",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
-        },
-        "catalog_product_service_line_extensions_product_id_foreign": {
-          "columnNames": [
-            "product_id"
-          ],
-          "constraintName": "catalog_product_service_line_extensions_product_id_foreign",
-          "localTableName": "public.catalog_product_service_line_extensions",
-          "referencedTableName": "public.catalog_products",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
-        },
-        "catalog_product_service_line_extensions_service_line_id_foreign": {
-          "columnNames": [
-            "service_line_id"
-          ],
-          "constraintName": "catalog_product_service_line_extensions_service_line_id_foreign",
-          "localTableName": "public.catalog_product_service_line_extensions",
-          "referencedTableName": "public.catalog_service_lines",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "restrict"
-        }
-      },
+      "foreignKeys": {},
       "nativeEnums": {},
       "comment": null
     },
@@ -4954,21 +4901,7 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {
-        "catalog_product_unit_conversions_product_id_foreign": {
-          "columnNames": [
-            "product_id"
-          ],
-          "constraintName": "catalog_product_unit_conversions_product_id_foreign",
-          "localTableName": "public.catalog_product_unit_conversions",
-          "referencedTableName": "public.catalog_products",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
-        }
-      },
+      "foreignKeys": {},
       "nativeEnums": {},
       "comment": null
     },
@@ -5857,21 +5790,7 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {
-        "catalog_product_variant_relations_child_product_id_foreign": {
-          "columnNames": [
-            "child_product_id"
-          ],
-          "constraintName": "catalog_product_variant_relations_child_product_id_foreign",
-          "localTableName": "public.catalog_product_variant_relations",
-          "referencedTableName": "public.catalog_products",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
-        }
-      },
+      "foreignKeys": {},
       "nativeEnums": {},
       "comment": null
     },
@@ -10430,7 +10349,17 @@
           ],
           "composite": false,
           "constraint": false,
-          "keyName": "cf_defs_active_entity_global_idx",
+          "keyName": "cf_defs_entity_global_idx",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "key"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "cf_defs_entity_key_idx",
           "unique": false,
           "primary": false
         },
@@ -10443,7 +10372,7 @@
           ],
           "composite": true,
           "constraint": false,
-          "keyName": "cf_defs_active_entity_key_scope_idx",
+          "keyName": "cf_defs_entity_key_scope_idx",
           "unique": false,
           "primary": false
         },
@@ -10454,7 +10383,7 @@
           ],
           "composite": true,
           "constraint": false,
-          "keyName": "cf_defs_active_entity_org_idx",
+          "keyName": "cf_defs_entity_org_idx",
           "unique": false,
           "primary": false
         },
@@ -10465,7 +10394,7 @@
           ],
           "composite": true,
           "constraint": false,
-          "keyName": "cf_defs_active_entity_tenant_idx",
+          "keyName": "cf_defs_entity_tenant_idx",
           "unique": false,
           "primary": false
         },
@@ -10477,17 +10406,7 @@
           ],
           "composite": true,
           "constraint": false,
-          "keyName": "cf_defs_active_entity_tenant_org_idx",
-          "unique": false,
-          "primary": false
-        },
-        {
-          "columnNames": [
-            "key"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "cf_defs_entity_key_idx",
+          "keyName": "cf_defs_entity_tenant_org_idx",
           "unique": false,
           "primary": false
         },
@@ -11234,7 +11153,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_activities_deal_id_foreign": {
+          "columnNames": [
+            "deal_id"
+          ],
+          "constraintName": "customer_activities_deal_id_foreign",
+          "localTableName": "public.customer_activities",
+          "referencedTableName": "public.customer_deals",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "customer_activities_entity_id_foreign": {
+          "columnNames": [
+            "entity_id"
+          ],
+          "constraintName": "customer_activities_entity_id_foreign",
+          "localTableName": "public.customer_activities",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -11586,7 +11532,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_addresses_entity_id_foreign": {
+          "columnNames": [
+            "entity_id"
+          ],
+          "constraintName": "customer_addresses_entity_id_foreign",
+          "localTableName": "public.customer_addresses",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -11821,7 +11781,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_comments_deal_id_foreign": {
+          "columnNames": [
+            "deal_id"
+          ],
+          "constraintName": "customer_comments_deal_id_foreign",
+          "localTableName": "public.customer_comments",
+          "referencedTableName": "public.customer_deals",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "customer_comments_entity_id_foreign": {
+          "columnNames": [
+            "entity_id"
+          ],
+          "constraintName": "customer_comments_entity_id_foreign",
+          "localTableName": "public.customer_comments",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -12114,7 +12101,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_companies_entity_id_foreign": {
+          "columnNames": [
+            "entity_id"
+          ],
+          "constraintName": "customer_companies_entity_id_foreign",
+          "localTableName": "public.customer_companies",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -12231,7 +12232,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_deal_companies_company_entity_id_foreign": {
+          "columnNames": [
+            "company_entity_id"
+          ],
+          "constraintName": "customer_deal_companies_company_entity_id_foreign",
+          "localTableName": "public.customer_deal_companies",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "customer_deal_companies_deal_id_foreign": {
+          "columnNames": [
+            "deal_id"
+          ],
+          "constraintName": "customer_deal_companies_deal_id_foreign",
+          "localTableName": "public.customer_deal_companies",
+          "referencedTableName": "public.customer_deals",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -12364,7 +12392,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_deal_people_deal_id_foreign": {
+          "columnNames": [
+            "deal_id"
+          ],
+          "constraintName": "customer_deal_people_deal_id_foreign",
+          "localTableName": "public.customer_deal_people",
+          "referencedTableName": "public.customer_deals",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "customer_deal_people_person_entity_id_foreign": {
+          "columnNames": [
+            "person_entity_id"
+          ],
+          "constraintName": "customer_deal_people_person_entity_id_foreign",
+          "localTableName": "public.customer_deal_people",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -12937,7 +12992,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": true,
+          "unique": false,
           "length": null,
           "precision": null,
           "scale": null,
@@ -13319,18 +13374,6 @@
           "keyName": "customer_entities_pkey",
           "unique": true,
           "primary": true
-        },
-        {
-          "columnNames": [
-            "organization_id",
-            "tenant_id",
-            "referral_code"
-          ],
-          "composite": true,
-          "constraint": false,
-          "keyName": "customer_entities_referral_code_scope_unique",
-          "unique": true,
-          "primary": false
         },
         {
           "columnNames": [
@@ -14163,7 +14206,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_people_company_entity_id_foreign": {
+          "columnNames": [
+            "company_entity_id"
+          ],
+          "constraintName": "customer_people_company_entity_id_foreign",
+          "localTableName": "public.customer_people",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "customer_people_entity_id_foreign": {
+          "columnNames": [
+            "entity_id"
+          ],
+          "constraintName": "customer_people_entity_id_foreign",
+          "localTableName": "public.customer_people",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -14642,21 +14712,7 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {
-        "customer_role_acls_role_id_foreign": {
-          "columnNames": [
-            "role_id"
-          ],
-          "constraintName": "customer_role_acls_role_id_foreign",
-          "localTableName": "public.customer_role_acls",
-          "referencedTableName": "public.customer_roles",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "no action"
-        }
-      },
+      "foreignKeys": {},
       "nativeEnums": {},
       "comment": null
     },
@@ -15149,7 +15205,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_tag_assignments_entity_id_foreign": {
+          "columnNames": [
+            "entity_id"
+          ],
+          "constraintName": "customer_tag_assignments_entity_id_foreign",
+          "localTableName": "public.customer_tag_assignments",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "customer_tag_assignments_tag_id_foreign": {
+          "columnNames": [
+            "tag_id"
+          ],
+          "constraintName": "customer_tag_assignments_tag_id_foreign",
+          "localTableName": "public.customer_tag_assignments",
+          "referencedTableName": "public.customer_tags",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -15521,7 +15604,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_todo_links_entity_id_foreign": {
+          "columnNames": [
+            "entity_id"
+          ],
+          "constraintName": "customer_todo_links_entity_id_foreign",
+          "localTableName": "public.customer_todo_links",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -15682,21 +15779,7 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {
-        "customer_user_acls_user_id_foreign": {
-          "columnNames": [
-            "user_id"
-          ],
-          "constraintName": "customer_user_acls_user_id_foreign",
-          "localTableName": "public.customer_user_acls",
-          "referencedTableName": "public.customer_users",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "no action"
-        }
-      },
+      "foreignKeys": {},
       "nativeEnums": {},
       "comment": null
     },
@@ -15840,21 +15923,7 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {
-        "customer_user_email_verifications_user_id_foreign": {
-          "columnNames": [
-            "user_id"
-          ],
-          "constraintName": "customer_user_email_verifications_user_id_foreign",
-          "localTableName": "public.customer_user_email_verifications",
-          "referencedTableName": "public.customer_users",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "no action"
-        }
-      },
+      "foreignKeys": {},
       "nativeEnums": {},
       "comment": null
     },
@@ -16265,21 +16334,7 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {
-        "customer_user_password_resets_user_id_foreign": {
-          "columnNames": [
-            "user_id"
-          ],
-          "constraintName": "customer_user_password_resets_user_id_foreign",
-          "localTableName": "public.customer_user_password_resets",
-          "referencedTableName": "public.customer_users",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "no action"
-        }
-      },
+      "foreignKeys": {},
       "nativeEnums": {},
       "comment": null
     },
@@ -16392,34 +16447,7 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {
-        "customer_user_roles_role_id_foreign": {
-          "columnNames": [
-            "role_id"
-          ],
-          "constraintName": "customer_user_roles_role_id_foreign",
-          "localTableName": "public.customer_user_roles",
-          "referencedTableName": "public.customer_roles",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "no action"
-        },
-        "customer_user_roles_user_id_foreign": {
-          "columnNames": [
-            "user_id"
-          ],
-          "constraintName": "customer_user_roles_user_id_foreign",
-          "localTableName": "public.customer_user_roles",
-          "referencedTableName": "public.customer_users",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "no action"
-        }
-      },
+      "foreignKeys": {},
       "nativeEnums": {},
       "comment": null
     },
@@ -16595,21 +16623,7 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {
-        "customer_user_sessions_user_id_foreign": {
-          "columnNames": [
-            "user_id"
-          ],
-          "constraintName": "customer_user_sessions_user_id_foreign",
-          "localTableName": "public.customer_user_sessions",
-          "referencedTableName": "public.customer_users",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "no action"
-        }
-      },
+      "foreignKeys": {},
       "nativeEnums": {},
       "comment": null
     },
@@ -19141,27 +19155,6 @@
       "indexes": [
         {
           "columnNames": [
-            "customer_id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "example_customer_priorities_customer_idx",
-          "unique": false,
-          "primary": false
-        },
-        {
-          "columnNames": [
-            "organization_id",
-            "tenant_id"
-          ],
-          "composite": true,
-          "constraint": false,
-          "keyName": "example_customer_priorities_org_tenant_idx",
-          "unique": false,
-          "primary": false
-        },
-        {
-          "columnNames": [
             "id"
           ],
           "composite": false,
@@ -19885,7 +19878,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "feature_toggle_overrides_toggle_id_foreign": {
+          "columnNames": [
+            "toggle_id"
+          ],
+          "constraintName": "feature_toggle_overrides_toggle_id_foreign",
+          "localTableName": "public.feature_toggle_overrides",
+          "referencedTableName": "public.feature_toggles",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -23131,11 +23138,11 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "insurance_insurer_contacts_insurer_fk": {
+        "insurance_insurer_contacts_insurer_id_foreign": {
           "columnNames": [
             "insurer_id"
           ],
-          "constraintName": "insurance_insurer_contacts_insurer_fk",
+          "constraintName": "insurance_insurer_contacts_insurer_id_foreign",
           "localTableName": "public.insurance_insurer_contacts",
           "referencedTableName": "public.insurance_insurers",
           "referencedColumnNames": [
@@ -23173,7 +23180,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": true,
+          "unique": false,
           "length": null,
           "precision": null,
           "scale": null,
@@ -23346,19 +23353,6 @@
       "name": "insurance_insurers",
       "schema": "public",
       "indexes": [
-        {
-          "columnNames": [
-            "organization_id",
-            "tenant_id",
-            "code"
-          ],
-          "composite": true,
-          "constraint": false,
-          "keyName": "insurance_insurers_code_scope_unique",
-          "unique": true,
-          "primary": false,
-          "expression": "CREATE UNIQUE INDEX insurance_insurers_code_scope_unique ON public.insurance_insurers USING btree (organization_id, tenant_id, code) WHERE (deleted_at IS NULL)"
-        },
         {
           "columnNames": [
             "id"
@@ -23635,21 +23629,7 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {
-        "insurance_leads_linked_policy_id_foreign": {
-          "columnNames": [
-            "linked_policy_id"
-          ],
-          "constraintName": "insurance_leads_linked_policy_id_foreign",
-          "localTableName": "public.insurance_leads",
-          "referencedTableName": "public.insurance_policies",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "set null"
-        }
-      },
+      "foreignKeys": {},
       "nativeEnums": {},
       "comment": null
     },
@@ -23757,7 +23737,7 @@
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "unique": false,
           "length": null,
           "precision": null,
@@ -23965,36 +23945,6 @@
       "indexes": [
         {
           "columnNames": [
-            "caretaker_user_id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "insurance_policies_caretaker_user_idx",
-          "unique": false,
-          "primary": false
-        },
-        {
-          "columnNames": [
-            "insured_company_entity_id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "insurance_policies_insured_company_idx",
-          "unique": false,
-          "primary": false
-        },
-        {
-          "columnNames": [
-            "insured_person_entity_id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "insurance_policies_insured_person_idx",
-          "unique": false,
-          "primary": false
-        },
-        {
-          "columnNames": [
             "referring_partner_entity_id"
           ],
           "composite": false,
@@ -24015,16 +23965,6 @@
         },
         {
           "columnNames": [
-            "resource_id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "insurance_policies_resource_idx",
-          "unique": false,
-          "primary": false
-        },
-        {
-          "columnNames": [
             "organization_id",
             "tenant_id"
           ],
@@ -24037,11 +23977,11 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "insurance_policies_insurer_contact_fk": {
+        "insurance_policies_insurer_contact_id_foreign": {
           "columnNames": [
             "insurer_contact_id"
           ],
-          "constraintName": "insurance_policies_insurer_contact_fk",
+          "constraintName": "insurance_policies_insurer_contact_id_foreign",
           "localTableName": "public.insurance_policies",
           "referencedTableName": "public.insurance_insurer_contacts",
           "referencedColumnNames": [
@@ -24050,11 +23990,11 @@
           "updateRule": "cascade",
           "deleteRule": "set null"
         },
-        "insurance_policies_insurer_fk": {
+        "insurance_policies_insurer_id_foreign": {
           "columnNames": [
             "insurer_id"
           ],
-          "constraintName": "insurance_policies_insurer_fk",
+          "constraintName": "insurance_policies_insurer_id_foreign",
           "localTableName": "public.insurance_policies",
           "referencedTableName": "public.insurance_insurers",
           "referencedColumnNames": [
@@ -29032,7 +28972,7 @@
           "length": 6,
           "precision": null,
           "scale": null,
-          "default": "now()",
+          "default": null,
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
@@ -29145,7 +29085,7 @@
           "precision": null,
           "scale": null,
           "default": null,
-          "comment": "i18n key for notification title",
+          "comment": null,
           "enumItems": [],
           "mappedType": "text"
         },
@@ -29161,7 +29101,7 @@
           "precision": null,
           "scale": null,
           "default": null,
-          "comment": "i18n key for notification body",
+          "comment": null,
           "enumItems": [],
           "mappedType": "text"
         },
@@ -29177,7 +29117,7 @@
           "precision": null,
           "scale": null,
           "default": null,
-          "comment": "Variables for i18n interpolation in title",
+          "comment": null,
           "enumItems": [],
           "mappedType": "json"
         },
@@ -29193,7 +29133,7 @@
           "precision": null,
           "scale": null,
           "default": null,
-          "comment": "Variables for i18n interpolation in body",
+          "comment": null,
           "enumItems": [],
           "mappedType": "json"
         }
@@ -42569,34 +42509,7 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {
-        "sales_return_lines_order_line_id_foreign": {
-          "columnNames": [
-            "order_line_id"
-          ],
-          "constraintName": "sales_return_lines_order_line_id_foreign",
-          "localTableName": "public.sales_return_lines",
-          "referencedTableName": "public.sales_order_lines",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "no action"
-        },
-        "sales_return_lines_return_id_foreign": {
-          "columnNames": [
-            "return_id"
-          ],
-          "constraintName": "sales_return_lines_return_id_foreign",
-          "localTableName": "public.sales_return_lines",
-          "referencedTableName": "public.sales_returns",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "no action"
-        }
-      },
+      "foreignKeys": {},
       "nativeEnums": {},
       "comment": null
     },
@@ -42862,21 +42775,7 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {
-        "sales_returns_order_id_foreign": {
-          "columnNames": [
-            "order_id"
-          ],
-          "constraintName": "sales_returns_order_id_foreign",
-          "localTableName": "public.sales_returns",
-          "referencedTableName": "public.sales_orders",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "no action"
-        }
-      },
+      "foreignKeys": {},
       "nativeEnums": {},
       "comment": null
     },

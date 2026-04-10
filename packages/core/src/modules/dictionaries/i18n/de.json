@@ -6,7 +6,7 @@
   "dictionaries.config.dialog.descriptionPlaceholder": "Erklären Sie, wie dieses Wörterbuch verwendet wird (optional).",
   "dictionaries.config.dialog.editTitle": "Wörterbuch bearbeiten",
   "dictionaries.config.dialog.keyErrorLength": "Der Schlüssel darf höchstens 100 Zeichen haben.",
-  "dictionaries.config.dialog.keyErrorPattern": "Verwenden Sie Kleinbuchstaben, Zahlen, Bindestrich oder Unterstrich.",
+  "dictionaries.config.dialog.keyErrorPattern": "Verwenden Sie Kleinbuchstaben, Zahlen, Punkt, Bindestrich oder Unterstrich (z. B. resources.service_activity).",
   "dictionaries.config.dialog.keyErrorRequired": "Schlüssel ist erforderlich.",
   "dictionaries.config.dialog.keyHint": "Verwenden Sie Kleinbuchstaben, Zahlen, Bindestrich oder Unterstrich.",
   "dictionaries.config.dialog.keyLabel": "Schlüssel",

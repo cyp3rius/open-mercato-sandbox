@@ -23,12 +23,16 @@ export function ComponentOverrideProvider({
 }) {
   const [userFeatures, setUserFeatures] = React.useState<readonly string[]>([])
 
+  // Server runs `bootstrap()` (registerComponentOverrides) in root layout; the browser does not.
+  // Registering only in useEffect runs after the first paint, so hydration saw an empty registry and
+  // skipped wrappers (e.g. example NotesSection) while SSR HTML included them — mismatch.
+  registerComponentOverrides(overrides)
+
   React.useEffect(() => {
-    registerComponentOverrides(overrides)
     return () => {
       registerComponentOverrides([])
     }
-  }, [overrides])
+  }, [])
 
   React.useEffect(() => {
     const requiredFeatures = new Set<string>()

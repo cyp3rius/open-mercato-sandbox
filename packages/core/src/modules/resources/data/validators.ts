@@ -138,6 +138,32 @@ export const resourcesResourceActivityUpdateSchema = z
   })
   .merge(resourcesResourceActivityCreateSchema.partial())
 
+export const resourcesResourceServiceBookEntryCreateSchema = z
+  .object({
+    ...scopedCreateFields,
+    entityId: z.string().uuid(),
+    serviceType: z.string().min(1).max(100),
+    serviceActivity: z.string().min(1).max(100),
+    serviceInAt: z.coerce.date(),
+    serviceOutAt: z.coerce.date().optional().nullable(),
+    description: z.string().max(200000).optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.serviceOutAt && data.serviceInAt && data.serviceOutAt < data.serviceInAt) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Service exit must be on or after service entry.',
+        path: ['serviceOutAt'],
+      })
+    }
+  })
+
+export const resourcesResourceServiceBookEntryUpdateSchema = z
+  .object({
+    id: z.string().uuid(),
+  })
+  .merge(resourcesResourceServiceBookEntryCreateSchema.partial())
+
 export type ResourcesResourceTypeCreateInput = z.infer<typeof resourcesResourceTypeCreateSchema>
 export type ResourcesResourceTypeUpdateInput = z.infer<typeof resourcesResourceTypeUpdateSchema>
 export type ResourcesResourceCreateInput = z.infer<typeof resourcesResourceCreateSchema>
@@ -149,3 +175,5 @@ export type ResourcesResourceCommentCreateInput = z.infer<typeof resourcesResour
 export type ResourcesResourceCommentUpdateInput = z.infer<typeof resourcesResourceCommentUpdateSchema>
 export type ResourcesResourceActivityCreateInput = z.infer<typeof resourcesResourceActivityCreateSchema>
 export type ResourcesResourceActivityUpdateInput = z.infer<typeof resourcesResourceActivityUpdateSchema>
+export type ResourcesResourceServiceBookEntryCreateInput = z.infer<typeof resourcesResourceServiceBookEntryCreateSchema>
+export type ResourcesResourceServiceBookEntryUpdateInput = z.infer<typeof resourcesResourceServiceBookEntryUpdateSchema>

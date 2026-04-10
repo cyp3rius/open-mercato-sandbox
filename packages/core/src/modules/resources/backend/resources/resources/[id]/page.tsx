@@ -16,7 +16,10 @@ import { SendObjectMessageDialog } from '@open-mercato/ui/backend/messages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { createTranslatorWithFallback } from '@open-mercato/shared/lib/i18n/translate'
 import { buildResourceScheduleItems } from '@open-mercato/core/modules/resources/lib/resourceSchedule'
-import { RESOURCES_RESOURCE_FIELDSET_DEFAULT } from '@open-mercato/core/modules/resources/lib/resourceCustomFields'
+import {
+  RESOURCES_RESOURCE_FIELDSET_DEFAULT,
+  RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+} from '@open-mercato/core/modules/resources/lib/resourceCustomFields'
 import type { AvailabilityScheduleItemBuilder } from '@open-mercato/core/modules/planner/components/AvailabilityRulesEditor'
 import { AvailabilityRulesEditor } from '@open-mercato/core/modules/planner/components/AvailabilityRulesEditor'
 import { ResourcesResourceForm, useResourcesResourceFormConfig } from '@open-mercato/core/modules/resources/components/ResourceCrudForm'
@@ -28,6 +31,7 @@ import {
   loadResourceDictionary,
   type DictionaryEntryOption,
 } from '@open-mercato/core/modules/resources/components/detail/dictionaries'
+import { ServiceBookSection } from '@open-mercato/core/modules/resources/components/detail/ServiceBookSection'
 import type { DictionarySelectLabels } from '@open-mercato/core/modules/dictionaries/components/DictionaryEntrySelect'
 
 type ResourceRecord = {
@@ -83,7 +87,7 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
   const searchParams = useSearchParams()
   const [initialValues, setInitialValues] = React.useState<Record<string, unknown> | null>(null)
   const [tags, setTags] = React.useState<TagOption[]>([])
-  const [activeTab, setActiveTab] = React.useState<'details' | 'availability'>('details')
+  const [activeTab, setActiveTab] = React.useState<'details' | 'availability' | 'serviceBook'>('details')
   const [activeDetailTab, setActiveDetailTab] = React.useState<'notes' | 'activities'>('notes')
   const [sectionAction, setSectionAction] = React.useState<SectionAction | null>(null)
   const [availabilityRuleSetId, setAvailabilityRuleSetId] = React.useState<string | null>(null)
@@ -206,6 +210,8 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
     const tabParam = searchParams.get('tab')
     if (tabParam === 'availability') {
       setActiveTab('availability')
+    } else if (tabParam === 'serviceBook') {
+      setActiveTab('serviceBook')
     }
     const created = searchParams.get('created') === '1'
     if (created && !flashShownRef.current) {
@@ -278,14 +284,44 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
     flash(t('resources.resources.form.flash.updated', 'Resource updated.'), 'success')
   }, [resourceId, t])
 
-  const tabs = React.useMemo(() => ([
-    { id: 'details', label: t('resources.resources.tabs.details', 'Details') },
-    { id: 'availability', label: t('resources.resources.tabs.availability', 'Availability') },
-  ]), [t])
-  const detailTabs = React.useMemo(() => ([
-    { id: 'notes' as const, label: t('resources.resources.detail.tabs.notes', 'Notes') },
-    { id: 'activities' as const, label: t('resources.resources.detail.tabs.activities', 'Activities') },
-  ]), [t])
+  const showServiceBookSection =
+    typeof initialValues?.customFieldsetCode === 'string' &&
+    initialValues.customFieldsetCode === RESOURCES_RESOURCE_FIELDSET_VEHICLE
+
+  const tabs = React.useMemo(() => {
+    const out: Array<{ id: 'details' | 'availability' | 'serviceBook'; label: string }> = [
+      { id: 'details', label: t('resources.resources.tabs.details', 'Details') },
+    ]
+    if (showServiceBookSection) {
+      out.push({
+        id: 'serviceBook',
+        label: t('resources.resources.detail.tabs.serviceBook', 'Service book'),
+      })
+    }
+    out.push({ id: 'availability', label: t('resources.resources.tabs.availability', 'Availability') })
+    return out
+  }, [showServiceBookSection, t])
+
+  const detailTabs = React.useMemo(
+    () => [
+      { id: 'notes' as const, label: t('resources.resources.detail.tabs.notes', 'Notes') },
+      { id: 'activities' as const, label: t('resources.resources.detail.tabs.activities', 'Activities') },
+    ],
+    [t],
+  )
+
+  React.useEffect(() => {
+    if (initialValues == null) return
+    if (!showServiceBookSection && activeTab === 'serviceBook') {
+      setActiveTab('details')
+    }
+  }, [activeTab, showServiceBookSection, initialValues])
+
+  React.useEffect(() => {
+    if (activeTab === 'serviceBook') {
+      setSectionAction(null)
+    }
+  }, [activeTab])
 
   const loadTagOptions = React.useCallback(
     async (query?: string): Promise<TagOption[]> => {
@@ -530,7 +566,7 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
                       ? 'border-primary text-foreground'
                       : 'border-transparent text-muted-foreground hover:text-foreground'
                   }`}
-                  onClick={() => setActiveTab(tab.id as 'details' | 'availability')}
+                  onClick={() => setActiveTab(tab.id)}
                 >
                   {tab.label}
                 </Button>
@@ -540,6 +576,25 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
 
           {activeTab === 'details' ? (
             <>
+              <div className="rounded-lg border bg-card p-4">
+                <h2 className="mb-4 text-sm font-semibold uppercase text-muted-foreground">
+                  {t('resources.resources.detail.formTitle', 'Resource settings')}
+                </h2>
+                <ResourcesResourceForm
+                  embedded
+                  title={t('resources.resources.form.editTitle', 'Edit resource')}
+                  backHref="/backend/resources/resources"
+                  cancelHref="/backend/resources/resources"
+                  successRedirect="/backend/resources/resources"
+                  formConfig={formConfig}
+                  initialValues={initialValues ?? undefined}
+                  onSubmit={handleSubmit}
+                  onDelete={handleDelete}
+                  isLoading={!initialValues}
+                  loadingMessage={t('resources.resources.form.loading', 'Loading resource...')}
+                />
+              </div>
+
               <div className="rounded-lg border bg-card p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex gap-2">
@@ -618,26 +673,11 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
                   />
                 ) : null}
               </div>
-
-              <div className="rounded-lg border bg-card p-4">
-                <h2 className="mb-4 text-sm font-semibold uppercase text-muted-foreground">
-                  {t('resources.resources.detail.formTitle', 'Resource settings')}
-                </h2>
-                <ResourcesResourceForm
-                  embedded
-                  title={t('resources.resources.form.editTitle', 'Edit resource')}
-                  backHref="/backend/resources/resources"
-                  cancelHref="/backend/resources/resources"
-                  successRedirect="/backend/resources/resources"
-                  formConfig={formConfig}
-                  initialValues={initialValues ?? undefined}
-                  onSubmit={handleSubmit}
-                  onDelete={handleDelete}
-                  isLoading={!initialValues}
-                  loadingMessage={t('resources.resources.form.loading', 'Loading resource...')}
-                />
-              </div>
             </>
+          ) : activeTab === 'serviceBook' ? (
+            <div className="rounded-lg border bg-card p-4">
+              <ServiceBookSection entityId={resourceId ?? null} />
+            </div>
           ) : (
             <AvailabilityRulesEditor
               subjectType="resource"

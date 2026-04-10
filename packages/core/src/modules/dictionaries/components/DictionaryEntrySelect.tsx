@@ -16,8 +16,9 @@ import {
 } from '@open-mercato/ui/primitives/dialog'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
 import { buildHrefWithReturnTo } from '@open-mercato/shared/lib/navigation/returnTo'
-import { DictionaryValue, renderDictionaryColor, renderDictionaryIcon } from './dictionaryAppearance'
+import { cn } from '@open-mercato/shared/lib/utils'
 import { AppearanceSelector, type AppearanceSelectorLabels, useAppearanceState } from './AppearanceSelector'
 
 const DEFAULT_APPEARANCE_LABELS: AppearanceSelectorLabels = {
@@ -134,9 +135,17 @@ export function DictionaryEntrySelect({
     if (!dialogOpen) resetDialogState()
   }, [dialogOpen, resetDialogState])
 
-  const activeOption = React.useMemo(
-    () => options.find((option) => option.value === value) ?? null,
-    [options, value],
+  const comboboxOptions = React.useMemo(
+    () => [
+      { value: '', label: labels.placeholder },
+      ...options.map((option) => ({
+        value: option.value,
+        label: option.label,
+        icon: option.icon ?? undefined,
+        color: option.color ?? undefined,
+      })),
+    ],
+    [labels.placeholder, options],
   )
 
   const handleCreate = React.useCallback(async () => {
@@ -232,26 +241,15 @@ export function DictionaryEntrySelect({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <select
-          className={[
-            'h-9 w-full rounded border pl-3 pr-8 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-70',
-            selectClassName,
-          ]
-            .filter(Boolean)
-            .join(' ')}
+      <div className="flex w-full min-w-0 items-center gap-2">
+        <EntitySearchCombobox
           value={value ?? ''}
-          onChange={(event) => onChange(event.target.value ? event.target.value : undefined)}
+          onChange={(next) => onChange(next.trim().length ? next : undefined)}
+          options={comboboxOptions}
+          placeholder={labels.placeholder}
           disabled={disabled}
-          title={activeOption?.label ?? undefined}
-        >
-          <option value="">{labels.placeholder}</option>
-          {options.map((option) => (
-            <option key={option.value} value={option.value} title={option.label}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          className={cn('min-w-0 flex-1', selectClassName)}
+        />
         <div className="flex items-center gap-1">
           {allowInlineCreate && createOption ? (
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -339,15 +337,6 @@ export function DictionaryEntrySelect({
           ) : null}
         </div>
       </div>
-      {activeOption && (activeOption.icon || activeOption.color) ? (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-2 rounded border border-dashed px-2 py-1">
-            {activeOption.icon ? renderDictionaryIcon(activeOption.icon, 'h-4 w-4') : null}
-            {activeOption.color ? renderDictionaryColor(activeOption.color, 'h-4 w-4 rounded-sm') : null}
-          </span>
-          {activeOption.color ? <span>{activeOption.color}</span> : null}
-        </div>
-      ) : null}
       {loading ? <div className="text-xs text-muted-foreground">{labels.loadingLabel}</div> : null}
     </div>
   )

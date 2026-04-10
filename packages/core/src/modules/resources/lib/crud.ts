@@ -3,6 +3,7 @@ import type {
   ResourcesResource,
   ResourcesResourceActivity,
   ResourcesResourceComment,
+  ResourcesResourceServiceBookEntry,
   ResourcesResourceTagAssignment,
   ResourcesResourceType,
 } from '../data/entities'
@@ -24,4 +25,6 @@ export const resourcesResourceCrudEvents = buildCrudEvents<ResourcesResource>('r
 export const resourcesResourceTypeCrudEvents = buildCrudEvents<ResourcesResourceType>('resource_type')
 export const resourcesResourceCommentCrudEvents = buildCrudEvents<ResourcesResourceComment>('comment')
 export const resourcesResourceActivityCrudEvents = buildCrudEvents<ResourcesResourceActivity>('activity')
+export const resourcesResourceServiceBookEntryCrudEvents =
+  buildCrudEvents<ResourcesResourceServiceBookEntry>('resource_service_book_entry')
 export const resourcesResourceTagAssignmentCrudEvents = buildCrudEvents<ResourcesResourceTagAssignment>('resource_tag_assignment')

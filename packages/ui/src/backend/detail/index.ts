@@ -42,5 +42,8 @@ export type {
 } from './addressFormat'
 export * from './AttachmentMetadataDialog'
 export * from './AttachmentDeleteDialog'
+export * from './AttachmentItemsGrid'
 export * from './AttachmentsSection'
+export * from './DraftRecordAttachmentsSection'
+export * from './useAttachmentDraftRecordId'
 export * from './AttachmentVisualPreview'

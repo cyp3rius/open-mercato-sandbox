@@ -175,6 +175,48 @@ export class ResourcesResourceActivity {
   resource!: ResourcesResource
 }
 
+@Entity({ tableName: 'resources_resource_service_book_entries' })
+@Index({ name: 'resources_resource_service_book_entries_resource_idx', properties: ['resource'] })
+@Index({ name: 'resources_resource_service_book_entries_tenant_org_idx', properties: ['tenantId', 'organizationId'] })
+@Index({
+  name: 'resources_resource_service_book_entries_resource_in_created_idx',
+  properties: ['resource', 'serviceInAt', 'createdAt'],
+})
+export class ResourcesResourceServiceBookEntry {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'service_type', type: 'text' })
+  serviceType!: string
+
+  @Property({ name: 'service_activity', type: 'text' })
+  serviceActivity!: string
+
+  @Property({ name: 'service_in_at', type: Date })
+  serviceInAt!: Date
+
+  @Property({ name: 'service_out_at', type: Date, nullable: true })
+  serviceOutAt?: Date | null
+
+  @Property({ type: 'text', nullable: true })
+  description?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @ManyToOne(() => ResourcesResource, { fieldName: 'resource_id' })
+  resource!: ResourcesResource
+}
+
 @Entity({ tableName: 'resources_resource_tags' })
 @Index({ name: 'resources_resource_tags_scope_idx', properties: ['organizationId', 'tenantId'] })
 @Unique({ name: 'resources_resource_tags_slug_unique', properties: ['organizationId', 'tenantId', 'slug'] })

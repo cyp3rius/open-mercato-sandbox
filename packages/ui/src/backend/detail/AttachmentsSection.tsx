@@ -1,14 +1,13 @@
 "use client"
 
 import * as React from 'react'
-import { Upload, Trash2, File, FileText, FileSpreadsheet, FileArchive, FileAudio, FileVideo, FileCode } from 'lucide-react'
+import { Upload } from 'lucide-react'
 import { Button } from '../../primitives/button'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { cn } from '@open-mercato/shared/lib/utils'
-import { AttachmentVisualPreview, formatAttachmentFileSize } from './AttachmentVisualPreview'
-import { AttachmentDeleteDialog } from './AttachmentDeleteDialog'
-import { AttachmentMetadataDialog, type AttachmentItem, type AttachmentMetadataSavePayload } from './AttachmentMetadataDialog'
+import { AttachmentItemsGrid } from './AttachmentItemsGrid'
+import type { AttachmentItem } from './AttachmentMetadataDialog'
 import { ComponentReplacementHandles } from '@open-mercato/shared/modules/widgets/component-registry'
 import { useRegisteredComponent } from '../injection/useRegisteredComponent'
 
@@ -44,10 +43,6 @@ function AttachmentsSectionImpl({
   const [error, setError] = React.useState<string | null>(null)
   const [isUploading, setIsUploading] = React.useState(false)
   const [isDragOver, setIsDragOver] = React.useState(false)
-  const [metadataOpen, setMetadataOpen] = React.useState(false)
-  const [selectedItem, setSelectedItem] = React.useState<AttachmentItem | null>(null)
-  const [deleteOpen, setDeleteOpen] = React.useState(false)
-  const [deleteTarget, setDeleteTarget] = React.useState<AttachmentItem | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
 
   const load = React.useCallback(async () => {
@@ -139,61 +134,6 @@ function AttachmentsSectionImpl({
     setIsDragOver(false)
   }, [])
 
-  const openMetadataDialog = React.useCallback((item: AttachmentItem) => {
-    setSelectedItem(item)
-    setMetadataOpen(true)
-  }, [])
-
-  const openDeleteDialog = React.useCallback((item: AttachmentItem) => {
-    setDeleteTarget(item)
-    setDeleteOpen(true)
-  }, [])
-
-  const handleDelete = React.useCallback(async () => {
-    if (!deleteTarget) return
-    try {
-      const call = await apiCall<{ error?: string }>(
-        `/api/attachments?id=${encodeURIComponent(deleteTarget.id)}`,
-        { method: 'DELETE' },
-      )
-      if (!call.ok) {
-        const message = call.result?.error || t('attachments.library.errors.delete', 'Failed to delete attachment.')
-        throw new Error(message)
-      }
-      setDeleteOpen(false)
-      setDeleteTarget(null)
-      await load()
-      onChanged?.()
-    } catch (err: any) {
-      setError(err?.message || t('attachments.library.errors.delete', 'Failed to delete attachment.'))
-    }
-  }, [deleteTarget, load, onChanged, t])
-
-  const handleMetadataSave = React.useCallback(
-    async (id: string, payload: AttachmentMetadataSavePayload) => {
-      const body: Record<string, unknown> = {
-        tags: payload.tags,
-        assignments: payload.assignments,
-      }
-      if (payload.customFields && Object.keys(payload.customFields).length) {
-        body.customFields = payload.customFields
-      }
-      const call = await apiCall<{ error?: string }>(`/api/attachments/library/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!call.ok) {
-        const message = call.result?.error || t('attachments.library.metadata.error', 'Failed to update metadata.')
-        throw new Error(message)
-      }
-      setMetadataOpen(false)
-      await load()
-      onChanged?.()
-    },
-    [load, onChanged, t],
-  )
-
   const sectionTitle = title ?? t('attachments.library.title', 'Attachments')
   const sectionDescription =
     description ?? t('attachments.library.description', 'Browse, tag, and manage every file stored in this workspace.')
@@ -244,70 +184,19 @@ function AttachmentsSectionImpl({
       {loading ? (
         <div className="text-sm text-muted-foreground">{t('attachments.library.loading', 'Loading attachments…')}</div>
       ) : items.length ? (
-        <div className={cn(
-          'grid gap-3',
-          compact ? 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-5' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
-        )}>
-          {items.map((item) => {
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => openMetadataDialog(item)}
-                className="group flex flex-col overflow-hidden rounded-lg border bg-card text-left cursor-pointer transition-shadow hover:shadow-sm"
-              >
-                <AttachmentVisualPreview
-                  fileName={item.fileName}
-                  mimeType={item.mimeType}
-                  thumbnailUrl={item.thumbnailUrl}
-                  className={compact ? 'aspect-[2/1]' : 'aspect-[4/3]'}
-                  overlay={(
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-2 top-2 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        openDeleteDialog(item)
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  )}
-                />
-                <div className={cn('space-y-1', compact ? 'p-2' : 'p-3')}>
-                  <div className={cn('truncate font-medium', compact ? 'text-xs' : 'text-sm')} title={item.fileName}>
-                    {item.fileName}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {formatAttachmentFileSize(item.fileSize)}
-                  </div>
-                </div>
-              </button>
-            )
-          })}
-        </div>
+        <AttachmentItemsGrid
+          items={items}
+          compact={compact}
+          onManagedChange={() => {
+            void load()
+            onChanged?.()
+          }}
+        />
       ) : (
         <div className="text-sm text-muted-foreground">
           {t('attachments.library.table.empty', 'No attachments found.')}
         </div>
       )}
-
-      <AttachmentMetadataDialog
-        open={metadataOpen}
-        onOpenChange={setMetadataOpen}
-        item={selectedItem}
-        availableTags={[]}
-        onSave={handleMetadataSave}
-      />
-      <AttachmentDeleteDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        fileName={deleteTarget?.fileName}
-        onConfirm={handleDelete}
-        isDeleting={false}
-      />
     </div>
   )
 }

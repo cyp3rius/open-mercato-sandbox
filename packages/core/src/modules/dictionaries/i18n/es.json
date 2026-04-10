@@ -6,7 +6,7 @@
   "dictionaries.config.dialog.descriptionPlaceholder": "Explica cómo se usa este diccionario (opcional).",
   "dictionaries.config.dialog.editTitle": "Editar diccionario",
   "dictionaries.config.dialog.keyErrorLength": "La clave debe tener como máximo 100 caracteres.",
-  "dictionaries.config.dialog.keyErrorPattern": "Usa letras minúsculas, números, guion o guion bajo.",
+  "dictionaries.config.dialog.keyErrorPattern": "Usa letras minúsculas, números, punto, guion o guion bajo (p. ej. resources.service_activity).",
   "dictionaries.config.dialog.keyErrorRequired": "La clave es obligatoria.",
   "dictionaries.config.dialog.keyHint": "Usa letras minúsculas, números, guion o guion bajo.",
   "dictionaries.config.dialog.keyLabel": "Clave",

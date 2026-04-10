@@ -5,7 +5,10 @@ export const dictionaryKeySchema = z
   .trim()
   .min(1)
   .max(100)
-  .regex(/^[a-z0-9][a-z0-9_-]*$/, 'Use lowercase letters, numbers, hyphen, or underscore.')
+  .regex(
+    /^[a-z0-9][a-z0-9_.-]*$/,
+    'Use lowercase letters, numbers, period, hyphen, or underscore (e.g. resources.service_activity).',
+  )
 
 const hexColorSchema = z
   .string()

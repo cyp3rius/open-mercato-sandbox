@@ -1330,8 +1330,17 @@ export function makeCrudRoute<TCreate = any, TUpdate = any, TList = any>(opts: C
         profiler.mark('query_engine_prepare')
         const qe = (ctx.container.resolve('queryEngine') as QueryEngine)
         profiler.mark('query_engine_resolved')
-        const sortFieldRaw = (queryParams as any).sortField || 'id'
-        const sortDirRaw = ((queryParams as any).sortDir || 'asc').toLowerCase() === 'desc' ? SortDir.Desc : SortDir.Asc
+        const pickSortString = (value: unknown) =>
+          typeof value === 'string' && value.trim().length ? value.trim() : null
+        const sortFieldRaw =
+          pickSortString((validated as Record<string, unknown>).sortField) ??
+          pickSortString((queryParams as Record<string, unknown>).sortField) ??
+          'id'
+        const sortDirToken =
+          pickSortString((validated as Record<string, unknown>).sortDir) ??
+          pickSortString((queryParams as Record<string, unknown>).sortDir) ??
+          'asc'
+        const sortDirRaw = sortDirToken.toLowerCase() === 'desc' ? SortDir.Desc : SortDir.Asc
         const sortField = (opts.list.sortFieldMap && opts.list.sortFieldMap[sortFieldRaw]) || sortFieldRaw
         const sort: Sort[] = [{ field: sortField as any, dir: sortDirRaw } as any]
         const page: Page = exportRequested

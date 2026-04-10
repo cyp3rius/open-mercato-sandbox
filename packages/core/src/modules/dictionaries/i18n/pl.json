@@ -6,7 +6,7 @@
   "dictionaries.config.dialog.descriptionPlaceholder": "Opisz, do czego służy ten słownik (opcjonalnie).",
   "dictionaries.config.dialog.editTitle": "Edytuj słownik",
   "dictionaries.config.dialog.keyErrorLength": "Klucz może mieć maksymalnie 100 znaków.",
-  "dictionaries.config.dialog.keyErrorPattern": "Używaj małych liter, cyfr, myślnika lub podkreślenia.",
+  "dictionaries.config.dialog.keyErrorPattern": "Używaj małych liter, cyfr, kropki, myślnika lub podkreślenia (np. resources.service_activity).",
   "dictionaries.config.dialog.keyErrorRequired": "Klucz jest wymagany.",
   "dictionaries.config.dialog.keyHint": "Używaj małych liter, cyfr, myślnika lub podkreślenia.",
   "dictionaries.config.dialog.keyLabel": "Klucz",

@@ -6,7 +6,7 @@
   "dictionaries.config.dialog.descriptionPlaceholder": "Explain how this dictionary is used (optional).",
   "dictionaries.config.dialog.editTitle": "Edit dictionary",
   "dictionaries.config.dialog.keyErrorLength": "Key must be at most 100 characters long.",
-  "dictionaries.config.dialog.keyErrorPattern": "Use lowercase letters, numbers, hyphen, or underscore.",
+  "dictionaries.config.dialog.keyErrorPattern": "Use lowercase letters, numbers, period, hyphen, or underscore (e.g. resources.service_activity).",
   "dictionaries.config.dialog.keyErrorRequired": "Key is required.",
   "dictionaries.config.dialog.keyHint": "Use lowercase letters, numbers, hyphen, or underscore.",
   "dictionaries.config.dialog.keyLabel": "Key",
