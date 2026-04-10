@@ -26,8 +26,9 @@ type MfSubject = {
   name?: string | null
   nip?: string | null
   regon?: string | null
-  residenceAddress?: MfAddress | null
-  workingAddress?: MfAddress | null
+  /** MF API returns a single formatted line, e.g. `ul/ Prosta 49 00-838 Warszawa` */
+  residenceAddress?: MfAddress | string | null
+  workingAddress?: MfAddress | string | null
 }
 
 function formatAddress(addr: MfAddress | null | undefined): {
@@ -51,10 +52,33 @@ function formatAddress(addr: MfAddress | null | undefined): {
   return { line1, postalCode: zip, city, country }
 }
 
+/** MF whitelist often returns one string: street … `00-000` `City` */
+function formatAddressFromApiField(raw: MfAddress | string | null | undefined): ReturnType<typeof formatAddress> {
+  if (raw == null) return { line1: null, postalCode: null, city: null, country: null }
+  if (typeof raw === 'string') {
+    const s = raw.trim()
+    if (!s.length) return { line1: null, postalCode: null, city: null, country: null }
+    const postalMatch = s.match(/\b(\d{2}-\d{3})\s+(.+)$/)
+    if (postalMatch) {
+      const postalCode = postalMatch[1] ?? null
+      const city = (postalMatch[2] ?? '').trim() || null
+      const before = s.slice(0, postalMatch.index).trim()
+      return {
+        line1: before.length ? before : s,
+        postalCode,
+        city,
+        country: 'PL',
+      }
+    }
+    return { line1: s, postalCode: null, city: null, country: null }
+  }
+  return formatAddress(raw)
+}
+
 function pickAddress(subject: MfSubject): ReturnType<typeof formatAddress> {
-  const w = formatAddress(subject.workingAddress ?? undefined)
+  const w = formatAddressFromApiField(subject.workingAddress)
   if (w.line1 || w.postalCode || w.city) return w
-  return formatAddress(subject.residenceAddress ?? undefined)
+  return formatAddressFromApiField(subject.residenceAddress)
 }
 
 function parseSubject(subject: MfSubject | null | undefined): MfRegistryCompanyData | null {

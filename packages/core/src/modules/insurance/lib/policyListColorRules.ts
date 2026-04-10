@@ -77,7 +77,7 @@ export type PolicyListColorEvaluationRow = {
   createdAt: string | null
   updatedAt: string | null
   insurerId: string
-  referringPartnerEntityId: string
+  referringPartnerEntityId: string | null
   catalogProductId: string | null
   resourceId: string | null
 }

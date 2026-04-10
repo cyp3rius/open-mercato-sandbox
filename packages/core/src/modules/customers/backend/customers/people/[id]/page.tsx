@@ -876,6 +876,7 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
             onSectionAction={handleSectionAction}
             navAriaLabel={t('customers.people.detail.tabs.label', 'Person detail sections')}
             headerClassName="mb-1"
+            panelContentKey={activeTab}
           >
             {(() => {
               const injected = injectedTabMap.get(activeTab)

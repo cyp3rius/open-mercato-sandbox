@@ -21,6 +21,8 @@ type DetailTabsLayoutProps<TId extends string = string> = {
   className?: string
   headerClassName?: string
   navClassName?: string
+  /** When set, remounts the panel when the key changes (avoids React 19 + DevTools reconciliation warnings when swapping tab bodies). */
+  panelContentKey?: React.Key
   children: React.ReactNode
 }
 
@@ -34,6 +36,7 @@ export function DetailTabsLayout<TId extends string = string>({
   className,
   headerClassName,
   navClassName,
+  panelContentKey,
   children,
 }: DetailTabsLayoutProps<TId>) {
   const handleTabChange = React.useCallback(
@@ -85,7 +88,7 @@ export function DetailTabsLayout<TId extends string = string>({
           </Button>
         ) : null}
       </div>
-      <div>{children}</div>
+      <div key={panelContentKey ?? 'detail-tab-panel'}>{children}</div>
     </div>
   )
 }

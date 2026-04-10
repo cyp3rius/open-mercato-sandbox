@@ -47,7 +47,7 @@ export function PolicyBasicsPreview({
         value={dash(labels.insurerContact)}
       />
       <PreviewFieldCell
-        label={t('insurance_desk.policies.form.caretaker', 'Caretaker (our side)')}
+        label={t('insurance_desk.policies.form.caretaker', 'Caretaker')}
         value={dash(labels.caretaker)}
       />
       <PreviewFieldCell

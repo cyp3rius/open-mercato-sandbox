@@ -6,6 +6,7 @@
   "insurance.policies.errors.insuredCompanyNotFound": "Wybrana firma ubezpieczona nie została znaleziona w CRM.",
   "insurance.policies.errors.caretakerNotFound": "Wybrany opiekun (użytkownik) nie został znaleziony.",
   "insurance.policies.errors.caretakerOrgMismatch": "Wybrany użytkownik nie należy do tej organizacji.",
+  "insurance.policies.errors.caretakerRequired": "Opiekun jest wymagany.",
   "insurance.audit.insurers.create": "Utwórz towarzystwo",
   "insurance.audit.insurers.update": "Aktualizuj towarzystwo",
   "insurance.audit.insurers.delete": "Usuń towarzystwo",

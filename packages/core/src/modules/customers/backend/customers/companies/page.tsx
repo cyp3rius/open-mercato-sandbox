@@ -37,6 +37,7 @@ type CompanyRow = {
   description?: string | null
   email?: string | null
   phone?: string | null
+  crmRecordType?: string | null
   status?: string | null
   lifecycleStage?: string | null
   nextInteractionAt?: string | null
@@ -71,6 +72,13 @@ function mapApiItem(item: Record<string, unknown>): CompanyRow | null {
   const description = typeof item.description === 'string' ? item.description : null
   const email = typeof item.primary_email === 'string' ? item.primary_email : null
   const phone = typeof item.primary_phone === 'string' ? item.primary_phone : null
+  const crmRecordTypeRaw = item.crm_record_type ?? item.crmRecordType
+  const crmRecordType =
+    crmRecordTypeRaw === 'customer' || crmRecordTypeRaw === 'partner' || crmRecordTypeRaw === 'referrer'
+      ? crmRecordTypeRaw
+      : typeof crmRecordTypeRaw === 'string' && crmRecordTypeRaw.trim().length
+        ? crmRecordTypeRaw.trim()
+        : null
   const status = typeof item.status === 'string' ? item.status : null
   const lifecycleStage = typeof item.lifecycle_stage === 'string' ? item.lifecycle_stage : null
   const nextInteractionAt = typeof item.next_interaction_at === 'string' ? item.next_interaction_at : null
@@ -91,6 +99,7 @@ function mapApiItem(item: Record<string, unknown>): CompanyRow | null {
     description,
     email,
     phone,
+    crmRecordType,
     status,
     lifecycleStage,
     nextInteractionAt,
@@ -505,6 +514,19 @@ export default function CustomersCompaniesPage() {
       return <span className="text-sm">{stringValue}</span>
     }
 
+    const formatCrmRecordTypeLabel = (raw: string | null | undefined) => {
+      if (raw === 'partner') {
+        return t('customers.companies.form.crmRecordType.partner', 'Partner')
+      }
+      if (raw === 'referrer') {
+        return t('customers.companies.form.crmRecordType.referrer', 'Referrer')
+      }
+      if (raw === 'customer' || raw == null || !String(raw).trim().length) {
+        return t('customers.companies.form.crmRecordType.customer', 'Customer')
+      }
+      return String(raw)
+    }
+
     const baseColumns: ColumnDef<CompanyRow>[] = [
       {
         accessorKey: 'name',
@@ -513,6 +535,13 @@ export default function CustomersCompaniesPage() {
           <Link href={`/backend/customers/companies-v2/${row.original.id}`} className="font-medium hover:underline">
             {row.original.name}
           </Link>
+        ),
+      },
+      {
+        accessorKey: 'crmRecordType',
+        header: t('customers.companies.list.columns.crmRecordType', 'Record type'),
+        cell: ({ row }) => (
+          <span className="text-sm">{formatCrmRecordTypeLabel(row.original.crmRecordType)}</span>
         ),
       },
       {

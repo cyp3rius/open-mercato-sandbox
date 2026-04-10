@@ -32,7 +32,7 @@ type PolicyRow = {
   id: string
   policyNumber: string
   insurerId: string
-  referringPartnerEntityId: string
+  referringPartnerEntityId: string | null
   catalogProductId: string | null
   resourceId: string | null
   status: string | null
@@ -322,7 +322,10 @@ export default function InsurancePoliciesListPage() {
         header: t('insurance_desk.policies.col.partner', 'Referring party'),
         cell: ({ row }) => {
           const id = row.original.referringPartnerEntityId
-          const text = partnerById.get(id) ?? shortId(id, 12)
+          const text =
+            id == null || !String(id).trim().length
+              ? '—'
+              : partnerById.get(id) ?? shortId(id, 12)
           return wrapRuleField(row.original.id, 'referringPartnerEntityId', text)
         },
       },

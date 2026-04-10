@@ -5,8 +5,8 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
-import { updateCrud, deleteCrud } from '@open-mercato/ui/backend/utils/crud'
-import { readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { createCrud, deleteCrud, fetchCrudList, updateCrud } from '@open-mercato/ui/backend/utils/crud'
+import { apiCallOrThrow, readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { createCrudFormError } from '@open-mercato/ui/backend/utils/serverErrors'
 import { E } from '#generated/entities.ids.generated'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -31,6 +31,11 @@ import type { TagSummary } from '../../../../components/detail/types'
 import { DetailTabsLayout } from '../../../../components/detail/DetailTabsLayout'
 import { formatTemplate } from '../../../../components/detail/utils'
 import { CompanyHighlightsSummary } from '../../../../components/detail/CustomerFormHighlights'
+import { CompanyRegistrySyncToolbarButton } from '../../../../components/companyRegistrySync'
+import { SendObjectMessageDialog } from '@open-mercato/ui/backend/messages'
+import type { MfRegistryCompanyData } from '../../../../lib/mfVatRegistry'
+import { normalizeAddressRowsForBillingSync } from '@open-mercato/core/modules/customers/lib/mfRegistryBillingAddress'
+import { syncBillingAddressFromMfRegistry } from '@open-mercato/core/modules/customers/lib/syncBillingAddressFromMfRegistry'
 import type { TagsSectionController } from '@open-mercato/ui/backend/detail'
 import {
   buildCompanyEditPayload,
@@ -73,6 +78,10 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
   }, [searchParams])
   const [activeTab, setActiveTab] = React.useState<SectionKey>(initialTab)
   const [sectionAction, setSectionAction] = React.useState<SectionAction | null>(null)
+
+  React.useEffect(() => {
+    setActiveTab(initialTab)
+  }, [initialTab])
 
   const currentCompanyId = data?.company?.id ?? null
   const mutationContextId = React.useMemo(
@@ -177,14 +186,99 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
     [injectionContext, runMutation],
   )
 
-  const { widgets: injectedTabWidgets } = useInjectionWidgets('detail:customers.company:tabs', {
+  const applyRegistrySync = React.useCallback(
+    async (registry: MfRegistryCompanyData) => {
+      if (!data?.company?.id) return
+      const companyEntityId = data.company.id
+      const body: Record<string, unknown> = {
+        id: companyEntityId,
+        displayName: registry.displayName,
+        legalName: registry.legalName,
+        nip: registry.nip,
+        regon: registry.regon,
+      }
+      await runMutationWithContext(
+        () =>
+          apiCallOrThrow(
+            '/api/customers/companies',
+            {
+              method: 'PUT',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(body),
+            },
+            { errorMessage: t('customers.companies.detail.inline.error', 'Unable to update company.') },
+          ),
+        body,
+      )
+      await loadData()
+      flash(t('customers.companies.form.registrySync.applied', 'Company data updated from the registry.'), 'success')
+      try {
+        const companyOrgId = data.company.organizationId ?? organizationId ?? null
+        await syncBillingAddressFromMfRegistry({
+          entityId: companyEntityId,
+          registry,
+          organizationId: companyOrgId,
+          listAddresses: async (eid) => {
+            const res = await fetchCrudList<Record<string, unknown>>('customers/addresses', {
+              entityId: eid,
+              page: 1,
+              pageSize: 100,
+            })
+            return normalizeAddressRowsForBillingSync(res.items)
+          },
+          createAddress: async (addrBody) => {
+            await createCrud('customers/addresses', addrBody, {
+              errorMessage: t('customers.companies.detail.inline.error', 'Unable to update company.'),
+            })
+          },
+          updateAddress: async (addrId, patch) => {
+            await updateCrud(
+              'customers/addresses',
+              { id: addrId, ...patch },
+              { errorMessage: t('customers.companies.detail.inline.error', 'Unable to update company.') },
+            )
+          },
+        })
+        await loadData()
+      } catch (err) {
+        const message =
+          err instanceof Error && err.message.trim().length
+            ? err.message
+            : t(
+                'customers.companies.form.registrySync.addressSyncFailed',
+                'Company data was updated, but the billing address from the registry could not be saved. Try adding the address manually or check your permissions.',
+              )
+        flash(message, 'error')
+      }
+    },
+    [data?.company?.id, data?.company?.organizationId, loadData, organizationId, runMutationWithContext, t],
+  )
+
+  const { widgets: legacyDetailTabWidgets } = useInjectionWidgets('customers.company.detail:tabs', {
+    context: injectionContext,
+    triggerOnLoad: true,
+  })
+  const { widgets: umesDetailTabWidgets } = useInjectionWidgets('detail:customers.company:tabs', {
     context: injectionContext,
     triggerOnLoad: true,
   })
 
+  const mergedDetailTabWidgets = React.useMemo(() => {
+    const byId = new Map<string, (typeof legacyDetailTabWidgets)[number]>()
+    for (const w of legacyDetailTabWidgets ?? []) {
+      byId.set(w.widgetId, w)
+    }
+    for (const w of umesDetailTabWidgets ?? []) {
+      if (!byId.has(w.widgetId)) {
+        byId.set(w.widgetId, w)
+      }
+    }
+    return Array.from(byId.values())
+  }, [legacyDetailTabWidgets, umesDetailTabWidgets])
+
   const injectedTabs = React.useMemo(
     () =>
-      (injectedTabWidgets ?? [])
+      (mergedDetailTabWidgets ?? [])
         .filter((widget) => (widget.placement?.kind ?? 'tab') === 'tab')
         .map((widget) => {
           const tabId = widget.placement?.groupId ?? widget.widgetId
@@ -200,7 +294,7 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
           return { id: tabId, label, priority, render }
         })
         .sort((a, b) => b.priority - a.priority),
-    [data, injectedTabWidgets, injectionContext],
+    [data, mergedDetailTabWidgets, injectionContext],
   )
 
   const injectedTabMap = React.useMemo(() => new Map(injectedTabs.map((tab) => [tab.id, tab.render])), [injectedTabs])
@@ -288,6 +382,33 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
     [data?.company?.id, router, t],
   )
 
+  const crudExtraActions = React.useMemo(() => {
+    if (!data?.company?.id) return null
+    const company = data.company
+    const profile = data.profile
+    return (
+      <>
+        <CompanyRegistrySyncToolbarButton onSuccess={applyRegistrySync} />
+        <SendObjectMessageDialog
+          object={{
+            entityModule: 'customers',
+            entityType: 'company',
+            entityId: company.id,
+            previewData: {
+              title: company.displayName,
+              subtitle: company.primaryEmail ?? undefined,
+              metadata: {
+                [t('customers.companies.detail.highlights.primaryPhone')]: company.primaryPhone ?? '-',
+                [t('customers.companies.detail.fields.industry')]: profile?.industry ?? '-',
+              },
+            },
+          }}
+          viewHref={`/backend/customers/companies-v2/${company.id}`}
+        />
+      </>
+    )
+  }, [applyRegistrySync, data, t])
+
   if (isLoading) {
     return (
       <Page>
@@ -343,8 +464,16 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
             groups={groups}
             initialValues={initialValues}
             contentHeader={contentHeader}
+            extraActions={crudExtraActions ?? undefined}
             onSubmit={handleFormSubmit}
             onDelete={handleFormDelete}
+          />
+
+          <InjectionSpot
+            spotId="customers.company.detail:details"
+            context={injectionContext}
+            data={data}
+            onDataChange={(next: unknown) => setData(next as CompanyOverview)}
           />
 
           <div className="rounded-md border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
@@ -373,6 +502,7 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
             onSectionAction={handleSectionAction}
             navAriaLabel={t('customers.companies.detail.tabs.label', 'Company detail sections')}
             navClassName="gap-4"
+            panelContentKey={activeTab}
           >
             {(() => {
               const injected = injectedTabMap.get(activeTab)
@@ -391,6 +521,7 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
                       actionLabel: t('customers.companies.detail.emptyState.notes.action', 'Create a note'),
                     }}
                     onActionChange={handleSectionActionChange}
+                    onLoadingChange={stableNoopCallback}
                     translator={translateCompanyDetail}
                     dataAdapter={notesAdapter}
                     renderIcon={renderDictionaryIcon}
@@ -429,6 +560,7 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
                       actionLabel: t('customers.companies.detail.emptyState.deals.action', 'Create a deal'),
                     }}
                     onActionChange={handleSectionActionChange}
+                    onLoadingChange={stableNoopCallback}
                     translator={detailTranslator}
                   />
                 )
@@ -445,6 +577,7 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
                       actionLabel: t('customers.companies.detail.emptyState.people.action', 'Create person'),
                     }}
                     onActionChange={handleSectionActionChange}
+                    onLoadingChange={stableNoopCallback}
                     translator={detailTranslator}
                     onDataRefresh={loadData}
                     runGuardedMutation={runMutationWithContext}
@@ -465,6 +598,7 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
                       actionLabel: t('customers.companies.detail.emptyState.addresses.action', 'Add address'),
                     }}
                     onActionChange={handleSectionActionChange}
+                    onLoadingChange={stableNoopCallback}
                     translator={detailTranslator}
                   />
                 )
@@ -484,6 +618,7 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
                       actionLabel: t('customers.companies.detail.emptyState.tasks.action', 'Create task'),
                     }}
                     onActionChange={handleSectionActionChange}
+                    onLoadingChange={stableNoopCallback}
                     translator={translateCompanyDetail}
                     entityName={companyName}
                     dialogContextKey="customers.companies.detail.tasks.dialog.context"

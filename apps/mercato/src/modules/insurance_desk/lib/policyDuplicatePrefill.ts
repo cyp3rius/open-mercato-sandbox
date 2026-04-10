@@ -11,7 +11,7 @@ export type PolicyApiRow = {
   insurerId: string
   insurerContactId: string | null
   caretakerUserId: string | null
-  referringPartnerEntityId: string
+  referringPartnerEntityId: string | null
   catalogProductId: string | null
   resourceId: string | null
   insuredPersonEntityId?: string | null
@@ -92,7 +92,7 @@ export function policyRowToDetailForm(row: PolicyApiRow): Record<string, unknown
     insurerId: row.insurerId,
     insurerContactId: row.insurerContactId ?? '',
     caretakerUserId: row.caretakerUserId ?? '',
-    referringPartnerEntityId: row.referringPartnerEntityId,
+    referringPartnerEntityId: row.referringPartnerEntityId ?? '',
     catalogProductId: row.catalogProductId ?? '',
     validFrom: row.validFrom ? row.validFrom.slice(0, 10) : '',
     validTo: row.validTo ? row.validTo.slice(0, 10) : '',
@@ -113,7 +113,7 @@ export function policyApiRowToCreateFormInitial(row: PolicyApiRow): Record<strin
     insurerId: row.insurerId,
     insurerContactId: row.insurerContactId ?? '',
     caretakerUserId: row.caretakerUserId ?? '',
-    referringPartnerEntityId: row.referringPartnerEntityId,
+    referringPartnerEntityId: row.referringPartnerEntityId ?? '',
     catalogProductId: row.catalogProductId ?? '',
     validFrom: row.validFrom ? row.validFrom.slice(0, 10) : '',
     validTo: row.validTo ? row.validTo.slice(0, 10) : '',

@@ -171,11 +171,15 @@ export function PolicyBasicsInlineSection({
       />
 
       <InlineSelectEditor
-        label={t('insurance_desk.policies.form.caretaker', 'Caretaker (our side)')}
+        label={t('insurance_desk.policies.form.caretaker', 'Caretaker')}
         value={typeof form.caretakerUserId === 'string' ? form.caretakerUserId : ''}
         emptyLabel={emptyLabel}
         options={caretakerOptions}
-        onSave={async (next) => mergeAndPersist({ caretakerUserId: (next ?? '').trim() })}
+        onSave={async (next) => {
+          const v = (next ?? '').trim()
+          if (!v.length) throw new Error('required')
+          await mergeAndPersist({ caretakerUserId: v })
+        }}
         variant="muted"
         activateOnClick
       />
@@ -187,7 +191,6 @@ export function PolicyBasicsInlineSection({
         options={partnerOptions}
         onSave={async (next) => {
           const v = (next ?? '').trim()
-          if (!v.length) throw new Error('required')
           await mergeAndPersist({ referringPartnerEntityId: v })
         }}
         variant="muted"

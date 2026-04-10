@@ -221,6 +221,7 @@
   "customers.companies.list.columns.email": "Correo electrónico",
   "customers.companies.list.columns.lifecycleStage": "Etapa del ciclo de vida",
   "customers.companies.list.columns.name": "Nombre",
+  "customers.companies.list.columns.crmRecordType": "Tipo de registro",
   "customers.companies.list.columns.nextInteraction": "Próxima interacción",
   "customers.companies.list.columns.source": "Origen",
   "customers.companies.list.columns.status": "Estado",

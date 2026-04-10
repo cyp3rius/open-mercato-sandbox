@@ -88,8 +88,10 @@ function formatEvalActualValue(
       return formatIsoDate(evalRow.updatedAt)
     case 'insurerId':
       return getters.getInsurerLabel(evalRow.insurerId)
-    case 'referringPartnerEntityId':
-      return getters.getPartnerLabel(evalRow.referringPartnerEntityId)
+    case 'referringPartnerEntityId': {
+      const pid = evalRow.referringPartnerEntityId
+      return pid != null && String(pid).trim().length ? getters.getPartnerLabel(String(pid)) : '—'
+    }
     case 'catalogProductId':
       return getters.getProductLabel(evalRow.catalogProductId)
     case 'resourceId':

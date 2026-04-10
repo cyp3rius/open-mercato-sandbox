@@ -69,7 +69,7 @@ function createCrmRecordTypeAndReferralField(t: Translator, variant: 'company' |
     id: 'crmRecordType',
     label: '',
     type: 'custom',
-    layout: 'third',
+    layout: 'full',
     component: ({
       value,
       values,
@@ -90,7 +90,7 @@ function createCrmRecordTypeAndReferralField(t: Translator, variant: 'company' |
       }, [showReferral, referral, setFormValue])
       const referralError = formErrors?.referralCode
       return (
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:gap-4">
+        <div className="flex w-full min-w-0 flex-col gap-3 md:flex-row md:items-start md:gap-4">
           <div className="min-w-0 flex-1 space-y-1">
             <label className="block text-sm font-medium" htmlFor={`crm-record-type-${variant}`}>
               {t(`${pf}.crmRecordType`, 'Record type')}
@@ -2372,12 +2372,12 @@ const optionalString = () =>
     .optional()
 
 export const createCompanyEditSchema = () =>
-  createCompanyFormSchema().extend({
+  createCompanyFormSchema().safeExtend({
     id: z.string().uuid(),
   })
 
 export const createPersonEditSchema = () =>
-  createPersonFormSchema().extend({
+  createPersonFormSchema().safeExtend({
     id: z.string().uuid(),
     department: optionalString(),
     linkedInUrl: z
@@ -2482,13 +2482,13 @@ export const createCompanyEditGroups = (t: Translator): CrudFormGroup[] => [
     id: 'details',
     title: t('customers.companies.form.groups.details'),
     column: 1,
-    fields: ['displayName', 'primaryEmail', 'primaryPhone', 'status', 'lifecycleStage', 'source'],
+    fields: ['displayName', 'primaryEmail', 'primaryPhone', 'status', 'lifecycleStage', 'source', 'crmRecordType'],
   },
   {
     id: 'profile',
     title: t('customers.companies.form.groups.profile'),
     column: 1,
-    fields: ['legalName', 'brandName', 'domain', 'websiteUrl', 'industry', 'sizeBucket', 'annualRevenue'],
+    fields: ['legalName', 'brandName', 'nip', 'regon', 'domain', 'websiteUrl', 'industry', 'sizeBucket', 'annualRevenue'],
   },
   {
     id: 'notes',
@@ -2596,6 +2596,8 @@ export type CompanyOverview = {
   company: {
     id: string
     displayName: string
+    crmRecordType?: string | null
+    referralCode?: string | null
     description?: string | null
     ownerUserId?: string | null
     primaryEmail?: string | null
@@ -2619,6 +2621,8 @@ export type CompanyOverview = {
     industry?: string | null
     sizeBucket?: string | null
     annualRevenue?: string | null
+    nip?: string | null
+    regon?: string | null
   } | null
   customFields: Record<string, unknown>
   tags: TagSummary[]
@@ -2693,6 +2697,9 @@ export type PersonOverview = {
 export function mapCompanyOverviewToFormValues(overview: CompanyOverview): Partial<CompanyEditFormValues> {
   const rawPhone = overview.company.primaryPhone
   const phoneValue = rawPhone == null ? '' : String(rawPhone)
+  const crmRaw = overview.company.crmRecordType
+  const crmRecordType =
+    crmRaw === 'customer' || crmRaw === 'partner' || crmRaw === 'referrer' ? crmRaw : 'customer'
   return {
     id: overview.company.id,
     displayName: overview.company.displayName,
@@ -2701,6 +2708,8 @@ export function mapCompanyOverviewToFormValues(overview: CompanyOverview): Parti
     status: overview.company.status ?? '',
     lifecycleStage: overview.company.lifecycleStage ?? '',
     source: overview.company.source ?? '',
+    crmRecordType,
+    referralCode: overview.company.referralCode ?? '',
     description: overview.company.description ?? '',
     legalName: overview.profile?.legalName ?? '',
     brandName: overview.profile?.brandName ?? '',
@@ -2709,6 +2718,8 @@ export function mapCompanyOverviewToFormValues(overview: CompanyOverview): Parti
     industry: overview.profile?.industry ?? '',
     sizeBucket: overview.profile?.sizeBucket ?? '',
     annualRevenue: overview.profile?.annualRevenue ?? '',
+    nip: overview.profile?.nip ?? '',
+    regon: overview.profile?.regon ?? '',
     ...overview.customFields,
   }
 }

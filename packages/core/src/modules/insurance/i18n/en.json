@@ -6,6 +6,7 @@
   "insurance.policies.errors.insuredCompanyNotFound": "The selected insured company was not found in CRM.",
   "insurance.policies.errors.caretakerNotFound": "The selected caretaker user was not found.",
   "insurance.policies.errors.caretakerOrgMismatch": "The selected user does not belong to this organization.",
+  "insurance.policies.errors.caretakerRequired": "Caretaker is required.",
   "insurance.audit.insurers.create": "Create insurer",
   "insurance.audit.insurers.update": "Update insurer",
   "insurance.audit.insurers.delete": "Delete insurer",

@@ -253,8 +253,9 @@ export default function InsurancePolicyCreatePage() {
       },
       {
         id: 'caretakerUserId',
-        label: t('insurance_desk.policies.form.caretaker', 'Caretaker (our side)'),
+        label: t('insurance_desk.policies.form.caretaker', 'Caretaker'),
         type: 'select',
+        required: true,
         loadOptions: loadCaretakerOpts,
         layout: 'third',
         useEntitySearchCombobox: true,
@@ -264,7 +265,6 @@ export default function InsurancePolicyCreatePage() {
         id: 'referringPartnerEntityId',
         label: t('insurance_desk.policies.form.referringPartyEntity', 'Referring party'),
         type: 'select',
-        required: true,
         loadOptions: loadPartnerOptions,
         layout: 'third',
         useEntitySearchCombobox: true,
@@ -448,17 +448,13 @@ export default function InsurancePolicyCreatePage() {
           insurerId: t('insurance_desk.policies.form.errors.insurer', 'Insurer is required.'),
         })
       }
-      if (!referringPartnerEntityId.length) {
-        throw createCrudFormError(
-          t('insurance_desk.policies.form.errors.partner', 'Referring party is required.'),
-          {
-            referringPartnerEntityId: t('insurance_desk.policies.form.errors.partner', 'Referring party is required.'),
-          },
-        )
-      }
-
       const insurerContactRaw = typeof values.insurerContactId === 'string' ? values.insurerContactId.trim() : ''
       const caretakerRaw = typeof values.caretakerUserId === 'string' ? values.caretakerUserId.trim() : ''
+      if (!caretakerRaw.length) {
+        throw createCrudFormError(t('insurance_desk.policies.form.errors.caretaker', 'Caretaker is required.'), {
+          caretakerUserId: t('insurance_desk.policies.form.errors.caretaker', 'Caretaker is required.'),
+        })
+      }
       const catalogProductIdRaw =
         typeof values.catalogProductId === 'string' ? values.catalogProductId.trim() : ''
       const statusRaw = typeof values.status === 'string' ? values.status.trim() : ''
@@ -530,7 +526,7 @@ export default function InsurancePolicyCreatePage() {
         await provisionPolicyInsuredEntities({
           contact: contactApi,
           leadUsage: values.leadUsage,
-          referringPartnerEntityId,
+          referringPartnerEntityId: referringPartnerEntityId.length ? referringPartnerEntityId : '',
           sourceLeadId,
           errorMessage: errProvision,
         })
@@ -562,9 +558,9 @@ export default function InsurancePolicyCreatePage() {
       const createPayload: Record<string, unknown> = {
         policyNumber,
         insurerId,
-        referringPartnerEntityId,
+        referringPartnerEntityId: referringPartnerEntityId.length ? referringPartnerEntityId : null,
         insurerContactId: insurerContactRaw.length ? insurerContactRaw : null,
-        caretakerUserId: caretakerRaw.length ? caretakerRaw : null,
+        caretakerUserId: caretakerRaw,
         catalogProductId: catalogProductIdRaw.length ? catalogProductIdRaw : null,
         resourceId,
         insuredPersonEntityId,

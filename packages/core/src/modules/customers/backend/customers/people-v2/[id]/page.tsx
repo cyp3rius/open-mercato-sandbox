@@ -70,6 +70,10 @@ export default function PersonDetailV2Page({ params }: { params?: { id?: string 
   const [activeTab, setActiveTab] = React.useState<SectionKey>(initialTab)
   const [sectionAction, setSectionAction] = React.useState<SectionAction | null>(null)
 
+  React.useEffect(() => {
+    setActiveTab(initialTab)
+  }, [initialTab])
+
   const currentPersonId = data?.person?.id ?? null
   const mutationContextId = React.useMemo(
     () => (currentPersonId ? `customer-person:${currentPersonId}` : `customer-person:${id ?? 'pending'}`),
@@ -338,6 +342,7 @@ export default function PersonDetailV2Page({ params }: { params?: { id?: string 
             onSectionAction={handleSectionAction}
             navAriaLabel={t('customers.people.detail.tabs.label', 'Person detail sections')}
             navClassName="gap-4"
+            panelContentKey={activeTab}
           >
             {(() => {
               const injected = injectedTabMap.get(activeTab)

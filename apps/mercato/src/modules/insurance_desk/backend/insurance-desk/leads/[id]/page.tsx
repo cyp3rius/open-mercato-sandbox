@@ -240,10 +240,6 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
     async (values: Record<string, unknown>) => {
       if (linkedPolicyId) return
       const referringPartnerEntityId = trimStr(values.referringPartnerEntityId)
-      if (!referringPartnerEntityId.length) {
-        flash(t('insurance_desk.policies.form.errors.partner', 'Referring party is required.'), 'error')
-        return
-      }
 
       let payload: ReturnType<typeof buildLeadPayloadFromFormValues>
       try {
@@ -280,7 +276,7 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
               title,
               status: loadedStatusRef.current,
               source: loadedSourceRef.current,
-              referringPartnerEntityId,
+              referringPartnerEntityId: referringPartnerEntityId.length ? referringPartnerEntityId : null,
               payload,
             },
             { errorMessage: t('insurance_desk.leads.form.errors.create', 'Could not save inquiry.') },
@@ -463,10 +459,6 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
         ),
         onSave: async (next) => {
           const id = (next ?? '').trim()
-          if (!id.length) {
-            flash(t('insurance_desk.policies.form.errors.partner', 'Referring party is required.'), 'error')
-            throw new Error('validation')
-          }
           const merged = { ...(formRef.current ?? {}), referringPartnerEntityId: id }
           setForm(merged)
           await persistLead(merged)

@@ -24,6 +24,8 @@ type MethodMetadata = {
   requireAuth?: boolean
   requireRoles?: string[]
   requireFeatures?: string[]
+  /** User must have at least one of these features (same org scope rules as requireFeatures). */
+  requireAnyFeatures?: string[]
   rateLimit?: RateLimitConfig
 }
 
@@ -95,6 +97,9 @@ function extractMethodMetadata(metadata: unknown, method: HttpMethod): MethodMet
   if (Array.isArray(source.requireFeatures)) {
     normalized.requireFeatures = source.requireFeatures.filter((feature): feature is string => typeof feature === 'string' && feature.length > 0)
   }
+  if (Array.isArray(source.requireAnyFeatures)) {
+    normalized.requireAnyFeatures = source.requireAnyFeatures.filter((feature): feature is string => typeof feature === 'string' && feature.length > 0)
+  }
   if (source.rateLimit && typeof source.rateLimit === 'object') {
     const rl = source.rateLimit as Record<string, unknown>
     if (typeof rl.points === 'number' && typeof rl.duration === 'number') {
@@ -121,6 +126,7 @@ async function checkAuthorization(
 
   const requiredRoles = methodMetadata?.requireRoles ?? []
   const requiredFeatures = methodMetadata?.requireFeatures ?? []
+  const requiredAnyFeatures = methodMetadata?.requireAnyFeatures ?? []
 
   if (
     requiredRoles.length &&
@@ -201,6 +207,26 @@ async function checkAuthorization(
         }
       }
       return NextResponse.json({ error: t('api.errors.forbidden', 'Forbidden'), requiredFeatures }, { status: 403 })
+    }
+  }
+
+  if (requiredAnyFeatures.length) {
+    if (!auth) {
+      return NextResponse.json({ error: t('api.errors.unauthorized', 'Unauthorized') }, { status: 401 })
+    }
+    const featureContainer = await ensureContainer()
+    const rbac = featureContainer.resolve<RbacService>('rbacService')
+    const featureContext = await resolveFeatureCheckContext({ container: featureContainer, auth, request: req })
+    const { organizationId } = featureContext
+    const ok = await rbac.userHasAnyFeature(auth.sub, requiredAnyFeatures, {
+      tenantId: featureContext.scope.tenantId ?? auth.tenantId ?? null,
+      organizationId,
+    })
+    if (!ok) {
+      return NextResponse.json(
+        { error: t('api.errors.forbidden', 'Forbidden'), requiredAnyFeatures },
+        { status: 403 },
+      )
     }
   }
 

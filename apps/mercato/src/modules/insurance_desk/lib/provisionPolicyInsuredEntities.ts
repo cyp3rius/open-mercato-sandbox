@@ -1,8 +1,10 @@
 import { isValidPesel, normalizePeselDigits } from '@open-mercato/core/modules/customers/lib/pesel'
 import type { MfRegistryCompanyData } from '@open-mercato/core/modules/customers/lib/mfVatRegistry'
+import { normalizeAddressRowsForBillingSync } from '@open-mercato/core/modules/customers/lib/mfRegistryBillingAddress'
+import { syncBillingAddressFromMfRegistry } from '@open-mercato/core/modules/customers/lib/syncBillingAddressFromMfRegistry'
 import { isValidRegon, normalizeRegonDigits } from '@open-mercato/core/modules/customers/lib/regon'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { createCrud } from '@open-mercato/ui/backend/utils/crud'
+import { createCrud, fetchCrudList, updateCrud } from '@open-mercato/ui/backend/utils/crud'
 import { createCrudFormError } from '@open-mercato/ui/backend/utils/serverErrors'
 import type { InsuranceLeadContact } from './insuranceLeadPayload'
 import { emptyLeadUsageForm, type LeadUsageFormValue } from './leadUsageForm'
@@ -179,10 +181,43 @@ export async function provisionPolicyInsuredEntities(
       }
     }
 
-    const companyRes = await createCrud<{ id?: string }>('customers/companies', companyBody, { errorMessage })
+    const companyRes = await createCrud<{ id?: string; organizationId?: string | null }>(
+      'customers/companies',
+      companyBody,
+      { errorMessage },
+    )
     companyEntityId = typeof companyRes.result?.id === 'string' ? companyRes.result.id : null
     if (!companyEntityId) {
       throw createCrudFormError(errorMessage, { leadContact: errorMessage })
+    }
+    if (registryData) {
+      try {
+        const orgId =
+          companyRes.result && typeof companyRes.result.organizationId === 'string'
+            ? companyRes.result.organizationId
+            : null
+        await syncBillingAddressFromMfRegistry({
+          entityId: companyEntityId,
+          registry: registryData,
+          organizationId: orgId,
+          listAddresses: async (eid) => {
+            const res = await fetchCrudList<Record<string, unknown>>('customers/addresses', {
+              entityId: eid,
+              page: 1,
+              pageSize: 100,
+            })
+            return normalizeAddressRowsForBillingSync(res.items)
+          },
+          createAddress: async (addrBody) => {
+            await createCrud('customers/addresses', addrBody, { errorMessage })
+          },
+          updateAddress: async (addrId, patch) => {
+            await updateCrud('customers/addresses', { id: addrId, ...patch }, { errorMessage })
+          },
+        })
+      } catch {
+        /* billing address from MF is best-effort */
+      }
     }
   }
 

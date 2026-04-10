@@ -57,6 +57,14 @@
       "types": "./src/modules/customers/lib/mfVatRegistry.ts",
       "default": "./dist/modules/customers/lib/mfVatRegistry.js"
     },
+    "./modules/customers/lib/syncBillingAddressFromMfRegistry": {
+      "types": "./src/modules/customers/lib/syncBillingAddressFromMfRegistry.ts",
+      "default": "./dist/modules/customers/lib/syncBillingAddressFromMfRegistry.js"
+    },
+    "./modules/customers/lib/mfRegistryBillingAddress": {
+      "types": "./src/modules/customers/lib/mfRegistryBillingAddress.ts",
+      "default": "./dist/modules/customers/lib/mfRegistryBillingAddress.js"
+    },
     "./modules/sales": {
       "types": "./src/modules/sales/index.ts",
       "default": "./dist/modules/sales/index.js"

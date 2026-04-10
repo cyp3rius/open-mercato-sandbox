@@ -43,7 +43,7 @@ type PolicySnapshot = {
   insurerId: string
   insurerContactId: string | null
   caretakerUserId: string | null
-  referringPartnerEntityId: string
+  referringPartnerEntityId: string | null
   catalogProductId: string | null
   resourceId: string | null
   insuredPersonEntityId: string | null
@@ -78,7 +78,7 @@ async function loadPolicySnapshot(em: EntityManager, id: string): Promise<Policy
     insurerId,
     insurerContactId,
     caretakerUserId: record.caretakerUserId ?? null,
-    referringPartnerEntityId: record.referringPartnerEntityId,
+    referringPartnerEntityId: record.referringPartnerEntityId ?? null,
     catalogProductId: record.catalogProductId ?? null,
     resourceId: record.resourceId ?? null,
     insuredPersonEntityId: record.insuredPersonEntityId ?? null,
@@ -186,12 +186,10 @@ const createPolicyCommand: CommandHandler<InsurancePolicyCreateInput, { policyId
     const parsed = insurancePolicyCreateSchema.parse(input)
     const { sourceLeadId, ...policyBody } = parsed
     const em = (ctx.container.resolve('em') as EntityManager).fork()
-    await enforceReferringPartner(
-      em,
-      policyBody.referringPartnerEntityId,
-      policyBody.organizationId,
-      policyBody.tenantId,
-    )
+    const partnerId = policyBody.referringPartnerEntityId?.trim() ?? ''
+    if (partnerId.length) {
+      await enforceReferringPartner(em, partnerId, policyBody.organizationId, policyBody.tenantId)
+    }
     const insurer = await em.findOne(InsuranceInsurer, {
       id: policyBody.insurerId,
       organizationId: policyBody.organizationId,
@@ -234,9 +232,7 @@ const createPolicyCommand: CommandHandler<InsurancePolicyCreateInput, { policyId
         'insurance.policies.errors.insuredCompanyNotFound',
       )
     }
-    if (policyBody.caretakerUserId) {
-      await enforceCaretakerUser(em, policyBody.caretakerUserId, policyBody.organizationId, policyBody.tenantId)
-    }
+    await enforceCaretakerUser(em, policyBody.caretakerUserId, policyBody.organizationId, policyBody.tenantId)
     const record = em.create(InsurancePolicy, {
       organizationId: policyBody.organizationId,
       tenantId: policyBody.tenantId,
@@ -244,7 +240,7 @@ const createPolicyCommand: CommandHandler<InsurancePolicyCreateInput, { policyId
       insurer,
       insurerContact: contactRef,
       caretakerUserId: policyBody.caretakerUserId ?? null,
-      referringPartnerEntityId: policyBody.referringPartnerEntityId,
+      referringPartnerEntityId: partnerId.length ? partnerId : null,
       catalogProductId: policyBody.catalogProductId ?? null,
       resourceId: policyBody.resourceId ?? null,
       insuredPersonEntityId: policyBody.insuredPersonEntityId ?? null,
@@ -344,14 +340,12 @@ const updatePolicyCommand: CommandHandler<InsurancePolicyUpdateInput, { policyId
     if (!record) {
       throw new CrudHttpError(404, { error: 'insurance.policies.errors.notFound' })
     }
-    if (parsed.referringPartnerEntityId) {
-      await enforceReferringPartner(
-        em,
-        parsed.referringPartnerEntityId,
-        record.organizationId,
-        record.tenantId,
-      )
-      record.referringPartnerEntityId = parsed.referringPartnerEntityId
+    if (parsed.referringPartnerEntityId !== undefined) {
+      const rid = parsed.referringPartnerEntityId?.trim() ?? ''
+      if (rid.length) {
+        await enforceReferringPartner(em, rid, record.organizationId, record.tenantId)
+      }
+      record.referringPartnerEntityId = rid.length ? rid : null
     }
     if (parsed.insurerId) {
       const insurer = await em.findOne(InsuranceInsurer, {
@@ -383,11 +377,10 @@ const updatePolicyCommand: CommandHandler<InsurancePolicyUpdateInput, { policyId
     }
     if (parsed.caretakerUserId !== undefined) {
       if (parsed.caretakerUserId === null) {
-        record.caretakerUserId = null
-      } else {
-        await enforceCaretakerUser(em, parsed.caretakerUserId, record.organizationId, record.tenantId)
-        record.caretakerUserId = parsed.caretakerUserId
+        throw new CrudHttpError(400, { error: 'insurance.policies.errors.caretakerRequired' })
       }
+      await enforceCaretakerUser(em, parsed.caretakerUserId, record.organizationId, record.tenantId)
+      record.caretakerUserId = parsed.caretakerUserId
     }
     if (parsed.policyNumber !== undefined) record.policyNumber = parsed.policyNumber
     if (parsed.catalogProductId !== undefined) record.catalogProductId = parsed.catalogProductId

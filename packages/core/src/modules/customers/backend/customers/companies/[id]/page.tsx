@@ -9,6 +9,7 @@ import { Separator } from '@open-mercato/ui/primitives/separator'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCallOrThrow, readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { createCrud, fetchCrudList, updateCrud } from '@open-mercato/ui/backend/utils/crud'
 import { collectCustomFieldValues } from '@open-mercato/ui/backend/utils/customFieldValues'
 import { mapCrudServerErrorToFormErrors } from '@open-mercato/ui/backend/utils/serverErrors'
 import { E } from '#generated/entities.ids.generated'
@@ -52,6 +53,8 @@ import { useGuardedMutation } from '@open-mercato/ui/backend/injection/useGuarde
 import { SendObjectMessageDialog } from '@open-mercato/ui/backend/messages'
 import { CompanyRegistrySyncToolbarButton } from '../../../../components/companyRegistrySync'
 import type { MfRegistryCompanyData } from '../../../../lib/mfVatRegistry'
+import { normalizeAddressRowsForBillingSync } from '@open-mercato/core/modules/customers/lib/mfRegistryBillingAddress'
+import { syncBillingAddressFromMfRegistry } from '@open-mercato/core/modules/customers/lib/syncBillingAddressFromMfRegistry'
 import { isValidNip, normalizeNipDigits } from '../../../../lib/nip'
 import { isValidRegon, normalizeRegonDigits } from '../../../../lib/regon'
 
@@ -487,8 +490,9 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
   const applyRegistrySync = React.useCallback(
     async (registry: MfRegistryCompanyData) => {
       if (!data?.company?.id) return
+      const companyEntityId = data.company.id
       const body: Record<string, unknown> = {
-        id: data.company.id,
+        id: companyEntityId,
         displayName: registry.displayName,
         legalName: registry.legalName,
         nip: registry.nip,
@@ -509,8 +513,45 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
       )
       await refreshCompanyDetail()
       flash(t('customers.companies.form.registrySync.applied', 'Company data updated from the registry.'), 'success')
+      try {
+        await syncBillingAddressFromMfRegistry({
+          entityId: companyEntityId,
+          registry,
+          organizationId: data.company.organizationId ?? null,
+          listAddresses: async (eid) => {
+            const res = await fetchCrudList<Record<string, unknown>>('customers/addresses', {
+              entityId: eid,
+              page: 1,
+              pageSize: 100,
+            })
+            return normalizeAddressRowsForBillingSync(res.items)
+          },
+          createAddress: async (addrBody) => {
+            await createCrud('customers/addresses', addrBody, {
+              errorMessage: t('customers.companies.detail.inline.error', 'Unable to update company.'),
+            })
+          },
+          updateAddress: async (addrId, patch) => {
+            await updateCrud(
+              'customers/addresses',
+              { id: addrId, ...patch },
+              { errorMessage: t('customers.companies.detail.inline.error', 'Unable to update company.') },
+            )
+          },
+        })
+        await refreshCompanyDetail()
+      } catch (err) {
+        const message =
+          err instanceof Error && err.message.trim().length
+            ? err.message
+            : t(
+                'customers.companies.form.registrySync.addressSyncFailed',
+                'Company data was updated, but the billing address from the registry could not be saved. Try adding the address manually or check your permissions.',
+              )
+        flash(message, 'error')
+      }
     },
-    [data?.company?.id, refreshCompanyDetail, runMutationWithContext, t],
+    [data?.company?.id, data?.company?.organizationId, refreshCompanyDetail, runMutationWithContext, t],
   )
 
   const submitCustomFields = React.useCallback(
@@ -966,6 +1007,7 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
             onSectionAction={handleSectionAction}
             navAriaLabel={t('customers.companies.detail.tabs.label', 'Company detail sections')}
             navClassName="gap-4"
+            panelContentKey={activeTab}
           >
             {(() => {
               const injected = injectedTabMap.get(activeTab)

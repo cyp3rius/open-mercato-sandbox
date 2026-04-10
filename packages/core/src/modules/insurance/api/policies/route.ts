@@ -87,7 +87,7 @@ type PolicyRow = {
   insurerId: string
   insurerContactId: string | null
   caretakerUserId: string | null
-  referringPartnerEntityId: string
+  referringPartnerEntityId: string | null
   catalogProductId: string | null
   resourceId: string | null
   insuredPersonEntityId: string | null
@@ -114,7 +114,7 @@ const toRow = (row: InsurancePolicy): PolicyRow => {
     insurerId,
     insurerContactId,
     caretakerUserId: row.caretakerUserId ?? null,
-    referringPartnerEntityId: row.referringPartnerEntityId,
+    referringPartnerEntityId: row.referringPartnerEntityId ?? null,
     catalogProductId: row.catalogProductId ?? null,
     resourceId: row.resourceId ?? null,
     insuredPersonEntityId: row.insuredPersonEntityId ?? null,
@@ -209,7 +209,7 @@ const policyListItemSchema = z.object({
   insurerId: z.uuid(),
   insurerContactId: z.uuid().nullable(),
   caretakerUserId: z.uuid().nullable(),
-  referringPartnerEntityId: z.uuid(),
+  referringPartnerEntityId: z.uuid().nullable(),
   catalogProductId: z.uuid().nullable(),
   resourceId: z.uuid().nullable(),
   insuredPersonEntityId: z.uuid().nullable(),

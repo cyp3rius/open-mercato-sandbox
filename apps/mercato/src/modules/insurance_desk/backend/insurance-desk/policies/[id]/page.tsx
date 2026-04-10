@@ -318,12 +318,16 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
       const insurerId = typeof values.insurerId === 'string' ? values.insurerId.trim() : ''
       const referringPartnerEntityId =
         typeof values.referringPartnerEntityId === 'string' ? values.referringPartnerEntityId.trim() : ''
-      if (!policyNumber.length || !insurerId.length || !referringPartnerEntityId.length) {
+      if (!policyNumber.length || !insurerId.length) {
         flash(t('insurance_desk.policies.form.errors.policyNumber', 'Check required fields.'), 'error')
         return
       }
       const insurerContactRaw = typeof values.insurerContactId === 'string' ? values.insurerContactId.trim() : ''
       const caretakerRaw = typeof values.caretakerUserId === 'string' ? values.caretakerUserId.trim() : ''
+      if (!caretakerRaw.length) {
+        flash(t('insurance_desk.policies.form.errors.caretaker', 'Caretaker is required.'), 'error')
+        return
+      }
       const catalogProductIdRaw = typeof values.catalogProductId === 'string' ? values.catalogProductId.trim() : ''
       const insuredPersonRaw =
         typeof values.insuredPersonEntityId === 'string' ? values.insuredPersonEntityId.trim() : ''
@@ -415,9 +419,9 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
               id: policyId,
               policyNumber,
               insurerId,
-              referringPartnerEntityId,
+              referringPartnerEntityId: referringPartnerEntityId.length ? referringPartnerEntityId : null,
               insurerContactId: insurerContactRaw.length ? insurerContactRaw : null,
-              caretakerUserId: caretakerRaw.length ? caretakerRaw : null,
+              caretakerUserId: caretakerRaw,
               catalogProductId: catalogProductIdRaw.length ? catalogProductIdRaw : null,
               resourceId,
               insuredPersonEntityId: insuredPersonRaw.length ? insuredPersonRaw : null,

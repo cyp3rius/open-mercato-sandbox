@@ -116,8 +116,8 @@ export class InsurancePolicy {
   insurerContact?: InsuranceInsurerContact | null
 
   /** CRM `customer_entities.id` (person or company); tag with `partner` / `customer` in CRM. */
-  @Property({ name: 'referring_partner_entity_id', type: 'uuid' })
-  referringPartnerEntityId!: string
+  @Property({ name: 'referring_partner_entity_id', type: 'uuid', nullable: true })
+  referringPartnerEntityId?: string | null
 
   @Property({ name: 'catalog_product_id', type: 'uuid', nullable: true })
   catalogProductId?: string | null

@@ -104,7 +104,6 @@ export default function InsuranceLeadCreatePage() {
         id: 'referringPartnerEntityId',
         label: t('insurance_desk.policies.form.referringPartyEntity', 'Referring party'),
         type: 'select',
-        required: true,
         loadOptions: loadPartnerOptions,
         layout: 'full',
         useEntitySearchCombobox: true,
@@ -234,14 +233,6 @@ export default function InsuranceLeadCreatePage() {
   const onSubmit = React.useCallback(
     async (values: Record<string, unknown>) => {
       const referringPartnerEntityId = trimStr(values.referringPartnerEntityId)
-      if (!referringPartnerEntityId.length) {
-        throw createCrudFormError(
-          t('insurance_desk.policies.form.errors.partner', 'Referring party is required.'),
-          {
-            referringPartnerEntityId: t('insurance_desk.policies.form.errors.partner', 'Referring party is required.'),
-          },
-        )
-      }
 
       let payload: ReturnType<typeof buildLeadPayloadFromFormValues>
       try {
@@ -278,7 +269,7 @@ export default function InsuranceLeadCreatePage() {
           title,
           status: 'received',
           source: 'insurance_desk',
-          referringPartnerEntityId,
+          referringPartnerEntityId: referringPartnerEntityId.length ? referringPartnerEntityId : null,
           payload,
         },
         { errorMessage: t('insurance_desk.leads.form.errors.create', 'Could not save inquiry.') },

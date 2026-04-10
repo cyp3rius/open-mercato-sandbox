@@ -103,10 +103,11 @@ export function PolicyBasicsEditBlock({
 
       <SelectRow
         id="policy-detail-caretakerUserId"
-        label={t('insurance_desk.policies.form.caretaker', 'Caretaker (our side)')}
+        label={t('insurance_desk.policies.form.caretaker', 'Caretaker')}
         value={caretakerUserId}
         options={caretakerOptions}
         onChange={(v) => setForm((f) => ({ ...f, caretakerUserId: v }))}
+        required
         emptyLabel={t('insurance_desk.policies.form.none', '— none —')}
       />
 
@@ -116,7 +117,6 @@ export function PolicyBasicsEditBlock({
         value={referringPartnerEntityId}
         options={partnerOptions}
         onChange={(v) => setForm((f) => ({ ...f, referringPartnerEntityId: v }))}
-        required
         emptyLabel={t('insurance_desk.policies.form.none', '— none —')}
       />
 

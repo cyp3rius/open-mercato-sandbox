@@ -392,4 +392,12 @@ export class RbacService {
     if (acl.organizations && scope.organizationId && !acl.organizations.includes(scope.organizationId) && !acl.organizations.includes('__all__')) return false
     return this.hasAllFeatures(required, acl.features)
   }
+
+  async userHasAnyFeature(userId: string, candidates: string[], scope: { tenantId: string | null; organizationId: string | null }): Promise<boolean> {
+    if (!candidates.length) return true
+    const acl = await this.loadAcl(userId, scope)
+    if (acl.isSuperAdmin) return true
+    if (acl.organizations && scope.organizationId && !acl.organizations.includes(scope.organizationId) && !acl.organizations.includes('__all__')) return false
+    return candidates.some((required) => acl.features.some((granted) => sharedMatchFeature(required, granted)))
+  }
 }
