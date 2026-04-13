@@ -1,0 +1,51 @@
+---
+description: Open-related-record control for association previews (linked CRM entities, policies, resources)
+globs:
+  - apps/mercato/src/modules/**/*.tsx
+  - packages/core/src/modules/**/components/**/*.tsx
+alwaysApply: false
+---
+
+# Association links — “Open” action (backend UI)
+
+Use this pattern whenever the UI shows a **read-only preview** of a **linked / associated record** (person, company, policy, resource, lead, etc.) and offers navigation to the target **admin (backend) screen**.
+
+**Do not** use a plain underlined text `<Link>` or raw `<a>` for the primary “open associated record” action — keep parity with Insurance desk and Resources.
+
+## Required pattern
+
+- **`Button`** with `type="button"`, **`variant="outline"`**, **`size="sm"`**, **`asChild`**
+- **`Link`** (Next.js) as the child with:
+  - **`target="_blank"`**
+  - **`rel="noopener noreferrer"`**
+  - **`className="inline-flex items-center gap-2"`**
+- **`ExternalLink`** from `lucide-react`: `className="size-4 shrink-0"`, **`aria-hidden`**
+- Label: **`t('common.open', 'Open')`** (app locale files already define `common.open`)
+
+## Layout — top-right on the preview “item”
+
+Place the Open control in the **top-right corner of the association preview surface** (card row, dashed preview box, etc.), not below the body copy.
+
+- Wrap the preview block in **`relative`** (the same element that has the card border / padding is fine).
+- Position the **`Button`** with **`className="absolute end-3 top-3 z-10 shrink-0"`** (inside a padded card, `end-3 top-3` keeps the control off the border; **`PolicySubjectDetailPreview`** uses `end-0 top-0` on a slightly different shell — both are valid if spacing looks correct).
+- Add horizontal reserve on the **main text column** so lines do not run under the button: **`pe-28`** (or equivalent) on the inner wrapper that contains the title / field grid **when** the Open button is shown.
+- Omit **`pe-28`** when there is no Open action (e.g. loading or missing `href`).
+
+## Reference implementations
+
+- `apps/mercato/src/modules/insurance_desk/components/policies/PolicySubjectDetailPreview.tsx` (open resource)
+- `apps/mercato/src/modules/insurance_desk/components/policies/LinkedLeadPreviewCard.tsx` (open inquiry)
+- `packages/core/src/modules/resources/components/detail/ResourceLinkedPoliciesSection.tsx` (open policy)
+- `packages/core/src/modules/resources/components/detail/VehicleAccessoriesSection.tsx` (open linked accessory resource)
+- `packages/core/src/modules/resources/components/ResourceCustomerLinkField.tsx` (open person / company from selected link preview)
+- `apps/mercato/src/modules/insurance_desk/components/policies/PolicyCustomerInlineSection.tsx` (`PolicyCustomerDetailPreview` — company + person tiles, each with Open)
+
+## Imports (typical)
+
+```tsx
+import Link from 'next/link'
+import { ExternalLink } from 'lucide-react'
+import { Button } from '@open-mercato/ui/primitives/button'
+```
+
+**Related:** `.cursor/rules/form-ui-consistency.mdc`, `.cursor/rules/module-backend-ui.mdc`.

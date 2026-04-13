@@ -4,11 +4,20 @@ import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { resolveCrudRecordId, parseScopedCommandInput } from '@open-mercato/shared/lib/api/scoped'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { ResourcesResource, ResourcesResourceTagAssignment, ResourcesResourceTag } from '../data/entities'
+import {
+  ResourcesResource,
+  ResourcesResourceTagAssignment,
+  ResourcesResourceTag,
+  ResourcesResourceType,
+} from '../data/entities'
 import { resourcesResourceCreateSchema, resourcesResourceUpdateSchema } from '../data/validators'
 import { sanitizeSearchTerm, parseBooleanFlag } from './helpers'
 import { E } from '#generated/entities.ids.generated'
 import { createResourcesCrudOpenApi, createPagedListResponseSchema, defaultOkResponseSchema } from './openapi'
+import {
+  RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+  resolveResourcesResourceFieldsetCode,
+} from '../lib/resourceCustomFields'
 
 // Field constants for ResourcesResource entity
 const F = {
@@ -27,6 +36,7 @@ const F = {
   appearance_color: "appearance_color",
   is_active: "is_active",
   availability_rule_set_id: "availability_rule_set_id",
+  customer_entity_id: "customer_entity_id",
   created_at: "created_at",
   updated_at: "updated_at",
   deleted_at: "deleted_at",
@@ -52,8 +62,11 @@ const listSchema = z
     resourceTypeId: z.string().uuid().optional(),
     isActive: z.string().optional(),
     tagIds: z.string().optional(),
+    customerEntityId: z.string().uuid().optional(),
     sortField: z.string().optional(),
     sortDir: z.enum(['asc', 'desc']).optional(),
+    /** When set to `resources_resource_vehicle`, only resources whose type maps to the Vehicles custom-field scope are returned. */
+    resourcesResourceFieldset: z.string().optional(),
   })
   .passthrough()
 
@@ -86,6 +99,7 @@ const crud = makeCrudRoute({
       'appearance_color',
       F.is_active,
       'availability_rule_set_id',
+      F.customer_entity_id,
       F.created_at,
       F.updated_at,
     ],
@@ -110,8 +124,39 @@ const crud = makeCrudRoute({
         const like = `%${escapeLikePattern(term)}%`
         filters[F.name] = { $ilike: like }
       }
-      if (query.resourceTypeId) {
+      const fieldsetRaw =
+        typeof query.resourcesResourceFieldset === 'string' ? query.resourcesResourceFieldset.trim() : ''
+      if (fieldsetRaw === RESOURCES_RESOURCE_FIELDSET_VEHICLE) {
+        const em = (ctx.container.resolve('em') as EntityManager).fork()
+        const scopeTenantId = ctx.organizationScope?.tenantId ?? ctx.auth?.tenantId ?? null
+        const organizationIds = ctx.organizationIds ?? ctx.organizationScope?.filterIds ?? null
+        const selectedOrganizationId = ctx.selectedOrganizationId ?? ctx.organizationScope?.selectedId ?? null
+        const typeWhere: Record<string, unknown> = { deletedAt: null }
+        if (scopeTenantId) typeWhere.tenantId = scopeTenantId
+        if (Array.isArray(organizationIds) && organizationIds.length > 0) {
+          typeWhere.organizationId = { $in: organizationIds }
+        } else if (selectedOrganizationId) {
+          typeWhere.organizationId = selectedOrganizationId
+        }
+        const allTypes = await em.find(ResourcesResourceType, typeWhere)
+        let vehicleTypeIds = allTypes
+          .filter((rt) => resolveResourcesResourceFieldsetCode(rt.name) === RESOURCES_RESOURCE_FIELDSET_VEHICLE)
+          .map((rt) => rt.id)
+        const requestedTypeId = typeof query.resourceTypeId === 'string' ? query.resourceTypeId.trim() : ''
+        if (requestedTypeId.length) {
+          vehicleTypeIds = vehicleTypeIds.filter((id) => id === requestedTypeId)
+        }
+        filters[F.resource_type_id] = {
+          $in:
+            vehicleTypeIds.length > 0
+              ? vehicleTypeIds
+              : ['00000000-0000-0000-0000-000000000000'],
+        }
+      } else if (query.resourceTypeId) {
         filters[F.resource_type_id] = query.resourceTypeId
+      }
+      if (query.customerEntityId) {
+        filters[F.customer_entity_id] = query.customerEntityId
       }
       const isActive = parseBooleanFlag(query.isActive)
       if (isActive !== undefined) {
@@ -155,6 +200,23 @@ const crud = makeCrudRoute({
         .filter((id): id is string => typeof id === 'string' && id.length > 0)
       if (resourceIds.length === 0) return
       const em = (ctx.container.resolve('em') as EntityManager).fork()
+      const typeIds = Array.from(
+        new Set(
+          items
+            .map((item) => {
+              const raw = item[F.resource_type_id]
+              return typeof raw === 'string' && raw.length > 0 ? raw : null
+            })
+            .filter((id): id is string => id !== null),
+        ),
+      )
+      const typeNameById = new Map<string, string>()
+      if (typeIds.length > 0) {
+        const types = await em.find(ResourcesResourceType, { id: { $in: typeIds }, deletedAt: null })
+        types.forEach((row) => {
+          if (row.name) typeNameById.set(row.id, row.name)
+        })
+      }
       const assignments = await em.find(
         ResourcesResourceTagAssignment,
         { resource: { $in: resourceIds } },
@@ -180,6 +242,11 @@ const crud = makeCrudRoute({
       items.forEach((item) => {
         const resourceId = typeof item.id === 'string' ? item.id : null
         item.tags = resourceId ? (tagsByResource.get(resourceId) ?? []) : []
+        const tid = item[F.resource_type_id]
+        if (typeof tid === 'string' && tid.length > 0) {
+          const tname = typeNameById.get(tid)
+          if (tname) item.resource_type_name = tname
+        }
       })
     },
   },
@@ -243,6 +310,8 @@ const resourceListItemSchema = z.object({
   appearance_color: z.string().nullable().optional(),
   is_active: z.boolean().nullable().optional(),
   availability_rule_set_id: z.string().uuid().nullable().optional(),
+  customer_entity_id: z.string().uuid().nullable().optional(),
+  resource_type_name: z.string().nullable().optional(),
   created_at: z.string().nullable().optional(),
   updated_at: z.string().nullable().optional(),
   tags: z.array(resourceTagListItemSchema).optional(),

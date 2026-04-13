@@ -40,6 +40,7 @@ import { PolicySourceLeadField } from '../../../../components/policies/PolicySou
 import { PolicyCreateLeadMergeProvider } from '../../../../components/policies/PolicyCreateLeadMergeContext'
 import { LeadCoverageCatalogField } from '../../../../components/leads/LeadCoverageCatalogField'
 import { LeadContactHolderField } from '../../../../components/leads/LeadContactHolderField'
+import { PolicyCreateClientContactTabs } from '../../../../components/policies/PolicyCreateClientContactTabs'
 import { INSURANCE_CONFIG_INSURANCES_PATH, INSURANCE_DESK_BASE } from '../../paths'
 import { INSURANCE_POLICY_ATTACHMENT_ENTITY_ID } from '../../../../lib/insuranceDeskConstants'
 import { transferDraftAttachmentsToRecord } from '../../../../lib/transferDraftAttachments'
@@ -73,6 +74,7 @@ export default function InsurancePolicyCreatePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const leadIdFromUrl = searchParams.get('leadId')
+  const isLeadPrefill = Boolean(leadIdFromUrl?.trim())
   const duplicateFromPolicyId = searchParams.get('duplicateFrom')
   const [formKey, setFormKey] = React.useState(0)
   const [leadFlowReady, setLeadFlowReady] = React.useState(() => !searchParams.get('leadId'))
@@ -225,7 +227,23 @@ export default function InsurancePolicyCreatePage() {
   )
 
   const fields = React.useMemo<CrudField[]>(
-    () => [
+    () => {
+      const contactField: CrudField = isLeadPrefill
+        ? {
+            id: 'leadContact',
+            label: '',
+            type: 'custom',
+            layout: 'full',
+            component: LeadContactHolderField,
+          }
+        : {
+            id: 'policyClientContactShell',
+            label: '',
+            type: 'custom',
+            layout: 'full',
+            component: PolicyCreateClientContactTabs,
+          }
+      return [
       {
         id: 'policyNumber',
         label: t('insurance_desk.policies.form.policyNumber', 'Policy number'),
@@ -306,13 +324,7 @@ export default function InsurancePolicyCreatePage() {
         useEntitySearchCombobox: true,
         createInNewTabHref: INSURANCE_CONFIG_INSURANCES_PATH,
       },
-      {
-        id: 'leadContact',
-        label: '',
-        type: 'custom',
-        layout: 'full',
-        component: LeadContactHolderField,
-      },
+      contactField,
       {
         id: 'leadUsage',
         label: '',
@@ -348,8 +360,9 @@ export default function InsurancePolicyCreatePage() {
         layout: 'full',
         component: PolicySourceLeadField,
       },
-    ],
-    [loadCaretakerOpts, loadInsurerOptions, loadPartnerOptions, loadProductOptions, loadStatusOptions, t],
+    ]
+    },
+    [isLeadPrefill, loadCaretakerOpts, loadInsurerOptions, loadPartnerOptions, loadProductOptions, loadStatusOptions, t],
   )
 
   const groups = React.useMemo<CrudFormGroup[]>(
@@ -372,9 +385,11 @@ export default function InsurancePolicyCreatePage() {
       },
       {
         id: 'contact',
-        title: t('insurance_desk.leads.form.groups.contact', 'Contact details'),
+        title: isLeadPrefill
+          ? t('insurance_desk.leads.form.groups.contact', 'Contact details')
+          : undefined,
         column: 1,
-        fields: ['leadContact'],
+        fields: [isLeadPrefill ? 'leadContact' : 'policyClientContactShell'],
       },
       {
         id: 'usage',
@@ -427,7 +442,7 @@ export default function InsurancePolicyCreatePage() {
         ),
       },
     ],
-    [attachmentDraftRecordId, t],
+    [attachmentDraftRecordId, isLeadPrefill, t],
   )
 
   const onSubmit = React.useCallback(
@@ -517,19 +532,34 @@ export default function InsurancePolicyCreatePage() {
         )
       }
 
-      const contactApi = leadContactFormToApi(values.leadContact)
+      const manualCompany = trimStr(values.insuredCompanyEntityId)
+      const manualPerson = trimStr(values.insuredPersonEntityId)
+      const hasManualInsured = manualCompany.length > 0 || manualPerson.length > 0
+
+      const contactApi = hasManualInsured ? {} : leadContactFormToApi(values.leadContact)
       const errProvision = t(
         'insurance_desk.policies.form.errors.provisionInsured',
         'Could not create insured customer from inquiry contact.',
       )
-      const { personEntityId: insuredPersonEntityId, companyEntityId: insuredCompanyEntityId } =
-        await provisionPolicyInsuredEntities({
+
+      let insuredPersonEntityId: string | null
+      let insuredCompanyEntityId: string | null
+      if (hasManualInsured) {
+        insuredPersonEntityId = manualPerson.length ? manualPerson : null
+        insuredCompanyEntityId = manualCompany.length ? manualCompany : null
+      } else {
+        const provisioned = await provisionPolicyInsuredEntities({
           contact: contactApi,
           leadUsage: values.leadUsage,
           referringPartnerEntityId: referringPartnerEntityId.length ? referringPartnerEntityId : '',
           sourceLeadId,
           errorMessage: errProvision,
         })
+        insuredPersonEntityId = provisioned.personEntityId
+        insuredCompanyEntityId = provisioned.companyEntityId
+      }
+
+      const resourceCustomerEntityId = insuredCompanyEntityId ?? insuredPersonEntityId ?? null
 
       let resourceId: string | null = null
       if (subjForm.mode === 'existing') {
@@ -543,6 +573,7 @@ export default function InsurancePolicyCreatePage() {
             ? subjForm.newResourceDescription.trim()
             : null,
           vehicle: subjForm.vehicle,
+          customerEntityId: resourceCustomerEntityId,
         })
         resourceId = newId
       }

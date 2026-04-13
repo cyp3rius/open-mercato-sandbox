@@ -611,13 +611,18 @@ function extractCustomerCompanyOption(record: Record<string, unknown>): Customer
   return { id, label, subtitle }
 }
 
-async function searchCustomerPeopleApi(query: string): Promise<CustomerEntityPickerOption[]> {
+async function searchCustomerPeopleApi(
+  query: string,
+  options?: { companyEntityId?: string | null },
+): Promise<CustomerEntityPickerOption[]> {
   const params = new URLSearchParams({
     pageSize: '20',
     sortField: 'name',
     sortDir: 'asc',
   })
   if (query.trim().length) params.set('search', query.trim())
+  const companyFilter = options?.companyEntityId?.trim() ?? ''
+  if (companyFilter.length) params.set('companyEntityId', companyFilter)
   const call = await apiCall<Record<string, unknown>>(`/api/customers/people?${params.toString()}`)
   if (!call.ok) {
     throw new Error(typeof call.result?.error === 'string' ? String(call.result?.error) : 'Failed to search people')
@@ -732,6 +737,8 @@ type CustomerEntitySinglePickerProps = {
   onChange: (next: string | undefined) => void
   labels: CustomerEntitySinglePickerLabels
   disabled?: boolean
+  /** When `kind` is `person`, limit search to people linked to this company (CRM profile). */
+  restrictPersonToCompanyEntityId?: string | null
 }
 
 /**
@@ -744,6 +751,7 @@ export function CustomerEntitySinglePicker({
   onChange,
   labels,
   disabled = false,
+  restrictPersonToCompanyEntityId = null,
 }: CustomerEntitySinglePickerProps) {
   const scopeVersion = useOrganizationScopeVersion()
   const normalized = typeof value === 'string' && value.trim().length ? value.trim() : undefined
@@ -759,10 +767,16 @@ export function CustomerEntitySinglePicker({
   const [saving, setSaving] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
 
-  const search = React.useMemo(
-    () => (kind === 'person' ? searchCustomerPeopleApi : searchCustomerCompaniesApi),
-    [kind],
-  )
+  const companyScope =
+    kind === 'person' && typeof restrictPersonToCompanyEntityId === 'string'
+      ? restrictPersonToCompanyEntityId.trim()
+      : ''
+
+  const search = React.useMemo(() => {
+    if (kind === 'company') return searchCustomerCompaniesApi
+    return (q: string) =>
+      searchCustomerPeopleApi(q, companyScope.length ? { companyEntityId: companyScope } : undefined)
+  }, [kind, companyScope])
   const fetchByIds = React.useMemo(
     () => (kind === 'person' ? fetchCustomerPeopleByIdsApi : fetchCustomerCompaniesByIdsApi),
     [kind],
@@ -774,6 +788,15 @@ export function CustomerEntitySinglePicker({
     setInput('')
     setError(null)
   }, [scopeVersion])
+
+  React.useEffect(() => {
+    if (!disabled) return
+    setSuggestions([])
+    setInput('')
+    setError(null)
+    setLoading(false)
+    setDialogOpen(false)
+  }, [disabled])
 
   React.useEffect(() => {
     if (!normalized) return
@@ -831,7 +854,7 @@ export function CustomerEntitySinglePicker({
       cancelled = true
       window.clearTimeout(handler)
     }
-  }, [disabled, input, labels.errorLabel, scopeVersion, search])
+  }, [companyScope, disabled, input, labels.errorLabel, scopeVersion, search])
 
   const selected = normalized ? (cache.get(normalized) ?? { id: normalized, label: normalized }) : null
 
@@ -932,6 +955,7 @@ export function CustomerEntitySinglePicker({
             firstName: fn,
             lastName: ln,
             displayName,
+            ...(companyScope.length ? { companyEntityId: companyScope } : {}),
           }),
         },
         { errorMessage: labels.errorSave },
@@ -957,6 +981,7 @@ export function CustomerEntitySinglePicker({
       setSaving(false)
     }
   }, [
+    companyScope,
     kind,
     labels.emptyError,
     labels.errorSave,
@@ -993,7 +1018,7 @@ export function CustomerEntitySinglePicker({
               type="text"
               className="min-w-[140px] flex-1 border-0 bg-transparent py-1 text-sm outline-none"
               value={input}
-              placeholder={labels.searchPlaceholder}
+              placeholder={disabled ? '' : labels.searchPlaceholder}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
@@ -1005,8 +1030,8 @@ export function CustomerEntitySinglePicker({
               disabled={busy}
             />
           </div>
-          {loading ? <div className="text-xs text-muted-foreground">{labels.loadingLabel}</div> : null}
-          {!loading && filteredSuggestions.length ? (
+          {!disabled && loading ? <div className="text-xs text-muted-foreground">{labels.loadingLabel}</div> : null}
+          {!disabled && !loading && filteredSuggestions.length ? (
             <div className="flex flex-wrap gap-2">
               {filteredSuggestions.slice(0, 10).map((option) => (
                 <Button
@@ -1028,7 +1053,7 @@ export function CustomerEntitySinglePicker({
               ))}
             </div>
           ) : null}
-          {!loading && !filteredSuggestions.length && input.trim().length ? (
+          {!disabled && !loading && !filteredSuggestions.length && input.trim().length ? (
             <div className="text-xs text-muted-foreground">{labels.noResultsLabel}</div>
           ) : null}
           {error ? <div className="text-xs text-red-600">{error}</div> : null}

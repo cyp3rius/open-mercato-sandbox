@@ -14,6 +14,8 @@ import { RESOURCES_CAPACITY_UNIT_DICTIONARY_KEY } from '@open-mercato/core/modul
 import { RESOURCES_RESOURCE_FIELDSET_DEFAULT, resolveResourcesResourceFieldsetCode } from '@open-mercato/core/modules/resources/lib/resourceCustomFields'
 import Link from 'next/link'
 import { Plus, Settings } from 'lucide-react'
+import { ResourceCustomerLinkField } from './ResourceCustomerLinkField'
+import { ResourceLinkedPoliciesSection } from './detail/ResourceLinkedPoliciesSection'
 
 const DEFAULT_PAGE_SIZE = 100
 
@@ -119,16 +121,17 @@ export function useResourcesResourceFormConfig(options: {
 
   const fields = React.useMemo<CrudField[]>(() => {
     const baseFields: CrudField[] = [
-      { id: 'name', label: t('resources.resources.form.fields.name', 'Name'), type: 'text', required: true },
       {
-        id: 'description',
-        label: t('resources.resources.form.fields.description', 'Description'),
-        type: 'richtext',
-        editor: 'uiw',
+        id: 'name',
+        label: t('resources.resources.form.fields.name', 'Name'),
+        type: 'text',
+        required: true,
+        layout: 'half',
       },
       {
         id: 'resourceTypeId',
         label: t('resources.resources.form.fields.type', 'Resource type'),
+        layout: 'half',
         type: 'custom',
         component: ({ value, setValue, setFormValue, disabled }) => (
           <div className="flex items-center gap-2">
@@ -181,6 +184,28 @@ export function useResourcesResourceFormConfig(options: {
               </Link>
             </Button>
           </div>
+        ),
+      },
+      {
+        id: 'description',
+        label: t('resources.resources.form.fields.description', 'Description'),
+        type: 'richtext',
+        editor: 'uiw',
+      },
+      {
+        id: 'customerEntityId',
+        label: t('resources.resources.form.fields.customer', 'Customer'),
+        description: t(
+          'resources.resources.form.fields.customer.help',
+          'Optional link to a person or company record.',
+        ),
+        type: 'custom',
+        component: ({ value, setValue, disabled }) => (
+          <ResourceCustomerLinkField
+            value={typeof value === 'string' ? value : null}
+            onChange={(next) => setValue(next ?? '')}
+            disabled={disabled}
+          />
         ),
       },
       {
@@ -258,8 +283,9 @@ export function useResourcesResourceFormConfig(options: {
         column: 1,
         fields: [
           'name',
-          'description',
           'resourceTypeId',
+          'description',
+          'customerEntityId',
           'capacity',
           'capacityUnitValue',
           'appearance',
@@ -344,7 +370,30 @@ export function ResourcesResourceForm(props: ResourcesResourceFormProps) {
         />
       ),
     }
-    return [...formConfig.groups, attachmentsGroup]
+    const linkedPoliciesGroup: CrudFormGroup | null = recordId
+      ? {
+          id: 'linkedPolicies',
+          column: 2,
+          bare: true,
+          component: () => <ResourceLinkedPoliciesSection resourceId={recordId} />,
+        }
+      : null
+    const base = formConfig.groups
+    if (!linkedPoliciesGroup) {
+      return [...base, attachmentsGroup]
+    }
+    const tagsIndex = base.findIndex((g) => g.id === 'tags')
+    if (tagsIndex >= 0) {
+      return [
+        ...base.slice(0, tagsIndex),
+        linkedPoliciesGroup,
+        ...base.slice(tagsIndex),
+        attachmentsGroup,
+      ]
+    }
+    const customIndex = base.findIndex((g) => g.id === 'custom')
+    const insertAt = customIndex >= 0 ? customIndex + 1 : base.length
+    return [...base.slice(0, insertAt), linkedPoliciesGroup, ...base.slice(insertAt), attachmentsGroup]
   }, [formConfig.groups, recordId, t])
 
   return (

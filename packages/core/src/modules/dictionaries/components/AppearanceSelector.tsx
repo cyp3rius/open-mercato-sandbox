@@ -33,7 +33,8 @@ type AppearanceSelectorProps = {
   className?: string
 }
 
-const ICON_PICKER_LIMIT = 240
+const INITIAL_ICON_GRID_COUNT = 96
+const MAX_ICON_SEARCH_RESULTS = 500
 
 export function AppearanceSelector({
   icon,
@@ -106,13 +107,13 @@ export function AppearanceSelector({
   const filteredIcons = React.useMemo(() => {
     const term = iconSearch.trim().toLowerCase()
     if (!term) {
-      return iconOptions.slice(0, ICON_PICKER_LIMIT)
+      return iconOptions.slice(0, INITIAL_ICON_GRID_COUNT)
     }
     const matches = iconOptions.filter((option) => {
       const haystack = [option.label, option.value, ...(option.keywords ?? [])].join(' ').toLowerCase()
       return haystack.includes(term)
     })
-    return matches.slice(0, ICON_PICKER_LIMIT)
+    return matches.slice(0, MAX_ICON_SEARCH_RESULTS)
   }, [iconOptions, iconSearch])
 
   return (

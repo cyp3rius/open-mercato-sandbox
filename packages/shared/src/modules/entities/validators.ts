@@ -68,6 +68,8 @@ export const customFieldsetSchema = z.object({
   icon: z.string().max(100).optional(),
   description: z.string().max(2000).optional(),
   groups: z.array(customFieldsetGroupSchema).optional(),
+  /** When set (e.g. resources entity), fieldset is only offered for these resource type IDs; omit or empty = any type. */
+  resourceTypeIds: z.array(z.string().uuid()).max(100).optional(),
 })
 
 export const customFieldEntityConfigSchema = z.object({

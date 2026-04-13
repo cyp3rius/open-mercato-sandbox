@@ -52,6 +52,7 @@ export const resourcesResourceCreateSchema = z.object({
     .nullable(),
   isActive: z.boolean().optional(),
   availabilityRuleSetId: z.string().uuid().optional().nullable(),
+  customerEntityId: z.string().uuid().optional().nullable(),
 })
 
 export const resourcesResourceUpdateSchema = z.object({
@@ -71,6 +72,25 @@ export const resourcesResourceUpdateSchema = z.object({
     .nullable(),
   isActive: z.boolean().optional(),
   availabilityRuleSetId: z.string().uuid().optional().nullable(),
+  customerEntityId: z.string().uuid().optional().nullable(),
+})
+
+export const resourcesResourceAccessoryLinkCreateSchema = z.object({
+  ...scopedCreateFields,
+  hostResourceId: z.string().uuid(),
+  accessoryResourceId: z.string().uuid(),
+  isMounted: z.boolean().optional(),
+})
+
+export const resourcesResourceAccessoryLinkUpdateSchema = z.object({
+  ...scopedCreateFields,
+  id: z.string().uuid(),
+  isMounted: z.boolean(),
+})
+
+export const resourcesResourceAccessoryLinkDeleteSchema = z.object({
+  ...scopedCreateFields,
+  id: z.string().uuid(),
 })
 
 export const resourcesResourceTagCreateSchema = z.object({
@@ -168,6 +188,9 @@ export type ResourcesResourceTypeCreateInput = z.infer<typeof resourcesResourceT
 export type ResourcesResourceTypeUpdateInput = z.infer<typeof resourcesResourceTypeUpdateSchema>
 export type ResourcesResourceCreateInput = z.infer<typeof resourcesResourceCreateSchema>
 export type ResourcesResourceUpdateInput = z.infer<typeof resourcesResourceUpdateSchema>
+export type ResourcesResourceAccessoryLinkCreateInput = z.infer<typeof resourcesResourceAccessoryLinkCreateSchema>
+export type ResourcesResourceAccessoryLinkUpdateInput = z.infer<typeof resourcesResourceAccessoryLinkUpdateSchema>
+export type ResourcesResourceAccessoryLinkDeleteInput = z.infer<typeof resourcesResourceAccessoryLinkDeleteSchema>
 export type ResourcesResourceTagCreateInput = z.infer<typeof resourcesResourceTagCreateSchema>
 export type ResourcesResourceTagUpdateInput = z.infer<typeof resourcesResourceTagUpdateSchema>
 export type ResourcesResourceTagAssignmentInput = z.infer<typeof resourcesResourceTagAssignmentSchema>

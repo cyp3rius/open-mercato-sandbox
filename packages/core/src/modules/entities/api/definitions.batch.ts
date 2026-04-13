@@ -35,6 +35,7 @@ function cloneFieldsets(fieldsets?: IncomingFieldset): IncomingFieldset {
     label: fieldset.label,
     icon: fieldset.icon,
     description: fieldset.description,
+    resourceTypeIds: fieldset.resourceTypeIds,
     groups: Array.isArray(fieldset.groups)
       ? fieldset.groups.map((group) => ({
           code: group.code,

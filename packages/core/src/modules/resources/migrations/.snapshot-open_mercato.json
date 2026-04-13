@@ -2142,7 +2142,7 @@
           ],
           "composite": true,
           "constraint": false,
-          "keyName": "carrier_shipments_organization_id_tenant_id_unif_b5ab4_index",
+          "keyName": "carrier_shipments_organization_id_tenant_id_unifie_ffc31_index",
           "unique": false,
           "primary": false
         },
@@ -2164,7 +2164,7 @@
           ],
           "composite": true,
           "constraint": false,
-          "keyName": "carrier_shipments_provider_key_carrier_shipment_i_f9f17_index",
+          "keyName": "carrier_shipments_provider_key_carrier_shipment_id_96494_index",
           "unique": false,
           "primary": false
         }
@@ -18849,7 +18849,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": true,
+          "unique": false,
           "length": null,
           "precision": null,
           "scale": null,
@@ -18917,7 +18917,7 @@
           "length": null,
           "precision": null,
           "scale": null,
-          "default": "'{}'",
+          "default": null,
           "comment": null,
           "enumItems": [],
           "mappedType": "json"
@@ -18933,7 +18933,7 @@
           "length": 6,
           "precision": null,
           "scale": null,
-          "default": "now()",
+          "default": null,
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
@@ -18949,7 +18949,7 @@
           "length": 6,
           "precision": null,
           "scale": null,
-          "default": "now()",
+          "default": null,
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
@@ -18977,20 +18977,6 @@
           "keyName": "entity_translations_pkey",
           "unique": true,
           "primary": true
-        },
-        {
-          "columnNames": [
-            "entity_type",
-            "entity_id",
-            "COALESCE(organization_id, 00000000-0000-0000-0000-000000000000::uuid)",
-            "COALESCE(tenant_id, 00000000-0000-0000-0000-000000000000::uuid)"
-          ],
-          "composite": true,
-          "constraint": false,
-          "keyName": "entity_translations_scope_uq",
-          "unique": true,
-          "primary": false,
-          "expression": "CREATE UNIQUE INDEX entity_translations_scope_uq ON public.entity_translations USING btree (entity_type, entity_id, COALESCE(organization_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(tenant_id, '00000000-0000-0000-0000-000000000000'::uuid))"
         },
         {
           "columnNames": [
@@ -31273,6 +31259,215 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
+        "is_mounted": {
+          "name": "is_mounted",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "host_resource_id": {
+          "name": "host_resource_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "accessory_resource_id": {
+          "name": "accessory_resource_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        }
+      },
+      "name": "resources_resource_accessory_links",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "host_resource_id",
+            "accessory_resource_id"
+          ],
+          "composite": true,
+          "constraint": true,
+          "keyName": "resources_resource_accessory_links_host_accessory_unique",
+          "unique": true,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "host_resource_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "resources_resource_accessory_links_host_idx",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "resources_resource_accessory_links_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "resources_resource_accessory_links_scope_idx",
+          "unique": false,
+          "primary": false
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "resources_resource_accessory_links_accessory_resource_id_foreig": {
+          "columnNames": [
+            "accessory_resource_id"
+          ],
+          "constraintName": "resources_resource_accessory_links_accessory_resource_id_foreig",
+          "localTableName": "public.resources_resource_accessory_links",
+          "referencedTableName": "public.resources_resources",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "resources_resource_accessory_links_host_resource_id_foreign": {
+          "columnNames": [
+            "host_resource_id"
+          ],
+          "constraintName": "resources_resource_accessory_links_host_resource_id_foreign",
+          "localTableName": "public.resources_resource_accessory_links",
+          "referencedTableName": "public.resources_resources",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "gen_random_uuid()",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
         "activity_type": {
           "name": "activity_type",
           "type": "text",
@@ -32777,6 +32972,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "customer_entity_id": {
+          "name": "customer_entity_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
       "name": "resources_resources",
@@ -34991,7 +35202,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_credit_memo_lines_credit_memo_id_foreign": {
+          "columnNames": [
+            "credit_memo_id"
+          ],
+          "constraintName": "sales_credit_memo_lines_credit_memo_id_foreign",
+          "localTableName": "public.sales_credit_memo_lines",
+          "referencedTableName": "public.sales_credit_memos",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "sales_credit_memo_lines_order_line_id_foreign": {
+          "columnNames": [
+            "order_line_id"
+          ],
+          "constraintName": "sales_credit_memo_lines_order_line_id_foreign",
+          "localTableName": "public.sales_credit_memo_lines",
+          "referencedTableName": "public.sales_order_lines",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -35369,7 +35607,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_credit_memos_invoice_id_foreign": {
+          "columnNames": [
+            "invoice_id"
+          ],
+          "constraintName": "sales_credit_memos_invoice_id_foreign",
+          "localTableName": "public.sales_credit_memos",
+          "referencedTableName": "public.sales_invoices",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "sales_credit_memos_order_id_foreign": {
+          "columnNames": [
+            "order_id"
+          ],
+          "constraintName": "sales_credit_memos_order_id_foreign",
+          "localTableName": "public.sales_credit_memos",
+          "referencedTableName": "public.sales_orders",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -36055,7 +36320,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_document_addresses_order_id_foreign": {
+          "columnNames": [
+            "order_id"
+          ],
+          "constraintName": "sales_document_addresses_order_id_foreign",
+          "localTableName": "public.sales_document_addresses",
+          "referencedTableName": "public.sales_orders",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "sales_document_addresses_quote_id_foreign": {
+          "columnNames": [
+            "quote_id"
+          ],
+          "constraintName": "sales_document_addresses_quote_id_foreign",
+          "localTableName": "public.sales_document_addresses",
+          "referencedTableName": "public.sales_quotes",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -36422,7 +36714,47 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_document_tag_assignments_order_id_foreign": {
+          "columnNames": [
+            "order_id"
+          ],
+          "constraintName": "sales_document_tag_assignments_order_id_foreign",
+          "localTableName": "public.sales_document_tag_assignments",
+          "referencedTableName": "public.sales_orders",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "sales_document_tag_assignments_quote_id_foreign": {
+          "columnNames": [
+            "quote_id"
+          ],
+          "constraintName": "sales_document_tag_assignments_quote_id_foreign",
+          "localTableName": "public.sales_document_tag_assignments",
+          "referencedTableName": "public.sales_quotes",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "sales_document_tag_assignments_tag_id_foreign": {
+          "columnNames": [
+            "tag_id"
+          ],
+          "constraintName": "sales_document_tag_assignments_tag_id_foreign",
+          "localTableName": "public.sales_document_tag_assignments",
+          "referencedTableName": "public.sales_document_tags",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -37026,7 +37358,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_invoice_lines_invoice_id_foreign": {
+          "columnNames": [
+            "invoice_id"
+          ],
+          "constraintName": "sales_invoice_lines_invoice_id_foreign",
+          "localTableName": "public.sales_invoice_lines",
+          "referencedTableName": "public.sales_invoices",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "sales_invoice_lines_order_line_id_foreign": {
+          "columnNames": [
+            "order_line_id"
+          ],
+          "constraintName": "sales_invoice_lines_order_line_id_foreign",
+          "localTableName": "public.sales_invoice_lines",
+          "referencedTableName": "public.sales_order_lines",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -37452,7 +37811,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_invoices_order_id_foreign": {
+          "columnNames": [
+            "order_id"
+          ],
+          "constraintName": "sales_invoices_order_id_foreign",
+          "localTableName": "public.sales_invoices",
+          "referencedTableName": "public.sales_orders",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -37709,7 +38082,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_notes_order_id_foreign": {
+          "columnNames": [
+            "order_id"
+          ],
+          "constraintName": "sales_notes_order_id_foreign",
+          "localTableName": "public.sales_notes",
+          "referencedTableName": "public.sales_orders",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "sales_notes_quote_id_foreign": {
+          "columnNames": [
+            "quote_id"
+          ],
+          "constraintName": "sales_notes_quote_id_foreign",
+          "localTableName": "public.sales_notes",
+          "referencedTableName": "public.sales_quotes",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -38063,7 +38463,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_order_adjustments_order_id_foreign": {
+          "columnNames": [
+            "order_id"
+          ],
+          "constraintName": "sales_order_adjustments_order_id_foreign",
+          "localTableName": "public.sales_order_adjustments",
+          "referencedTableName": "public.sales_orders",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "sales_order_adjustments_order_line_id_foreign": {
+          "columnNames": [
+            "order_line_id"
+          ],
+          "constraintName": "sales_order_adjustments_order_line_id_foreign",
+          "localTableName": "public.sales_order_adjustments",
+          "referencedTableName": "public.sales_order_lines",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -38762,7 +39189,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_order_lines_order_id_foreign": {
+          "columnNames": [
+            "order_id"
+          ],
+          "constraintName": "sales_order_lines_order_id_foreign",
+          "localTableName": "public.sales_order_lines",
+          "referencedTableName": "public.sales_orders",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -39847,7 +40288,60 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_orders_channel_ref_id_foreign": {
+          "columnNames": [
+            "channel_ref_id"
+          ],
+          "constraintName": "sales_orders_channel_ref_id_foreign",
+          "localTableName": "public.sales_orders",
+          "referencedTableName": "public.sales_channels",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "sales_orders_delivery_window_ref_id_foreign": {
+          "columnNames": [
+            "delivery_window_ref_id"
+          ],
+          "constraintName": "sales_orders_delivery_window_ref_id_foreign",
+          "localTableName": "public.sales_orders",
+          "referencedTableName": "public.sales_delivery_windows",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "sales_orders_payment_method_ref_id_foreign": {
+          "columnNames": [
+            "payment_method_ref_id"
+          ],
+          "constraintName": "sales_orders_payment_method_ref_id_foreign",
+          "localTableName": "public.sales_orders",
+          "referencedTableName": "public.sales_payment_methods",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "sales_orders_shipping_method_ref_id_foreign": {
+          "columnNames": [
+            "shipping_method_ref_id"
+          ],
+          "constraintName": "sales_orders_shipping_method_ref_id_foreign",
+          "localTableName": "public.sales_orders",
+          "referencedTableName": "public.sales_shipping_methods",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -40025,7 +40519,47 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_payment_allocations_invoice_id_foreign": {
+          "columnNames": [
+            "invoice_id"
+          ],
+          "constraintName": "sales_payment_allocations_invoice_id_foreign",
+          "localTableName": "public.sales_payment_allocations",
+          "referencedTableName": "public.sales_invoices",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "sales_payment_allocations_order_id_foreign": {
+          "columnNames": [
+            "order_id"
+          ],
+          "constraintName": "sales_payment_allocations_order_id_foreign",
+          "localTableName": "public.sales_payment_allocations",
+          "referencedTableName": "public.sales_orders",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "sales_payment_allocations_payment_id_foreign": {
+          "columnNames": [
+            "payment_id"
+          ],
+          "constraintName": "sales_payment_allocations_payment_id_foreign",
+          "localTableName": "public.sales_payment_allocations",
+          "referencedTableName": "public.sales_payments",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -40628,7 +41162,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_payments_order_id_foreign": {
+          "columnNames": [
+            "order_id"
+          ],
+          "constraintName": "sales_payments_order_id_foreign",
+          "localTableName": "public.sales_payments",
+          "referencedTableName": "public.sales_orders",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "sales_payments_payment_method_id_foreign": {
+          "columnNames": [
+            "payment_method_id"
+          ],
+          "constraintName": "sales_payments_payment_method_id_foreign",
+          "localTableName": "public.sales_payments",
+          "referencedTableName": "public.sales_payment_methods",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -40982,7 +41543,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_quote_adjustments_quote_id_foreign": {
+          "columnNames": [
+            "quote_id"
+          ],
+          "constraintName": "sales_quote_adjustments_quote_id_foreign",
+          "localTableName": "public.sales_quote_adjustments",
+          "referencedTableName": "public.sales_quotes",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "sales_quote_adjustments_quote_line_id_foreign": {
+          "columnNames": [
+            "quote_line_id"
+          ],
+          "constraintName": "sales_quote_adjustments_quote_line_id_foreign",
+          "localTableName": "public.sales_quote_adjustments",
+          "referencedTableName": "public.sales_quote_lines",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -41617,7 +42205,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_quote_lines_quote_id_foreign": {
+          "columnNames": [
+            "quote_id"
+          ],
+          "constraintName": "sales_quote_lines_quote_id_foreign",
+          "localTableName": "public.sales_quote_lines",
+          "referencedTableName": "public.sales_quotes",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -42500,7 +43102,60 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_quotes_channel_ref_id_foreign": {
+          "columnNames": [
+            "channel_ref_id"
+          ],
+          "constraintName": "sales_quotes_channel_ref_id_foreign",
+          "localTableName": "public.sales_quotes",
+          "referencedTableName": "public.sales_channels",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "sales_quotes_delivery_window_ref_id_foreign": {
+          "columnNames": [
+            "delivery_window_ref_id"
+          ],
+          "constraintName": "sales_quotes_delivery_window_ref_id_foreign",
+          "localTableName": "public.sales_quotes",
+          "referencedTableName": "public.sales_delivery_windows",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "sales_quotes_payment_method_ref_id_foreign": {
+          "columnNames": [
+            "payment_method_ref_id"
+          ],
+          "constraintName": "sales_quotes_payment_method_ref_id_foreign",
+          "localTableName": "public.sales_quotes",
+          "referencedTableName": "public.sales_payment_methods",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "sales_quotes_shipping_method_ref_id_foreign": {
+          "columnNames": [
+            "shipping_method_ref_id"
+          ],
+          "constraintName": "sales_quotes_shipping_method_ref_id_foreign",
+          "localTableName": "public.sales_quotes",
+          "referencedTableName": "public.sales_shipping_methods",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -43359,7 +44014,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_shipment_items_order_line_id_foreign": {
+          "columnNames": [
+            "order_line_id"
+          ],
+          "constraintName": "sales_shipment_items_order_line_id_foreign",
+          "localTableName": "public.sales_shipment_items",
+          "referencedTableName": "public.sales_order_lines",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "sales_shipment_items_shipment_id_foreign": {
+          "columnNames": [
+            "shipment_id"
+          ],
+          "constraintName": "sales_shipment_items_shipment_id_foreign",
+          "localTableName": "public.sales_shipment_items",
+          "referencedTableName": "public.sales_shipments",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -43773,7 +44455,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sales_shipments_order_id_foreign": {
+          "columnNames": [
+            "order_id"
+          ],
+          "constraintName": "sales_shipments_order_id_foreign",
+          "localTableName": "public.sales_shipments",
+          "referencedTableName": "public.sales_orders",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -45623,7 +46319,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "staff_leave_requests_member_id_foreign": {
+          "columnNames": [
+            "member_id"
+          ],
+          "constraintName": "staff_leave_requests_member_id_foreign",
+          "localTableName": "public.staff_leave_requests",
+          "referencedTableName": "public.staff_team_members",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -45886,7 +46596,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "staff_team_member_activities_member_id_foreign": {
+          "columnNames": [
+            "member_id"
+          ],
+          "constraintName": "staff_team_member_activities_member_id_foreign",
+          "localTableName": "public.staff_team_member_activities",
+          "referencedTableName": "public.staff_team_members",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -46249,7 +46973,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "staff_team_member_addresses_member_id_foreign": {
+          "columnNames": [
+            "member_id"
+          ],
+          "constraintName": "staff_team_member_addresses_member_id_foreign",
+          "localTableName": "public.staff_team_member_addresses",
+          "referencedTableName": "public.staff_team_members",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -46468,7 +47206,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "staff_team_member_comments_member_id_foreign": {
+          "columnNames": [
+            "member_id"
+          ],
+          "constraintName": "staff_team_member_comments_member_id_foreign",
+          "localTableName": "public.staff_team_member_comments",
+          "referencedTableName": "public.staff_team_members",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -46698,7 +47450,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "staff_team_member_job_histories_member_id_foreign": {
+          "columnNames": [
+            "member_id"
+          ],
+          "constraintName": "staff_team_member_job_histories_member_id_foreign",
+          "localTableName": "public.staff_team_member_job_histories",
+          "referencedTableName": "public.staff_team_members",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },

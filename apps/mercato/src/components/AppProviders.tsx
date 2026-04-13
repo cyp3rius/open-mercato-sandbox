@@ -8,6 +8,7 @@ import { ThemeProvider, FrontendLayout, QueryProvider, AuthFooter } from '@open-
 import { ClientBootstrapProvider } from '@/components/ClientBootstrap'
 import { GlobalNoticeBars } from '@/components/GlobalNoticeBars'
 import { ComponentOverridesBootstrap } from '@/components/ComponentOverridesBootstrap'
+import { Toaster } from 'sonner'
 
 type AppProvidersProps = {
   children: ReactNode
@@ -24,6 +25,7 @@ export function AppProviders({ children, locale, dict, demoModeEnabled }: AppPro
           <ThemeProvider>
             <QueryProvider>
               <FrontendLayout footer={<AuthFooter />}>{children}</FrontendLayout>
+              <Toaster richColors closeButton position="top-center" />
               <GlobalNoticeBars demoModeEnabled={demoModeEnabled} />
             </QueryProvider>
           </ThemeProvider>

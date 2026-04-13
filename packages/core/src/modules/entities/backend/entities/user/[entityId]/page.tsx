@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { CrudForm, type CrudField, type CrudFormGroup } from '@open-mercato/ui/backend/CrudForm'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall, readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
-import { invalidateCustomFieldDefs } from '@open-mercato/ui/backend/utils/customFieldDefs'
+import { invalidateCustomFieldDefs, RESOURCES_RESOURCE_CUSTOM_FIELDS_ENTITY_ID } from '@open-mercato/ui/backend/utils/customFieldDefs'
 import { upsertCustomEntitySchema, upsertCustomFieldDefSchema } from '@open-mercato/core/modules/entities/data/validators'
 import { z } from 'zod'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
@@ -29,7 +29,14 @@ import { TranslationManager } from '@open-mercato/core/modules/translations/comp
 type Def = FieldDefinition
 type EntitiesListResponse = { items?: Array<Record<string, unknown>> }
 type FieldsetGroup = { code: string; title?: string; hint?: string }
-type FieldsetDefinition = { code: string; label: string; icon?: string; description?: string; groups?: FieldsetGroup[] }
+type FieldsetDefinition = {
+  code: string
+  label: string
+  icon?: string
+  description?: string
+  groups?: FieldsetGroup[]
+  resourceTypeIds?: string[]
+}
 type DefinitionsManageResponse = { items?: any[]; deletedKeys?: string[]; fieldsets?: FieldsetDefinition[]; settings?: { singleFieldsetPerRecord?: boolean } }
 
 type DefErrors = FieldDefinitionError
@@ -59,6 +66,43 @@ export default function EditDefinitionsPage({ params }: { params?: { entityId?: 
   const [activeFieldset, setActiveFieldset] = useState<string | null>(null)
   const [singleFieldsetPerRecord, setSingleFieldsetPerRecord] = useState(true)
   const [translateDef, setTranslateDef] = useState<{ def: Def; entityId: string } | null>(null)
+  const [resourceTypeOptions, setResourceTypeOptions] = useState<Array<{ value: string; label: string }>>([])
+
+  React.useEffect(() => {
+    if (entityId !== RESOURCES_RESOURCE_CUSTOM_FIELDS_ENTITY_ID) {
+      setResourceTypeOptions([])
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const params = new URLSearchParams({ page: '1', pageSize: '100' })
+        const call = await apiCall<{ items?: Array<{ id?: string; name?: string }> }>(
+          `/api/resources/resource-types?${params.toString()}`,
+        )
+        if (cancelled || !call.ok) return
+        const rows = Array.isArray(call.result?.items) ? call.result.items : []
+        setResourceTypeOptions(
+          rows
+            .map((row) => ({
+              value: typeof row.id === 'string' ? row.id : '',
+              label:
+                typeof row.name === 'string' && row.name.trim().length > 0
+                  ? row.name.trim()
+                  : typeof row.id === 'string'
+                    ? row.id
+                    : '',
+            }))
+            .filter((o) => o.value.length > 0),
+        )
+      } catch {
+        if (!cancelled) setResourceTypeOptions([])
+      }
+    })().catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [entityId])
 
   const translateFields = React.useMemo(() => {
     if (!translateDef) return undefined
@@ -442,6 +486,9 @@ export default function EditDefinitionsPage({ params }: { params?: { entityId?: 
         orderNotice={orderDirty ? { dirty: true, saving: orderSaving, message: 'Reordered — will auto-save on blur' } : undefined}
         addButtonLabel="Add Field"
         translate={t}
+        resourceTypeOptions={
+          entityId === RESOURCES_RESOURCE_CUSTOM_FIELDS_ENTITY_ID ? resourceTypeOptions : undefined
+        }
         listRef={listRef}
         listProps={{
           tabIndex: -1,
@@ -456,7 +503,7 @@ export default function EditDefinitionsPage({ params }: { params?: { entityId?: 
         }}
       />
     ),
-  [defs, defErrors, deletedKeys, fieldsets, activeFieldset, singleFieldsetPerRecord, orderDirty, orderSaving, addField, removeField, restoreField, saveOrderIfDirty])
+  [defs, defErrors, deletedKeys, fieldsets, activeFieldset, singleFieldsetPerRecord, orderDirty, orderSaving, addField, removeField, restoreField, saveOrderIfDirty, entityId, resourceTypeOptions, t])
 
   const definitionsGroup: CrudFormGroup = { id: 'definitions', title: 'Field Definitions', column: 1, component: renderFieldDefinitions }
 

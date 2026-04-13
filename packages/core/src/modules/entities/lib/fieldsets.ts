@@ -6,12 +6,16 @@ export type CustomFieldsetGroup = {
   hint?: string | null
 }
 
+const RESOURCE_TYPE_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 export type CustomFieldsetDefinition = {
   code: string
   label: string
   icon?: string | null
   description?: string | null
   groups?: CustomFieldsetGroup[]
+  resourceTypeIds?: string[]
 }
 
 export type EntityFieldsetConfig = {
@@ -64,6 +68,18 @@ function normalizeFieldset(raw: any): CustomFieldsetDefinition | null {
       })
     }
     if (groups.length) normalized.groups = groups
+  }
+  if (Array.isArray(raw.resourceTypeIds) && raw.resourceTypeIds.length) {
+    const seenIds = new Set<string>()
+    const ids: string[] = []
+    for (const entry of raw.resourceTypeIds) {
+      if (typeof entry !== 'string') continue
+      const trimmed = entry.trim()
+      if (!RESOURCE_TYPE_ID_RE.test(trimmed) || seenIds.has(trimmed)) continue
+      seenIds.add(trimmed)
+      ids.push(trimmed)
+    }
+    if (ids.length) normalized.resourceTypeIds = ids
   }
   return normalized
 }

@@ -117,6 +117,7 @@ const manageFieldsetSchema = z.object({
   label: z.string(),
   icon: z.string().optional(),
   description: z.string().optional(),
+  resourceTypeIds: z.array(z.string().uuid()).max(100).optional(),
   groups: z.array(manageFieldsetGroupSchema).optional(),
 })
 

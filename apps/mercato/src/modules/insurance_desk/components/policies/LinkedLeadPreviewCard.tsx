@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { MessageSquare } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -71,12 +71,29 @@ export function LinkedLeadPreviewCard(props: { policyId: string }) {
           )}
         </p>
       </div>
-      <div className="rounded-md border border-dashed bg-muted/20 px-3 py-3 text-sm">
+      <div className="relative rounded-md border border-dashed bg-muted/20 px-3 py-3 text-sm">
         {loading ? (
           <span className="text-muted-foreground">{t('common.loading', 'Loading…')}</span>
         ) : row ? (
-          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-4">
-            <PreviewFieldGrid className="min-w-0 flex-1 lg:grid-cols-2">
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              asChild
+              className="absolute end-3 top-3 z-10 shrink-0"
+            >
+              <Link
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2"
+              >
+                <ExternalLink className="size-4 shrink-0" aria-hidden />
+                {t('common.open', 'Open')}
+              </Link>
+            </Button>
+            <PreviewFieldGrid className="min-w-0 pe-28 lg:grid-cols-2">
               <PreviewFieldCell
                 label={t('insurance_desk.leads.col.title', 'Inquiry subject')}
                 value={titleValue}
@@ -86,13 +103,7 @@ export function LinkedLeadPreviewCard(props: { policyId: string }) {
                 value={createdValue}
               />
             </PreviewFieldGrid>
-            <Button type="button" variant="outline" size="sm" asChild className="shrink-0">
-              <Link href={href} className="inline-flex items-center gap-2">
-                <MessageSquare className="size-4 shrink-0" aria-hidden />
-                {t('insurance_desk.policies.detail.linkedLead.open', 'Open')}
-              </Link>
-            </Button>
-          </div>
+          </>
         ) : null}
       </div>
     </section>

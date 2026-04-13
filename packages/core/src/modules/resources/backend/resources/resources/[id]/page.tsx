@@ -32,12 +32,15 @@ import {
   type DictionaryEntryOption,
 } from '@open-mercato/core/modules/resources/components/detail/dictionaries'
 import { ServiceBookSection } from '@open-mercato/core/modules/resources/components/detail/ServiceBookSection'
+import { VehicleAccessoriesSection } from '@open-mercato/core/modules/resources/components/detail/VehicleAccessoriesSection'
 import type { DictionarySelectLabels } from '@open-mercato/core/modules/dictionaries/components/DictionaryEntrySelect'
 
 type ResourceRecord = {
   id: string
   name: string
   description?: string | null
+  customerEntityId?: string | null
+  customer_entity_id?: string | null
   resourceTypeId: string | null
   capacity: number | null
   capacityUnitValue: string | null
@@ -67,6 +70,7 @@ type ResourceResponse = {
 function normalizeResourceRecord(record: ResourceRecord): ResourceRecord {
   return {
     ...record,
+    customerEntityId: record.customerEntityId ?? record.customer_entity_id ?? null,
     resourceTypeId: record.resourceTypeId ?? record.resource_type_id ?? null,
     description: record.description ?? null,
     capacityUnitValue: record.capacityUnitValue ?? record.capacity_unit_value ?? null,
@@ -87,7 +91,7 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
   const searchParams = useSearchParams()
   const [initialValues, setInitialValues] = React.useState<Record<string, unknown> | null>(null)
   const [tags, setTags] = React.useState<TagOption[]>([])
-  const [activeTab, setActiveTab] = React.useState<'details' | 'availability' | 'serviceBook'>('details')
+  const [activeTab, setActiveTab] = React.useState<'details' | 'availability' | 'serviceBook' | 'accessories'>('details')
   const [activeDetailTab, setActiveDetailTab] = React.useState<'notes' | 'activities'>('notes')
   const [sectionAction, setSectionAction] = React.useState<SectionAction | null>(null)
   const [availabilityRuleSetId, setAvailabilityRuleSetId] = React.useState<string | null>(null)
@@ -212,6 +216,8 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
       setActiveTab('availability')
     } else if (tabParam === 'serviceBook') {
       setActiveTab('serviceBook')
+    } else if (tabParam === 'accessories') {
+      setActiveTab('accessories')
     }
     const created = searchParams.get('created') === '1'
     if (created && !flashShownRef.current) {
@@ -263,10 +269,14 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
     const customFieldsetCode = typeof values.customFieldsetCode === 'string' && values.customFieldsetCode.trim().length
       ? values.customFieldsetCode.trim()
       : RESOURCES_RESOURCE_FIELDSET_DEFAULT
+    const rawCustomer = values.customerEntityId
+    const customerEntityId =
+      typeof rawCustomer === 'string' && rawCustomer.trim().length > 0 ? rawCustomer.trim() : null
     const payload: Record<string, unknown> = {
       ...rest,
       id: resourceId,
       resourceTypeId: values.resourceTypeId || null,
+      customerEntityId,
       capacity: values.capacity ? Number(values.capacity) : null,
       capacityUnitValue: values.capacityUnitValue ? String(values.capacityUnitValue) : null,
       appearanceIcon: appearance.icon ?? null,
@@ -289,13 +299,17 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
     initialValues.customFieldsetCode === RESOURCES_RESOURCE_FIELDSET_VEHICLE
 
   const tabs = React.useMemo(() => {
-    const out: Array<{ id: 'details' | 'availability' | 'serviceBook'; label: string }> = [
+    const out: Array<{ id: 'details' | 'availability' | 'serviceBook' | 'accessories'; label: string }> = [
       { id: 'details', label: t('resources.resources.tabs.details', 'Details') },
     ]
     if (showServiceBookSection) {
       out.push({
         id: 'serviceBook',
         label: t('resources.resources.detail.tabs.serviceBook', 'Service book'),
+      })
+      out.push({
+        id: 'accessories',
+        label: t('resources.resources.detail.tabs.accessories', 'Accessories'),
       })
     }
     out.push({ id: 'availability', label: t('resources.resources.tabs.availability', 'Availability') })
@@ -312,13 +326,13 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
 
   React.useEffect(() => {
     if (initialValues == null) return
-    if (!showServiceBookSection && activeTab === 'serviceBook') {
+    if (!showServiceBookSection && (activeTab === 'serviceBook' || activeTab === 'accessories')) {
       setActiveTab('details')
     }
   }, [activeTab, showServiceBookSection, initialValues])
 
   React.useEffect(() => {
-    if (activeTab === 'serviceBook') {
+    if (activeTab === 'serviceBook' || activeTab === 'accessories') {
       setSectionAction(null)
     }
   }, [activeTab])
@@ -476,6 +490,7 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
             name: resource.name,
             description: resource.description ?? '',
             resourceTypeId: resource.resourceTypeId || '',
+            customerEntityId: resource.customerEntityId ?? '',
             capacity: resource.capacity ?? '',
             capacityUnitValue: resource.capacityUnitValue ?? '',
             appearance: { icon: resource.appearanceIcon ?? null, color: resource.appearanceColor ?? null },
@@ -677,6 +692,10 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
           ) : activeTab === 'serviceBook' ? (
             <div className="rounded-lg border bg-card p-4">
               <ServiceBookSection entityId={resourceId ?? null} />
+            </div>
+          ) : activeTab === 'accessories' ? (
+            <div className="rounded-lg border bg-card p-4">
+              <VehicleAccessoriesSection hostResourceId={resourceId ?? null} />
             </div>
           ) : (
             <AvailabilityRulesEditor

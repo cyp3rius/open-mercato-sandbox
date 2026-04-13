@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { BadgeCheck } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -147,8 +147,13 @@ export function LinkedPolicyPreviewCard(props: { policyId: string }) {
                 value={row.policyNumber}
               />
               <Button type="button" variant="outline" size="sm" asChild className="shrink-0">
-                <Link href={href} className="inline-flex items-center gap-2">
-                  <BadgeCheck className="size-4 shrink-0" aria-hidden />
+                <Link
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2"
+                >
+                  <ExternalLink className="size-4 shrink-0" aria-hidden />
                   {t('insurance_desk.leads.openPolicy', 'Open')}
                 </Link>
               </Button>

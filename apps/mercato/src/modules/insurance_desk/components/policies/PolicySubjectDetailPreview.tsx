@@ -2,7 +2,9 @@
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
+import { ExternalLink } from 'lucide-react'
 import type { TranslateFn } from '@open-mercato/shared/lib/i18n/context'
+import { Button } from '@open-mercato/ui/primitives/button'
 import { LeadVehiclePreview, PreviewFieldCell, PreviewFieldGrid } from '../leads/leadDetailPreviewUtils'
 import {
   deriveNewResourceNameForApi,
@@ -55,6 +57,9 @@ export function PolicySubjectDetailPreview({
         ? shortId(rid)
         : ''
 
+  const resourceHref = rid.length ? `/backend/resources/resources/${encodeURIComponent(rid)}` : ''
+  const showOpenResource = resourceHref.length > 0
+
   let resourceValue: ReactNode = null
   if (s.mode === 'new_resource') {
     const draft = deriveNewResourceNameForApi(s)
@@ -65,25 +70,33 @@ export function PolicySubjectDetailPreview({
           'New resource (save policy to create)',
         )
   } else if (rid.length) {
-    resourceValue = (
-      <Link
-        href={`/backend/resources/resources/${encodeURIComponent(rid)}`}
-        className="font-medium text-primary hover:underline"
-      >
-        {displayName}
-      </Link>
-    )
+    resourceValue = <span className="font-medium text-foreground">{displayName}</span>
   }
 
   return (
-    <div className="space-y-4">
-      <PreviewFieldGrid className="sm:grid-cols-1">
-        <PreviewFieldCell
-          label={t('insurance_desk.policies.form.subject.pickResource', 'Resource')}
-          value={resourceValue}
-        />
-      </PreviewFieldGrid>
-      <LeadVehiclePreview leadVehicle={s.vehicle} t={t} />
+    <div className="relative">
+      {showOpenResource ? (
+        <Button type="button" variant="outline" size="sm" asChild className="absolute end-0 top-0 z-10 shrink-0">
+          <Link
+            href={resourceHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2"
+          >
+            <ExternalLink className="size-4 shrink-0" aria-hidden />
+            {t('common.open', 'Open')}
+          </Link>
+        </Button>
+      ) : null}
+      <div className={showOpenResource ? 'space-y-4 pe-28' : 'space-y-4'}>
+        <PreviewFieldGrid className="sm:grid-cols-1">
+          <PreviewFieldCell
+            label={t('insurance_desk.policies.form.subject.pickResource', 'Resource')}
+            value={resourceValue}
+          />
+        </PreviewFieldGrid>
+        <LeadVehiclePreview leadVehicle={s.vehicle} t={t} />
+      </div>
     </div>
   )
 }

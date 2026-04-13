@@ -29,6 +29,7 @@ import { TasksSection } from '../../../../components/detail/TasksSection'
 import { TagsSection } from '../../../../components/detail/TagsSection'
 import type { TagSummary } from '../../../../components/detail/types'
 import { DetailTabsLayout } from '../../../../components/detail/DetailTabsLayout'
+import { PersonResourcesSection } from '../../../../components/detail/PersonResourcesSection'
 import { formatTemplate } from '../../../../components/detail/utils'
 import { CompanyHighlightsSummary } from '../../../../components/detail/CustomerFormHighlights'
 import { CompanyRegistrySyncToolbarButton } from '../../../../components/companyRegistrySync'
@@ -47,7 +48,7 @@ import {
   type CompanyOverview,
 } from '../../../../components/formConfig'
 
-type SectionKey = 'notes' | 'activities' | 'deals' | 'people' | 'addresses' | 'tasks' | string
+type SectionKey = 'notes' | 'activities' | 'deals' | 'people' | 'addresses' | 'tasks' | 'resources' | string
 
 const stableNoopCallback = () => {}
 
@@ -71,7 +72,15 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
 
   const initialTab = React.useMemo(() => {
     const raw = searchParams?.get('tab')
-    if (raw === 'notes' || raw === 'activities' || raw === 'deals' || raw === 'people' || raw === 'addresses' || raw === 'tasks') {
+    if (
+      raw === 'notes' ||
+      raw === 'activities' ||
+      raw === 'deals' ||
+      raw === 'people' ||
+      raw === 'addresses' ||
+      raw === 'tasks' ||
+      raw === 'resources'
+    ) {
       return raw
     }
     return 'notes'
@@ -307,6 +316,7 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
       { id: 'people' as const, label: t('customers.companies.detail.tabs.people', 'People') },
       { id: 'addresses' as const, label: t('customers.companies.detail.tabs.addresses', 'Addresses') },
       { id: 'tasks' as const, label: t('customers.companies.detail.tabs.tasks', 'Tasks') },
+      { id: 'resources' as const, label: t('customers.companies.detail.tabs.resources', 'Resources') },
       ...injectedTabs.map((tab) => ({ id: tab.id as SectionKey, label: tab.label })),
     ],
     [injectedTabs, t],
@@ -623,6 +633,14 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
                     entityName={companyName}
                     dialogContextKey="customers.companies.detail.tasks.dialog.context"
                     dialogContextFallback="This task will be linked to {{name}}"
+                  />
+                )
+              }
+              if (activeTab === 'resources') {
+                return (
+                  <PersonResourcesSection
+                    customerEntityId={companyId}
+                    translate={(key, fallback) => translateCompanyDetail(key, fallback)}
                   />
                 )
               }

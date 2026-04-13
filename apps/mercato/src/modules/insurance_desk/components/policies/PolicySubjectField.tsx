@@ -5,7 +5,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import type { CrudCustomFieldRenderProps } from '@open-mercato/ui/backend/CrudForm'
 import { cn } from '@open-mercato/shared/lib/utils'
 import { CRUD_FORM_TEXT_INPUT_CLASS } from '@open-mercato/ui/backend/CrudForm'
-import { loadResourceOptions } from '../../lib/loadPolicyFormOptions'
+import { searchResourceOptionsForPolicySubject } from '../../lib/loadPolicyFormOptions'
 import { ComboboxInput } from '@open-mercato/ui/backend/inputs/ComboboxInput'
 
 export type InsuranceSubjectVehicle = {
@@ -129,19 +129,30 @@ export function buildInsuranceSubjectMetadata(v: InsuranceSubjectFormValue): Rec
 
 export function PolicySubjectField(props: CrudCustomFieldRenderProps) {
   const t = useT()
-  const { value, setValue, disabled, error } = props
+  const { value, setValue, disabled, error, values } = props
   const model = normalize(value)
-  const [resourceOpts, setResourceOpts] = React.useState<Array<{ value: string; label: string }>>([])
 
-  React.useEffect(() => {
-    let cancelled = false
-    loadResourceOptions(t('insurance_desk.policies.form.none', '— none —')).then((opts) => {
-      if (!cancelled) setResourceOpts(opts)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [t])
+  const resourceSearchScopeId = React.useMemo(() => {
+    const raw = values && typeof values === 'object' ? (values as Record<string, unknown>) : null
+    const company =
+      raw && typeof raw.insuredCompanyEntityId === 'string' ? raw.insuredCompanyEntityId.trim() : ''
+    const person =
+      raw && typeof raw.insuredPersonEntityId === 'string' ? raw.insuredPersonEntityId.trim() : ''
+    if (company.length) return company
+    if (person.length) return person
+    return ''
+  }, [values])
+
+  const noneLabel = t('insurance_desk.policies.form.none', '— none —')
+  const loadResourceSuggestions = React.useCallback(
+    (query?: string) =>
+      searchResourceOptionsForPolicySubject(
+        noneLabel,
+        typeof query === 'string' ? query : '',
+        resourceSearchScopeId.length ? resourceSearchScopeId : null,
+      ),
+    [noneLabel, resourceSearchScopeId],
+  )
 
   const patch = React.useCallback(
     (partial: Partial<InsuranceSubjectFormValue>) => {
@@ -209,7 +220,7 @@ export function PolicySubjectField(props: CrudCustomFieldRenderProps) {
           </label>
           <ComboboxInput
             value={model.resourceId}
-            suggestions={resourceOpts}
+            loadSuggestions={loadResourceSuggestions}
             onChange={(next) => patch({ resourceId: typeof next === 'string' ? next : '' })}
             placeholder={t('insurance_desk.policies.form.subject.searchResource', 'Search resources…')}
             disabled={disabled}

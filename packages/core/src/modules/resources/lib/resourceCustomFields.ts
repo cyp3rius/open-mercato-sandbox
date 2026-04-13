@@ -315,3 +315,7 @@ export function resolveResourcesResourceFieldsetCode(name?: string | null): stri
   }
   return RESOURCES_RESOURCE_FIELDSET_DEFAULT
 }
+
+export function isResourcesVehicleFieldsetCode(fieldsetCode: string | null | undefined): boolean {
+  return fieldsetCode === RESOURCES_RESOURCE_FIELDSET_VEHICLE
+}

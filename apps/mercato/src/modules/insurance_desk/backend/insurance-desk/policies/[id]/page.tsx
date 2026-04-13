@@ -596,7 +596,7 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
                   t={t}
                 />
               }
-              editContent={<PolicyCustomerInlineSection form={form} setForm={setForm} />}
+              editContent={<PolicyCustomerInlineSection mode="record" form={form} setForm={setForm} />}
             />
 
             <LeadVisualSectionCard

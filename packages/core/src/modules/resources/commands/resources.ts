@@ -9,6 +9,7 @@ import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { CrudIndexerConfig } from '@open-mercato/shared/lib/crud/types'
 import { Dictionary, DictionaryEntry } from '@open-mercato/core/modules/dictionaries/data/entities'
+import { CustomerEntity } from '@open-mercato/core/modules/customers/data/entities'
 import { ResourcesResource, ResourcesResourceTag, ResourcesResourceTagAssignment } from '../data/entities'
 import {
   resourcesResourceCreateSchema,
@@ -48,6 +49,7 @@ type ResourceSnapshot = {
   appearanceColor: string | null
   isActive: boolean
   availabilityRuleSetId: string | null
+  customerEntityId: string | null
   tags: string[]
   deletedAt: string | null
   customFields?: CustomFieldSnapshot | null
@@ -118,6 +120,18 @@ function normalizeTagIds(tags?: Array<string | null | undefined>): string[] {
   return Array.from(set)
 }
 
+async function ensureCustomerEntityLinkable(
+  em: EntityManager,
+  customerEntityId: string,
+  organizationId: string,
+  tenantId: string,
+): Promise<void> {
+  const row = await em.findOne(CustomerEntity, { id: customerEntityId, deletedAt: null })
+  if (!row || row.organizationId !== organizationId || row.tenantId !== tenantId) {
+    throw new CrudHttpError(400, { error: 'Customer not found.' })
+  }
+}
+
 async function loadResourceSnapshot(em: EntityManager, id: string): Promise<ResourceSnapshot | null> {
   const resource = await findOneWithDecryption(
     em,
@@ -152,6 +166,7 @@ async function loadResourceSnapshot(em: EntityManager, id: string): Promise<Reso
     appearanceColor: resource.appearanceColor ?? null,
     isActive: resource.isActive,
     availabilityRuleSetId: resource.availabilityRuleSetId ?? null,
+    customerEntityId: resource.customerEntityId ?? null,
     tags,
     deletedAt: resource.deletedAt ? resource.deletedAt.toISOString() : null,
   }
@@ -218,6 +233,10 @@ const createResourceCommand: CommandHandler<ResourcesResourceCreateInput, { reso
     const unitSnapshot = unitValue
       ? await resolveCapacityUnit(em, { tenantId: parsed.tenantId, organizationId: parsed.organizationId }, unitValue)
       : null
+    const customerEntityId = parsed.customerEntityId ?? null
+    if (customerEntityId) {
+      await ensureCustomerEntityLinkable(em, customerEntityId, parsed.organizationId, parsed.tenantId)
+    }
     const record = em.create(ResourcesResource, {
       tenantId: parsed.tenantId,
       organizationId: parsed.organizationId,
@@ -233,6 +252,7 @@ const createResourceCommand: CommandHandler<ResourcesResourceCreateInput, { reso
       appearanceColor: parsed.appearanceColor ?? null,
       isActive: parsed.isActive ?? true,
       availabilityRuleSetId: parsed.availabilityRuleSetId ?? null,
+      customerEntityId,
       createdAt: now,
       updatedAt: now,
     })
@@ -378,6 +398,13 @@ const updateResourceCommand: CommandHandler<ResourcesResourceUpdateInput, { reso
     if (parsed.appearanceIcon !== undefined) record.appearanceIcon = parsed.appearanceIcon ?? null
     if (parsed.appearanceColor !== undefined) record.appearanceColor = parsed.appearanceColor ?? null
     if (parsed.availabilityRuleSetId !== undefined) record.availabilityRuleSetId = parsed.availabilityRuleSetId ?? null
+    if (parsed.customerEntityId !== undefined) {
+      const nextCustomer = parsed.customerEntityId ?? null
+      if (nextCustomer) {
+        await ensureCustomerEntityLinkable(em, nextCustomer, record.organizationId, record.tenantId)
+      }
+      record.customerEntityId = nextCustomer
+    }
     record.updatedAt = new Date()
     if (parsed.isActive !== undefined) record.isActive = parsed.isActive
     await em.flush()
@@ -438,6 +465,7 @@ const updateResourceCommand: CommandHandler<ResourcesResourceUpdateInput, { reso
       'appearanceColor',
       'isActive',
       'availabilityRuleSetId',
+      'customerEntityId',
       'deletedAt',
     ])
     if (before.tags.join(',') !== after.tags.join(',')) {
@@ -488,6 +516,7 @@ const updateResourceCommand: CommandHandler<ResourcesResourceUpdateInput, { reso
     record.appearanceColor = before.appearanceColor ?? null
     record.isActive = before.isActive
     record.availabilityRuleSetId = before.availabilityRuleSetId ?? null
+    record.customerEntityId = before.customerEntityId ?? null
     record.deletedAt = before.deletedAt ? new Date(before.deletedAt) : null
     record.updatedAt = new Date()
     await em.flush()
@@ -619,6 +648,7 @@ const deleteResourceCommand: CommandHandler<{ id?: string }, { resourceId: strin
         appearanceColor: before.appearanceColor ?? null,
         isActive: before.isActive,
         availabilityRuleSetId: before.availabilityRuleSetId ?? null,
+        customerEntityId: before.customerEntityId ?? null,
         deletedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -637,6 +667,7 @@ const deleteResourceCommand: CommandHandler<{ id?: string }, { resourceId: strin
       record.appearanceColor = before.appearanceColor ?? null
       record.isActive = before.isActive
       record.availabilityRuleSetId = before.availabilityRuleSetId ?? null
+      record.customerEntityId = before.customerEntityId ?? null
       record.deletedAt = null
       record.updatedAt = new Date()
     }

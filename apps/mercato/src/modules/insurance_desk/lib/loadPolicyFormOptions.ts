@@ -1,4 +1,5 @@
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { RESOURCES_RESOURCE_FIELDSET_VEHICLE } from '@open-mercato/core/modules/resources/lib/resourceCustomFields'
 import { splitFullName } from './insurerContactName'
 
 type PolicyStatusDictionaryResponse = {
@@ -222,22 +223,83 @@ export async function loadCatalogProductOptions(noneLabel: string): Promise<Arra
   return [{ value: '', label: noneLabel }, ...opts]
 }
 
-export async function loadResourceOptions(noneLabel: string): Promise<Array<{ value: string; label: string }>> {
-  const call = await apiCall<PagedItems<Record<string, unknown>>>('/api/resources/resources?page=1&pageSize=100')
+function mapResourceRowsToOptions(items: Record<string, unknown>[]): Array<{ value: string; label: string }> {
+  return items
+    .map((row) => {
+      const id = typeof row.id === 'string' ? row.id : ''
+      const name = row.name
+      const label =
+        typeof name === 'string' && name.trim().length
+          ? name.trim()
+          : id.length
+            ? id
+            : ''
+      return { value: id, label }
+    })
+    .filter((o) => o.value.length > 0)
+}
+
+async function fetchResourceOptionsPage(
+  search: string,
+  customerEntityId?: string | null,
+  options?: { resourcesResourceFieldset?: string | null },
+): Promise<Array<{ value: string; label: string }>> {
+  const params = new URLSearchParams({ page: '1', pageSize: '100' })
+  const q = search.trim()
+  if (q.length) params.set('search', q)
+  const ce = typeof customerEntityId === 'string' ? customerEntityId.trim() : ''
+  if (ce.length) params.set('customerEntityId', ce)
+  const fs = options?.resourcesResourceFieldset?.trim() ?? ''
+  if (fs.length) params.set('resourcesResourceFieldset', fs)
+  const call = await apiCall<PagedItems<Record<string, unknown>>>(`/api/resources/resources?${params.toString()}`)
   const items = call.ok && Array.isArray(call.result?.items) ? call.result.items : []
-  const opts = items.map((row) => {
-    const id = typeof row.id === 'string' ? row.id : ''
-    const name = row.name
-    const label =
-      typeof name === 'string' && name.trim().length
-        ? name.trim()
-        : id.length
-          ? id
-          : ''
-    return { value: id, label }
-  }).filter((o) => o.value.length > 0)
-  opts.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
-  return [{ value: '', label: noneLabel }, ...opts]
+  return mapResourceRowsToOptions(items)
+}
+
+const POLICY_SUBJECT_RESOURCE_FIELDSET = {
+  resourcesResourceFieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+} as const
+
+/**
+ * Resources for policy subject picker. When `scopeCustomerEntityId` is set (CRM company or person),
+ * lists that customer's resources first, then the rest (same search query), de-duplicated.
+ */
+export async function searchResourceOptionsForPolicySubject(
+  noneLabel: string,
+  query: string,
+  scopeCustomerEntityId: string | null,
+): Promise<Array<{ value: string; label: string }>> {
+  const scope = typeof scopeCustomerEntityId === 'string' ? scopeCustomerEntityId.trim() : ''
+  const sortByLabel = (opts: Array<{ value: string; label: string }>) =>
+    [...opts].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+
+  let merged: Array<{ value: string; label: string }> = []
+  if (scope.length) {
+    const scoped = sortByLabel(await fetchResourceOptionsPage(query, scope, POLICY_SUBJECT_RESOURCE_FIELDSET))
+    const general = sortByLabel(await fetchResourceOptionsPage(query, null, POLICY_SUBJECT_RESOURCE_FIELDSET))
+    const seen = new Set<string>()
+    for (const o of scoped) {
+      if (!seen.has(o.value)) {
+        seen.add(o.value)
+        merged.push(o)
+      }
+    }
+    for (const o of general) {
+      if (!seen.has(o.value)) {
+        seen.add(o.value)
+        merged.push(o)
+      }
+    }
+  } else {
+    merged = sortByLabel(await fetchResourceOptionsPage(query, null, POLICY_SUBJECT_RESOURCE_FIELDSET))
+  }
+  return [{ value: '', label: noneLabel }, ...merged]
+}
+
+export async function loadResourceOptions(noneLabel: string): Promise<Array<{ value: string; label: string }>> {
+  const items = await fetchResourceOptionsPage('', null)
+  const sorted = [...items].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+  return [{ value: '', label: noneLabel }, ...sorted]
 }
 
 export async function loadInsurerContactOptions(

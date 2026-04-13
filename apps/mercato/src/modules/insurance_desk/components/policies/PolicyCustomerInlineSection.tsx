@@ -1,14 +1,54 @@
 "use client"
 
 import * as React from 'react'
+import Link from 'next/link'
+import { ExternalLink } from 'lucide-react'
 import type { TranslateFn } from '@open-mercato/shared/lib/i18n/context'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { Button } from '@open-mercato/ui/primitives/button'
 import {
   CustomerEntitySinglePicker,
   type CustomerEntitySinglePickerLabels,
 } from '@open-mercato/core/modules/customers/components/formConfig'
-import { PreviewFieldCell, PreviewFieldGrid } from '../leads/leadDetailPreviewUtils'
+import { PreviewFieldCell } from '../leads/leadDetailPreviewUtils'
 import { fetchPartnerLabelsByIds } from '../../lib/policyListLookups'
+
+function CustomerEntityPreviewTile(props: {
+  entityId: string
+  fieldLabel: string
+  value: React.ReactNode
+  recordHref: string | null
+  t: TranslateFn
+}) {
+  const { entityId, fieldLabel, value, recordHref, t } = props
+  const showOpen = Boolean(recordHref && entityId.trim().length > 0)
+  return (
+    <div className="relative rounded-md border border-border/60 bg-background/80 px-3 py-3 text-sm">
+      {showOpen ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          asChild
+          className="absolute end-3 top-3 z-10 shrink-0"
+        >
+          <Link
+            href={recordHref!}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2"
+          >
+            <ExternalLink className="size-4 shrink-0" aria-hidden />
+            {t('common.open', 'Open')}
+          </Link>
+        </Button>
+      ) : null}
+      <div className={showOpen ? 'pe-28' : undefined}>
+        <PreviewFieldCell label={fieldLabel} value={value} />
+      </div>
+    </div>
+  )
+}
 
 export function PolicyCustomerDetailPreview(props: {
   companyId: string
@@ -47,26 +87,54 @@ export function PolicyCustomerDetailPreview(props: {
     return raw
   }
 
+  const companyTrim = companyId.trim()
+  const personTrim = personId.trim()
+  const companyHref =
+    companyTrim.length > 0
+      ? `/backend/customers/companies-v2/${encodeURIComponent(companyTrim)}`
+      : null
+  const personHref =
+    personTrim.length > 0 ? `/backend/customers/people-v2/${encodeURIComponent(personTrim)}` : null
+
   return (
-    <PreviewFieldGrid className="sm:grid-cols-2">
-      <PreviewFieldCell
-        label={t('insurance_desk.policies.detail.customer.company', 'Company')}
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <CustomerEntityPreviewTile
+        entityId={companyId}
+        fieldLabel={t('insurance_desk.policies.detail.customer.company', 'Company')}
         value={show(companyLabel)}
+        recordHref={companyHref}
+        t={t}
       />
-      <PreviewFieldCell
-        label={t('insurance_desk.policies.detail.customer.person', 'Person')}
+      <CustomerEntityPreviewTile
+        entityId={personId}
+        fieldLabel={t('insurance_desk.policies.detail.customer.person', 'Person')}
         value={show(personLabel)}
+        recordHref={personHref}
+        t={t}
       />
-    </PreviewFieldGrid>
+    </div>
   )
 }
 
-type Props = {
+type RecordModeProps = {
+  mode: 'record'
   form: Record<string, unknown>
   setForm: React.Dispatch<React.SetStateAction<Record<string, unknown> | null>>
 }
 
-export function PolicyCustomerInlineSection({ form, setForm }: Props) {
+type CrudModeProps = {
+  mode: 'crud'
+  values: Record<string, unknown>
+  setFormValue: (id: string, value: unknown) => void
+}
+
+export type PolicyCustomerInlineSectionProps = RecordModeProps | CrudModeProps
+
+function sliceForm(props: PolicyCustomerInlineSectionProps): Record<string, unknown> {
+  return props.mode === 'record' ? props.form : props.values
+}
+
+export function PolicyCustomerInlineSection(props: PolicyCustomerInlineSectionProps) {
   const t = useT()
 
   const companyLabels = React.useMemo<CustomerEntitySinglePickerLabels>(
@@ -117,8 +185,11 @@ export function PolicyCustomerInlineSection({ form, setForm }: Props) {
     [t],
   )
 
-  const personId = typeof form.insuredPersonEntityId === 'string' ? form.insuredPersonEntityId.trim() : ''
-  const companyId = typeof form.insuredCompanyEntityId === 'string' ? form.insuredCompanyEntityId.trim() : ''
+  const formSlice = sliceForm(props)
+  const personId =
+    typeof formSlice.insuredPersonEntityId === 'string' ? formSlice.insuredPersonEntityId.trim() : ''
+  const companyId =
+    typeof formSlice.insuredCompanyEntityId === 'string' ? formSlice.insuredCompanyEntityId.trim() : ''
 
   return (
     <div className="space-y-4">
@@ -133,9 +204,22 @@ export function PolicyCustomerInlineSection({ form, setForm }: Props) {
             labels={companyLabels}
             onChange={(next) => {
               const trimmed = (next ?? '').trim()
-              setForm((prev) =>
-                prev ? { ...prev, insuredCompanyEntityId: trimmed.length ? trimmed : '' } : prev,
-              )
+              const val = trimmed.length ? trimmed : ''
+              const shouldClearPerson = val.length > 0 && val !== companyId
+              if (props.mode === 'record') {
+                props.setForm((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        insuredCompanyEntityId: val,
+                        ...(shouldClearPerson ? { insuredPersonEntityId: '' } : {}),
+                      }
+                    : prev,
+                )
+              } else {
+                props.setFormValue('insuredCompanyEntityId', val)
+                if (shouldClearPerson) props.setFormValue('insuredPersonEntityId', '')
+              }
             }}
           />
         </div>
@@ -147,11 +231,17 @@ export function PolicyCustomerInlineSection({ form, setForm }: Props) {
             kind="person"
             value={personId.length ? personId : undefined}
             labels={personLabels}
+            restrictPersonToCompanyEntityId={companyId.length ? companyId : null}
             onChange={(next) => {
               const trimmed = (next ?? '').trim()
-              setForm((prev) =>
-                prev ? { ...prev, insuredPersonEntityId: trimmed.length ? trimmed : '' } : prev,
-              )
+              const val = trimmed.length ? trimmed : ''
+              if (props.mode === 'record') {
+                props.setForm((prev) =>
+                  prev ? { ...prev, insuredPersonEntityId: val } : prev,
+                )
+              } else {
+                props.setFormValue('insuredPersonEntityId', val)
+              }
             }}
           />
         </div>

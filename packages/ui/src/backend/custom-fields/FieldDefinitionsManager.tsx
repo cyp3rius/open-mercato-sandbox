@@ -8,13 +8,20 @@ import { ErrorNotice } from '../../primitives/ErrorNotice'
 import { flash } from '../FlashMessages'
 import { apiCall, readApiResultOrThrow } from '../utils/apiCall'
 import { raiseCrudError } from '../utils/serverErrors'
-import { invalidateCustomFieldDefs } from '../utils/customFieldDefs'
+import { invalidateCustomFieldDefs, RESOURCES_RESOURCE_CUSTOM_FIELDS_ENTITY_ID } from '../utils/customFieldDefs'
 import { FieldDefinitionsEditor, type FieldDefinition, type FieldDefinitionError } from './FieldDefinitionsEditor'
 import { upsertCustomFieldDefSchema } from '@open-mercato/shared/modules/entities/validators'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 type FieldsetGroup = { code: string; title?: string; hint?: string }
-type FieldsetDefinition = { code: string; label: string; icon?: string; description?: string; groups?: FieldsetGroup[] }
+type FieldsetDefinition = {
+  code: string
+  label: string
+  icon?: string
+  description?: string
+  groups?: FieldsetGroup[]
+  resourceTypeIds?: string[]
+}
 type DefinitionsManageResponse = {
   items?: any[]
   deletedKeys?: string[]
@@ -65,6 +72,43 @@ export const FieldDefinitionsManager = React.forwardRef<FieldDefinitionsManagerH
     const [singleFieldsetPerRecord, setSingleFieldsetPerRecord] = React.useState(true)
     const [isDirty, setIsDirty] = React.useState(false)
     const [orderDirty, setOrderDirty] = React.useState(false)
+    const [resourceTypeOptions, setResourceTypeOptions] = React.useState<Array<{ value: string; label: string }>>([])
+
+    React.useEffect(() => {
+      if (entityId !== RESOURCES_RESOURCE_CUSTOM_FIELDS_ENTITY_ID) {
+        setResourceTypeOptions([])
+        return
+      }
+      let cancelled = false
+      ;(async () => {
+        try {
+          const params = new URLSearchParams({ page: '1', pageSize: '100' })
+          const call = await apiCall<{ items?: Array<{ id?: string; name?: string }> }>(
+            `/api/resources/resource-types?${params.toString()}`,
+          )
+          if (cancelled || !call.ok) return
+          const rows = Array.isArray(call.result?.items) ? call.result.items : []
+          setResourceTypeOptions(
+            rows
+              .map((row) => ({
+                value: typeof row.id === 'string' ? row.id : '',
+                label:
+                  typeof row.name === 'string' && row.name.trim().length > 0
+                    ? row.name.trim()
+                    : typeof row.id === 'string'
+                      ? row.id
+                      : '',
+              }))
+              .filter((o) => o.value.length > 0),
+          )
+        } catch {
+          if (!cancelled) setResourceTypeOptions([])
+        }
+      })().catch(() => {})
+      return () => {
+        cancelled = true
+      }
+    }, [entityId])
 
     const loadDefinitions = React.useCallback(async () => {
       if (!entityId) return
@@ -349,6 +393,7 @@ export const FieldDefinitionsManager = React.forwardRef<FieldDefinitionsManagerH
         onReorder={handleReorder}
         orderNotice={orderDirty ? { dirty: true, message: t('entities.customFields.orderNotice', 'Reordered — remember to save') } : undefined}
         translate={t}
+        resourceTypeOptions={entityId === RESOURCES_RESOURCE_CUSTOM_FIELDS_ENTITY_ID ? resourceTypeOptions : undefined}
       />
     )
 

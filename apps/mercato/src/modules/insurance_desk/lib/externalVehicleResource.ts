@@ -57,6 +57,7 @@ export function buildExternalVehicleResourceCreateBody(input: {
   description: string | null
   vehicle: InsuranceSubjectVehicle
   resourceTypeId: string
+  customerEntityId?: string | null
 }): Record<string, unknown> {
   const customFields = buildVehicleResourceCustomFields(input.vehicle)
   const body: Record<string, unknown> = {
@@ -68,6 +69,10 @@ export function buildExternalVehicleResourceCreateBody(input: {
   if (Object.keys(customFields).length) {
     body.customFields = customFields
   }
+  const ce = typeof input.customerEntityId === 'string' ? input.customerEntityId.trim() : ''
+  if (ce.length) {
+    body.customerEntityId = ce
+  }
   return body
 }
 
@@ -78,6 +83,7 @@ export async function createInsuranceExternalVehicleResource(input: {
   name: string
   description: string | null
   vehicle: InsuranceSubjectVehicle
+  customerEntityId?: string | null
 }): Promise<string> {
   const resourceTypeId = await resolveExternalVehicleResourceTypeId()
   if (!resourceTypeId) {
@@ -94,6 +100,7 @@ export async function createInsuranceExternalVehicleResource(input: {
       description: input.description,
       vehicle: input.vehicle,
       resourceTypeId,
+      customerEntityId: input.customerEntityId ?? null,
     }),
     {
       errorMessage: input.t(

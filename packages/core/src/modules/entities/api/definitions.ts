@@ -488,6 +488,7 @@ const entityFieldsetResponseSchema = z.object({
   label: z.string(),
   icon: z.string().optional(),
   description: z.string().optional(),
+  resourceTypeIds: z.array(z.string().uuid()).optional(),
   groups: z.array(customFieldsetGroupResponseSchema).optional(),
 })
 

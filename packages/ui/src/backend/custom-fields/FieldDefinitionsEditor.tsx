@@ -20,9 +20,17 @@ import {
   normalizeCustomFieldOptions,
   type CustomFieldOptionDto,
 } from '@open-mercato/shared/modules/entities/options'
+import { TagsInput } from '../inputs/TagsInput'
 
 type FieldsetGroup = { code: string; title?: string; hint?: string }
-type FieldsetConfig = { code: string; label: string; icon?: string; description?: string; groups?: FieldsetGroup[] }
+type FieldsetConfig = {
+  code: string
+  label: string
+  icon?: string
+  description?: string
+  groups?: FieldsetGroup[]
+  resourceTypeIds?: string[]
+}
 
 export type FieldDefinition = {
   key: string
@@ -58,6 +66,8 @@ export type FieldDefinitionsEditorProps = {
   singleFieldsetPerRecord?: boolean
   onSingleFieldsetPerRecordChange?: (value: boolean) => void
   translate?: (key: string, fallback: string) => string
+  /** When set (e.g. resources entity fieldsets), show checkboxes to restrict fieldset to resource types. */
+  resourceTypeOptions?: Array<{ value: string; label: string }>
 }
 
 const DEFAULT_KIND_OPTIONS = CUSTOM_FIELD_KINDS.map((k) => ({
@@ -162,6 +172,7 @@ export function FieldDefinitionsEditor({
   listRef,
   listProps,
   translate,
+  resourceTypeOptions,
 }: FieldDefinitionsEditorProps) {
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const dragIndex = React.useRef<number | null>(null)
@@ -320,50 +331,84 @@ export function FieldDefinitionsEditor({
             </Button>
           </div>
           {resolvedActiveFieldset && activeFieldsetConfig ? (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div>
-                <label className="text-xs">Code</label>
-                <input
-                  className="border rounded w-full px-2 py-1 text-sm font-mono"
-                  value={activeFieldsetConfig.code}
-                  onChange={(event) => handleFieldsetCodeInput(activeFieldsetConfig.code, event.target.value)}
-                />
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="text-xs">Code</label>
+                  <input
+                    className="border rounded w-full px-2 py-1 text-sm font-mono"
+                    value={activeFieldsetConfig.code}
+                    onChange={(event) => handleFieldsetCodeInput(activeFieldsetConfig.code, event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs">Label</label>
+                  <input
+                    className="border rounded w-full px-2 py-1 text-sm"
+                    value={activeFieldsetConfig.label}
+                    onChange={(event) => handleFieldsetPatch(activeFieldsetConfig.code, { label: event.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs">Icon</label>
+                  <select
+                    className="border rounded w-full px-2 py-1 text-sm"
+                    value={activeFieldsetConfig.icon ?? ''}
+                    onChange={(event) =>
+                      handleFieldsetPatch(activeFieldsetConfig.code, {
+                        icon: event.target.value || undefined,
+                      })
+                    }
+                  >
+                    <option value="">Default</option>
+                    {FIELDSET_ICON_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs">Description</label>
+                  <input
+                    className="border rounded w-full px-2 py-1 text-sm"
+                    value={activeFieldsetConfig.description ?? ''}
+                    onChange={(event) =>
+                      handleFieldsetPatch(activeFieldsetConfig.code, { description: event.target.value })}
+                  />
+                </div>
               </div>
-              <div>
-                <label className="text-xs">Label</label>
-                <input
-                  className="border rounded w-full px-2 py-1 text-sm"
-                  value={activeFieldsetConfig.label}
-                  onChange={(event) => handleFieldsetPatch(activeFieldsetConfig.code, { label: event.target.value })}
-                />
-              </div>
-              <div>
-                <label className="text-xs">Icon</label>
-                <select
-                  className="border rounded w-full px-2 py-1 text-sm"
-                  value={activeFieldsetConfig.icon ?? ''}
-                  onChange={(event) =>
-                    handleFieldsetPatch(activeFieldsetConfig.code, {
-                      icon: event.target.value || undefined,
-                    })
-                  }
-                >
-                  <option value="">Default</option>
-                  {FIELDSET_ICON_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs">Description</label>
-                <input
-                  className="border rounded w-full px-2 py-1 text-sm"
-                  value={activeFieldsetConfig.description ?? ''}
-                  onChange={(event) => handleFieldsetPatch(activeFieldsetConfig.code, { description: event.target.value })}
-                />
-              </div>
+              {resourceTypeOptions && resourceTypeOptions.length > 0 ? (
+                <div className="space-y-2 rounded-md border border-border/50 bg-muted/20 px-3 py-2">
+                  <div className="text-xs font-medium text-muted-foreground">
+                    {t(
+                      'entities.customFields.fieldsetResourceTypesLabel',
+                      'Resource types',
+                    )}
+                  </div>
+                  <p className="text-[10px] leading-snug text-muted-foreground">
+                    {t(
+                      'entities.customFields.fieldsetResourceTypesHint',
+                      'Leave none selected so this fieldset is available for every resource type; the resource\'s fieldset choice still applies. Select one or more types to show this fieldset only when the resource has that type.',
+                    )}
+                  </p>
+                  <TagsInput
+                    value={activeFieldsetConfig.resourceTypeIds ?? []}
+                    onChange={(next) =>
+                      handleFieldsetPatch(activeFieldsetConfig.code, {
+                        resourceTypeIds: next.length ? next : undefined,
+                      })
+                    }
+                    suggestions={resourceTypeOptions.map((o) => ({ value: o.value, label: o.label }))}
+                    allowCustomValues={false}
+                    showSuggestionsOnFocus
+                    placeholder={t(
+                      'entities.customFields.fieldsetResourceTypesPlaceholder',
+                      'Search resource types…',
+                    )}
+                  />
+                </div>
+              ) : null}
             </div>
           ) : null}
           <div className="flex items-center gap-2 text-xs">

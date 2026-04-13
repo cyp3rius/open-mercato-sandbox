@@ -40,6 +40,7 @@ const listSchema = z
     id: z.string().uuid().optional(),
     tagIds: z.string().optional(),
     tagIdsEmpty: z.string().optional(),
+    companyEntityId: z.string().uuid().optional(),
   })
   .passthrough()
 
@@ -160,6 +161,11 @@ const crud = makeCrudRoute({
       }
       if (Object.keys(createdRange).length) {
         filters.created_at = createdRange
+      }
+      const companyEntityId =
+        typeof query.companyEntityId === 'string' ? query.companyEntityId.trim() : ''
+      if (companyEntityId.length) {
+        filters['person_profile.company_entity_id'] = { $eq: companyEntityId }
       }
       if (ctx) {
         try {

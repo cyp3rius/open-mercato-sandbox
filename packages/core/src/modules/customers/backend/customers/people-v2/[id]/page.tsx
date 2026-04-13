@@ -28,6 +28,7 @@ import { TasksSection } from '../../../../components/detail/TasksSection'
 import { TagsSection } from '../../../../components/detail/TagsSection'
 import type { TagSummary } from '../../../../components/detail/types'
 import { DetailTabsLayout } from '../../../../components/detail/DetailTabsLayout'
+import { PersonResourcesSection } from '../../../../components/detail/PersonResourcesSection'
 import { PersonHighlightsSummary } from '../../../../components/detail/CustomerFormHighlights'
 import type { TagsSectionController } from '@open-mercato/ui/backend/detail'
 import {
@@ -40,7 +41,7 @@ import {
   type PersonOverview,
 } from '../../../../components/formConfig'
 
-type SectionKey = 'notes' | 'activities' | 'deals' | 'addresses' | 'tasks' | string
+type SectionKey = 'notes' | 'activities' | 'deals' | 'addresses' | 'tasks' | 'resources' | string
 
 export default function PersonDetailV2Page({ params }: { params?: { id?: string } }) {
   const id = params?.id
@@ -62,7 +63,14 @@ export default function PersonDetailV2Page({ params }: { params?: { id?: string 
 
   const initialTab = React.useMemo(() => {
     const raw = searchParams?.get('tab')
-    if (raw === 'notes' || raw === 'activities' || raw === 'deals' || raw === 'addresses' || raw === 'tasks') {
+    if (
+      raw === 'notes' ||
+      raw === 'activities' ||
+      raw === 'deals' ||
+      raw === 'addresses' ||
+      raw === 'tasks' ||
+      raw === 'resources'
+    ) {
       return raw
     }
     return 'notes'
@@ -188,6 +196,7 @@ export default function PersonDetailV2Page({ params }: { params?: { id?: string 
       { id: 'deals' as const, label: t('customers.people.detail.tabs.deals', 'Deals') },
       { id: 'addresses' as const, label: t('customers.people.detail.tabs.addresses', 'Addresses') },
       { id: 'tasks' as const, label: t('customers.people.detail.tabs.tasks', 'Tasks') },
+      { id: 'resources' as const, label: t('customers.people.detail.tabs.resources', 'Resources') },
       ...injectedTabs.map((tab) => ({ id: tab.id as SectionKey, label: tab.label })),
     ],
     [injectedTabs, t],
@@ -438,6 +447,9 @@ export default function PersonDetailV2Page({ params }: { params?: { id?: string 
                     dialogContextFallback="This task will be linked to {{name}}"
                   />
                 )
+              }
+              if (activeTab === 'resources') {
+                return <PersonResourcesSection customerEntityId={personId} />
               }
               return null
             })()}

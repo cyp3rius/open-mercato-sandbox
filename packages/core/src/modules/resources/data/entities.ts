@@ -82,6 +82,9 @@ export class ResourcesResource {
   @Property({ name: 'availability_rule_set_id', type: 'uuid', nullable: true })
   availabilityRuleSetId?: string | null
 
+  @Property({ name: 'customer_entity_id', type: 'uuid', nullable: true })
+  customerEntityId?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 
@@ -90,6 +93,39 @@ export class ResourcesResource {
 
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
+}
+
+@Entity({ tableName: 'resources_resource_accessory_links' })
+@Index({ name: 'resources_resource_accessory_links_scope_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'resources_resource_accessory_links_host_idx', properties: ['hostResource'] })
+@Unique({
+  name: 'resources_resource_accessory_links_host_accessory_unique',
+  properties: ['hostResource', 'accessoryResource'],
+})
+export class ResourcesResourceAccessoryLink {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @ManyToOne(() => ResourcesResource, { fieldName: 'host_resource_id' })
+  hostResource!: ResourcesResource
+
+  @ManyToOne(() => ResourcesResource, { fieldName: 'accessory_resource_id' })
+  accessoryResource!: ResourcesResource
+
+  @Property({ name: 'is_mounted', type: 'boolean', default: false })
+  isMounted: boolean = false
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
 }
 
 @Entity({ tableName: 'resources_resource_comments' })

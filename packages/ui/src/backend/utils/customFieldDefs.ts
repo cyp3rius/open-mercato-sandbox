@@ -50,6 +50,22 @@ export type CustomFieldsetDto = {
   icon?: string
   description?: string
   groups?: CustomFieldsetGroupDto[]
+  /** Resources entity: when non-empty, fieldset only for these resource type record IDs. */
+  resourceTypeIds?: string[]
+}
+
+/** Custom fields entity id for `resources` module records (fieldset bindings in CrudForm). */
+export const RESOURCES_RESOURCE_CUSTOM_FIELDS_ENTITY_ID = 'resources:resources_resource' as const
+
+export function fieldsetAppliesToResourceType(
+  fieldset: Pick<CustomFieldsetDto, 'resourceTypeIds'>,
+  resourceTypeId: string | null | undefined,
+): boolean {
+  const ids = fieldset.resourceTypeIds
+  if (!ids?.length) return true
+  const rt = typeof resourceTypeId === 'string' ? resourceTypeId.trim() : ''
+  if (!rt) return false
+  return ids.includes(rt)
 }
 
 export type CustomFieldDefinitionsPayload = {

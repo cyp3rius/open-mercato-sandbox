@@ -50,6 +50,10 @@ import {
 } from 'lucide-react'
 import { loadGeneratedFieldRegistrations } from './fields/registry'
 import type { CustomFieldDefDto, CustomFieldDefinitionsPayload, CustomFieldsetDto } from './utils/customFieldDefs'
+import {
+  RESOURCES_RESOURCE_CUSTOM_FIELDS_ENTITY_ID,
+  fieldsetAppliesToResourceType,
+} from './utils/customFieldDefs'
 import { buildFormFieldsFromCustomFields, buildFormFieldFromCustomFieldDef } from './utils/customFieldForms'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { TagsInput } from './inputs/TagsInput'
@@ -396,6 +400,8 @@ type CustomFieldEntityLayout = {
   singleFieldsetPerRecord: boolean
   hasFieldsets: boolean
   activeFieldset: string | null
+  /** When true, one fieldset at a time with a dropdown (resources: only if Single fieldset per entity is off). */
+  showFieldsetSelector: boolean
 }
 
 class FieldDefinitionsManagerErrorBoundary extends React.Component<
@@ -1147,6 +1153,19 @@ export function CrudForm<TValues extends Record<string, unknown>>({
   const fieldsetsByEntity = cfMetadata?.fieldsetsByEntity ?? {}
   const entitySettings = cfMetadata?.entitySettings ?? {}
 
+  const resourceTypeIdForResourceFieldsets = React.useMemo(() => {
+    const raw = (values as Record<string, unknown>).resourceTypeId
+    return typeof raw === 'string' ? raw.trim() : ''
+  }, [values])
+
+  const resourceCustomFieldsetBindingKey =
+    customFieldsetBindings?.[RESOURCES_RESOURCE_CUSTOM_FIELDS_ENTITY_ID]?.valueKey ?? ''
+  const resourceCustomFieldsetCodeStr = React.useMemo(() => {
+    if (!resourceCustomFieldsetBindingKey) return ''
+    const raw = (values as Record<string, unknown>)[resourceCustomFieldsetBindingKey]
+    return typeof raw === 'string' ? raw.trim() : ''
+  }, [values, resourceCustomFieldsetBindingKey])
+
   const { cfFields, customFieldLayout } = React.useMemo(() => {
     if (!cfDefinitions.length) return { cfFields: [], customFieldLayout: [] as CustomFieldEntityLayout[] }
     const aggregated: CrudField[] = []
@@ -1226,10 +1245,29 @@ export function CrudForm<TValues extends Record<string, unknown>>({
     entityIds.forEach((entityId) => {
       const defsForEntity = defsByEntity.get(entityId) ?? []
       if (!defsForEntity.length) return
-      const availableFieldsets = fieldsetsByEntity[entityId] ?? []
+      const isResourcesCustomEntity = entityId === RESOURCES_RESOURCE_CUSTOM_FIELDS_ENTITY_ID
+      const allFieldsets = fieldsetsByEntity[entityId] ?? []
+      const availableFieldsets =
+        isResourcesCustomEntity
+          ? allFieldsets.filter((fs) => fieldsetAppliesToResourceType(fs, resourceTypeIdForResourceFieldsets))
+          : allFieldsets
       const hasFieldsets = availableFieldsets.length > 0
+      const resourceFieldsetsExcludedByType =
+        isResourcesCustomEntity && allFieldsets.length > 0 && availableFieldsets.length === 0
       const singleFieldsetPerRecord =
         entitySettings[entityId]?.singleFieldsetPerRecord !== false
+      if (resourceFieldsetsExcludedByType) {
+        layout.push({
+          entityId,
+          sections: [],
+          availableFieldsets: [],
+          singleFieldsetPerRecord,
+          hasFieldsets: false,
+          activeFieldset: null,
+          showFieldsetSelector: false,
+        })
+        return
+      }
       const defsByFieldset = new globalThis.Map<string | null, CustomFieldDefDto[]>()
       defsForEntity.forEach((def) => {
         const memberships = Array.isArray(def.fieldsets)
@@ -1265,18 +1303,20 @@ export function CrudForm<TValues extends Record<string, unknown>>({
         }
       }
 
+      const useFieldsetDropdown = isResourcesCustomEntity !== singleFieldsetPerRecord
+
       if (!hasFieldsets) {
         const fallbackDefs =
           defsByFieldset.get(null) ?? Array.from(defsByFieldset.values()).flat()
         const section = buildSection(entityId, null, fallbackDefs, undefined)
         if (section) sections.push(section)
-      } else if (singleFieldsetPerRecord) {
+      } else if (useFieldsetDropdown) {
         const availableCodes = availableFieldsets.map((fs) => fs.code)
         const activeFieldset =
           cfFieldsetSelections[entityId] && availableCodes.includes(cfFieldsetSelections[entityId]!)
             ? cfFieldsetSelections[entityId]
             : availableFieldsets[0]?.code ?? null
-        const targetDefs = activeFieldset ? defsByFieldset.get(activeFieldset) ?? [] : defsByFieldset.get(null) ?? []
+        const targetDefs = activeFieldset ? defsByFieldset.get(activeFieldset) ?? [] : []
         const targetSection = activeFieldset
           ? buildSection(
               entityId,
@@ -1284,14 +1324,14 @@ export function CrudForm<TValues extends Record<string, unknown>>({
               targetDefs,
               availableFieldsets.find((fs) => fs.code === activeFieldset),
             )
-          : buildSection(entityId, null, targetDefs, undefined)
+          : null
         if (targetSection) {
           sections.push(targetSection)
         } else if (activeFieldset) {
           sections.push(createEmptySection(activeFieldset))
         }
         const unassigned = defsByFieldset.get(null)
-        if (unassigned?.length && activeFieldset) {
+        if (unassigned?.length && activeFieldset && !isResourcesCustomEntity) {
           const generalSection = buildSection(entityId, null, unassigned, undefined)
           if (generalSection) sections.push(generalSection)
         }
@@ -1302,7 +1342,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
           if (section) sections.push(section)
         })
         const unassigned = defsByFieldset.get(null)
-        if (unassigned?.length) {
+        if (unassigned?.length && !isResourcesCustomEntity) {
           const section = buildSection(entityId, null, unassigned, undefined)
           if (section) sections.push(section)
         }
@@ -1313,13 +1353,23 @@ export function CrudForm<TValues extends Record<string, unknown>>({
         sections.push(createEmptySection(fallbackCode))
       }
 
+      const availableCodesForLayout = availableFieldsets.map((fs) => fs.code)
+      const resolvedLayoutActiveFieldset =
+        cfFieldsetSelections[entityId] && availableCodesForLayout.includes(cfFieldsetSelections[entityId]!)
+          ? cfFieldsetSelections[entityId]
+          : availableFieldsets[0]?.code ?? null
+
+      const showFieldsetSelector =
+        hasFieldsets && availableFieldsets.length > 0 && useFieldsetDropdown
+
       layout.push({
         entityId,
         sections,
         availableFieldsets,
         singleFieldsetPerRecord,
         hasFieldsets,
-        activeFieldset: cfFieldsetSelections[entityId] ?? availableFieldsets[0]?.code ?? null,
+        activeFieldset: resolvedLayoutActiveFieldset,
+        showFieldsetSelector,
       })
     })
 
@@ -1332,6 +1382,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
     entitySettings,
     fieldsetsByEntity,
     resolvedEntityIds,
+    resourceTypeIdForResourceFieldsets,
   ])
 
   const injectedFieldDefinitions = React.useMemo<InjectionFieldDefinition[]>(() => {
@@ -1843,6 +1894,27 @@ export function CrudForm<TValues extends Record<string, unknown>>({
       console.error('[CrudForm] Error in onFieldChange:', err)
     })
   }, [extendedInjectionEventsEnabled, t, translateValidationMessage, triggerInjectionEvent])
+
+  React.useEffect(() => {
+    if (!customFieldsetBindings || !resourceCustomFieldsetBindingKey) return
+    const binding = customFieldsetBindings[RESOURCES_RESOURCE_CUSTOM_FIELDS_ENTITY_ID]
+    if (!binding) return
+    const all = fieldsetsByEntity[RESOURCES_RESOURCE_CUSTOM_FIELDS_ENTITY_ID] ?? []
+    if (!all.length) return
+    const applicable = all.filter((fs) => fieldsetAppliesToResourceType(fs, resourceTypeIdForResourceFieldsets))
+    const codes = new Set(applicable.map((fs) => fs.code))
+    const current = resourceCustomFieldsetCodeStr
+    if (!current || codes.has(current)) return
+    const nextCode = applicable[0]?.code ?? ''
+    setValue(binding.valueKey, nextCode || undefined)
+  }, [
+    customFieldsetBindings,
+    fieldsetsByEntity,
+    resourceCustomFieldsetBindingKey,
+    resourceCustomFieldsetCodeStr,
+    resourceTypeIdForResourceFieldsets,
+    setValue,
+  ])
 
   const handleFieldsetSelectionChange = React.useCallback(
     (entityId: string, nextCode: string | null) => {
@@ -2393,10 +2465,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
 
     customFieldLayout.forEach((entityLayout) => {
       const manageHref = buildCustomFieldsManageHref(entityLayout.entityId)
-      const showSelector =
-        entityLayout.hasFieldsets &&
-        entityLayout.singleFieldsetPerRecord &&
-        entityLayout.availableFieldsets.length > 0
+      const showSelector = entityLayout.showFieldsetSelector
 
       if (multipleEntities) {
         nodes.push(
@@ -2425,7 +2494,12 @@ export function CrudForm<TValues extends Record<string, unknown>>({
                     event.target.value || null,
                   )}
               >
-                <option value="">{defaultFieldsetLabel}</option>
+                {entityLayout.entityId === RESOURCES_RESOURCE_CUSTOM_FIELDS_ENTITY_ID &&
+                entityLayout.availableFieldsets.length > 0
+                  ? null
+                  : (
+                      <option value="">{defaultFieldsetLabel}</option>
+                    )}
                 {entityLayout.availableFieldsets.map((fs) => (
                   <option key={fs.code} value={fs.code}>
                     {fs.label}
