@@ -27,6 +27,9 @@ type ResourceRow = {
   name: string
   resourceTypeId: string | null
   capacity: number | null
+  statusLabel?: string | null
+  statusColor?: string | null
+  statusIcon?: string | null
   tags?: TagOption[] | null
   isActive: boolean
   appearanceIcon?: string | null
@@ -428,9 +431,30 @@ export default function ResourcesResourcesPage() {
       },
     },
     {
+      accessorKey: 'status',
+      header: t('resources.resources.list.columns.status', 'Status'),
+      meta: { priority: 4 },
+      cell: ({ row }) => {
+        if (row.original.rowKind === 'group') return null
+        const label = row.original.statusLabel?.trim().length ? row.original.statusLabel : null
+        const icon = row.original.statusIcon ?? null
+        const color = row.original.statusColor ?? null
+        if (!label && !icon && !color) {
+          return <span className="text-xs text-muted-foreground">{t('resources.resources.list.columns.status.empty', '—')}</span>
+        }
+        return (
+          <div className="flex items-center gap-2">
+            {color ? renderDictionaryColor(color) : null}
+            {icon ? renderDictionaryIcon(icon) : null}
+            {label ? <span className="text-sm">{label}</span> : null}
+          </div>
+        )
+      },
+    },
+    {
       accessorKey: 'capacity',
       header: t('resources.resources.list.columns.capacity', 'Capacity'),
-      meta: { priority: 4 },
+      meta: { priority: 5 },
       cell: ({ row }) => row.original.rowKind === 'group'
         ? null
         : row.original.capacity ?? t('resources.resources.list.columns.capacity.empty', '-'),
@@ -438,7 +462,7 @@ export default function ResourcesResourcesPage() {
     {
       accessorKey: 'tags',
       header: t('resources.resources.list.columns.tags', 'Tags'),
-      meta: { priority: 5 },
+      meta: { priority: 6 },
       cell: ({ row }) => {
         if (row.original.rowKind === 'group') {
           return null
@@ -459,7 +483,7 @@ export default function ResourcesResourcesPage() {
     {
       accessorKey: 'isActive',
       header: t('resources.resources.list.columns.active', 'Active'),
-      meta: { priority: 6 },
+      meta: { priority: 7 },
       cell: ({ row }) => row.original.rowKind === 'group' ? null : <BooleanIcon value={row.original.isActive} />,
     },
   ], [canManage, resourceTypes, t])
@@ -534,11 +558,32 @@ function mapApiResource(item: Record<string, unknown>): ResourceRow {
       ? item.appearance_color
       : null
   const tags = Array.isArray(item.tags) ? item.tags as TagOption[] : []
+  const statusLabel =
+    typeof item.statusLabel === 'string'
+      ? item.statusLabel
+      : typeof item.status_label === 'string'
+        ? item.status_label
+        : null
+  const statusColor =
+    typeof item.statusColor === 'string'
+      ? item.statusColor
+      : typeof item.status_color === 'string'
+        ? item.status_color
+        : null
+  const statusIcon =
+    typeof item.statusIcon === 'string'
+      ? item.statusIcon
+      : typeof item.status_icon === 'string'
+        ? item.status_icon
+        : null
   return withDataTableNamespaces({
     id,
     name,
     resourceTypeId,
     capacity: Number.isFinite(capacity as number) ? capacity as number : null,
+    statusLabel,
+    statusColor,
+    statusIcon,
     tags,
     isActive,
     appearanceIcon,

@@ -9,6 +9,7 @@ import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { CrudIndexerConfig } from '@open-mercato/shared/lib/crud/types'
 import { Dictionary, DictionaryEntry } from '@open-mercato/core/modules/dictionaries/data/entities'
+import { normalizeDictionaryValue } from '@open-mercato/core/modules/dictionaries/lib/utils'
 import { CustomerEntity } from '@open-mercato/core/modules/customers/data/entities'
 import { ResourcesResource, ResourcesResourceTag, ResourcesResourceTagAssignment } from '../data/entities'
 import {
@@ -20,6 +21,7 @@ import {
 import { resourcesResourceCrudEvents } from '../lib/crud'
 import { ensureOrganizationScope, ensureTenantScope, extractUndoPayload } from './shared'
 import { RESOURCES_CAPACITY_UNIT_DICTIONARY_KEY } from '../lib/capacityUnits'
+import { RESOURCES_RESOURCE_STATUS_DICTIONARY_KEY } from '../lib/resourceStatus'
 import { E } from '#generated/entities.ids.generated'
 
 const resourceCrudIndexer: CrudIndexerConfig<ResourcesResource> = {
@@ -29,6 +31,13 @@ const resourceCrudIndexer: CrudIndexerConfig<ResourcesResource> = {
 type CapacityUnitSnapshot = {
   value: string
   name: string
+  color: string | null
+  icon: string | null
+}
+
+type ResourceStatusSnapshot = {
+  value: string
+  label: string
   color: string | null
   icon: string | null
 }
@@ -50,6 +59,11 @@ type ResourceSnapshot = {
   isActive: boolean
   availabilityRuleSetId: string | null
   customerEntityId: string | null
+  procurementProcessId: string | null
+  statusValue: string | null
+  statusLabel: string | null
+  statusColor: string | null
+  statusIcon: string | null
   tags: string[]
   deletedAt: string | null
   customFields?: CustomFieldSnapshot | null
@@ -60,6 +74,103 @@ type ResourceUndoPayload = {
   after?: ResourceSnapshot | null
   customBefore?: CustomFieldSnapshot | null
   customAfter?: CustomFieldSnapshot | null
+}
+
+async function resolveResourceStatusDictionary(
+  em: EntityManager,
+  scope: { tenantId: string; organizationId: string },
+): Promise<Dictionary | null> {
+  return findOneWithDecryption(
+    em,
+    Dictionary,
+    {
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      key: RESOURCES_RESOURCE_STATUS_DICTIONARY_KEY,
+      deletedAt: null,
+      isActive: true,
+    },
+    undefined,
+    scope,
+  )
+}
+
+async function findDefaultResourceStatus(
+  em: EntityManager,
+  scope: { tenantId: string; organizationId: string },
+): Promise<ResourceStatusSnapshot | null> {
+  const dictionary = await resolveResourceStatusDictionary(em, scope)
+  if (!dictionary) return null
+  const entry = await findOneWithDecryption(
+    em,
+    DictionaryEntry,
+    {
+      dictionary,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      isDefault: true,
+    },
+    { populate: ['dictionary'] },
+    scope,
+  )
+  if (!entry) return null
+  return {
+    value: entry.value,
+    label: entry.label?.trim().length ? entry.label : entry.value,
+    color: entry.color ?? null,
+    icon: entry.icon ?? null,
+  }
+}
+
+async function resolveResourceStatus(
+  em: EntityManager,
+  scope: { tenantId: string; organizationId: string },
+  rawValue: string,
+): Promise<ResourceStatusSnapshot> {
+  const trimmed = rawValue.trim()
+  if (!trimmed) {
+    throw new CrudHttpError(400, { error: 'Resource status is required.' })
+  }
+  const dictionary = await resolveResourceStatusDictionary(em, scope)
+  if (!dictionary) {
+    throw new CrudHttpError(400, { error: 'Resource status dictionary is not configured.' })
+  }
+  const normalizedValue = normalizeDictionaryValue(trimmed)
+  const entry = await findOneWithDecryption(
+    em,
+    DictionaryEntry,
+    {
+      dictionary,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      normalizedValue,
+    },
+    { populate: ['dictionary'] },
+    scope,
+  )
+  if (!entry) {
+    throw new CrudHttpError(400, { error: 'Resource status not found.' })
+  }
+  return {
+    value: entry.value,
+    label: entry.label?.trim().length ? entry.label : entry.value,
+    color: entry.color ?? null,
+    icon: entry.icon ?? null,
+  }
+}
+
+function applyResourceStatus(record: ResourcesResource, snapshot: ResourceStatusSnapshot | null): void {
+  if (!snapshot) {
+    record.statusValue = null
+    record.statusLabel = null
+    record.statusColor = null
+    record.statusIcon = null
+    return
+  }
+  record.statusValue = snapshot.value
+  record.statusLabel = snapshot.label
+  record.statusColor = snapshot.color
+  record.statusIcon = snapshot.icon
 }
 
 async function resolveCapacityUnit(
@@ -167,6 +278,11 @@ async function loadResourceSnapshot(em: EntityManager, id: string): Promise<Reso
     isActive: resource.isActive,
     availabilityRuleSetId: resource.availabilityRuleSetId ?? null,
     customerEntityId: resource.customerEntityId ?? null,
+    procurementProcessId: resource.procurementProcessId ?? null,
+    statusValue: resource.statusValue ?? null,
+    statusLabel: resource.statusLabel ?? null,
+    statusColor: resource.statusColor ?? null,
+    statusIcon: resource.statusIcon ?? null,
     tags,
     deletedAt: resource.deletedAt ? resource.deletedAt.toISOString() : null,
   }
@@ -237,6 +353,20 @@ const createResourceCommand: CommandHandler<ResourcesResourceCreateInput, { reso
     if (customerEntityId) {
       await ensureCustomerEntityLinkable(em, customerEntityId, parsed.organizationId, parsed.tenantId)
     }
+    const statusRaw = typeof parsed.statusValue === 'string' ? parsed.statusValue.trim() : ''
+    let statusSnapshot: ResourceStatusSnapshot | null = null
+    if (statusRaw) {
+      statusSnapshot = await resolveResourceStatus(
+        em,
+        { tenantId: parsed.tenantId, organizationId: parsed.organizationId },
+        statusRaw,
+      )
+    } else {
+      statusSnapshot = await findDefaultResourceStatus(em, {
+        tenantId: parsed.tenantId,
+        organizationId: parsed.organizationId,
+      })
+    }
     const record = em.create(ResourcesResource, {
       tenantId: parsed.tenantId,
       organizationId: parsed.organizationId,
@@ -253,6 +383,11 @@ const createResourceCommand: CommandHandler<ResourcesResourceCreateInput, { reso
       isActive: parsed.isActive ?? true,
       availabilityRuleSetId: parsed.availabilityRuleSetId ?? null,
       customerEntityId,
+      procurementProcessId: parsed.procurementProcessId ?? null,
+      statusValue: statusSnapshot?.value ?? null,
+      statusLabel: statusSnapshot?.label ?? null,
+      statusColor: statusSnapshot?.color ?? null,
+      statusIcon: statusSnapshot?.icon ?? null,
       createdAt: now,
       updatedAt: now,
     })
@@ -405,6 +540,22 @@ const updateResourceCommand: CommandHandler<ResourcesResourceUpdateInput, { reso
       }
       record.customerEntityId = nextCustomer
     }
+    if (parsed.procurementProcessId !== undefined) {
+      record.procurementProcessId = parsed.procurementProcessId ?? null
+    }
+    if (parsed.statusValue !== undefined) {
+      const statusRaw = typeof parsed.statusValue === 'string' ? parsed.statusValue.trim() : ''
+      if (!statusRaw) {
+        applyResourceStatus(record, null)
+      } else {
+        const nextStatus = await resolveResourceStatus(
+          em,
+          { tenantId: record.tenantId, organizationId: record.organizationId },
+          statusRaw,
+        )
+        applyResourceStatus(record, nextStatus)
+      }
+    }
     record.updatedAt = new Date()
     if (parsed.isActive !== undefined) record.isActive = parsed.isActive
     await em.flush()
@@ -466,6 +617,11 @@ const updateResourceCommand: CommandHandler<ResourcesResourceUpdateInput, { reso
       'isActive',
       'availabilityRuleSetId',
       'customerEntityId',
+      'procurementProcessId',
+      'statusValue',
+      'statusLabel',
+      'statusColor',
+      'statusIcon',
       'deletedAt',
     ])
     if (before.tags.join(',') !== after.tags.join(',')) {
@@ -517,6 +673,11 @@ const updateResourceCommand: CommandHandler<ResourcesResourceUpdateInput, { reso
     record.isActive = before.isActive
     record.availabilityRuleSetId = before.availabilityRuleSetId ?? null
     record.customerEntityId = before.customerEntityId ?? null
+    record.procurementProcessId = before.procurementProcessId ?? null
+    record.statusValue = before.statusValue ?? null
+    record.statusLabel = before.statusLabel ?? null
+    record.statusColor = before.statusColor ?? null
+    record.statusIcon = before.statusIcon ?? null
     record.deletedAt = before.deletedAt ? new Date(before.deletedAt) : null
     record.updatedAt = new Date()
     await em.flush()
@@ -649,6 +810,11 @@ const deleteResourceCommand: CommandHandler<{ id?: string }, { resourceId: strin
         isActive: before.isActive,
         availabilityRuleSetId: before.availabilityRuleSetId ?? null,
         customerEntityId: before.customerEntityId ?? null,
+        procurementProcessId: before.procurementProcessId ?? null,
+        statusValue: before.statusValue ?? null,
+        statusLabel: before.statusLabel ?? null,
+        statusColor: before.statusColor ?? null,
+        statusIcon: before.statusIcon ?? null,
         deletedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -668,6 +834,11 @@ const deleteResourceCommand: CommandHandler<{ id?: string }, { resourceId: strin
       record.isActive = before.isActive
       record.availabilityRuleSetId = before.availabilityRuleSetId ?? null
       record.customerEntityId = before.customerEntityId ?? null
+      record.procurementProcessId = before.procurementProcessId ?? null
+      record.statusValue = before.statusValue ?? null
+      record.statusLabel = before.statusLabel ?? null
+      record.statusColor = before.statusColor ?? null
+      record.statusIcon = before.statusIcon ?? null
       record.deletedAt = null
       record.updatedAt = new Date()
     }

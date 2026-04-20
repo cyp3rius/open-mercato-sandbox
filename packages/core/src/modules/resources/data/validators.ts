@@ -53,6 +53,8 @@ export const resourcesResourceCreateSchema = z.object({
   isActive: z.boolean().optional(),
   availabilityRuleSetId: z.string().uuid().optional().nullable(),
   customerEntityId: z.string().uuid().optional().nullable(),
+  procurementProcessId: z.string().uuid().optional().nullable(),
+  statusValue: z.string().max(200).optional().nullable(),
 })
 
 export const resourcesResourceUpdateSchema = z.object({
@@ -73,6 +75,8 @@ export const resourcesResourceUpdateSchema = z.object({
   isActive: z.boolean().optional(),
   availabilityRuleSetId: z.string().uuid().optional().nullable(),
   customerEntityId: z.string().uuid().optional().nullable(),
+  procurementProcessId: z.string().uuid().optional().nullable(),
+  statusValue: z.string().max(200).optional().nullable(),
 })
 
 export const resourcesResourceAccessoryLinkCreateSchema = z.object({

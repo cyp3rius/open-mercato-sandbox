@@ -27,6 +27,10 @@ export default function ResourcesResourceCreatePage() {
       ...rest,
       capacity: values.capacity ? Number(values.capacity) : null,
       capacityUnitValue: values.capacityUnitValue ? String(values.capacityUnitValue) : null,
+      statusValue:
+        typeof values.statusValue === 'string' && values.statusValue.trim().length > 0
+          ? values.statusValue.trim()
+          : null,
       appearanceIcon: appearance.icon ?? null,
       appearanceColor: appearance.color ?? null,
       isActive: values.isActive ?? true,
@@ -60,6 +64,7 @@ export default function ResourcesResourceCreatePage() {
             description: '',
             isActive: true,
             capacityUnitValue: '',
+            statusValue: '',
             appearance: { icon: null, color: null },
             customFieldsetCode: RESOURCES_RESOURCE_FIELDSET_DEFAULT,
           }}

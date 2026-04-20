@@ -84,7 +84,7 @@ export function PersonHighlights({
   const [companyError, setCompanyError] = React.useState<string | null>(null)
   const [companySaving, setCompanySaving] = React.useState(false)
   const companyHref = React.useMemo(
-    () => (company ? `/backend/customers/companies/${encodeURIComponent(company.id)}` : null),
+    () => (company ? `/backend/customers/companies-v2/${encodeURIComponent(company.id)}` : null),
     [company],
   )
   const isCompanyInteractive = !editingCompany && !companyLoading && !companyError && Boolean(companyHref)

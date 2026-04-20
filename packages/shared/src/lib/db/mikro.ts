@@ -45,6 +45,7 @@ export async function getOrm() {
   const poolMax = parseInt(process.env.DB_POOL_MAX || '50')
   const poolIdleTimeout = parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '3000')
   const poolAcquireTimeout = parseInt(process.env.DB_POOL_ACQUIRE_TIMEOUT || '6000')
+  const connectionTimeoutMillis = parseInt(process.env.DB_CONNECTION_TIMEOUT_MS || '15000', 10)
   const idleSessionTimeoutEnv = parseInt(process.env.DB_IDLE_SESSION_TIMEOUT_MS || '')
   const idleInTxTimeoutEnv = parseInt(process.env.DB_IDLE_IN_TRANSACTION_TIMEOUT_MS || '')
   const idleSessionTimeoutMs = Number.isFinite(idleSessionTimeoutEnv)
@@ -86,6 +87,8 @@ export async function getOrm() {
         max: poolMax,
         // Minimum number of connections in the pool
         min: poolMin,
+        // Abort TCP connect if the server never answers (avoids infinite hang on wrong host/VPN)
+        connectionTimeoutMillis: Number.isFinite(connectionTimeoutMillis) ? connectionTimeoutMillis : 15000,
         // Close connections after this many milliseconds of inactivity
         idleTimeoutMillis: poolIdleTimeout,
         // Maximum time to wait for a connection from the pool

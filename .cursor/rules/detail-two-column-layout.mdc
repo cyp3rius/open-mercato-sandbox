@@ -2,6 +2,7 @@
 description: Two-column detail page layout (7fr/3fr), section chrome, linked-record preview cards — align with CrudForm groups
 globs:
   - apps/mercato/src/modules/**/*.tsx
+  - packages/core/src/modules/**/backend/**/*.tsx
   - packages/ui/src/backend/detail/**/*.tsx
 alwaysApply: false
 ---

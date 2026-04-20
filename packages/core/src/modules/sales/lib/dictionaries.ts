@@ -226,6 +226,7 @@ async function ensureSalesDictionaryEntry(
     normalizedValue,
     color: color ?? null,
     icon: icon ?? null,
+    isDefault: false,
     createdAt: now,
     updatedAt: now,
   })

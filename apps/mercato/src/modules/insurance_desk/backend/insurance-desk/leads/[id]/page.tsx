@@ -252,7 +252,7 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
               'Enter at least brand and model, registration plate, or VIN.',
             ),
             'error',
-          )
+        )
           return
         }
         throw e
@@ -270,16 +270,16 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
       await runMutation({
         operation: () =>
           updateCrud(
-            'insurance/leads',
-            {
-              id: leadId,
-              title,
-              status: loadedStatusRef.current,
-              source: loadedSourceRef.current,
+        'insurance/leads',
+        {
+          id: leadId,
+          title,
+          status: loadedStatusRef.current,
+          source: loadedSourceRef.current,
               referringPartnerEntityId: referringPartnerEntityId.length ? referringPartnerEntityId : null,
-              payload,
-            },
-            { errorMessage: t('insurance_desk.leads.form.errors.create', 'Could not save inquiry.') },
+          payload,
+        },
+        { errorMessage: t('insurance_desk.leads.form.errors.create', 'Could not save inquiry.') },
           ),
         context: {
           resourceKind: 'insurance.lead',

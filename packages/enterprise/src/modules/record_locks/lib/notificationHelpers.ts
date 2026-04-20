@@ -21,7 +21,7 @@ const RESOURCE_PATHS: Record<string, string> = {
   'catalog.product': '/backend/catalog/products',
   'catalog.product_variant': '/backend/catalog/products',
   'customers.person': '/backend/customers/people',
-  'customers.company': '/backend/customers/companies',
+  'customers.company': '/backend/customers/companies-v2',
   'customers.deal': '/backend/customers/deals',
   'sales.quote': '/backend/sales/quotes',
   'sales.order': '/backend/sales/orders',

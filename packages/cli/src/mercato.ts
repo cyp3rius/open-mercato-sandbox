@@ -90,7 +90,13 @@ function formatCliFailureMessage(modName: string, cmdName: string, error: unknow
     return `${target} is not reachable: it ${reason}. Start the database service or fix DATABASE_URL in .env, then retry \`yarn db:${cmdName}\`.`
   }
 
-  return message
+  const trimmed = typeof message === 'string' ? message.trim() : ''
+  if (trimmed.length) return trimmed
+  const code =
+    error && typeof error === 'object' && 'code' in error ? String((error as { code?: unknown }).code ?? '') : ''
+  if (code) return `Error code ${code} (no message)`
+  if (error instanceof Error && error.name && error.name !== 'Error') return error.name
+  return 'Unknown error (no message). Check DATABASE_URL and logs above. If the browser loads forever, dev defaults to Webpack; set NEXT_DEV_TURBOPACK=1 only if you want Turbopack.'
 }
 
 async function ensureEnvLoaded() {
@@ -1185,13 +1191,45 @@ export async function run(argv = process.argv) {
           const nextBin = resolveInstalledBinary(nodeModulesBases, 'next/dist/bin/next')
           const mercatoBin = resolveInstalledBinary(nodeModulesBases, '@open-mercato/cli/bin/mercato')
 
+          const useTurbopack = process.env.NEXT_DEV_TURBOPACK === '1'
+          const nextDevArgs = useTurbopack ? ['dev', '--turbopack'] : ['dev', '--webpack']
+          if (useTurbopack) {
+            console.log('[server] Next.js dev with Turbopack (NEXT_DEV_TURBOPACK=1).')
+          } else {
+            console.log('[server] Next.js dev with Webpack (--webpack). Set NEXT_DEV_TURBOPACK=1 for Turbopack.')
+          }
+
+          const logChildExit = (label: string, proc: ChildProcess) => {
+            proc.on('exit', (code, signal) => {
+              if (code === 0) return
+              if (signal === 'SIGTERM' || signal === 'SIGINT') return
+              if (code === null && !signal) return
+              console.error(
+                `[server] ${label} exited (code ${code ?? 'null'}${signal ? `, ${signal}` : ''}). Next.js keeps running. Set AUTO_SPAWN_WORKERS=false or AUTO_SPAWN_SCHEDULER=false to skip.`,
+              )
+            })
+          }
+
+          const nextLockFile = path.join(appDir, '.mercato', 'next', 'dev', 'lock')
+          try {
+            fs.unlinkSync(nextLockFile)
+          } catch {
+            // no stale lock
+          }
+
           // Start Next.js dev
-          const nextProcess = spawn('node', [nextBin, 'dev', '--turbopack'], {
+          const nextProcess = spawn('node', [nextBin, ...nextDevArgs], {
             stdio: 'inherit',
             env: process.env,
             cwd: appDir,
           })
           processes.push(nextProcess)
+          nextProcess.on('error', (err) => {
+            console.error('[server] Failed to spawn Next.js:', err)
+          })
+          if (nextProcess.pid) {
+            console.log(`[server] Next.js process ${nextProcess.pid}, cwd ${appDir}`)
+          }
 
           // Start workers if enabled
           if (autoSpawnWorkers) {
@@ -1202,6 +1240,7 @@ export async function run(argv = process.argv) {
               cwd: appDir,
             })
             processes.push(workerProcess)
+            logChildExit('Worker process', workerProcess)
           }
 
           if (autoSpawnScheduler && queueStrategy === 'local') {
@@ -1212,17 +1251,12 @@ export async function run(argv = process.argv) {
               cwd: appDir,
             })
             processes.push(schedulerProcess)
+            logChildExit('Scheduler process', schedulerProcess)
           }
 
-          // Wait for any process to exit
-          await Promise.race(
-            processes.map(
-              (proc) =>
-                new Promise<void>((resolve) => {
-                  proc.on('exit', () => resolve())
-                })
-            )
-          )
+          await new Promise<void>((resolve) => {
+            nextProcess.once('exit', () => resolve())
+          })
 
           await cleanupAndWait()
         },

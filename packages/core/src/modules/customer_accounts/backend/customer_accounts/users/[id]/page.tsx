@@ -605,7 +605,10 @@ export default function CustomerUserDetailPage({ params }: { params?: { id?: str
                 <p className="text-muted-foreground">{t('customer_accounts.admin.detail.fields.customerEntity', 'Linked Company')}</p>
                 {editCustomerEntityId ? (
                   <div className="flex items-center gap-2">
-                    <Link href={`/backend/customers/companies/${editCustomerEntityId}`} className="text-primary hover:underline">
+                    <Link
+                      href={`/backend/customers/companies-v2/${encodeURIComponent(editCustomerEntityId)}`}
+                      className="text-primary hover:underline"
+                    >
                       {companyName || editCustomerEntityId}
                     </Link>
                     <Button type="button" variant="outline" size="sm" onClick={() => { setEditCustomerEntityId(null); setCompanyName(null) }}>

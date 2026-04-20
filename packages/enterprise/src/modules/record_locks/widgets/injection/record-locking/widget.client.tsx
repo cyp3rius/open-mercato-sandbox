@@ -371,6 +371,7 @@ function resolveResourceKind(context: CrudInjectionContext): string | null {
 
   const path = context.path ?? ''
   if (path.startsWith('/backend/customers/people/')) return 'customers.person'
+  if (path.startsWith('/backend/customers/companies-v2/')) return 'customers.company'
   if (path.startsWith('/backend/customers/companies/')) return 'customers.company'
   if (path.startsWith('/backend/customers/deals/')) return 'customers.deal'
   if (path.startsWith('/backend/sales/orders/')) return 'sales.order'

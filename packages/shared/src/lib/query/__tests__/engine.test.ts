@@ -1,4 +1,4 @@
-import { BasicQueryEngine } from '../engine'
+import { BasicQueryEngine, resolveEntityTableName } from '../engine'
 import { SortDir } from '../types'
 import { registerModules } from '../../i18n/server'
 
@@ -344,5 +344,25 @@ describe('BasicQueryEngine', () => {
       ? subQuery._ops.wheres.some((w: any) => Array.isArray(w) && w[0] === 'in' && w[1] === 'tag_assignments.tag_id')
       : false
     expect(hasInFilter).toBe(true)
+  })
+})
+
+describe('resolveEntityTableName', () => {
+  it('maps procurement dotted and colon entity ids to real table names', () => {
+    expect(resolveEntityTableName(undefined, 'procurement.procurement_process')).toBe('procurement_processes')
+    expect(resolveEntityTableName(undefined, 'procurement:procurement_process')).toBe('procurement_processes')
+  })
+
+  it('strips mistaken schema.table ORM metadata to a single Knex table name', () => {
+    const em = {
+      getMetadata: () => ({
+        find: (name: string) =>
+          name === 'ZzWidget'
+            ? { tableName: 'bad_schema.zz_widget' }
+            : null,
+        getAll: () => [],
+      }),
+    } as any
+    expect(resolveEntityTableName(em, 'mod.zz_widget')).toBe('zz_widgets')
   })
 })

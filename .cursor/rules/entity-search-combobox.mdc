@@ -2,6 +2,7 @@
 description: When and how to use EntitySearchCombobox for system entities and dictionary-backed fields (forms vs detail preview vs inline edit)
 globs:
   - apps/**/src/modules/**/*.tsx
+  - packages/core/src/modules/**/backend/**/*.tsx
   - packages/ui/src/backend/**/*.tsx
   - packages/core/src/modules/**/components/**/*.tsx
 alwaysApply: false
@@ -12,6 +13,8 @@ alwaysApply: false
 Use **`EntitySearchCombobox`** from `@open-mercato/ui/backend/inputs/EntitySearchCombobox` when the user picks a value from a **searchable catalog** — not a short static `<select>`.
 
 **Related:** `.cursor/rules/form-ui-consistency.mdc` (Crud parity, detail grids, `muted` inline editors, `+` in new tab); `.cursor/rules/detail-two-column-layout.mdc` (7fr/3fr detail shell).
+
+**Scope:** Use the same rules for **core** backend pages (`packages/core/src/modules/**/backend/**`) and app modules. Any **FK / association** field that points at another tenant-scoped record (customer entity, user, sales document, resource, supplier row on another entity, etc.) should use **search-backed** pickers (`EntitySearchCombobox` with `onRemoteSearch` when the list is API-driven), not raw UUID `<input>` or unfiltered native `<select>` over large sets.
 
 ## When to use
 

@@ -961,7 +961,7 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
                       },
                     },
                   }}
-                  viewHref={`/backend/customers/companies/${companyId}`}
+                  viewHref={`/backend/customers/companies-v2/${encodeURIComponent(companyId)}`}
                 />
               </>
             )}

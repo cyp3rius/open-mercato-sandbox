@@ -85,6 +85,21 @@ export class ResourcesResource {
   @Property({ name: 'customer_entity_id', type: 'uuid', nullable: true })
   customerEntityId?: string | null
 
+  @Property({ name: 'procurement_process_id', type: 'uuid', nullable: true })
+  procurementProcessId?: string | null
+
+  @Property({ name: 'status_value', type: 'text', nullable: true })
+  statusValue?: string | null
+
+  @Property({ name: 'status_label', type: 'text', nullable: true })
+  statusLabel?: string | null
+
+  @Property({ name: 'status_color', type: 'text', nullable: true })
+  statusColor?: string | null
+
+  @Property({ name: 'status_icon', type: 'text', nullable: true })
+  statusIcon?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 

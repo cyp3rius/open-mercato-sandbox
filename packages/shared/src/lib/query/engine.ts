@@ -35,7 +35,53 @@ const pluralizeBaseName = (name: string): string => {
   if (!name) return name
   if (name.endsWith('s')) return name
   if (name.endsWith('y')) return `${name.slice(0, -1)}ies`
+  // e.g. procurement_process → procurement_processes (not procurement_processs)
+  if (name.endsWith('process')) return `${name}es`
   return `${name}s`
+}
+
+/** Public table names for entity_type ids that use `module.entity_snake` (ORM class resolution may be unavailable in some contexts). */
+const ENTITY_TYPE_TABLE_NAME_OVERRIDES: Record<string, string> = {
+  'procurement.procurement_process': 'procurement_processes',
+  'procurement.procurement_process_supplier': 'procurement_process_suppliers',
+  'procurement.procurement_process_line_item': 'procurement_process_line_items',
+  'procurement.procurement_process_task': 'procurement_process_tasks',
+}
+
+/** `module:entity_slug` → `module.entity_slug` for shared override map lookups. */
+function canonicalEntityTypeKey(entityKey: string): string {
+  const s = String(entityKey || '').trim()
+  if (!s) return s
+  const colonIdx = s.indexOf(':')
+  if (colonIdx > 0) {
+    const mod = s.slice(0, colonIdx).trim()
+    const rest = s.slice(colonIdx + 1).trim()
+    if (mod && rest) return `${mod}.${rest}`
+  }
+  return s
+}
+
+/**
+ * Knex expects a single unqualified table name in the public schema. Values like `procurement.procurement_process`
+ * become a quoted identifier and Postgres reports `relation "procurement.procurement_process" does not exist`.
+ * MikroORM may also return `schema.table` — keep the table segment and apply the same pluralization as fallbacks.
+ */
+function toKnexUnqualifiedTableName(resolved: string, rawSlug: string): string {
+  const t = String(resolved || '').trim()
+  if (!t.includes('.')) return t
+  const last = t.split('.').pop() || ''
+  if (!last) return pluralizeBaseName(rawSlug)
+  return pluralizeBaseName(last)
+}
+
+function lookupEntityTableOverride(entityKey: string): string | undefined {
+  const k = String(entityKey || '').trim()
+  if (!k) return undefined
+  const direct = ENTITY_TYPE_TABLE_NAME_OVERRIDES[k]
+  if (direct) return direct
+  const canon = canonicalEntityTypeKey(k)
+  if (canon !== k) return ENTITY_TYPE_TABLE_NAME_OVERRIDES[canon]
+  return undefined
 }
 
 const toPascalCase = (value: string): string => {
@@ -54,12 +100,50 @@ const candidateClassNames = (rawName: string): string[] => {
   return Array.from(candidates)
 }
 
-export function resolveEntityTableName(em: EntityManager | undefined, entity: EntityId): string {
-  if (entityTableCache.has(entity)) {
-    return entityTableCache.get(entity)!
+/**
+ * EntityId may use `module:entity` (e.g. resources:resources_resource) or
+ * `module.entity_snake` (e.g. procurement.procurement_process → entity slug `procurement_process`).
+ */
+function parseEntityIdSegments(entity: string): { modulePrefix: string; rawName: string } {
+  const s = String(entity || '').trim()
+  if (!s) return { modulePrefix: '', rawName: '' }
+  if (s.includes(':')) {
+    const parts = s.split(':')
+    const head = (parts[0] || '').trim()
+    const tail = parts.length > 1 ? parts.slice(1).join(':').trim() : ''
+    const rawName = tail.length > 0 ? tail : head
+    return { modulePrefix: head, rawName }
   }
-  const parts = String(entity || '').split(':')
-  const rawName = (parts[1] && parts[1].trim().length > 0) ? parts[1] : (parts[0] || '').trim()
+  if (s.includes('.')) {
+    const parts = s.split('.')
+    const rawName = (parts[parts.length - 1] || '').trim()
+    const modulePrefix = parts.length > 1 ? parts.slice(0, -1).join('.').trim() : ''
+    return { modulePrefix, rawName }
+  }
+  return { modulePrefix: '', rawName: s }
+}
+
+export function resolveEntityTableName(em: EntityManager | undefined, entity: EntityId): string {
+  const entityKey = String(entity || '').trim()
+  const cacheKeys = Array.from(new Set([entityKey, canonicalEntityTypeKey(entityKey)].filter(Boolean)))
+
+  for (const ck of cacheKeys) {
+    if (entityTableCache.has(ck)) {
+      const cached = entityTableCache.get(ck)!
+      if (!cached.includes('.')) {
+        for (const k of cacheKeys) entityTableCache.set(k, cached)
+        return cached
+      }
+      entityTableCache.delete(ck)
+    }
+  }
+
+  const overrideTable = lookupEntityTableOverride(entityKey)
+  if (overrideTable) {
+    for (const k of cacheKeys) entityTableCache.set(k, overrideTable)
+    return overrideTable
+  }
+  const { modulePrefix, rawName } = parseEntityIdSegments(entityKey)
   const metadata = (em as any)?.getMetadata?.()
 
   if (metadata && rawName) {
@@ -68,26 +152,25 @@ export function resolveEntityTableName(em: EntityManager | undefined, entity: En
       try {
         const meta = metadata.find?.(candidate)
         if (meta?.tableName) {
-          const tableName = String(meta.tableName)
-          entityTableCache.set(entity, tableName)
+          const tableName = toKnexUnqualifiedTableName(String(meta.tableName), rawName)
+          for (const k of cacheKeys) entityTableCache.set(k, tableName)
           return tableName
         }
       } catch {}
     }
 
     // Secondary lookup: search ORM metadata by candidate table names
-    const modulePrefix = parts[0] ?? ''
     const candidateTables = [
-      `${modulePrefix}_${rawName}`,
+      ...(modulePrefix ? [`${modulePrefix}_${rawName}`] : []),
       pluralizeBaseName(rawName),
-      `${modulePrefix}_${pluralizeBaseName(rawName)}`,
+      ...(modulePrefix ? [`${modulePrefix}_${pluralizeBaseName(rawName)}`] : []),
     ]
     try {
       const allMeta: any[] = metadata.getAll?.() ?? []
       for (const meta of allMeta) {
         if (meta?.tableName && candidateTables.includes(String(meta.tableName))) {
-          const tableName = String(meta.tableName)
-          entityTableCache.set(entity, tableName)
+          const tableName = toKnexUnqualifiedTableName(String(meta.tableName), rawName)
+          for (const k of cacheKeys) entityTableCache.set(k, tableName)
           return tableName
         }
       }
@@ -96,11 +179,11 @@ export function resolveEntityTableName(em: EntityManager | undefined, entity: En
 
   const fallback = pluralizeBaseName(rawName || '')
   console.warn(
-    `[QueryEngine] Could not resolve entity "${entity}" via ORM metadata. ` +
+    `[QueryEngine] Could not resolve entity "${entityKey}" via ORM metadata. ` +
     `Falling back to table name "${fallback}". ` +
     `Ensure the entity ID segment matches the class name convention.`
   )
-  entityTableCache.set(entity, fallback)
+  for (const k of cacheKeys) entityTableCache.set(k, fallback)
   return fallback
 }
 

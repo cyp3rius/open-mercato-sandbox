@@ -1259,6 +1259,7 @@ async function seedCurrencyDictionary(em: EntityManager, { tenantId, organizatio
       label,
       color: null,
       icon: null,
+      isDefault: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     })

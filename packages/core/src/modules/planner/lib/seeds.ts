@@ -202,6 +202,7 @@ export async function seedPlannerUnavailabilityReasons(
         label: reason.label,
         color: null,
         icon: null,
+        isDefault: false,
         createdAt: now,
         updatedAt: now,
       })

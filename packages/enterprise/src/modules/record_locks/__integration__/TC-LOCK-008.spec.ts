@@ -53,7 +53,7 @@ test.describe('TC-LOCK-008: Reactive contention handling without legacy notifica
         (response) => response.url().includes('/api/record_locks/acquire') && response.request().method() === 'POST',
         { timeout: 15_000 },
       );
-      await page.goto(`/backend/customers/companies/${encodeURIComponent(companyId)}`);
+      await page.goto(`/backend/customers/companies-v2/${encodeURIComponent(companyId)}`);
       await page.waitForLoadState('domcontentloaded');
       const acquireResponse = await acquireResponsePromise;
       expect(acquireResponse.ok()).toBeTruthy();

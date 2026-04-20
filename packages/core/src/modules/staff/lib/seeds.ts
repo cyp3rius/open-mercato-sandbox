@@ -565,6 +565,7 @@ export async function seedStaffActivityTypes(
       label: (seed.label ?? value).trim(),
       color: color ?? null,
       icon: icon ?? null,
+      isDefault: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     })
@@ -611,6 +612,7 @@ export async function seedStaffAddressTypes(
       label: (seed.label ?? value).trim(),
       color: null,
       icon: null,
+      isDefault: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     })

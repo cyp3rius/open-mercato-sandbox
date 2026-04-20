@@ -81,6 +81,7 @@ export async function GET(req: Request, ctx: { params?: { dictionaryId?: string 
         label: entry.label,
         color: entry.color,
         icon: entry.icon,
+        isDefault: Boolean(entry.isDefault),
         createdAt: entry.createdAt,
         updatedAt: entry.updatedAt,
       })),
@@ -129,6 +130,7 @@ export async function POST(req: Request, ctx: { params?: { dictionaryId?: string
       label: entry.label,
       color: entry.color,
       icon: entry.icon,
+      isDefault: Boolean(entry.isDefault),
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
     }, { status: 201 })

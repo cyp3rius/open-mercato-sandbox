@@ -32,6 +32,7 @@ export type DictionaryEntrySnapshot = {
   label: string
   color: string | null
   icon: string | null
+  isDefault: boolean
   createdAt: string
   updatedAt: string
 }
@@ -41,7 +42,7 @@ export type DictionaryEntryUndoPayload = {
   after?: DictionaryEntrySnapshot | null
 }
 
-const ENTRY_CHANGE_KEYS = ['value', 'label', 'color', 'icon'] as const
+const ENTRY_CHANGE_KEYS = ['value', 'label', 'color', 'icon', 'isDefault'] as const
 
 type ResolveDictionaryForCreate<TCreate> = (options: {
   em: EntityManager
@@ -95,13 +96,14 @@ async function loadSnapshot(em: EntityManager, id: string): Promise<DictionaryEn
   return {
     id: entry.id,
     dictionaryId: entry.dictionary.id,
-   dictionaryKey: entry.dictionary.key,
+    dictionaryKey: entry.dictionary.key,
     organizationId: entry.organizationId,
     tenantId: entry.tenantId,
     value: entry.value,
     label: entry.label,
     color: entry.color ?? null,
     icon: entry.icon ?? null,
+    isDefault: Boolean(entry.isDefault),
     createdAt:
       entry.createdAt instanceof Date
         ? entry.createdAt.toISOString()
@@ -119,6 +121,7 @@ function applySnapshot(entry: DictionaryEntry, snapshot: DictionaryEntrySnapshot
   entry.label = snapshot.label
   entry.color = snapshot.color ?? null
   entry.icon = snapshot.icon ?? null
+  entry.isDefault = Boolean(snapshot.isDefault)
   entry.organizationId = snapshot.organizationId
   entry.tenantId = snapshot.tenantId
   entry.createdAt = new Date(snapshot.createdAt)
@@ -145,6 +148,7 @@ function sanitizeCreatePayload(input: any): {
   label: string
   color: string | null
   icon: string | null
+  isDefault: boolean
 } {
   const rawValue = typeof input?.value === 'string' ? input.value.trim() : ''
   if (!rawValue) {
@@ -155,7 +159,8 @@ function sanitizeCreatePayload(input: any): {
   const label = rawLabel || rawValue
   const color = sanitizeDictionaryColor(input?.color ?? null)
   const icon = sanitizeDictionaryIcon(input?.icon ?? null)
-  return { value: rawValue, normalized, label, color, icon }
+  const isDefault = input?.isDefault === true
+  return { value: rawValue, normalized, label, color, icon, isDefault }
 }
 
 function sanitizeUpdatePayload(input: any): {
@@ -164,6 +169,7 @@ function sanitizeUpdatePayload(input: any): {
   label?: string
   color?: string | null
   icon?: string | null
+  isDefault?: boolean
 } {
   const payload: {
     value?: string
@@ -171,6 +177,7 @@ function sanitizeUpdatePayload(input: any): {
     label?: string
     color?: string | null
     icon?: string | null
+    isDefault?: boolean
   } = {}
   if (Object.prototype.hasOwnProperty.call(input, 'value')) {
     const rawValue = typeof input?.value === 'string' ? input.value.trim() : ''
@@ -190,6 +197,9 @@ function sanitizeUpdatePayload(input: any): {
   if (Object.prototype.hasOwnProperty.call(input, 'icon')) {
     payload.icon = sanitizeDictionaryIcon(input?.icon ?? null)
   }
+  if (Object.prototype.hasOwnProperty.call(input, 'isDefault')) {
+    payload.isDefault = input?.isDefault === true
+  }
   return payload
 }
 
@@ -205,6 +215,26 @@ export function registerDictionaryEntryCommands<TCreate, TUpdate>(
   const fallbackDelete = config.labels?.delete ?? `Delete ${fallbackSingular}`
   const duplicateMessage = getDuplicateError(config)
 
+  async function clearOtherDefaultEntries(
+    em: EntityManager,
+    dictionary: Dictionary,
+    scope: DictionaryScope,
+    keepEntryId: string,
+  ): Promise<void> {
+    const flagged = await em.find(DictionaryEntry, {
+      dictionary,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      isDefault: true,
+    })
+    for (const row of flagged) {
+      if (row.id === keepEntryId) continue
+      row.isDefault = false
+      row.updatedAt = new Date()
+    }
+    await em.flush()
+  }
+
   const createCommand: CommandHandler<
     ReturnType<typeof config.createSchema['parse']>,
     { entryId: string }
@@ -216,7 +246,7 @@ export function registerDictionaryEntryCommands<TCreate, TUpdate>(
       const { dictionary, scope } = await config.resolveDictionaryForCreate({ em, ctx, parsed })
       scopeEnsurer(ctx, scope)
 
-      const { value, normalized, label, color, icon } = sanitizeCreatePayload(parsed)
+      const { value, normalized, label, color, icon, isDefault } = sanitizeCreatePayload(parsed)
       const duplicate = await em.findOne(DictionaryEntry, {
         dictionary,
         tenantId: scope.tenantId,
@@ -236,11 +266,15 @@ export function registerDictionaryEntryCommands<TCreate, TUpdate>(
         label,
         color,
         icon,
+        isDefault,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
       em.persist(entry)
       await em.flush()
+      if (isDefault) {
+        await clearOtherDefaultEntries(em, dictionary, scope, entry.id)
+      }
       return { entryId: entry.id }
     },
     captureAfter: async (_input, result, ctx) => {
@@ -274,12 +308,12 @@ export function registerDictionaryEntryCommands<TCreate, TUpdate>(
       scopeEnsurer(ctx, { tenantId: after.tenantId, organizationId: after.organizationId })
       const entry = await em.findOne(DictionaryEntry, after.id)
       if (entry) {
-      await em.removeAndFlush(entry)
-      return
-    }
-    await em.nativeDelete(DictionaryEntry, { id: after.id })
-  },
-}
+        await em.removeAndFlush(entry)
+        return
+      }
+      await em.nativeDelete(DictionaryEntry, { id: after.id })
+    },
+  }
 
   const updateCommand: CommandHandler<
     ReturnType<typeof config.updateSchema['parse']>,
@@ -331,7 +365,13 @@ export function registerDictionaryEntryCommands<TCreate, TUpdate>(
       if (Object.prototype.hasOwnProperty.call(updates, 'icon')) {
         entry.icon = updates.icon ?? null
       }
+      if (Object.prototype.hasOwnProperty.call(updates, 'isDefault')) {
+        entry.isDefault = updates.isDefault === true
+      }
       await em.flush()
+      if (entry.isDefault) {
+        await clearOtherDefaultEntries(em, dictionary, scope, entry.id)
+      }
       return { entryId: entry.id }
     },
     captureAfter: async (_input, result, ctx) => {
@@ -384,6 +424,7 @@ export function registerDictionaryEntryCommands<TCreate, TUpdate>(
           label: before.label,
           color: before.color,
           icon: before.icon,
+          isDefault: before.isDefault,
           createdAt: new Date(before.createdAt),
           updatedAt: new Date(before.updatedAt),
         })
@@ -458,6 +499,7 @@ export function registerDictionaryEntryCommands<TCreate, TUpdate>(
           label: before.label,
           color: before.color,
           icon: before.icon,
+          isDefault: before.isDefault,
           createdAt: new Date(before.createdAt),
           updatedAt: new Date(before.updatedAt),
         })

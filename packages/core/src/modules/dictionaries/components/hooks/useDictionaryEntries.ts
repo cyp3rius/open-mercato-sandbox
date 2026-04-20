@@ -13,6 +13,7 @@ export type DictionaryEntryRecord = DictionaryDisplayEntry & {
   id: string
   createdAt: string | null
   updatedAt: string | null
+  isDefault?: boolean
 }
 
 export type DictionaryEntriesQueryData = {
@@ -59,6 +60,7 @@ export const dictionaryEntriesQueryOptions = (dictionaryId: string, scopeVersion
       const icon = typeof data.icon === 'string' && data.icon.trim().length ? data.icon.trim() : null
       const createdAt = typeof data.createdAt === 'string' ? data.createdAt : null
       const updatedAt = typeof data.updatedAt === 'string' ? data.updatedAt : null
+      const isDefault = data.isDefault === true
       parsed.push({
         id,
         value,
@@ -67,6 +69,7 @@ export const dictionaryEntriesQueryOptions = (dictionaryId: string, scopeVersion
         icon,
         createdAt,
         updatedAt,
+        isDefault,
       })
     }
     const normalized = normalizeDictionaryEntries(

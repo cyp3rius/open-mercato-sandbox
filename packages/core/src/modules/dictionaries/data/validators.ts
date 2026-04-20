@@ -32,6 +32,7 @@ export const createDictionaryEntrySchema = z.object({
   label: z.string().trim().min(1).max(150).optional(),
   color: hexColorSchema.nullable().optional(),
   icon: iconSchema.nullable().optional(),
+  isDefault: z.boolean().optional(),
 })
 
 export type CreateDictionaryEntryInput = z.infer<typeof createDictionaryEntrySchema>
@@ -41,10 +42,14 @@ const dictionaryEntryUpdateFieldsSchema = z.object({
   label: z.string().trim().min(1).max(150).optional(),
   color: hexColorSchema.nullable().optional(),
   icon: iconSchema.nullable().optional(),
+  isDefault: z.boolean().optional(),
 })
 
 const validateDictionaryEntryUpdate = (payload: z.infer<typeof dictionaryEntryUpdateFieldsSchema>) =>
-  Object.keys(payload).length > 0
+  Object.keys(payload).filter((key) => {
+    const v = payload[key as keyof typeof payload]
+    return v !== undefined
+  }).length > 0
 
 export const updateDictionaryEntrySchema = dictionaryEntryUpdateFieldsSchema.refine(
   validateDictionaryEntryUpdate,

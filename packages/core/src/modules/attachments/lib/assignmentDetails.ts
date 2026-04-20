@@ -40,7 +40,7 @@ function getEntityLinkSpecs(): Record<string, AssignmentLinkSpec> {
       extraFields: ['kind'],
       buildHref: (record) => {
         const kind = String(readRecordValue(record, 'kind') || '').toLowerCase()
-        if (kind === 'company') return buildSimpleHref('/backend/customers/companies', record.id)
+        if (kind === 'company') return buildSimpleHref('/backend/customers/companies-v2', record.id)
         if (kind === 'person') return buildSimpleHref('/backend/customers/people', record.id)
         return null
       },
@@ -62,7 +62,7 @@ function getEntityLinkSpecs(): Record<string, AssignmentLinkSpec> {
       extraFields: ['entity_id'],
       buildHref: (record) => {
         const entityId = readRecordValue(record, 'entity_id')
-        return entityId ? buildSimpleHref('/backend/customers/companies', entityId) : null
+        return entityId ? buildSimpleHref('/backend/customers/companies-v2', entityId) : null
       },
     }
   }

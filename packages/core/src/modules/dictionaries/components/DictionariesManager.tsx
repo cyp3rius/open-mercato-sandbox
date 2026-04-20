@@ -323,6 +323,7 @@ export function DictionariesManager() {
         {selectedDictionary ? (
           <DictionaryEntriesEditor
             dictionaryId={selectedDictionary.id}
+            dictionaryKey={selectedDictionary.key}
             dictionaryName={selectedDictionary.name}
             readOnly={selectedDictionary.isInherited}
           />

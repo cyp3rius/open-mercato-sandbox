@@ -1,12 +1,16 @@
 ---
 description: Open Mercato — backend module UI (list, detail, create) for app modules
-globs: apps/mercato/src/modules/**/*.tsx
+globs:
+  - apps/mercato/src/modules/**/*.tsx
+  - packages/core/src/modules/**/backend/**/*.tsx
 alwaysApply: false
 ---
 
 # Backend module UI (app modules)
 
-**Reference implementation:** `packages/core/src/modules/customers/backend/customers/companies` — detail at `[id]/page.tsx`, create at `create/page.tsx`. New module screens under `apps/mercato/src/modules/<module>/backend/...` should use the **same URL semantics and the same mechanisms** (CrudForm, groups, actions) unless a spec says otherwise.
+**Reference implementation:** `packages/core/src/modules/customers/backend/customers/companies` — detail at `[id]/page.tsx`, create at `create/page.tsx`.
+
+**Where this applies:** **App** modules under `apps/mercato/src/modules/<module>/backend/...` **and** **core** feature modules that ship backend UI under `packages/core/src/modules/<module>/backend/...` (same URL semantics, CrudForm-first, detail layout, relation pickers). Only the **repository root** differs (`apps/mercato` vs `packages/core`).
 
 ## Routing and files
 

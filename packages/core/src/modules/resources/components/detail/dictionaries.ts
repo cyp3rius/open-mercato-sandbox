@@ -1,6 +1,7 @@
 "use client"
 
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { RESOURCES_RESOURCE_STATUS_DICTIONARY_KEY } from '@open-mercato/core/modules/resources/lib/resourceStatus'
 
 export type DictionaryEntryOption = {
   value: string
@@ -19,12 +20,14 @@ const RESOURCE_DICTIONARY_KEYS = {
   activityTypes: 'resources.activity-types',
   serviceTypes: 'resources.service_type',
   serviceActivities: 'resources.service_activity',
+  resourceStatus: RESOURCES_RESOURCE_STATUS_DICTIONARY_KEY,
 } as const
 
 const RESOURCE_DICTIONARY_DISPLAY_NAMES: Record<keyof typeof RESOURCE_DICTIONARY_KEYS, string> = {
   activityTypes: 'Resource activity types',
   serviceTypes: 'Resource service types',
   serviceActivities: 'Resource service activities',
+  resourceStatus: 'Resource status',
 }
 
 async function ensureDictionary(key: string, name: string): Promise<DictionarySummary | null> {

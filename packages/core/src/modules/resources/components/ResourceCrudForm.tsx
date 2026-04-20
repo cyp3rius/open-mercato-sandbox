@@ -11,6 +11,7 @@ import { E } from '#generated/entities.ids.generated'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { RESOURCES_CAPACITY_UNIT_DICTIONARY_KEY } from '@open-mercato/core/modules/resources/lib/capacityUnits'
+import { RESOURCES_RESOURCE_STATUS_DICTIONARY_KEY } from '@open-mercato/core/modules/resources/lib/resourceStatus'
 import { RESOURCES_RESOURCE_FIELDSET_DEFAULT, resolveResourcesResourceFieldsetCode } from '@open-mercato/core/modules/resources/lib/resourceCustomFields'
 import Link from 'next/link'
 import { Plus, Settings } from 'lucide-react'
@@ -54,6 +55,7 @@ export function useResourcesResourceFormConfig(options: {
   const [resourceTypes, setResourceTypes] = React.useState<ResourceTypeRow[]>([])
   const [resourceTypesLoaded, setResourceTypesLoaded] = React.useState(false)
   const [capacityUnitDictionaryId, setCapacityUnitDictionaryId] = React.useState<string | null>(null)
+  const [resourceStatusDictionaryId, setResourceStatusDictionaryId] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     let cancelled = false
@@ -92,6 +94,23 @@ export function useResourcesResourceFormConfig(options: {
     return () => { cancelled = true }
   }, [scopeVersion])
 
+  React.useEffect(() => {
+    let cancelled = false
+    async function loadResourceStatusDictionary() {
+      try {
+        const call = await apiCall<{ items?: Array<{ id?: string; key?: string; isInherited?: boolean }> }>('/api/dictionaries')
+        const items = Array.isArray(call.result?.items) ? call.result.items : []
+        const matches = items.filter((item) => item?.key === RESOURCES_RESOURCE_STATUS_DICTIONARY_KEY)
+        const preferred = matches.find((item) => item?.isInherited === false) ?? matches[0] ?? null
+        if (!cancelled) setResourceStatusDictionaryId(preferred?.id ?? null)
+      } catch {
+        if (!cancelled) setResourceStatusDictionaryId(null)
+      }
+    }
+    loadResourceStatusDictionary()
+    return () => { cancelled = true }
+  }, [scopeVersion])
+
   const resourceFieldsetByTypeId = React.useMemo(() => {
     const map = new Map<string, string>()
     resourceTypes.forEach((type) => {
@@ -126,7 +145,7 @@ export function useResourcesResourceFormConfig(options: {
         label: t('resources.resources.form.fields.name', 'Name'),
         type: 'text',
         required: true,
-        layout: 'half',
+        layout: 'full',
       },
       {
         id: 'resourceTypeId',
@@ -185,6 +204,31 @@ export function useResourcesResourceFormConfig(options: {
             </Button>
           </div>
         ),
+      },
+      {
+        id: 'statusValue',
+        label: t('resources.resources.form.fields.status', 'Status'),
+        layout: 'half',
+        type: 'custom',
+        component: ({ value, setValue, disabled }) => {
+          if (!resourceStatusDictionaryId) {
+            return (
+              <p className="text-xs text-muted-foreground">
+                {t('resources.resources.form.fields.status.missing', 'Resource status dictionary is not configured.')}
+              </p>
+            )
+          }
+          return (
+            <DictionarySelectControl
+              dictionaryId={resourceStatusDictionaryId}
+              value={typeof value === 'string' && value.trim().length ? value : null}
+              onChange={(next) => setValue(next ?? '')}
+              selectClassName="w-full"
+              disabled={disabled}
+              allowInlineCreate={false}
+            />
+          )
+        },
       },
       {
         id: 'description',
@@ -271,6 +315,7 @@ export function useResourcesResourceFormConfig(options: {
   }, [
     appearanceLabels,
     capacityUnitDictionaryId,
+    resourceStatusDictionaryId,
     resolveFieldsetCode,
     resourceTypes,
     t,
@@ -284,6 +329,7 @@ export function useResourcesResourceFormConfig(options: {
         fields: [
           'name',
           'resourceTypeId',
+          'statusValue',
           'description',
           'customerEntityId',
           'capacity',

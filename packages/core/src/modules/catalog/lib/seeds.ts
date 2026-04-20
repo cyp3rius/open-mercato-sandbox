@@ -97,6 +97,7 @@ export async function seedCatalogUnits(
       label: unit.label,
       color: null,
       icon: null,
+      isDefault: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     })

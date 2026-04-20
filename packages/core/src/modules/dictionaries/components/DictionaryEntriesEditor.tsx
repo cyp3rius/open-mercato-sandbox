@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from 'react'
-import { Plus, Pencil, Trash2, RefreshCw, Languages } from 'lucide-react'
+import { Plus, Pencil, Trash2, RefreshCw, Languages, Check } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
   Dialog,
@@ -29,11 +29,13 @@ import {
   DialogDescription,
 } from '@open-mercato/ui/primitives/dialog'
 import { TranslationManager } from '@open-mercato/core/modules/translations/components/TranslationManager'
+import { RESOURCES_RESOURCE_STATUS_DICTIONARY_KEY } from '@open-mercato/core/modules/resources/lib/resourceStatus'
 
 type Entry = DictionaryEntryRecord
 
 type DictionaryEntriesEditorProps = {
   dictionaryId: string
+  dictionaryKey?: string
   dictionaryName: string
   readOnly?: boolean
 }
@@ -44,9 +46,15 @@ type FormState = {
   label: string
   color: string | null
   icon: string | null
+  isDefault: boolean
 }
 
-export function DictionaryEntriesEditor({ dictionaryId, dictionaryName, readOnly = false }: DictionaryEntriesEditorProps) {
+export function DictionaryEntriesEditor({
+  dictionaryId,
+  dictionaryKey,
+  dictionaryName,
+  readOnly = false,
+}: DictionaryEntriesEditorProps) {
   const t = useT()
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const readOnlyMessage = t('dictionaries.config.entries.readOnly', 'Inherited dictionaries are managed at the parent organization.')
@@ -55,6 +63,8 @@ export function DictionaryEntriesEditor({ dictionaryId, dictionaryName, readOnly
   const dictionaryQuery = useDictionaryEntries(dictionaryId, scopeVersion)
   const entries = React.useMemo<Entry[]>(() => dictionaryQuery.data?.fullEntries ?? [], [dictionaryQuery.data?.fullEntries])
   const dictionaryMap = dictionaryQuery.data?.map ?? {}
+  const showDefaultColumn = dictionaryKey === RESOURCES_RESOURCE_STATUS_DICTIONARY_KEY
+  const tableColumnCount = showDefaultColumn ? 5 : 4
   const isInitialLoading = dictionaryQuery.isLoading
   const loadError = dictionaryQuery.isError
     ? t('dictionaries.config.entries.error.load', 'Failed to load dictionary entries.')
@@ -67,13 +77,14 @@ export function DictionaryEntriesEditor({ dictionaryId, dictionaryName, readOnly
     label: '',
     color: null,
     icon: null,
+    isDefault: false,
   }))
   const [errors, setErrors] = React.useState<{ value?: string; label?: string }>({})
   const [translateEntry, setTranslateEntry] = React.useState<Entry | null>(null)
   const appearance = useAppearanceState(formState.icon, formState.color)
 
   const resetForm = React.useCallback(() => {
-    setFormState({ value: '', label: '', color: null, icon: null })
+    setFormState({ value: '', label: '', color: null, icon: null, isDefault: false })
     appearance.setColor(null)
     appearance.setIcon(null)
     setErrors({})
@@ -92,6 +103,7 @@ export function DictionaryEntriesEditor({ dictionaryId, dictionaryName, readOnly
           label: entry.label,
           color: entry.color ?? null,
           icon: entry.icon ?? null,
+          isDefault: entry.isDefault === true,
         })
         appearance.setColor(entry.color ?? null)
         appearance.setIcon(entry.icon ?? null)
@@ -128,11 +140,14 @@ export function DictionaryEntriesEditor({ dictionaryId, dictionaryName, readOnly
     setErrors({})
     setIsSaving(true)
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         value: trimmedValue,
         label: trimmedLabel || trimmedValue,
         color: appearance.color,
         icon: appearance.icon,
+      }
+      if (showDefaultColumn) {
+        payload.isDefault = formState.isDefault
       }
       if (formState.id) {
         const call = await apiCall<Record<string, unknown>>(
@@ -167,7 +182,7 @@ export function DictionaryEntriesEditor({ dictionaryId, dictionaryName, readOnly
       }
       await invalidateDictionaryEntries(queryClient, dictionaryId)
       setDialogOpen(false)
-      setFormState({ value: '', label: '', color: null, icon: null })
+      setFormState({ value: '', label: '', color: null, icon: null, isDefault: false })
       appearance.setColor(null)
       appearance.setIcon(null)
       setErrors({})
@@ -177,7 +192,19 @@ export function DictionaryEntriesEditor({ dictionaryId, dictionaryName, readOnly
     } finally {
       setIsSaving(false)
     }
-  }, [appearance, dictionaryId, formState.id, formState.label, formState.value, queryClient, readOnly, readOnlyMessage, t])
+  }, [
+    appearance,
+    dictionaryId,
+    formState.id,
+    formState.isDefault,
+    formState.label,
+    formState.value,
+    queryClient,
+    readOnly,
+    readOnlyMessage,
+    showDefaultColumn,
+    t,
+  ])
 
   const handleDelete = React.useCallback(
     async (entry: Entry) => {
@@ -218,7 +245,7 @@ export function DictionaryEntriesEditor({ dictionaryId, dictionaryName, readOnly
     if (isInitialLoading) {
       return (
         <TableRow>
-          <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+          <TableCell colSpan={tableColumnCount} className="py-8 text-center text-sm text-muted-foreground">
             <Spinner className="mx-auto mb-2 h-5 w-5" />
             {t('dictionaries.config.entries.loading', 'Loading entries…')}
           </TableCell>
@@ -228,7 +255,7 @@ export function DictionaryEntriesEditor({ dictionaryId, dictionaryName, readOnly
     if (loadError) {
       return (
         <TableRow>
-          <TableCell colSpan={4} className="py-6 text-center text-sm text-destructive">
+          <TableCell colSpan={tableColumnCount} className="py-6 text-center text-sm text-destructive">
             {loadError}
           </TableCell>
         </TableRow>
@@ -237,7 +264,7 @@ export function DictionaryEntriesEditor({ dictionaryId, dictionaryName, readOnly
     if (!entries.length) {
       return (
         <TableRow>
-          <TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
+          <TableCell colSpan={tableColumnCount} className="py-6 text-center text-sm text-muted-foreground">
             {t('dictionaries.config.entries.empty', 'No entries yet.')}
           </TableCell>
         </TableRow>
@@ -257,6 +284,13 @@ export function DictionaryEntriesEditor({ dictionaryId, dictionaryName, readOnly
               fallback={<span className="text-sm text-muted-foreground">{t('dictionaries.config.entries.appearance.none', 'None')}</span>}
             />
           </TableCell>
+          {showDefaultColumn ? (
+            <TableCell className="text-center">
+              {entry.isDefault ? (
+                <Check className="mx-auto h-4 w-4 text-primary" aria-label={t('dictionaries.config.entries.default.yes', 'Default')} />
+              ) : null}
+            </TableCell>
+          ) : null}
           <TableCell className="flex items-center gap-2">
             {readOnly ? (
               <span className="text-xs text-muted-foreground">
@@ -295,7 +329,19 @@ export function DictionaryEntriesEditor({ dictionaryId, dictionaryName, readOnly
           </TableCell>
       </TableRow>
       ))
-  }, [dictionaryMap, entries, handleDelete, isDeleting, isInitialLoading, loadError, openDialog, readOnly, t])
+  }, [
+    dictionaryMap,
+    entries,
+    handleDelete,
+    isDeleting,
+    isInitialLoading,
+    loadError,
+    openDialog,
+    readOnly,
+    showDefaultColumn,
+    tableColumnCount,
+    t,
+  ])
 
   return (
     <div className="space-y-4">
@@ -340,6 +386,11 @@ export function DictionaryEntriesEditor({ dictionaryId, dictionaryName, readOnly
               <TableHead className="w-48">{t('dictionaries.config.entries.columns.value', 'Value')}</TableHead>
               <TableHead className="w-48">{t('dictionaries.config.entries.columns.label', 'Label')}</TableHead>
               <TableHead>{t('dictionaries.config.entries.columns.appearance', 'Appearance')}</TableHead>
+              {showDefaultColumn ? (
+                <TableHead className="w-24 text-center">
+                  {t('dictionaries.config.entries.columns.default', 'Default')}
+                </TableHead>
+              ) : null}
               <TableHead className="w-32 text-right">{t('dictionaries.config.entries.columns.actions', 'Actions')}</TableHead>
             </TableRow>
           </TableHeader>
@@ -394,6 +445,20 @@ export function DictionaryEntriesEditor({ dictionaryId, dictionaryName, readOnly
                 className="w-full rounded border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               />
             </div>
+            {showDefaultColumn ? (
+              <div className="flex items-center gap-2">
+                <input
+                  id="dictionary-entry-is-default"
+                  type="checkbox"
+                  className="h-4 w-4 rounded border"
+                  checked={formState.isDefault}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, isDefault: event.target.checked }))}
+                />
+                <label htmlFor="dictionary-entry-is-default" className="text-sm font-medium">
+                  {t('dictionaries.config.entries.dialog.defaultLabel', 'Default status for new resources')}
+                </label>
+              </div>
+            ) : null}
             <AppearanceSelector
               icon={appearance.icon}
               color={appearance.color}

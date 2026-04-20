@@ -2,6 +2,7 @@
 description: Open-related-record control for association previews (linked CRM entities, policies, resources)
 globs:
   - apps/mercato/src/modules/**/*.tsx
+  - packages/core/src/modules/**/backend/**/*.tsx
   - packages/core/src/modules/**/components/**/*.tsx
 alwaysApply: false
 ---

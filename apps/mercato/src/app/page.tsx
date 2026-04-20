@@ -1,13 +1,13 @@
+import { Suspense } from 'react'
 import { modules } from '@/.mercato/generated/modules.generated'
 import { StartPageContent } from '@/components/StartPageContent'
+import { HomeDbStatusSection } from '@/components/HomeDbStatusSection'
 import type { Metadata } from 'next'
 import { resolveLocalizedAppMetadata } from '@/lib/metadata'
 import { cookies } from 'next/headers'
 import Image from 'next/image'
 import Link from 'next/link'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
-import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
-import type { EntityManager } from '@mikro-orm/postgresql'
 
 function FeatureBadge({ label }: { label: string }) {
   return (
@@ -28,23 +28,6 @@ export default async function Home() {
   const cookieStore = await cookies()
   const showStartPageCookie = cookieStore.get('show_start_page')
   const showStartPage = showStartPageCookie?.value !== 'false'
-
-  // Database status and counts
-  let dbStatus = t('app.page.dbStatus.unknown', 'Unknown')
-  let usersCount = 0
-  let tenantsCount = 0
-  let orgsCount = 0
-  try {
-    const container = await createRequestContainer()
-    const em = container.resolve<EntityManager>('em')
-    usersCount = await em.count('User', {})
-    tenantsCount = await em.count('Tenant', {})
-    orgsCount = await em.count('Organization', {})
-    dbStatus = t('app.page.dbStatus.connected', 'Connected')
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : t('app.page.dbStatus.noConnection', 'no connection')
-    dbStatus = t('app.page.dbStatus.error', 'Error: {message}', { message })
-  }
 
   const onboardingAvailable =
     process.env.SELF_SERVICE_ONBOARDING_ENABLED === 'true' &&
@@ -70,24 +53,16 @@ export default async function Home() {
       <StartPageContent showStartPage={showStartPage} showOnboardingCta={onboardingAvailable} />
 
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="rounded-lg border bg-card p-4">
-          <div className="text-sm font-medium mb-2">{t('app.page.dbStatus.title', 'Database Status')}</div>
-          <div className="text-sm text-muted-foreground">{t('app.page.dbStatus.label', 'Status:')} <span className="font-medium text-foreground">{dbStatus}</span></div>
-          <div className="mt-3 space-y-1.5 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">{t('app.page.dbStatus.users', 'Users:')}</span>
-              <span className="font-mono font-medium">{usersCount}</span>
+        <Suspense
+          fallback={
+            <div className="rounded-lg border bg-card p-4">
+              <div className="text-sm font-medium mb-2">{t('app.page.dbStatus.title', 'Database Status')}</div>
+              <p className="text-sm text-muted-foreground">{t('common.loading', 'Loading…')}</p>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">{t('app.page.dbStatus.tenants', 'Tenants:')}</span>
-              <span className="font-mono font-medium">{tenantsCount}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">{t('app.page.dbStatus.organizations', 'Organizations:')}</span>
-              <span className="font-mono font-medium">{orgsCount}</span>
-            </div>
-          </div>
-        </div>
+          }
+        >
+          <HomeDbStatusSection />
+        </Suspense>
 
         <div className="rounded-lg border bg-card p-4 md:col-span-2">
           <div className="text-sm font-medium mb-3">{t('app.page.activeModules.title', 'Active Modules')}</div>

@@ -201,12 +201,14 @@ const searchGetTool: AiToolDefinition = {
     if (input.entityType.includes('person')) {
       url = `/backend/customers/people/${id}`
     } else if (input.entityType.includes('company')) {
-      url = `/backend/customers/companies/${id}`
+      url = `/backend/customers/companies-v2/${encodeURIComponent(String(id))}`
     } else if (input.entityType.includes('deal')) {
       url = `/backend/customers/deals/${id}`
     } else if (input.entityType.includes('activity')) {
       const entityId = record.entity_id ?? record.entityId
-      url = entityId ? `/backend/customers/companies/${entityId}#activity-${id}` : null
+      url = entityId
+        ? `/backend/customers/companies-v2/${encodeURIComponent(String(entityId))}#activity-${encodeURIComponent(String(id))}`
+        : null
     }
 
     return {

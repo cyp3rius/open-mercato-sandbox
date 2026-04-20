@@ -45,6 +45,7 @@ export const dictionaryEntrySchema = z.object({
   label: z.string(),
   color: z.string().nullable(),
   icon: z.string().nullable(),
+  isDefault: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string().nullable(),
 })

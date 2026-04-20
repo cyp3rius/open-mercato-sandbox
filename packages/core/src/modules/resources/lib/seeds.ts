@@ -25,6 +25,7 @@ import {
   resolveResourcesResourceFieldsetCode,
 } from './resourceCustomFields'
 import { RESOURCES_CAPACITY_UNIT_DEFAULTS, RESOURCES_CAPACITY_UNIT_DICTIONARY_KEY } from './capacityUnits'
+import { RESOURCES_RESOURCE_STATUS_DICTIONARY_KEY } from './resourceStatus'
 
 export type ResourcesSeedScope = { tenantId: string; organizationId: string }
 
@@ -33,6 +34,7 @@ type DictionarySeedEntry = {
   label?: string
   color?: string | null
   icon?: string | null
+  isDefault?: boolean
 }
 
 type ResourcesResourceTypeSeed = {
@@ -87,6 +89,13 @@ const RESOURCES_ADDRESS_TYPE_DEFAULTS: DictionarySeedEntry[] = [
   { value: 'main address', label: 'Main address' },
   { value: 'alternative address', label: 'Alternative address' },
   { value: 'current address', label: 'Current address' },
+]
+
+const RESOURCES_RESOURCE_STATUS_DEFAULTS: DictionarySeedEntry[] = [
+  { value: 'available', label: 'Available', icon: 'lucide:circle-check', color: '#16a34a', isDefault: true },
+  { value: 'in_use', label: 'In use', icon: 'lucide:activity', color: '#ca8a04' },
+  { value: 'maintenance', label: 'Maintenance', icon: 'lucide:wrench', color: '#f59e0b' },
+  { value: 'inactive', label: 'Inactive', icon: 'lucide:moon', color: '#64748b' },
 ]
 
 async function ensureResourceFieldsetConfig(em: EntityManager, scope: ResourcesSeedScope) {
@@ -169,6 +178,7 @@ export async function seedResourcesCapacityUnits(
       label: unit.label,
       color: null,
       icon: null,
+      isDefault: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     })
@@ -259,6 +269,7 @@ export async function seedResourcesActivityTypes(
       label: (seed.label ?? value).trim(),
       color: color ?? null,
       icon: icon ?? null,
+      isDefault: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     })
@@ -305,6 +316,65 @@ export async function seedResourcesAddressTypes(
       label: (seed.label ?? value).trim(),
       color: null,
       icon: null,
+      isDefault: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    em.persist(entry)
+  }
+  await em.flush()
+}
+
+export async function seedResourcesResourceStatus(em: EntityManager, scope: ResourcesSeedScope) {
+  const dictionary = await ensureResourcesDictionary(em, scope, {
+    key: RESOURCES_RESOURCE_STATUS_DICTIONARY_KEY,
+    name: 'Resource status',
+    description: 'Status values for resources (availability and lifecycle).',
+  })
+  const existingEntries = await em.find(DictionaryEntry, {
+    dictionary,
+    tenantId: scope.tenantId,
+    organizationId: scope.organizationId,
+  })
+  const existingByValue = new Map(existingEntries.map((entry) => [entry.normalizedValue, entry]))
+  for (const seed of RESOURCES_RESOURCE_STATUS_DEFAULTS) {
+    const value = seed.value.trim()
+    if (!value) continue
+    const normalizedValue = normalizeDictionaryValue(value)
+    if (!normalizedValue) continue
+    const color = sanitizeDictionaryColor(seed.color)
+    const icon = sanitizeDictionaryIcon(seed.icon)
+    const existing = existingByValue.get(normalizedValue)
+    if (existing) {
+      let updated = false
+      if (!existing.label?.trim() && (seed.label ?? '').trim()) {
+        existing.label = (seed.label ?? value).trim()
+        updated = true
+      }
+      if (color !== undefined && existing.color !== color) {
+        existing.color = color
+        updated = true
+      }
+      if (icon !== undefined && existing.icon !== icon) {
+        existing.icon = icon
+        updated = true
+      }
+      if (updated) {
+        existing.updatedAt = new Date()
+        em.persist(existing)
+      }
+      continue
+    }
+    const entry = em.create(DictionaryEntry, {
+      dictionary,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      value,
+      normalizedValue,
+      label: (seed.label ?? value).trim(),
+      color: color ?? null,
+      icon: icon ?? null,
+      isDefault: seed.isDefault === true,
       createdAt: new Date(),
       updatedAt: new Date(),
     })

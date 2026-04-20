@@ -61,6 +61,14 @@ type ResourceRecord = {
   is_active?: boolean
   availabilityRuleSetId?: string | null
   availability_rule_set_id?: string | null
+  statusValue?: string | null
+  statusLabel?: string | null
+  statusColor?: string | null
+  statusIcon?: string | null
+  status_value?: string | null
+  status_label?: string | null
+  status_color?: string | null
+  status_icon?: string | null
 } & Record<string, unknown>
 
 type ResourceResponse = {
@@ -80,6 +88,10 @@ function normalizeResourceRecord(record: ResourceRecord): ResourceRecord {
     appearanceIcon: record.appearanceIcon ?? record.appearance_icon ?? null,
     appearanceColor: record.appearanceColor ?? record.appearance_color ?? null,
     isActive: record.isActive ?? record.is_active ?? true,
+    statusValue: record.statusValue ?? record.status_value ?? null,
+    statusLabel: record.statusLabel ?? record.status_label ?? null,
+    statusColor: record.statusColor ?? record.status_color ?? null,
+    statusIcon: record.statusIcon ?? record.status_icon ?? null,
   }
 }
 
@@ -279,6 +291,10 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
       customerEntityId,
       capacity: values.capacity ? Number(values.capacity) : null,
       capacityUnitValue: values.capacityUnitValue ? String(values.capacityUnitValue) : null,
+      statusValue:
+        typeof values.statusValue === 'string' && values.statusValue.trim().length > 0
+          ? values.statusValue.trim()
+          : null,
       appearanceIcon: appearance.icon ?? null,
       appearanceColor: appearance.color ?? null,
       isActive: values.isActive ?? true,
@@ -493,6 +509,7 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
             customerEntityId: resource.customerEntityId ?? '',
             capacity: resource.capacity ?? '',
             capacityUnitValue: resource.capacityUnitValue ?? '',
+            statusValue: resource.statusValue ?? '',
             appearance: { icon: resource.appearanceIcon ?? null, color: resource.appearanceColor ?? null },
             isActive: resource.isActive ?? true,
             customFieldsetCode: resource.resourceTypeId

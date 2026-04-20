@@ -362,8 +362,8 @@ function buildCustomerUrl(kind: string | null | undefined, id?: string | null): 
   if (!id) return null
   const encoded = encodeURIComponent(id)
   if (kind === 'person') return `/backend/customers/people/${encoded}`
-  if (kind === 'company') return `/backend/customers/companies/${encoded}`
-  return `/backend/customers/companies/${encoded}`
+  if (kind === 'company') return `/backend/customers/companies-v2/${encoded}`
+  return `/backend/customers/companies-v2/${encoded}`
 }
 
 function formatDealValue(record: Record<string, unknown>): string | undefined {

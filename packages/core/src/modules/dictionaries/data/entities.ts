@@ -80,6 +80,9 @@ export class DictionaryEntry {
   @Property({ type: 'text', nullable: true })
   icon?: string | null
 
+  @Property({ name: 'is_default', type: 'boolean', default: false })
+  isDefault: boolean = false
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 

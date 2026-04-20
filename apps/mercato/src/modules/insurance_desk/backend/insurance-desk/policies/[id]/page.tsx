@@ -390,7 +390,7 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
       } else {
         const newId = await createInsuranceExternalVehicleResource({
           t,
-          name: newResourceNameResolved,
+            name: newResourceNameResolved,
           description: subjForm.newResourceDescription.trim().length
             ? subjForm.newResourceDescription.trim()
             : null,
@@ -416,20 +416,20 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
           updateCrud(
             'insurance/policies',
             {
-              id: policyId,
-              policyNumber,
-              insurerId,
+        id: policyId,
+        policyNumber,
+        insurerId,
               referringPartnerEntityId: referringPartnerEntityId.length ? referringPartnerEntityId : null,
-              insurerContactId: insurerContactRaw.length ? insurerContactRaw : null,
+        insurerContactId: insurerContactRaw.length ? insurerContactRaw : null,
               caretakerUserId: caretakerRaw,
-              catalogProductId: catalogProductIdRaw.length ? catalogProductIdRaw : null,
-              resourceId,
+        catalogProductId: catalogProductIdRaw.length ? catalogProductIdRaw : null,
+        resourceId,
               insuredPersonEntityId: insuredPersonRaw.length ? insuredPersonRaw : null,
               insuredCompanyEntityId: insuredCompanyRaw.length ? insuredCompanyRaw : null,
-              validFrom: validFrom && !Number.isNaN(validFrom.getTime()) ? validFrom.toISOString() : null,
-              validTo: validTo && !Number.isNaN(validTo.getTime()) ? validTo.toISOString() : null,
+        validFrom: validFrom && !Number.isNaN(validFrom.getTime()) ? validFrom.toISOString() : null,
+        validTo: validTo && !Number.isNaN(validTo.getTime()) ? validTo.toISOString() : null,
               status: statusRaw,
-              metadata: Object.keys(metadata).length ? metadata : null,
+        metadata: Object.keys(metadata).length ? metadata : null,
             },
             { errorMessage: t('ui.forms.flash.saveError', 'Could not save.') },
           ),

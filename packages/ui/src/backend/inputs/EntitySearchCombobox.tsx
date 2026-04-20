@@ -105,11 +105,16 @@ export function EntitySearchCombobox({
 
   const localRows = options
 
+  const onRemoteSearchRef = React.useRef(onRemoteSearch)
+  onRemoteSearchRef.current = onRemoteSearch
+
   React.useEffect(() => {
     if (!isRemote || !open) return
+    const run = onRemoteSearchRef.current
+    if (typeof run !== 'function') return
     let cancelled = false
     setRemoteLoading(true)
-    void onRemoteSearch(debouncedQuery.trim())
+    void run(debouncedQuery.trim())
       .then((rows) => {
         if (!cancelled) setRemoteRows(rows)
       })
@@ -122,7 +127,7 @@ export function EntitySearchCombobox({
     return () => {
       cancelled = true
     }
-  }, [debouncedQuery, isRemote, onRemoteSearch, open])
+  }, [debouncedQuery, isRemote, open])
 
   const rows = isRemote ? remoteRows : localRows
 
