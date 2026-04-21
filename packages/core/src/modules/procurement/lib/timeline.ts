@@ -1,4 +1,4 @@
-import type { EntityManager } from '@mikro-orm/postgresql'
+import type { EntityManager } from '@mikro-orm/core'
 import { ProcurementProcess, ProcurementProcessTimelineEvent } from '../data/entities'
 
 export async function appendProcurementTimelineEvent(

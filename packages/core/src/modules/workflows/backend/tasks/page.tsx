@@ -14,21 +14,27 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import type { FilterDef, FilterValues } from '@open-mercato/ui/backend/FilterBar'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
+import { isUserTaskCalendarOverdue } from '../../lib/userTaskDue'
 
 type UserTaskStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
 
 type UserTask = {
   id: string
-  workflowInstanceId: string
-  stepInstanceId: string
+  workflowInstanceId: string | null
+  stepInstanceId: string | null
+  procurementProcessTaskId?: string | null
+  procurementProcessId?: string | null
+  procurementProcessTitle?: string | null
   taskName: string
   description: string | null
   status: UserTaskStatus
   formSchema: any | null
   formData: any | null
   assignedTo: string | null
+  assignedToDisplayName?: string | null
   assignedToRoles: string[] | null
   claimedBy: string | null
+  claimedByDisplayName?: string | null
   claimedAt: string | null
   dueDate: string | null
   escalatedAt: string | null
@@ -146,12 +152,8 @@ export default function UserTasksListPage() {
     }
   }
 
-  const isOverdue = (task: UserTask) => {
-    if (!task.dueDate || task.status === 'COMPLETED' || task.status === 'CANCELLED') {
-      return false
-    }
-    return new Date(task.dueDate) < new Date()
-  }
+  const isOverdue = (task: UserTask) =>
+    isUserTaskCalendarOverdue(task.dueDate ?? null, task.status)
 
   const filters: FilterDef[] = [
     {
@@ -228,14 +230,20 @@ export default function UserTasksListPage() {
       header: t('workflows.tasks.fields.assignment'),
       cell: ({ row }) => {
         if (row.original.claimedBy) {
+          const label =
+            row.original.claimedByDisplayName?.trim() || row.original.claimedBy
           return (
             <div className="text-sm">
-              <div className="text-foreground">{t('workflows.tasks.claimedBy')}: {row.original.claimedBy}</div>
+              <div className="text-foreground">
+                {t('workflows.tasks.claimedBy')}: {label}
+              </div>
             </div>
           )
         }
         if (row.original.assignedTo) {
-          return <div className="text-sm text-foreground">{row.original.assignedTo}</div>
+          const label =
+            row.original.assignedToDisplayName?.trim() || row.original.assignedTo
+          return <div className="text-sm text-foreground">{label}</div>
         }
         if (row.original.assignedToRoles && row.original.assignedToRoles.length > 0) {
           return (

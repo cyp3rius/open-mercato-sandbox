@@ -7,22 +7,31 @@ import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import {
+  ProcurementProcess,
   ProcurementProcessSupplier,
   ProcurementProcessTask,
 } from '../data/entities'
 import {
   procurementTaskCreateSchema,
+  procurementTaskDeleteSchema,
   procurementTaskUpdateSchema,
   type ProcurementTaskCreateInput,
   type ProcurementTaskUpdateInput,
 } from '../data/validators'
+import { resolveProcurementCommandActorUserId } from '../lib/commandActor'
 import { appendProcurementTimelineEvent } from '../lib/timeline'
+import { assertProcurementProcessMutationAllowed } from '../lib/procurementProcessAccess'
 import { resolveProcurementProcess } from '../lib/resolveProcess'
 import {
   procurementTaskCrudEvents,
   procurementTaskCrudIndexer,
 } from '../lib/crud'
 import { emitProcurementTaskAssignedEvent } from '../lib/emitProcurementTaskAssignedEvent'
+import {
+  syncProcurementTaskWorkItemCreate,
+  syncProcurementTaskWorkItemDelete,
+  syncProcurementTaskWorkItemUpdate,
+} from '../lib/procurementWorkItemSync'
 
 type TaskSnapshot = {
   id: string
@@ -37,6 +46,7 @@ type TaskSnapshot = {
   assignedUserId: string | null
   delegatedFromUserId: string | null
   sourceActionValue: string | null
+  workItemUserTaskId: string | null
   createdAt: string
   updatedAt: string
 }
@@ -68,6 +78,7 @@ async function loadTaskSnapshot(em: EntityManager, id: string): Promise<TaskSnap
     assignedUserId: record.assignedUserId ?? null,
     delegatedFromUserId: record.delegatedFromUserId ?? null,
     sourceActionValue: record.sourceActionValue ?? null,
+    workItemUserTaskId: record.workItemUserTaskId ?? null,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
   }
@@ -100,6 +111,7 @@ const createTaskCommand: CommandHandler<ProcurementTaskCreateInput, { taskId: st
       parsed.organizationId,
       parsed.tenantId,
     )
+    await assertProcurementProcessMutationAllowed(ctx, process)
     let supplier: ProcurementProcessSupplier | null = null
     if (parsed.supplierId) {
       supplier = await resolveSupplierOnProcess(em, parsed.supplierId, process.id)
@@ -122,14 +134,18 @@ const createTaskCommand: CommandHandler<ProcurementTaskCreateInput, { taskId: st
     })
     em.persist(record)
     await em.flush()
+    const { translate } = await resolveTranslations()
     await appendProcurementTimelineEvent(em, {
       process,
       eventType: 'task.created',
-      message: `Task created: ${parsed.title}.`,
-      actorUserId: ctx.auth?.userId ?? null,
+      message: translate('procurement.timeline.msg.taskCreated', 'Task created: {{title}}.', {
+        title: parsed.title,
+      }),
+      actorUserId: resolveProcurementCommandActorUserId(ctx),
       metadata: { taskId: record.id, assignedUserId: parsed.assignedUserId ?? null },
     })
     await em.flush()
+    await syncProcurementTaskWorkItemCreate(ctx as CommandRuntimeContext, em, process, record)
     const dataEngine = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({
       dataEngine,
@@ -177,6 +193,7 @@ const createTaskCommand: CommandHandler<ProcurementTaskCreateInput, { taskId: st
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const record = await em.findOne(ProcurementProcessTask, { id: after.id })
     if (!record) return
+    await syncProcurementTaskWorkItemDelete(ctx as CommandRuntimeContext, em, record)
     record.deletedAt = new Date()
     record.updatedAt = new Date()
     await em.flush()
@@ -193,6 +210,7 @@ const updateTaskCommand: CommandHandler<ProcurementTaskUpdateInput, { taskId: st
   },
   async execute(input, ctx) {
     const parsed = procurementTaskUpdateSchema.parse(input)
+    const skipWorkItemSync = parsed.skipWorkItemSync === true
     requireId(parsed.id, 'Task id is required')
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const record = await findOneWithDecryption(
@@ -203,6 +221,13 @@ const updateTaskCommand: CommandHandler<ProcurementTaskUpdateInput, { taskId: st
       { tenantId: ctx.auth?.tenantId ?? null, organizationId: ctx.auth?.orgId ?? null },
     )
     if (!record) throw new CrudHttpError(404, { error: 'Procurement task not found.' })
+
+    const processForAcl =
+      typeof record.process === 'string'
+        ? await em.findOne(ProcurementProcess, { id: record.process, deletedAt: null })
+        : record.process
+    if (!processForAcl) throw new CrudHttpError(404, { error: 'Procurement process not found.' })
+    await assertProcurementProcessMutationAllowed(ctx, processForAcl)
 
     const processId = typeof record.process === 'string' ? record.process : record.process.id
     const previousAssignee = record.assignedUserId ?? null
@@ -233,13 +258,25 @@ const updateTaskCommand: CommandHandler<ProcurementTaskUpdateInput, { taskId: st
     record.updatedAt = new Date()
     await em.flush()
 
+    if (!skipWorkItemSync) {
+      await syncProcurementTaskWorkItemUpdate(
+        ctx as CommandRuntimeContext,
+        em,
+        processForAcl,
+        record,
+      )
+    }
+
     const process = typeof record.process === 'string' ? null : record.process
     if (process) {
+      const { translate } = await resolveTranslations()
       await appendProcurementTimelineEvent(em, {
         process,
         eventType: 'task.updated',
-        message: `Task updated: ${record.title}.`,
-        actorUserId: ctx.auth?.userId ?? null,
+        message: translate('procurement.timeline.msg.taskUpdated', 'Task updated: {{title}}.', {
+          title: record.title,
+        }),
+        actorUserId: resolveProcurementCommandActorUserId(ctx),
         metadata: { taskId: record.id },
       })
       await em.flush()
@@ -311,7 +348,7 @@ const updateTaskCommand: CommandHandler<ProcurementTaskUpdateInput, { taskId: st
   },
 }
 
-const deleteTaskCommand: CommandHandler<{ id: string }, { taskId: string }> = {
+const deleteTaskCommand: CommandHandler<{ id: string; skipWorkItemSync?: boolean }, { taskId: string }> = {
   id: 'procurement.process_tasks.delete',
   async prepare(input, ctx) {
     const id = requireId(input.id, 'Task id is required')
@@ -320,7 +357,9 @@ const deleteTaskCommand: CommandHandler<{ id: string }, { taskId: string }> = {
     return { before }
   },
   async execute(input, ctx) {
-    const id = requireId(input.id, 'Task id is required')
+    const parsed = procurementTaskDeleteSchema.parse(input)
+    const id = parsed.id
+    const skipWorkItemSync = parsed.skipWorkItemSync === true
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const record = await findOneWithDecryption(
       em,
@@ -331,19 +370,30 @@ const deleteTaskCommand: CommandHandler<{ id: string }, { taskId: string }> = {
     )
     if (!record) throw new CrudHttpError(404, { error: 'Procurement task not found.' })
 
+    const processEnt =
+      typeof record.process === 'string'
+        ? await em.findOne(ProcurementProcess, { id: record.process, deletedAt: null })
+        : record.process
+    if (!processEnt) throw new CrudHttpError(404, { error: 'Procurement process not found.' })
+    await assertProcurementProcessMutationAllowed(ctx, processEnt)
+
     const process = typeof record.process === 'string' ? null : record.process
     const title = record.title
+    if (!skipWorkItemSync) {
+      await syncProcurementTaskWorkItemDelete(ctx as CommandRuntimeContext, em, record)
+    }
     const now = new Date()
     record.deletedAt = now
     record.updatedAt = now
     await em.flush()
 
     if (process) {
+      const { translate } = await resolveTranslations()
       await appendProcurementTimelineEvent(em, {
         process,
         eventType: 'task.removed',
-        message: `Task removed: ${title}.`,
-        actorUserId: ctx.auth?.userId ?? null,
+        message: translate('procurement.timeline.msg.taskRemoved', 'Task removed: {{title}}.', { title }),
+        actorUserId: resolveProcurementCommandActorUserId(ctx),
         metadata: { taskId: id },
       })
       await em.flush()

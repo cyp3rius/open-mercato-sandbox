@@ -23,8 +23,11 @@ export interface JsonSchemaField {
 // API response shape (serialized — string dates, proper formSchema/formData types)
 export type UserTaskResponse = {
   id: string
-  workflowInstanceId: string
-  stepInstanceId: string
+  workflowInstanceId: string | null
+  stepInstanceId: string | null
+  procurementProcessTaskId?: string | null
+  procurementProcessId?: string | null
+  procurementProcessTitle?: string | null
   taskName: string
   description: string | null
   status: import('./validators').UserTaskStatus

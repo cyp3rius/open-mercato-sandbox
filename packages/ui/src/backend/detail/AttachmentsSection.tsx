@@ -142,7 +142,7 @@ function AttachmentsSectionImpl({
     <div className={cn('space-y-4', className)}>
       {showHeader ? (
         <div className="space-y-1">
-          <div className="text-base font-medium">{sectionTitle}</div>
+          <h2 className="text-sm font-semibold">{sectionTitle}</h2>
           <div className="text-sm text-muted-foreground">{sectionDescription}</div>
         </div>
       ) : null}

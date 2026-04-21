@@ -16,9 +16,18 @@ import { mergeProcurementCommandScope } from '../mergeScope'
 
 const routeMetadata = {
   GET: { requireAuth: true, requireFeatures: ['procurement.processes.view'] },
-  POST: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
-  PUT: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
-  DELETE: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
+  POST: {
+    requireAuth: true,
+    requireAnyFeatures: ['procurement.processes.manage', 'procurement.processes.handle'],
+  },
+  PUT: {
+    requireAuth: true,
+    requireAnyFeatures: ['procurement.processes.manage', 'procurement.processes.handle'],
+  },
+  DELETE: {
+    requireAuth: true,
+    requireAnyFeatures: ['procurement.processes.manage', 'procurement.processes.handle'],
+  },
 }
 
 export const metadata = routeMetadata
@@ -86,6 +95,7 @@ type LineItemRow = {
   specification: string | null
   quantity: number | null
   unitLabel: string | null
+  resourceId: string | null
   sortOrder: number
   createdAt: string | null
   updatedAt: string | null
@@ -103,6 +113,7 @@ const toRow = (row: ProcurementProcessLineItem): LineItemRow => {
     specification: row.specification ?? null,
     quantity: row.quantity ?? null,
     unitLabel: row.unitLabel ?? null,
+    resourceId: row.resourceId ?? null,
     sortOrder: row.sortOrder,
     createdAt: row.createdAt ? row.createdAt.toISOString() : null,
     updatedAt: row.updatedAt ? row.updatedAt.toISOString() : null,
@@ -178,6 +189,7 @@ const lineItemListSchema = z.object({
   specification: z.string().nullable(),
   quantity: z.number().nullable(),
   unitLabel: z.string().nullable(),
+  resourceId: z.uuid().nullable(),
   sortOrder: z.number(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),

@@ -2,8 +2,9 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { ArrowRight, BookOpen, GripVertical, Plus, Waypoints } from 'lucide-react'
+import { ArrowRight, BookOpen, GripVertical, Pencil, Plus, Trash2, Waypoints } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { IconButton } from '@open-mercato/ui/primitives/icon-button'
 import { Label } from '@open-mercato/ui/primitives/label'
 import {
   Dialog,
@@ -22,10 +23,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { cn } from '@open-mercato/shared/lib/utils'
-import {
-  renderDictionaryColor,
-  renderDictionaryIcon,
-} from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
+import { DictionaryAppearancePreview } from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
 import { DictionaryEntrySelect } from '@open-mercato/core/modules/dictionaries/components/DictionaryEntrySelect'
 import type { DictionaryOption } from '@open-mercato/core/modules/dictionaries/components/DictionaryEntrySelect'
 import { PROCUREMENT_PROCESS_STATUS_DICTIONARY_KEY } from '../lib/dictionaryKeys'
@@ -61,17 +59,13 @@ function reorderById(items: RuleRow[], dragId: string, targetId: string): RuleRo
 function StatusAppearanceChip(props: { option?: DictionaryOption; text: string }) {
   const { option, text } = props
   return (
-    <span className="flex min-w-0 max-w-[min(100%,12rem)] items-center gap-1.5">
-      {option?.color?.trim() ? (
-        <span className="shrink-0">{renderDictionaryColor(option.color.trim(), 'h-3 w-3 rounded-sm')}</span>
-      ) : null}
-      {option?.icon?.trim() ? (
-        <span className="inline-flex size-5 shrink-0 items-center justify-center text-muted-foreground">
-          {renderDictionaryIcon(option.icon, 'size-4')}
-        </span>
-      ) : null}
-      <span className="min-w-0 truncate text-sm font-medium">{text}</span>
-    </span>
+    <DictionaryAppearancePreview
+      color={option?.color}
+      icon={option?.icon}
+      label={text}
+      className="min-w-0 max-w-[min(100%,12rem)]"
+      labelClassName="text-sm font-medium"
+    />
   )
 }
 
@@ -124,6 +118,11 @@ export default function ProcurementStatusPipelineSettings(): React.ReactElement 
   const [workflowDisplayLabel, setWorkflowDisplayLabel] = React.useState('')
 
   const [draggingId, setDraggingId] = React.useState<string | null>(null)
+
+  const [orgDefaultLoaded, setOrgDefaultLoaded] = React.useState(false)
+  const [orgDefaultStatus, setOrgDefaultStatus] = React.useState('')
+  const [orgTerminalStatus, setOrgTerminalStatus] = React.useState('')
+  const [savingOrgSettings, setSavingOrgSettings] = React.useState(false)
 
   const fetchStatusOptions = React.useCallback(
     () => fetchDictionaryOptionsByKey(PROCUREMENT_PROCESS_STATUS_DICTIONARY_KEY),
@@ -179,6 +178,88 @@ export default function ProcurementStatusPipelineSettings(): React.ReactElement 
   React.useEffect(() => {
     void loadRules()
   }, [loadRules, scopeVersion])
+
+  const loadOrgProcurementSettings = React.useCallback(async () => {
+    setOrgDefaultLoaded(false)
+    try {
+      const data = await readApiResultOrThrow<{
+        defaultProcessStatusValue?: string | null
+        terminalProcessStatusValue?: string | null
+      }>('/api/procurement/organization-settings', undefined, {
+        errorMessage: t(
+          'procurement.settings.statusPipeline.defaultStatusLoadFailed',
+          'Failed to load default status setting.',
+        ),
+        fallback: { defaultProcessStatusValue: null, terminalProcessStatusValue: null },
+      })
+      const d = data?.defaultProcessStatusValue
+      setOrgDefaultStatus(typeof d === 'string' && d.trim().length ? d : '')
+      const tr = data?.terminalProcessStatusValue
+      setOrgTerminalStatus(typeof tr === 'string' && tr.trim().length ? tr : '')
+    } finally {
+      setOrgDefaultLoaded(true)
+    }
+  }, [t])
+
+  React.useEffect(() => {
+    void loadOrgProcurementSettings()
+  }, [loadOrgProcurementSettings, scopeVersion])
+
+  const persistOrgProcurementSettings = React.useCallback(
+    async (patch: { defaultNext?: string; terminalNext?: string }) => {
+      setSavingOrgSettings(true)
+      try {
+        const defaultTrimmed = (patch.defaultNext ?? orgDefaultStatus).trim()
+        const terminalTrimmed = (patch.terminalNext ?? orgTerminalStatus).trim()
+        const res = await apiCall('/api/procurement/organization-settings', {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            defaultProcessStatusValue: defaultTrimmed.length ? defaultTrimmed : null,
+            terminalProcessStatusValue: terminalTrimmed.length ? terminalTrimmed : null,
+          }),
+        })
+        if (!res.ok) {
+          await raiseCrudError(
+            res.response,
+            t(
+              'procurement.settings.statusPipeline.orgSettingsSaveFailed',
+              'Failed to save procurement organization settings.',
+            ),
+          )
+          await loadOrgProcurementSettings()
+          return
+        }
+        const body = res.result as {
+          defaultProcessStatusValue?: string | null
+          terminalProcessStatusValue?: string | null
+        } | null
+        const dv = body?.defaultProcessStatusValue
+        setOrgDefaultStatus(typeof dv === 'string' && dv.trim().length ? dv : '')
+        const tv = body?.terminalProcessStatusValue
+        setOrgTerminalStatus(typeof tv === 'string' && tv.trim().length ? tv : '')
+        const savedDefault = patch.defaultNext !== undefined
+        const savedTerminal = patch.terminalNext !== undefined
+        if (savedDefault) {
+          flash(
+            t('procurement.settings.statusPipeline.defaultStatusSaved', 'Default starting status saved.'),
+            'success',
+          )
+        } else if (savedTerminal) {
+          flash(
+            t(
+              'procurement.settings.statusPipeline.terminalStatusSaved',
+              'Final status saved.',
+            ),
+            'success',
+          )
+        }
+      } finally {
+        setSavingOrgSettings(false)
+      }
+    },
+    [loadOrgProcurementSettings, orgDefaultStatus, orgTerminalStatus, t],
+  )
 
   const persistReorder = React.useCallback(
     async (ordered: RuleRow[]) => {
@@ -396,6 +477,76 @@ export default function ProcurementStatusPipelineSettings(): React.ReactElement 
         </p>
       </div>
 
+      <section className="rounded-lg border bg-card p-4 shadow-xs">
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold">
+              {t(
+                'procurement.settings.statusPipeline.organizationStatusesTitle',
+                'Default process statuses',
+              )}
+            </h3>
+            <p className="text-muted-foreground text-sm">
+              {t(
+                'procurement.settings.statusPipeline.organizationStatusesLead',
+                'Choose values from the procurement status dictionary: the initial status is used for new processes when none is selected on create (leave empty to use the dictionary default). The terminal status optionally marks a completed process for reporting and the process detail view when the pipeline is enforced.',
+              )}
+            </p>
+          </div>
+          {!orgDefaultLoaded ? (
+            <div className="flex py-4">
+              <Spinner />
+            </div>
+          ) : (
+            <div
+              className={cn(
+                'grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-4',
+                savingOrgSettings && 'pointer-events-none opacity-60',
+              )}
+            >
+              <div className="min-w-0 space-y-1.5 md:col-span-1">
+                <Label>{t('procurement.settings.statusPipeline.defaultStatusField', 'Initial status')}</Label>
+                <DictionaryEntrySelect
+                  value={orgDefaultStatus || undefined}
+                  onChange={(next) => {
+                    const v = next ?? ''
+                    setOrgDefaultStatus(v)
+                    void persistOrgProcurementSettings({ defaultNext: v })
+                  }}
+                  fetchOptions={fetchStatusOptions}
+                  labels={dictLabels}
+                  allowInlineCreate={false}
+                  showManage={false}
+                  allowAppearance
+                  selectClassName="w-full"
+                  disabled={savingOrgSettings}
+                />
+              </div>
+              <div className="min-w-0 space-y-1.5 md:col-span-1">
+                <Label>{t('procurement.settings.statusPipeline.terminalStatusField', 'Terminal status')}</Label>
+                <DictionaryEntrySelect
+                  value={orgTerminalStatus || undefined}
+                  onChange={(next) => {
+                    const v = next ?? ''
+                    setOrgTerminalStatus(v)
+                    void persistOrgProcurementSettings({ terminalNext: v })
+                  }}
+                  fetchOptions={fetchStatusOptions}
+                  labels={dictLabels}
+                  allowInlineCreate={false}
+                  showManage={false}
+                  allowAppearance
+                  selectClassName="w-full"
+                  disabled={savingOrgSettings}
+                />
+              </div>
+              <div className="hidden min-h-0 md:block" aria-hidden />
+              <div className="hidden min-h-0 md:block" aria-hidden />
+            </div>
+          )}
+        </div>
+      </section>
+
       {loading ? (
         <div className="flex justify-center py-12">
           <Spinner />
@@ -500,18 +651,28 @@ export default function ProcurementStatusPipelineSettings(): React.ReactElement 
                         )}
                       </td>
                       <td className="px-3 py-2 text-right align-middle">
-                        <span className="space-x-2">
-                          <Button type="button" variant="outline" size="sm" onClick={() => openEdit(row)}>
-                            {t('common.edit', 'Edit')}
-                          </Button>
-                          <Button
+                        <span className="inline-flex items-center justify-end gap-1">
+                          <IconButton
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            aria-label={t('common.edit', 'Edit')}
+                            title={t('common.edit', 'Edit')}
+                            onClick={() => openEdit(row)}
+                          >
+                            <Pencil className="size-4" />
+                          </IconButton>
+                          <IconButton
                             type="button"
                             variant="ghost"
                             size="sm"
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20"
+                            aria-label={t('common.delete', 'Delete')}
+                            title={t('common.delete', 'Delete')}
                             onClick={() => void handleDelete(row)}
                           >
-                            {t('common.delete', 'Delete')}
-                          </Button>
+                            <Trash2 className="size-4" />
+                          </IconButton>
                         </span>
                       </td>
                     </tr>

@@ -12,10 +12,13 @@ import { JsonDisplay } from '@open-mercato/ui/backend/JsonDisplay'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useQuery } from '@tanstack/react-query'
+import { SquareArrowOutUpRight } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { MobileTaskForm } from '../../../components/mobile/MobileTaskForm'
 import { useIsMobile } from '@open-mercato/ui/hooks/useIsMobile'
 import type { UserTaskResponse, UserTaskStatus } from '../../../data/types'
+import { buildProcurementProcessDeepLink } from '../../../../procurement/lib/procurementDeepLink'
+import { isUserTaskCalendarOverdue } from '../../../lib/userTaskDue'
 
 export default function UserTaskDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -38,6 +41,19 @@ export default function UserTaskDetailPage({ params }: { params: { id: string } 
 
       return result.result?.data || null
     },
+  })
+
+  const { data: assigneeRow } = useQuery({
+    queryKey: ['auth-user-label', task?.assignedTo],
+    queryFn: async () => {
+      if (!task?.assignedTo) return null
+      const result = await apiCall<{ items: Array<{ id: string; email: string }> }>(
+        `/api/auth/users?id=${encodeURIComponent(task.assignedTo)}&pageSize=1`,
+      )
+      if (!result.ok || !result.result?.items?.[0]) return null
+      return result.result.items[0]
+    },
+    enabled: Boolean(task?.assignedTo),
   })
 
   const handleFieldChange = (fieldName: string, value: any) => {
@@ -335,7 +351,7 @@ export default function UserTaskDetailPage({ params }: { params: { id: string } 
   }
 
   const isCompletable = task.status === 'PENDING' || task.status === 'IN_PROGRESS'
-  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && isCompletable
+  const isOverdue = isUserTaskCalendarOverdue(task.dueDate ?? null, task.status) && isCompletable
 
   if (isMobile) {
     return (
@@ -354,6 +370,7 @@ export default function UserTaskDetailPage({ params }: { params: { id: string } 
               submitting={submitting}
               isCompletable={isCompletable}
               isOverdue={!!isOverdue}
+              assigneeEmail={assigneeRow?.email ?? null}
               onFieldChange={handleFieldChange}
               onCommentsChange={setComments}
               onSubmit={handleSubmit}
@@ -416,9 +433,17 @@ export default function UserTaskDetailPage({ params }: { params: { id: string } 
                 </div>
               )}
               {task.assignedTo && (
-                <div>
-                  <span className="text-muted-foreground">{t('workflows.tasks.detail.assignedTo')}:</span>
-                  <span className="ml-2 text-foreground">{task.assignedTo}</span>
+                <div className="sm:col-span-2">
+                  <span className="text-muted-foreground">{t('workflows.tasks.detail.assignedTo')}:</span>{' '}
+                  <a
+                    href={`/backend/users/${task.assignedTo}/edit`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-2 inline-flex items-center gap-1 text-primary hover:underline text-sm font-medium"
+                  >
+                    {assigneeRow?.email ?? task.assignedTo}
+                    <SquareArrowOutUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  </a>
                 </div>
               )}
               {task.claimedBy && (
@@ -427,15 +452,35 @@ export default function UserTaskDetailPage({ params }: { params: { id: string } 
                   <span className="ml-2 text-foreground">{task.claimedBy}</span>
                 </div>
               )}
-              <div>
-                <span className="text-muted-foreground">{t('workflows.tasks.detail.workflowInstance')}:</span>
-                <Link
-                  href={`/backend/instances/${task.workflowInstanceId}`}
-                  className="ml-2 text-primary hover:underline text-xs font-mono"
-                >
-                  {task.workflowInstanceId.slice(0, 8)}...
-                </Link>
-              </div>
+              {task.workflowInstanceId ? (
+                <div>
+                  <span className="text-muted-foreground">{t('workflows.tasks.detail.workflowInstance')}:</span>
+                  <Link
+                    href={`/backend/instances/${task.workflowInstanceId}`}
+                    className="ml-2 text-primary hover:underline text-xs font-mono"
+                  >
+                    {task.workflowInstanceId.slice(0, 8)}...
+                  </Link>
+                </div>
+              ) : null}
+              {task.procurementProcessId ? (
+                <div className="sm:col-span-2">
+                  <span className="text-muted-foreground">
+                    {t('workflows.tasks.detail.procurementProcessLabel', 'Proces zakupowy')}
+                    :
+                  </span>{' '}
+                  <a
+                    href={buildProcurementProcessDeepLink(task.procurementProcessId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-2 inline-flex items-center gap-1 text-primary hover:underline text-sm font-medium"
+                  >
+                    {task.procurementProcessTitle?.trim() ||
+                      `${task.procurementProcessId.slice(0, 8)}…`}
+                    <SquareArrowOutUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  </a>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -488,7 +533,7 @@ export default function UserTaskDetailPage({ params }: { params: { id: string } 
                 </div>
 
                 {/* Actions */}
-                <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center">
+                <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:flex-wrap sm:items-center">
                   <Button
                     type="submit"
                     disabled={submitting}

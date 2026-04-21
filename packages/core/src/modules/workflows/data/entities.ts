@@ -374,17 +374,32 @@ export class StepInstance {
 @Index({ name: 'user_tasks_status_assigned_idx', properties: ['status', 'assignedTo'] })
 @Index({ name: 'user_tasks_status_due_date_idx', properties: ['status', 'dueDate'] })
 @Index({ name: 'user_tasks_tenant_org_idx', properties: ['tenantId', 'organizationId'] })
+@Index({ name: 'user_tasks_procurement_process_idx', properties: ['procurementProcessId'] })
 export class UserTask {
   [OptionalProps]?: 'createdAt' | 'updatedAt'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
 
-  @Property({ name: 'workflow_instance_id', type: 'uuid' })
-  workflowInstanceId!: string
+  /** Set for workflow-driven tasks; null when the task is synced from procurement only. */
+  @Property({ name: 'workflow_instance_id', type: 'uuid', nullable: true })
+  workflowInstanceId?: string | null
 
-  @Property({ name: 'step_instance_id', type: 'uuid' })
-  stepInstanceId!: string
+  /** Set for workflow-driven tasks; null when the task is synced from procurement only. */
+  @Property({ name: 'step_instance_id', type: 'uuid', nullable: true })
+  stepInstanceId?: string | null
+
+  /** When set, this row mirrors `procurement_process_tasks.id` and appears under /backend/tasks. */
+  @Property({ name: 'procurement_process_task_id', type: 'uuid', nullable: true })
+  procurementProcessTaskId?: string | null
+
+  /** Denormalized for UI links without loading the procurement task row. */
+  @Property({ name: 'procurement_process_id', type: 'uuid', nullable: true })
+  procurementProcessId?: string | null
+
+  /** Denormalized process title for /backend/tasks (procurement-linked tasks). */
+  @Property({ name: 'procurement_process_title', type: 'varchar', length: 500, nullable: true })
+  procurementProcessTitle?: string | null
 
   @Property({ name: 'task_name', type: 'varchar', length: 255 })
   taskName!: string

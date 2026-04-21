@@ -67,6 +67,21 @@ Use these rules when building or refactoring **backend forms**, **custom CrudFor
 - **`DetailFieldsSection`** merges **`className`** with **`cn()`** / **tailwind-merge** — prefer overrides like **`md:grid-cols-2`** instead of duplicating the full grid class string.
 - **Full-width field inside the default grid** (`grid-cols-1` / `sm:grid-cols-2` / `md:grid-cols-3`): set **`gridClassName: 'sm:col-span-2 md:col-span-3'`** on that **`DetailFieldConfig`** (e.g. a single multiline “Description” in a narrow sidebar). **Do not** move the whole section out of its column just to widen one control.
 - **`InlineTextEditor`**, **`InlineSelectEditor`**, **`InlineMultilineEditor`** — **`variant="muted"`** uses **`border border-border bg-background p-3`** and **`overflow-hidden`** on the container so **text** and **select / entity search** preview tiles look identical; do not reintroduce **`bg-muted/20`** vs **`bg-muted/30`** splits between field kinds.
+- **`InlineSelectEditor`**: use **`embedEditTriggerInDisplay={true}`** only when **`renderDisplay`** places the pencil with other corner actions (e.g. relations). Otherwise omit it (default **`false`**) so the **standard trailing pencil** shows on row hover like other inline fields.
 - **Entity search trigger** styling inside inline edit: see **`.cursor/rules/entity-search-combobox.mdc`** (ghost + border + transparent fill).
 
 **Detail page shell** (7fr/3fr, section cards): **`.cursor/rules/detail-two-column-layout.mdc`**.
+
+## Create vs detail — same field type for long text
+
+- When the **detail** screen edits a field with **`InlineMultilineEditor`** (Markdown preview + markdown editor), the **create** form for the same entity should use **`CrudForm`** **`type: 'richtext'`** (default **Markdown** path in `FieldControl`, not `textarea`) so users see the same editing experience and storage format.
+- Use **`type: 'richtext'`** with **`editor: 'html'`** only when product explicitly wants HTML rich text instead of markdown.
+
+## Module dialogs (tasks, suppliers, etc.)
+
+- Put **linked entities** (supplier on a task, secondary lookups) **after** core scalar fields (title, body, dates, status, assignee) unless the flow requires the link first.
+- Avoid redundant **hint paragraphs** under labels when the field is self-explanatory or behavior is obvious (e.g. do not duplicate “defaults to you” under assignee if the picker is clear).
+
+## Relation previews (inline select + `renderDisplay`)
+
+- For **corner actions** (edit pencil, “open in new tab”) on association previews, wrap the preview container with **`group`** and make the action row **`opacity-0 group-hover:opacity-100`** (with **`pointer-events-none` / `group-hover:pointer-events-auto`**) so actions appear **on hover over the preview block**, not as always-on chrome.

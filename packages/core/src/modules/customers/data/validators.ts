@@ -412,6 +412,8 @@ export const interactionCreateSchema = z.object({
   appearanceIcon: z.string().trim().max(100).optional().nullable(),
   appearanceColor: z.string().trim().regex(/^#([0-9a-fA-F]{6})$/).optional().nullable(),
   source: z.string().trim().max(100).optional().nullable(),
+  procurementProcessId: z.string().uuid().optional().nullable(),
+  procurementProcessTaskId: z.string().uuid().optional().nullable(),
 }).passthrough()
 
 export type InteractionCreateInput = z.infer<typeof interactionCreateSchema>
@@ -430,6 +432,8 @@ export const interactionUpdateSchema = z.object({
   dealId: z.string().uuid().optional().nullable(),
   appearanceIcon: z.string().trim().max(100).optional().nullable(),
   appearanceColor: z.string().trim().regex(/^#([0-9a-fA-F]{6})$/).optional().nullable(),
+  procurementProcessId: z.string().uuid().optional().nullable(),
+  procurementProcessTaskId: z.string().uuid().optional().nullable(),
 }).passthrough()
 
 export type InteractionUpdateInput = z.infer<typeof interactionUpdateSchema>

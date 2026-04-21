@@ -1,6 +1,7 @@
 import { resolveNotificationService } from '../../notifications/lib/notificationService'
 import { buildNotificationFromType } from '../../notifications/lib/notificationBuilder'
 import { notificationTypes } from '../notifications'
+import { buildProcurementProcessTaskDeepLink } from '../lib/procurementDeepLink'
 
 export const metadata = {
   event: 'procurement.process_task.assigned',
@@ -34,6 +35,7 @@ export default async function handle(payload: TaskAssignedPayload, ctx: Resolver
       typeof payload.dueAt === 'string' && payload.dueAt.trim().length > 0
         ? ` (${payload.dueAt})`
         : ''
+    const deepLink = buildProcurementProcessTaskDeepLink(payload.processId, payload.taskId)
     const notificationInput = buildNotificationFromType(typeDef, {
       recipientUserId: payload.assignedUserId,
       bodyVariables: {
@@ -42,8 +44,13 @@ export default async function handle(payload: TaskAssignedPayload, ctx: Resolver
       },
       sourceEntityType: 'procurement:process',
       sourceEntityId: payload.processId,
-      linkHref: `/backend/procurement/processes/${payload.processId}`,
+      linkHref: deepLink,
     })
+    if (Array.isArray(notificationInput.actions) && notificationInput.actions.length > 0) {
+      notificationInput.actions = notificationInput.actions.map((action) =>
+        action.id === 'view' ? { ...action, href: deepLink } : action,
+      )
+    }
 
     await notificationService.create(notificationInput, {
       tenantId: payload.tenantId,

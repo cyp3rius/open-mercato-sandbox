@@ -10,7 +10,9 @@ import { Label } from '@open-mercato/ui/primitives/label'
 import { Separator } from '@open-mercato/ui/primitives/separator'
 import { JsonDisplay } from '@open-mercato/ui/backend/JsonDisplay'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { SquareArrowOutUpRight } from 'lucide-react'
 import type { UserTaskResponse, UserTaskStatus, JsonSchemaField } from '../../data/types'
+import { buildProcurementProcessDeepLink } from '../../../procurement/lib/procurementDeepLink'
 
 interface MobileTaskFormProps {
   task: UserTaskResponse
@@ -19,6 +21,7 @@ interface MobileTaskFormProps {
   submitting: boolean
   isCompletable: boolean
   isOverdue: boolean | null | undefined
+  assigneeEmail?: string | null
   onFieldChange: (fieldName: string, value: string | number | boolean) => void
   onCommentsChange: (value: string) => void
   onSubmit: (e: React.FormEvent) => void
@@ -33,6 +36,7 @@ export function MobileTaskForm({
   submitting,
   isCompletable,
   isOverdue,
+  assigneeEmail = null,
   onFieldChange,
   onCommentsChange,
   onSubmit,
@@ -213,20 +217,47 @@ export function MobileTaskForm({
             </div>
           )}
           {task.assignedTo && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">{t('workflows.tasks.detail.assignedTo')}:</span>
-              <span className="text-right">{task.assignedTo}</span>
+            <div className="flex justify-between gap-2 items-start">
+              <span className="text-muted-foreground shrink-0">{t('workflows.tasks.detail.assignedTo')}:</span>
+              <a
+                href={`/backend/users/${task.assignedTo}/edit`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-right inline-flex items-center justify-end gap-1 text-primary hover:underline text-xs font-medium"
+              >
+                {assigneeEmail ?? task.assignedTo}
+                <SquareArrowOutUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              </a>
             </div>
           )}
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">{t('workflows.tasks.detail.workflowInstance')}:</span>
-            <Link
-              href={`/backend/instances/${task.workflowInstanceId}`}
-              className="text-primary hover:underline text-xs font-mono"
-            >
-              {task.workflowInstanceId.slice(0, 8)}...
-            </Link>
-          </div>
+          {task.workflowInstanceId ? (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">{t('workflows.tasks.detail.workflowInstance')}:</span>
+              <Link
+                href={`/backend/instances/${task.workflowInstanceId}`}
+                className="text-primary hover:underline text-xs font-mono"
+              >
+                {task.workflowInstanceId.slice(0, 8)}...
+              </Link>
+            </div>
+          ) : null}
+          {task.procurementProcessId ? (
+            <div className="flex justify-between gap-2 items-start">
+              <span className="text-muted-foreground shrink-0">
+                {t('workflows.tasks.detail.procurementProcessLabel', 'Proces zakupowy')}:
+              </span>
+              <a
+                href={buildProcurementProcessDeepLink(task.procurementProcessId)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-right inline-flex items-center justify-end gap-1 text-primary hover:underline text-xs font-medium"
+              >
+                {task.procurementProcessTitle?.trim() ||
+                  `${task.procurementProcessId.slice(0, 8)}…`}
+                <SquareArrowOutUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              </a>
+            </div>
+          ) : null}
         </div>
       </div>
 

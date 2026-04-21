@@ -859,6 +859,7 @@
   "workflows.tasks.detail.type": "Zadanie Użytkownika",
   "workflows.tasks.detail.validation.requiredField": "Brakuje wymaganego pola: {{field}}",
   "workflows.tasks.detail.workflowInstance": "Instancja Przepływu",
+  "workflows.tasks.detail.procurementProcessLabel": "Proces zakupowy",
   "workflows.tasks.dueDate": "Termin",
   "workflows.tasks.fields.assignment": "Przypisanie",
   "workflows.tasks.fields.createdAt": "Data Utworzenia",

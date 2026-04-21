@@ -5,7 +5,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import type { FilterQuery } from '@mikro-orm/core'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
-import { ProcurementProcessSupplier } from '../../data/entities'
+import { ProcurementProcessSupplier, ProcurementProcessSupplierLineItem } from '../../data/entities'
 import { procurementSupplierCreateSchema, procurementSupplierUpdateSchema } from '../../data/validators'
 import {
   buildProcurementCrudOpenApi,
@@ -16,9 +16,18 @@ import { mergeProcurementCommandScope } from '../mergeScope'
 
 const routeMetadata = {
   GET: { requireAuth: true, requireFeatures: ['procurement.processes.view'] },
-  POST: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
-  PUT: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
-  DELETE: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
+  POST: {
+    requireAuth: true,
+    requireAnyFeatures: ['procurement.processes.manage', 'procurement.processes.handle'],
+  },
+  PUT: {
+    requireAuth: true,
+    requireAnyFeatures: ['procurement.processes.manage', 'procurement.processes.handle'],
+  },
+  DELETE: {
+    requireAuth: true,
+    requireAnyFeatures: ['procurement.processes.manage', 'procurement.processes.handle'],
+  },
 }
 
 export const metadata = routeMetadata
@@ -91,13 +100,14 @@ type SupplierRow = {
   notes: string | null
   offerSummary: string | null
   sortOrder: number
+  lineItemIds: string[]
   createdAt: string | null
   updatedAt: string | null
   organizationId: string
   tenantId: string
 }
 
-const toRow = (row: ProcurementProcessSupplier): SupplierRow => {
+const toRow = (row: ProcurementProcessSupplier, lineItemIds: string[]): SupplierRow => {
   const proc = row.process
   const processId = typeof proc === 'string' ? proc : proc.id
   const vce = row.vendorCustomerEntity
@@ -115,6 +125,7 @@ const toRow = (row: ProcurementProcessSupplier): SupplierRow => {
     notes: row.notes ?? null,
     offerSummary: row.offerSummary ?? null,
     sortOrder: row.sortOrder,
+    lineItemIds,
     createdAt: row.createdAt ? row.createdAt.toISOString() : null,
     updatedAt: row.updatedAt ? row.updatedAt.toISOString() : null,
     organizationId: String(row.organizationId),
@@ -172,7 +183,27 @@ export async function GET(req: Request) {
   })
   const start = (page - 1) * pageSize
   const paged = all.slice(start, start + pageSize)
-  const items = paged.map(toRow)
+  const supplierIds = paged.map((r) => r.id)
+  const lineIdsBySupplier = new Map<string, string[]>()
+  if (supplierIds.length) {
+    const links = await em.find(
+      ProcurementProcessSupplierLineItem,
+      { supplier: { $in: supplierIds } },
+      { populate: ['lineItem', 'supplier'] },
+    )
+    for (const link of links) {
+      const sid = typeof link.supplier === 'string' ? link.supplier : link.supplier.id
+      const lid = typeof link.lineItem === 'string' ? link.lineItem : link.lineItem.id
+      const arr = lineIdsBySupplier.get(sid) ?? []
+      arr.push(lid)
+      lineIdsBySupplier.set(sid, arr)
+    }
+    for (const sid of supplierIds) {
+      const arr = lineIdsBySupplier.get(sid)
+      if (arr?.length) arr.sort()
+    }
+  }
+  const items = paged.map((row) => toRow(row, lineIdsBySupplier.get(row.id) ?? []))
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   return NextResponse.json({ items, total, page, pageSize, totalPages })
@@ -194,6 +225,7 @@ const supplierListItemSchema = z.object({
   notes: z.string().nullable(),
   offerSummary: z.string().nullable(),
   sortOrder: z.number(),
+  lineItemIds: z.array(z.uuid()),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
   organizationId: z.uuid(),

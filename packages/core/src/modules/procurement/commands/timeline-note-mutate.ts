@@ -1,7 +1,8 @@
 import { registerCommand, type CommandHandler } from '@open-mercato/shared/lib/commands'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
-import { ProcurementProcessTimelineEvent } from '../data/entities'
+import { ProcurementProcess, ProcurementProcessTimelineEvent } from '../data/entities'
+import { assertProcurementProcessMutationAllowed } from '../lib/procurementProcessAccess'
 import {
   procurementTimelineDeleteSchema,
   procurementTimelineUpdateSchema,
@@ -32,6 +33,10 @@ const updateTimelineNoteCommand: CommandHandler<ProcurementTimelineUpdateInput, 
     if (record.eventType !== NOTE_EVENT_TYPE) {
       throw new CrudHttpError(400, { error: 'Only manual notes can be edited.' })
     }
+    const processEnt =
+      typeof proc === 'string' ? await em.findOne(ProcurementProcess, { id: proc, deletedAt: null }) : proc
+    if (!processEnt) throw new CrudHttpError(404, { error: 'Procurement process not found.' })
+    await assertProcurementProcessMutationAllowed(ctx, processEnt)
     record.message = parsed.message
     await em.flush()
     return { ok: true }
@@ -59,6 +64,10 @@ const deleteTimelineNoteCommand: CommandHandler<ProcurementTimelineDeleteInput, 
     if (record.eventType !== NOTE_EVENT_TYPE) {
       throw new CrudHttpError(400, { error: 'Only manual notes can be removed.' })
     }
+    const processEntDel =
+      typeof proc === 'string' ? await em.findOne(ProcurementProcess, { id: proc, deletedAt: null }) : proc
+    if (!processEntDel) throw new CrudHttpError(404, { error: 'Procurement process not found.' })
+    await assertProcurementProcessMutationAllowed(ctx, processEntDel)
     em.remove(record)
     await em.flush()
     return { ok: true }

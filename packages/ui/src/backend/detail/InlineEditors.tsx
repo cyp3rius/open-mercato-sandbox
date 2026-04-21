@@ -233,7 +233,8 @@ export function InlineTextEditor({
       variant === 'plain'
         ? 'inline-flex max-w-full min-w-0 items-center gap-2 text-xl font-semibold leading-tight text-primary hover:text-primary/90 hover:underline'
         : 'flex max-w-full min-w-0 items-center gap-2 text-sm text-primary hover:text-primary/90 hover:underline'
-    const textClass = variant === 'plain' ? 'text-2xl font-semibold leading-tight' : 'text-sm break-words'
+    const textClass =
+      variant === 'plain' ? 'text-2xl font-semibold leading-tight' : 'text-sm font-semibold break-words'
     if (resolvedType === 'email') {
       if (!baseValue.length) {
         return (
@@ -245,7 +246,7 @@ export function InlineTextEditor({
       return (
         <a className={anchorClass} href={`mailto:${baseValue}`}>
           <Mail aria-hidden className={variant === 'plain' ? 'h-5 w-5' : 'h-4 w-4'} />
-          <span className="truncate min-w-0">{baseValue}</span>
+          <span className="min-w-0 truncate font-semibold">{baseValue}</span>
         </a>
       )
     }
@@ -262,7 +263,7 @@ export function InlineTextEditor({
       return (
         <a className={anchorClass} href={`tel:${hrefValue}`}>
           <Phone aria-hidden className={variant === 'plain' ? 'h-5 w-5' : 'h-4 w-4'} />
-          <span className="truncate">{baseValue}</span>
+          <span className="truncate font-semibold">{baseValue}</span>
         </a>
       )
     }
@@ -751,6 +752,13 @@ export function InlineMultilineEditor({
 
 export type InlineSelectOption = { value: string; label: string; description?: string }
 
+export type InlineSelectDisplayParams = {
+  value: string | null | undefined
+  emptyLabel: string
+  /** When `embedEditTriggerInDisplay` is set, call to enter edit mode (pencil moved into `renderDisplay`). */
+  requestEdit?: () => void
+}
+
 export type InlineSelectEditorProps = {
   label: string
   value: string | null | undefined
@@ -761,11 +769,16 @@ export type InlineSelectEditorProps = {
   activateOnClick?: boolean
   /** When false, hide the pencil/cancel trigger (fully read-only). Default true. */
   showEditTrigger?: boolean
+  /**
+   * When true, the default pencil is not shown next to the field; `requestEdit` is passed into
+   * `renderDisplay` so actions (e.g. Open + edit) can be grouped (e.g. top-right, vertical).
+   */
+  embedEditTriggerInDisplay?: boolean
   containerClassName?: string
   triggerClassName?: string
   hideLabel?: boolean
   renderEditor?: (params: { value: string; onChange: (next: string) => void }) => React.ReactNode
-  renderDisplay?: (params: { value: string | null | undefined; emptyLabel: string }) => React.ReactNode
+  renderDisplay?: (params: InlineSelectDisplayParams) => React.ReactNode
 }
 
 export function InlineSelectEditor({
@@ -777,6 +790,7 @@ export function InlineSelectEditor({
   variant = 'default',
   activateOnClick = false,
   showEditTrigger = true,
+  embedEditTriggerInDisplay = false,
   containerClassName,
   triggerClassName,
   hideLabel = false,
@@ -847,6 +861,17 @@ export function InlineSelectEditor({
         }
       : {}
 
+  const displayParams: InlineSelectDisplayParams =
+    embedEditTriggerInDisplay && showEditTrigger && !editing
+      ? {
+          value,
+          emptyLabel,
+          requestEdit: () => setEditing(true),
+        }
+      : { value, emptyLabel }
+
+  const showEndEditTrigger = showEditTrigger && !embedEditTriggerInDisplay
+
   return (
     <div className={containerClasses}>
       <div className="flex items-start justify-between gap-2">
@@ -883,10 +908,10 @@ export function InlineSelectEditor({
           ) : (
             <div className={variant === 'plain' ? 'flex items-center gap-2' : 'mt-1 text-sm'}>
               {renderDisplay ? (
-                renderDisplay({ value, emptyLabel })
+                renderDisplay(displayParams)
               ) : selected ? (
                 <div className="space-y-0.5">
-                  <p className="font-medium leading-tight">{selected.label}</p>
+                  <p className="font-semibold leading-tight">{selected.label}</p>
                   {selected.description ? (
                     <p className="text-xs text-muted-foreground">{selected.description}</p>
                   ) : null}
@@ -897,7 +922,7 @@ export function InlineSelectEditor({
             </div>
           )}
         </div>
-        {showEditTrigger ? (
+        {showEndEditTrigger ? (
           <Button
             type="button"
             variant="ghost"

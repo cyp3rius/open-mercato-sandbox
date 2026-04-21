@@ -1,7 +1,10 @@
 "use client"
 
 import * as React from 'react'
+import * as LucideIcons from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { DynamicIcon, iconNames } from 'lucide-react/dynamic'
+import { cn } from '@open-mercato/shared/lib/utils'
 
 export type DictionaryDisplayEntry = {
   value: string
@@ -203,6 +206,84 @@ export function renderDictionaryColor(color: string | null | undefined, classNam
   )
 }
 
+const LEGACY_LUCIDE_PASCAL = /^[A-Z][a-zA-Z0-9]*$/
+
+/**
+ * Renders a dictionary icon token (lucide:, emoji), including legacy PascalCase lucide exports.
+ * Kept for parity with search combobox / migrations that stored old icon names.
+ */
+export function renderDictionarySourceIcon(icon: string | null | undefined, className: string): React.ReactNode {
+  const trimmed = icon?.trim() ?? ''
+  if (!trimmed.length) return null
+  if (extractLucideSlug(trimmed)) {
+    const rendered = renderDictionaryIcon(trimmed, className)
+    if (rendered) return rendered
+  }
+  const map = LucideIcons as Record<string, LucideIcon>
+  if (LEGACY_LUCIDE_PASCAL.test(trimmed) && map[trimmed]) {
+    const Cmp = map[trimmed]!
+    return <Cmp className={className} aria-hidden />
+  }
+  return renderDictionaryIcon(trimmed, className)
+}
+
+export type DictionaryAppearancePreviewProps = {
+  color?: string | null
+  icon?: string | null
+  label: React.ReactNode
+  className?: string
+  /** Applied to the color swatch when `color` is set. */
+  colorClassName?: string
+  iconWrapperClassName?: string
+  iconClassName?: string
+  labelClassName?: string
+}
+
+/**
+ * Dictionary / catalog row: **color → icon → label** only for props that are set.
+ * Relational options with neither color nor icon render as **label only** (no leading gaps).
+ */
+export function DictionaryAppearancePreview({
+  color,
+  icon,
+  label,
+  className,
+  colorClassName,
+  iconWrapperClassName = 'inline-flex size-6 shrink-0 items-center justify-center text-muted-foreground',
+  iconClassName = 'size-4',
+  labelClassName,
+}: DictionaryAppearancePreviewProps) {
+  const raw = color?.trim()
+  const iconRaw = icon?.trim()
+  const hasColor = Boolean(raw)
+  const hasIcon = Boolean(iconRaw)
+  const swatchDims = colorClassName ?? 'h-3 w-3 rounded-sm'
+  /** Align with icon slot (typ. h-6) so rows with/without color share the same row height in detail grids. */
+  const rowMin = 'inline-flex min-h-6 min-w-0 items-center gap-2'
+
+  if (!hasColor && !hasIcon) {
+    return (
+      <span className={cn(rowMin, 'flex-1 truncate', labelClassName, className)}>
+        {label}
+      </span>
+    )
+  }
+
+  return (
+    <span className={cn(rowMin, className)}>
+      {hasColor ? (
+        <span className="inline-flex h-6 w-4 shrink-0 items-center justify-center">
+          {renderDictionaryColor(raw, swatchDims)}
+        </span>
+      ) : null}
+      {hasIcon ? (
+        <span className={cn(iconWrapperClassName)}>{renderDictionarySourceIcon(iconRaw, iconClassName)}</span>
+      ) : null}
+      <span className={cn('min-w-0 flex-1 truncate', labelClassName)}>{label}</span>
+    </span>
+  )
+}
+
 export function normalizeDictionaryEntries(items: unknown): DictionaryDisplayEntry[] {
   if (!Array.isArray(items)) return []
   const entries: DictionaryDisplayEntry[] = []
@@ -245,22 +326,24 @@ export function DictionaryValue({
   map,
   fallback = null,
   className,
-  iconWrapperClassName = 'inline-flex h-6 w-6 items-center justify-center rounded border border-border bg-card',
-  iconClassName = 'h-4 w-4',
-  colorClassName = 'h-3 w-3 rounded-full',
+  iconWrapperClassName,
+  iconClassName = 'size-4',
+  colorClassName = 'h-3 w-3 rounded-sm',
 }: DictionaryValueProps): React.ReactNode {
   if (!value) return fallback ?? null
   const entry = map?.[value]
   if (!entry) {
     return <span className={className}>{value}</span>
   }
-  const classes = ['inline-flex items-center gap-2', className].filter(Boolean).join(' ')
-  const renderedIcon = renderDictionaryIcon(entry.icon, iconClassName)
   return (
-    <span className={classes}>
-      {renderedIcon ? <span className={[iconWrapperClassName].filter(Boolean).join(' ')}>{renderedIcon}</span> : null}
-      <span>{entry.label}</span>
-      {entry.color ? renderDictionaryColor(entry.color, colorClassName) : null}
-    </span>
+    <DictionaryAppearancePreview
+      color={entry.color}
+      icon={entry.icon}
+      label={entry.label}
+      className={className}
+      colorClassName={colorClassName}
+      iconWrapperClassName={iconWrapperClassName}
+      iconClassName={iconClassName}
+    />
   )
 }

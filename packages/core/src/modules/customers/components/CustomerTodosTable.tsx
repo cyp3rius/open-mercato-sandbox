@@ -15,6 +15,7 @@ import { buildCrudExportUrl } from '@open-mercato/ui/backend/utils/crud'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { buildProcurementProcessTaskDeepLink } from '../../procurement/lib/procurementDeepLink'
 
 type CustomerTodoItem = {
   id: string
@@ -31,6 +32,8 @@ type CustomerTodoItem = {
   organizationId: string
   tenantId: string
   createdAt: string
+  procurementProcessId?: string | null
+  procurementProcessTaskId?: string | null
   customer: {
     id: string | null
     displayName: string | null
@@ -57,6 +60,20 @@ function buildCustomerHref(item: CustomerTodoItem): string | null {
       ? `/backend/customers/companies-v2/${customerId}`
       : `/backend/customers/people-v2/${customerId}`
   return `${base}?${TASKS_TAB_QUERY}`
+}
+
+function buildTodoTaskHref(item: CustomerTodoItem): string {
+  const ppid = item.procurementProcessId
+  const ptid = item.procurementProcessTaskId
+  if (
+    typeof ppid === 'string' &&
+    ppid.trim().length > 0 &&
+    typeof ptid === 'string' &&
+    ptid.trim().length > 0
+  ) {
+    return buildProcurementProcessTaskDeepLink(ppid, ptid)
+  }
+  return `/backend/todos/${item.todoId}/edit`
 }
 
 // SPEC-046b: To enable canonical interactions mode, switch this table to
@@ -121,7 +138,7 @@ export function CustomerTodosTable(): React.JSX.Element {
         const todoId = row.original.todoId
         if (!todoId) return <span className="text-muted-foreground">{title}</span>
         return (
-          <Link href={`/backend/todos/${todoId}/edit`} className="underline-offset-2 hover:underline">
+          <Link href={buildTodoTaskHref(row.original)} className="underline-offset-2 hover:underline">
             {title}
           </Link>
         )

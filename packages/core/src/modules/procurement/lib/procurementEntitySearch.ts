@@ -293,6 +293,108 @@ export async function resolveUserDisplayLabel(id: string): Promise<string | null
   return email.length ? email : typeof r.id === 'string' ? r.id : null
 }
 
+export type ProcurementCustomerAssociationPreview = {
+  kind: 'person' | 'company' | 'unknown'
+  title: string
+  subtitle: string | null
+  recordHref: string | null
+}
+
+export async function fetchProcurementCustomerAssociationPreview(
+  entityId: string,
+): Promise<ProcurementCustomerAssociationPreview | null> {
+  const id = entityId.trim()
+  if (!id.length) return null
+  const personRes = await apiCall<{
+    person?: { id?: string; displayName?: string | null; primaryEmail?: string | null }
+  }>(`/api/customers/people/${encodeURIComponent(id)}`)
+  if (personRes.ok && personRes.result?.person?.id === id) {
+    const row = personRes.result.person
+    const title =
+      typeof row.displayName === 'string' && row.displayName.trim().length ? row.displayName.trim() : id
+    const email =
+      typeof row.primaryEmail === 'string' && row.primaryEmail.trim().length ? row.primaryEmail.trim() : null
+    return {
+      kind: 'person',
+      title,
+      subtitle: email,
+      recordHref: `/backend/customers/people-v2/${encodeURIComponent(id)}`,
+    }
+  }
+  const companyRes = await apiCall<{
+    company?: { id?: string; displayName?: string | null; primaryEmail?: string | null }
+    profile?: { domain?: string | null } | null
+  }>(`/api/customers/companies/${encodeURIComponent(id)}`)
+  if (companyRes.ok && companyRes.result?.company?.id === id) {
+    const row = companyRes.result.company
+    const title =
+      typeof row.displayName === 'string' && row.displayName.trim().length ? row.displayName.trim() : id
+    const email =
+      typeof row.primaryEmail === 'string' && row.primaryEmail.trim().length ? row.primaryEmail.trim() : null
+    const domainRaw =
+      companyRes.result.profile && typeof companyRes.result.profile.domain === 'string'
+        ? companyRes.result.profile.domain.trim()
+        : ''
+    const subtitle = email ?? (domainRaw.length ? domainRaw : null)
+    return {
+      kind: 'company',
+      title,
+      subtitle,
+      recordHref: `/backend/customers/companies-v2/${encodeURIComponent(id)}`,
+    }
+  }
+  return {
+    kind: 'unknown',
+    title: id,
+    subtitle: null,
+    recordHref: null,
+  }
+}
+
+export type ProcurementQuoteAssociationPreview = {
+  quoteLabel: string
+  subtitle: string | null
+  recordHref: string
+}
+
+export async function fetchProcurementQuoteAssociationPreview(
+  quoteId: string,
+): Promise<ProcurementQuoteAssociationPreview | null> {
+  const id = quoteId.trim()
+  if (!id.length) return null
+  const call = await apiCall<Record<string, unknown>>(
+    `/api/sales/quotes?id=${encodeURIComponent(id)}&pageSize=1`,
+  )
+  if (!call.ok) return null
+  const row = readItems(call.result ?? undefined)[0]
+  if (!row || typeof row !== 'object') return null
+  const r = row as Record<string, unknown>
+  const numRaw = r.quote_number ?? r.quoteNumber
+  const num = typeof numRaw === 'string' ? numRaw.trim() : ''
+  const quoteLabel = num.length ? num : typeof r.id === 'string' ? r.id : id
+  let subtitle: string | null = null
+  const cust = r.customer_snapshot ?? r.customerSnapshot
+  if (cust && typeof cust === 'object') {
+    const snap = cust as Record<string, unknown>
+    const name =
+      typeof snap.displayName === 'string'
+        ? snap.displayName.trim()
+        : typeof snap.display_name === 'string'
+          ? snap.display_name.trim()
+          : ''
+    if (name.length) subtitle = name
+  }
+  const statusRaw = r.status
+  if (typeof statusRaw === 'string' && statusRaw.trim().length) {
+    subtitle = subtitle ? `${subtitle} · ${statusRaw.trim()}` : statusRaw.trim()
+  }
+  return {
+    quoteLabel,
+    subtitle,
+    recordHref: `/backend/sales/documents/${encodeURIComponent(id)}`,
+  }
+}
+
 export function mergeEntitySearchOption(
   options: EntitySearchComboboxOption[],
   value: string,

@@ -15,6 +15,10 @@ import {
   ProcurementProcessTask,
 } from '../data/entities'
 import {
+  resolveInitialProcurementProcessStatus,
+  resolveProcurementProcessCompletionStatus,
+} from '../lib/procurementOrganizationSettings'
+import {
   assertProcurementStatusTransitionAllowed,
   findProcurementStatusTransition,
   normProcurementStatusValue,
@@ -33,6 +37,12 @@ import {
   PROCUREMENT_PROCESS_TYPE_DICTIONARY_KEY,
 } from '../lib/dictionaryKeys'
 import { findDefaultDictionaryEntry, resolveDictionaryPresentation } from '../lib/resolveDictionaryPresentation'
+import { resolveProcurementCommandActorUserId } from '../lib/commandActor'
+import {
+  assertProcurementProcessManageOnly,
+  assertProcurementProcessMutationAllowed,
+  ensureProcurementHandlerUserInScope,
+} from '../lib/procurementProcessAccess'
 import { appendProcurementTimelineEvent } from '../lib/timeline'
 import { procurementProcessCrudEvents, procurementProcessCrudIndexer } from '../lib/crud'
 import {
@@ -68,6 +78,7 @@ type ProcessSnapshot = {
   refinancingNotes: string | null
   closedAt: string | null
   deletedAt: string | null
+  handlerUserId: string | null
 }
 
 type ProcessUndoPayload = UndoPayload<ProcessSnapshot>
@@ -110,6 +121,7 @@ async function loadProcessSnapshot(em: EntityManager, id: string): Promise<Proce
     refinancingNotes: row.refinancingNotes ?? null,
     closedAt: toIso(row.closedAt ?? null),
     deletedAt: toIso(row.deletedAt ?? null),
+    handlerUserId: row.handlerUserId ?? null,
   }
 }
 
@@ -185,12 +197,16 @@ const createProcessCommand: CommandHandler<ProcurementProcessCreateInput, { proc
     if (parsed.customerEntityId) {
       await ensureCustomerInScope(em, parsed.customerEntityId, parsed.organizationId, parsed.tenantId)
     }
+    if ('handlerUserId' in parsed && parsed.handlerUserId !== undefined) {
+      await ensureProcurementHandlerUserInScope(
+        em,
+        parsed.handlerUserId ?? null,
+        parsed.tenantId,
+        parsed.organizationId,
+      )
+    }
 
-    const statusDefault = await findDefaultDictionaryEntry(
-      em,
-      scope,
-      PROCUREMENT_PROCESS_STATUS_DICTIONARY_KEY,
-    )
+    const statusDefault = await resolveInitialProcurementProcessStatus(em, scope)
     const typeDefault = await findDefaultDictionaryEntry(em, scope, PROCUREMENT_PROCESS_TYPE_DICTIONARY_KEY)
 
     const record = em.create(ProcurementProcess, {
@@ -212,6 +228,8 @@ const createProcessCommand: CommandHandler<ProcurementProcessCreateInput, { proc
       startedAt: null,
       createdAt: now,
       updatedAt: now,
+      handlerUserId:
+        'handlerUserId' in parsed && parsed.handlerUserId !== undefined ? parsed.handlerUserId ?? null : null,
     })
     em.persist(record)
     const statusBeforeApply = record.statusValue ?? null
@@ -266,18 +284,19 @@ const createProcessCommand: CommandHandler<ProcurementProcessCreateInput, { proc
 
     await em.flush()
 
+    const { translate } = await resolveTranslations()
     await appendProcurementTimelineEvent(em, {
       process: record,
       eventType: 'process.created',
-      message: 'Procurement process created.',
-      actorUserId: ctx.auth?.userId ?? null,
+      message: translate('procurement.timeline.msg.processCreated', 'Procurement process created.'),
+      actorUserId: resolveProcurementCommandActorUserId(ctx),
     })
     if (record.startedAt) {
       await appendProcurementTimelineEvent(em, {
         process: record,
         eventType: 'process.started',
-        message: 'Procurement process started.',
-        actorUserId: ctx.auth?.userId ?? null,
+        message: translate('procurement.timeline.msg.processStarted', 'Procurement process started.'),
+        actorUserId: resolveProcurementCommandActorUserId(ctx),
       })
     }
     await em.flush()
@@ -356,6 +375,9 @@ const updateProcessCommand: CommandHandler<ProcurementProcessUpdateInput, { proc
     )
     if (!record) throw new CrudHttpError(404, { error: 'Procurement process not found.' })
 
+    await assertProcurementProcessMutationAllowed(ctx, record)
+
+    const { translate } = await resolveTranslations()
     const scope = { tenantId: record.tenantId, organizationId: record.organizationId }
 
     if (parsed.customerEntityId !== undefined) {
@@ -373,6 +395,17 @@ const updateProcessCommand: CommandHandler<ProcurementProcessUpdateInput, { proc
     if (parsed.refinancingNotes !== undefined) record.refinancingNotes = parsed.refinancingNotes ?? null
     if (parsed.startedAt !== undefined) record.startedAt = parsed.startedAt ?? null
     if (parsed.closedAt !== undefined) record.closedAt = parsed.closedAt ?? null
+
+    if (parsed.handlerUserId !== undefined) {
+      await assertProcurementProcessManageOnly(ctx, record)
+      await ensureProcurementHandlerUserInScope(
+        em,
+        parsed.handlerUserId ?? null,
+        record.tenantId,
+        record.organizationId,
+      )
+      record.handlerUserId = parsed.handlerUserId ?? null
+    }
 
     const prevStatus = record.statusValue
     const prevType = record.typeValue
@@ -421,20 +454,30 @@ const updateProcessCommand: CommandHandler<ProcurementProcessUpdateInput, { proc
       }
     }
     if ('statusValue' in parsed && parsed.statusValue !== undefined && record.statusValue !== prevStatus) {
+      const statusLabel =
+        record.statusLabel ??
+        record.statusValue ??
+        translate('procurement.timeline.msg.unknownValue', 'Unknown')
       await appendProcurementTimelineEvent(em, {
         process: record,
         eventType: 'process.status_changed',
-        message: `Status set to ${record.statusLabel ?? record.statusValue ?? 'unknown'}.`,
-        actorUserId: ctx.auth?.userId ?? null,
+        message: translate('procurement.timeline.msg.statusSetTo', 'Status set to {{label}}.', {
+          label: statusLabel,
+        }),
+        actorUserId: resolveProcurementCommandActorUserId(ctx),
         metadata: { from: prevStatus, to: record.statusValue },
       })
     }
     if ('typeValue' in parsed && parsed.typeValue !== undefined && record.typeValue !== prevType) {
+      const typeLabel =
+        record.typeLabel ?? record.typeValue ?? translate('procurement.timeline.msg.unknownValue', 'Unknown')
       await appendProcurementTimelineEvent(em, {
         process: record,
         eventType: 'process.type_changed',
-        message: `Type set to ${record.typeLabel ?? record.typeValue ?? 'unknown'}.`,
-        actorUserId: ctx.auth?.userId ?? null,
+        message: translate('procurement.timeline.msg.typeSetTo', 'Type set to {{label}}.', {
+          label: typeLabel,
+        }),
+        actorUserId: resolveProcurementCommandActorUserId(ctx),
         metadata: { from: prevType, to: record.typeValue },
       })
     }
@@ -449,8 +492,8 @@ const updateProcessCommand: CommandHandler<ProcurementProcessUpdateInput, { proc
       await appendProcurementTimelineEvent(em, {
         process: record,
         eventType: 'process.started',
-        message: 'Procurement process started.',
-        actorUserId: ctx.auth?.userId ?? null,
+        message: translate('procurement.timeline.msg.processStarted', 'Procurement process started.'),
+        actorUserId: resolveProcurementCommandActorUserId(ctx),
       })
     }
 
@@ -500,6 +543,7 @@ const updateProcessCommand: CommandHandler<ProcurementProcessUpdateInput, { proc
       'refinancingNotes',
       'closedAt',
       'deletedAt',
+      'handlerUserId',
     ])
     const { translate } = await resolveTranslations()
     return {
@@ -541,6 +585,7 @@ const updateProcessCommand: CommandHandler<ProcurementProcessUpdateInput, { proc
     row.refinancingNotes = before.refinancingNotes ?? null
     row.closedAt = before.closedAt ? new Date(before.closedAt) : null
     row.deletedAt = before.deletedAt ? new Date(before.deletedAt) : null
+    row.handlerUserId = before.handlerUserId ?? null
     row.updatedAt = new Date()
     await em.flush()
     const dataEngine = ctx.container.resolve('dataEngine') as DataEngine
@@ -574,6 +619,7 @@ const deleteProcessCommand: CommandHandler<Record<string, unknown>, { processId:
       { tenantId: ctx.auth?.tenantId ?? null, organizationId: ctx.auth?.orgId ?? null },
     )
     if (!record) throw new CrudHttpError(404, { error: 'Procurement process not found.' })
+    await assertProcurementProcessManageOnly(ctx, record)
     const now = new Date()
     record.deletedAt = now
     record.updatedAt = now
@@ -654,60 +700,87 @@ const completeProcessCommand: CommandHandler<Record<string, unknown>, { processI
     )
     if (!process) throw new CrudHttpError(404, { error: 'Procurement process not found.' })
 
-    const resource = await findOneWithDecryption(
-      em,
-      ResourcesResource,
-      {
-        id: parsed.resourceId,
-        deletedAt: null,
-        organizationId: process.organizationId,
-        tenantId: process.tenantId,
-      },
-      undefined,
-      { tenantId: process.tenantId, organizationId: process.organizationId },
-    )
-    if (!resource) throw new CrudHttpError(400, { error: 'Resource not found in this organization.' })
+    await assertProcurementProcessMutationAllowed(ctx, process)
 
     if (process.closedAt) {
       throw new CrudHttpError(400, { error: 'Procurement process is already closed.' })
     }
-    if (process.resourceId && process.resourceId !== parsed.resourceId) {
-      throw new CrudHttpError(400, { error: 'Procurement process is already linked to a different resource.' })
+
+    const resourceIdToLink =
+      typeof parsed.resourceId === 'string' && parsed.resourceId.trim().length > 0
+        ? parsed.resourceId.trim()
+        : ''
+
+    let resource: ResourcesResource | null = null
+    if (resourceIdToLink) {
+      resource = await findOneWithDecryption(
+        em,
+        ResourcesResource,
+        {
+          id: resourceIdToLink,
+          deletedAt: null,
+          organizationId: process.organizationId,
+          tenantId: process.tenantId,
+        },
+        undefined,
+        { tenantId: process.tenantId, organizationId: process.organizationId },
+      )
+      if (!resource) throw new CrudHttpError(400, { error: 'Resource not found in this organization.' })
+      if (process.resourceId && process.resourceId !== resourceIdToLink) {
+        throw new CrudHttpError(400, { error: 'Procurement process is already linked to a different resource.' })
+      }
+      if (resource.procurementProcessId && resource.procurementProcessId !== process.id) {
+        throw new CrudHttpError(400, { error: 'Resource is already linked to another procurement process.' })
+      }
     }
+
+    const scope = { tenantId: process.tenantId, organizationId: process.organizationId }
+    const prevStatus = process.statusValue
+    const completionStatus = await resolveProcurementProcessCompletionStatus(em, scope)
+    let completeTransitionWorkflowId: string | null | undefined
     if (
-      resource.procurementProcessId &&
-      resource.procurementProcessId !== process.id
+      normProcurementStatusValue(prevStatus) !== normProcurementStatusValue(completionStatus.value)
     ) {
-      throw new CrudHttpError(400, { error: 'Resource is already linked to another procurement process.' })
+      const tr = await findProcurementStatusTransition(
+        em,
+        process.tenantId,
+        process.organizationId,
+        prevStatus,
+        completionStatus.value,
+      )
+      completeTransitionWorkflowId = tr?.automationWorkflowId ?? null
     }
 
-    const closed = await resolveDictionaryPresentation(
-      em,
-      { tenantId: process.tenantId, organizationId: process.organizationId },
-      PROCUREMENT_PROCESS_STATUS_DICTIONARY_KEY,
-      'closed',
-      'Procurement status dictionary is not configured.',
-      'Closed status not found in dictionary.',
-    )
-
-    process.resourceId = parsed.resourceId
     process.salesInvoiceId = parsed.salesInvoiceId ?? null
-    process.statusValue = closed.value
-    process.statusLabel = closed.label
-    process.statusColor = closed.color
-    process.statusIcon = closed.icon
+    process.statusValue = completionStatus.value
+    process.statusLabel = completionStatus.label
+    process.statusColor = completionStatus.color
+    process.statusIcon = completionStatus.icon
     process.closedAt = new Date()
     process.updatedAt = new Date()
 
-    resource.procurementProcessId = process.id
-    resource.updatedAt = new Date()
+    if (resource) {
+      process.resourceId = resource.id
+      resource.procurementProcessId = process.id
+      resource.updatedAt = new Date()
+    }
 
+    const { translate } = await resolveTranslations()
     await appendProcurementTimelineEvent(em, {
       process,
       eventType: 'process.completed',
-      message: `Process completed. Linked resource ${resource.name}.`,
-      actorUserId: ctx.auth?.userId ?? null,
-      metadata: { resourceId: resource.id, invoiceId: process.salesInvoiceId },
+      message: resource
+        ? translate(
+            'procurement.timeline.msg.processCompletedWithResource',
+            'Process completed. Linked resource {{name}}.',
+            { name: resource.name },
+          )
+        : translate('procurement.timeline.msg.processCompleted', 'Process completed.'),
+      actorUserId: resolveProcurementCommandActorUserId(ctx),
+      metadata: {
+        resourceId: resource?.id ?? null,
+        invoiceId: process.salesInvoiceId,
+      },
     })
     await em.flush()
 
@@ -720,14 +793,27 @@ const completeProcessCommand: CommandHandler<Record<string, unknown>, { processI
       events: procurementProcessCrudEvents,
       indexer: procurementProcessCrudIndexer,
     })
-    await emitCrudSideEffects({
-      dataEngine,
-      action: 'updated',
-      entity: resource,
-      identifiers: { id: resource.id, organizationId: resource.organizationId, tenantId: resource.tenantId },
-      events: resourcesResourceCrudEvents,
-      indexer: resourcesResourceCrudIndexer,
-    })
+    if (completeTransitionWorkflowId) {
+      await runProcurementTransitionAutomation(
+        em,
+        ctx.container,
+        process,
+        prevStatus ?? null,
+        completionStatus.value,
+        completeTransitionWorkflowId,
+        ctx.auth?.userId ?? ctx.auth?.sub ?? null,
+      )
+    }
+    if (resource) {
+      await emitCrudSideEffects({
+        dataEngine,
+        action: 'updated',
+        entity: resource,
+        identifiers: { id: resource.id, organizationId: resource.organizationId, tenantId: resource.tenantId },
+        events: resourcesResourceCrudEvents,
+        indexer: resourcesResourceCrudIndexer,
+      })
+    }
     return { processId: process.id }
   },
 }

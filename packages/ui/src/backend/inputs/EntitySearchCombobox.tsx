@@ -2,36 +2,13 @@
 
 import * as React from 'react'
 import { Command } from 'cmdk'
-import * as LucideIcons from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 import { Check, ChevronDown, Plus } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { cn } from '@open-mercato/shared/lib/utils'
-import {
-  extractLucideSlug,
-  renderDictionaryColor,
-  renderDictionaryIcon,
-} from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
+import { DictionaryAppearancePreview } from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
 import { Button } from '../../primitives/button'
 import { IconButton } from '../../primitives/icon-button'
 import { Popover, PopoverContent, PopoverTrigger } from '../../primitives/popover'
-
-const LEGACY_LUCIDE_PASCAL = /^[A-Z][a-zA-Z0-9]*$/
-
-function renderDictionarySourceIcon(icon: string | null | undefined, className: string): React.ReactNode {
-  const trimmed = icon?.trim() ?? ''
-  if (!trimmed.length) return null
-  if (extractLucideSlug(trimmed)) {
-    const rendered = renderDictionaryIcon(trimmed, className)
-    if (rendered) return rendered
-  }
-  const map = LucideIcons as Record<string, LucideIcon>
-  if (LEGACY_LUCIDE_PASCAL.test(trimmed) && map[trimmed]) {
-    const Cmp = map[trimmed]!
-    return <Cmp className={className} aria-hidden />
-  }
-  return renderDictionaryIcon(trimmed, className)
-}
 
 export type EntitySearchComboboxOption = {
   value: string
@@ -173,22 +150,27 @@ export function EntitySearchCombobox({
             data-crud-focus-target=""
           >
             <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
-              {value && selectedOption?.color?.trim() ? (
-                <span className="shrink-0">{renderDictionaryColor(selectedOption.color.trim(), 'h-3 w-3 rounded-sm')}</span>
-              ) : null}
-              {value && selectedOption?.icon?.trim() ? (
-                <span className="inline-flex size-5 shrink-0 items-center justify-center text-muted-foreground">
-                  {renderDictionarySourceIcon(selectedOption.icon, 'size-4')}
-                </span>
-              ) : null}
-              <span className="truncate">{value ? triggerLabel : placeholder ?? ''}</span>
+              {value ? (
+                <DictionaryAppearancePreview
+                  color={selectedOption?.color}
+                  icon={selectedOption?.icon}
+                  label={triggerLabel}
+                  className="min-w-0 flex-1"
+                  labelClassName="truncate"
+                />
+              ) : (
+                <span className="truncate">{placeholder ?? ''}</span>
+              )}
             </span>
             <ChevronDown className="ml-1 size-4 shrink-0 opacity-60" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[min(100vw-2rem,var(--radix-popover-trigger-width,24rem))] p-0" align="start">
-          <Command shouldFilter={!isRemote} className="overflow-hidden rounded-md bg-popover text-popover-foreground">
-            <div className="border-b px-0">
+          <Command
+            shouldFilter={!isRemote}
+            className="flex min-h-0 max-h-[min(18rem,calc(100vh-6rem))] flex-col overflow-hidden rounded-md bg-popover text-popover-foreground"
+          >
+            <div className="shrink-0 border-b px-0">
               <Command.Input
                 placeholder={defaultSearchPh}
                 value={query}
@@ -196,7 +178,11 @@ export function EntitySearchCombobox({
                 className="flex h-9 w-full border-0 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
               />
             </div>
-            <Command.List className="max-h-60 overflow-y-auto p-1">
+            <Command.List
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1"
+              onWheel={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+            >
               {remoteLoading ? (
                 <div className="px-3 py-2 text-xs text-muted-foreground">
                   {t('common.loading', 'Loading…')}
@@ -217,23 +203,23 @@ export function EntitySearchCombobox({
                         }}
                         className="flex cursor-pointer flex-col gap-0.5 rounded-sm px-2 py-1.5 text-sm aria-selected:bg-accent"
                       >
-                        <span className="flex w-full min-w-0 items-center gap-2">
-                          <Check
-                            className={cn('size-4 shrink-0', value === opt.value ? 'opacity-100' : 'opacity-0')}
-                          />
-                          {opt.color?.trim() ? (
-                            <span className="shrink-0">{renderDictionaryColor(opt.color.trim(), 'h-3 w-3 rounded-sm')}</span>
+                        <div className="flex w-full min-w-0 flex-col gap-0.5">
+                          <div className="flex w-full min-w-0 items-center gap-2">
+                            <Check
+                              className={cn('size-4 shrink-0', value === opt.value ? 'opacity-100' : 'opacity-0')}
+                            />
+                            <DictionaryAppearancePreview
+                              color={opt.color}
+                              icon={opt.icon}
+                              label={opt.label}
+                              className="min-w-0 flex-1"
+                              labelClassName="truncate font-medium"
+                            />
+                          </div>
+                          {opt.description ? (
+                            <span className="pl-6 text-xs text-muted-foreground">{opt.description}</span>
                           ) : null}
-                          {opt.icon?.trim() ? (
-                            <span className="inline-flex size-5 shrink-0 items-center justify-center text-muted-foreground">
-                              {renderDictionarySourceIcon(opt.icon, 'size-4')}
-                            </span>
-                          ) : null}
-                          <span className="min-w-0 truncate font-medium">{opt.label}</span>
-                        </span>
-                        {opt.description ? (
-                          <span className="pl-10 text-xs text-muted-foreground">{opt.description}</span>
-                        ) : null}
+                        </div>
                       </Command.Item>
                     ))}
                   </Command.Group>

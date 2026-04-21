@@ -22,6 +22,25 @@ import { useRouter } from 'next/navigation'
 
 type TodoRow = TodoListItem & { organization_name?: string }
 
+function procurementProcessTaskDeepLink(processId: string, taskId: string): string {
+  const q = new URLSearchParams({ tab: 'tasks', taskId })
+  return `/backend/procurement/processes/${processId}?${q.toString()}`
+}
+
+function resolveTodoRowHref(row: TodoRow): string {
+  const ppid = row.procurement_process_id
+  const ptid = row.procurement_process_task_id
+  if (
+    typeof ppid === 'string' &&
+    ppid.trim().length > 0 &&
+    typeof ptid === 'string' &&
+    ptid.trim().length > 0
+  ) {
+    return procurementProcessTaskDeepLink(ppid, ptid)
+  }
+  return `/backend/todos/${row.id}/edit`
+}
+
 type TodosResponse = {
   items: TodoListItem[]
   total: number
@@ -293,7 +312,7 @@ export default function TodosTable() {
         rowActions={(row) => (
           <RowActions
             items={[
-              { label: t('example.todos.table.actions.edit'), href: `/backend/todos/${row.id}/edit` },
+              { label: t('example.todos.table.actions.edit'), href: resolveTodoRowHref(row) },
               {
                 label: t('example.todos.table.actions.delete'),
                 destructive: true,
@@ -327,7 +346,7 @@ export default function TodosTable() {
           onPageChange: setPage,
         }}
         isLoading={isLoading}
-        onRowClick={(row) => router.push(`/backend/todos/${row.id}/edit`)}
+        onRowClick={(row) => router.push(resolveTodoRowHref(row))}
       />
       {ConfirmDialogElement}
     </>

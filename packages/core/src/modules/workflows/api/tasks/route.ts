@@ -10,7 +10,10 @@ import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
+import { User } from '@open-mercato/core/modules/auth/data/entities'
 import { UserTask } from '../../data/entities'
+import { serializeUserTaskForApi } from '../../lib/serializeUserTask'
+import { startOfLocalToday } from '../../lib/userTaskDue'
 import {
   workflowsTag,
   userTaskListQuerySchema,
@@ -92,7 +95,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (overdue) {
-      where.dueDate = { $lt: new Date() }
+      // Calendar-day overdue: due before start of today (not “same calendar day as now”)
+      where.dueDate = { $lt: startOfLocalToday() }
       where.status = { $in: ['PENDING', 'IN_PROGRESS'] }
     }
 
@@ -104,18 +108,39 @@ export async function GET(request: NextRequest) {
       ]
     }
 
-    const [tasks, total] = await em.findAndCount(
-      UserTask,
-      where,
-      {
-        orderBy: { createdAt: 'DESC' },
-        limit,
-        offset,
-      }
+    const [tasks, total] = await em.findAndCount(UserTask, where, {
+      orderBy: { createdAt: 'DESC' },
+      limit,
+      offset,
+    })
+
+    const userIds = [
+      ...new Set(
+        tasks
+          .flatMap((t) => [t.assignedTo, t.claimedBy])
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    ]
+    const users =
+      userIds.length > 0
+        ? await em.find(User, { id: { $in: userIds as any[] }, deletedAt: null })
+        : []
+    const displayById = new Map(
+      users.map((u) => {
+        const name = typeof u.name === 'string' && u.name.trim().length ? u.name.trim() : null
+        const label = name ?? u.email ?? u.id
+        return [u.id, label] as const
+      }),
     )
 
+    const data = tasks.map((t) => ({
+      ...serializeUserTaskForApi(t),
+      assignedToDisplayName: t.assignedTo ? displayById.get(t.assignedTo) ?? null : null,
+      claimedByDisplayName: t.claimedBy ? displayById.get(t.claimedBy) ?? null : null,
+    }))
+
     return NextResponse.json({
-      data: tasks,
+      data,
       pagination: {
         total,
         limit,

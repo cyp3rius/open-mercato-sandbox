@@ -13,11 +13,11 @@ export const notificationTypes: NotificationTypeDefinition[] = [
         id: 'view',
         labelKey: 'common.view',
         variant: 'outline',
-        href: '/backend/procurement/processes/{sourceEntityId}',
+        href: '/backend/procurement/processes/{sourceEntityId}?tab=tasks',
         icon: 'external-link',
       },
     ],
-    linkHref: '/backend/procurement/processes/{sourceEntityId}',
+    linkHref: '/backend/procurement/processes/{sourceEntityId}?tab=tasks',
     expiresAfterHours: 168,
   },
 ]

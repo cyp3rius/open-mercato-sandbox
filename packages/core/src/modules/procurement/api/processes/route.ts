@@ -5,6 +5,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import type { FilterQuery } from '@mikro-orm/core'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import { User } from '@open-mercato/core/modules/auth/data/entities'
 import { ProcurementProcess } from '../../data/entities'
 import { procurementProcessCreateSchema, procurementProcessUpdateSchema } from '../../data/validators'
 import {
@@ -17,7 +18,10 @@ import { mergeProcurementCommandScope } from '../mergeScope'
 const routeMetadata = {
   GET: { requireAuth: true, requireFeatures: ['procurement.processes.view'] },
   POST: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
-  PUT: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
+  PUT: {
+    requireAuth: true,
+    requireAnyFeatures: ['procurement.processes.manage', 'procurement.processes.handle'],
+  },
   DELETE: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
 }
 
@@ -108,9 +112,19 @@ type ProcessRow = {
   updatedAt: string | null
   organizationId: string
   tenantId: string
+  handlerUserId: string | null
+  handlerLabel: string | null
 }
 
-const toRow = (row: ProcurementProcess): ProcessRow => ({
+function formatUserHandlerLabel(user: User): string {
+  const name = typeof user.name === 'string' && user.name.trim().length ? user.name.trim() : ''
+  if (name) return name
+  const email = typeof user.email === 'string' && user.email.trim().length ? user.email.trim() : ''
+  if (email) return email
+  return String(user.id)
+}
+
+const toRow = (row: ProcurementProcess, handlerLabel: string | null): ProcessRow => ({
   id: String(row.id),
   title: row.title,
   description: row.description ?? null,
@@ -135,6 +149,8 @@ const toRow = (row: ProcurementProcess): ProcessRow => ({
   updatedAt: row.updatedAt ? row.updatedAt.toISOString() : null,
   organizationId: String(row.organizationId),
   tenantId: String(row.tenantId),
+  handlerUserId: row.handlerUserId ?? null,
+  handlerLabel,
 })
 
 export async function GET(req: Request) {
@@ -205,7 +221,13 @@ export async function GET(req: Request) {
   })
   const start = (page - 1) * pageSize
   const paged = all.slice(start, start + pageSize)
-  const items = paged.map(toRow)
+  const handlerIds = [...new Set(paged.map((r) => r.handlerUserId).filter(Boolean) as string[])]
+  const handlers =
+    handlerIds.length > 0
+      ? await em.find(User, { id: { $in: handlerIds }, deletedAt: null })
+      : []
+  const handlerLabelById = new Map(handlers.map((u) => [u.id, formatUserHandlerLabel(u)] as const))
+  const items = paged.map((row) => toRow(row, row.handlerUserId ? handlerLabelById.get(row.handlerUserId) ?? null : null))
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   return NextResponse.json({ items, total, page, pageSize, totalPages })
@@ -240,6 +262,8 @@ const processListItemSchema = z.object({
   updatedAt: z.string().nullable(),
   organizationId: z.uuid(),
   tenantId: z.uuid(),
+  handlerUserId: z.uuid().nullable(),
+  handlerLabel: z.string().nullable(),
 })
 
 export const openApi = buildProcurementCrudOpenApi({

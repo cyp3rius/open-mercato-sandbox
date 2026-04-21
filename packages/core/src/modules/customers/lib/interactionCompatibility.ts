@@ -5,6 +5,8 @@ export const CUSTOMER_INTERACTION_TASK_SOURCE = 'customers:interaction'
 export const CUSTOMER_INTERACTION_TASK_TYPE = 'task'
 export const CUSTOMER_INTERACTION_ACTIVITY_ADAPTER_SOURCE = 'adapter:activity'
 export const CUSTOMER_INTERACTION_TODO_ADAPTER_SOURCE = 'adapter:todo'
+/** Tasks created from procurement process steps (see procurement work-item sync). */
+export const CUSTOMER_INTERACTION_PROCUREMENT_SOURCE = 'procurement:task'
 
 export type InteractionRecord = InteractionSummary & {
   authorName?: string | null
@@ -12,6 +14,8 @@ export type InteractionRecord = InteractionSummary & {
   dealTitle?: string | null
   customValues?: Record<string, unknown> | null
   _integrations?: Record<string, unknown>
+  procurementProcessId?: string | null
+  procurementProcessTaskId?: string | null
 }
 
 export function isTaskInteractionType(value: string | null | undefined): boolean {

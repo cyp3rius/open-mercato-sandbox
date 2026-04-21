@@ -19,6 +19,8 @@ import {
   StepInstance,
   WorkflowDefinition,
 } from '../data/entities'
+import { ProcurementProcess, ProcurementProcessTask } from '../../procurement/data/entities'
+import { appendProcurementTimelineNoteFromUserTask } from '../../procurement/lib/appendUserTaskProcurementNote'
 import { executeWorkflow } from './workflow-executor'
 import * as stepHandler from './step-handler'
 import * as transitionHandler from './transition-handler'
@@ -85,6 +87,63 @@ export async function completeUserTask(
     )
   }
 
+  /** Procurement-backed tasks: complete locally and mirror status to `procurement_process_tasks` (no workflow resume). */
+  if (task.procurementProcessTaskId) {
+    if (task.formSchema) {
+      try {
+        validateFormData(formData, task.formSchema)
+      } catch (error) {
+        throw new UserTaskError(
+          error instanceof Error ? error.message : 'Form validation failed',
+          'FORM_VALIDATION_FAILED',
+          { taskId, formSchema: task.formSchema, formData }
+        )
+      }
+    }
+
+    const now = new Date()
+    task.status = 'COMPLETED'
+    task.formData = formData
+    task.completedBy = userId
+    task.completedAt = now
+    task.comments = comments || null
+    task.updatedAt = now
+
+    await em.flush()
+
+    const procTask = await em.findOne(
+      ProcurementProcessTask,
+      {
+        id: task.procurementProcessTaskId,
+        deletedAt: null,
+      },
+      { populate: ['process'] },
+    )
+    if (procTask) {
+      procTask.taskStatus = 'done'
+      procTask.updatedAt = now
+      await em.flush()
+
+      if (comments?.trim()) {
+        const processEntity =
+          typeof procTask.process === 'string'
+            ? await em.findOne(ProcurementProcess, { id: procTask.process, deletedAt: null })
+            : procTask.process
+        if (processEntity) {
+          await appendProcurementTimelineNoteFromUserTask(em, {
+            userTask: task,
+            procurementTask: procTask,
+            process: processEntity,
+            text: comments.trim(),
+            actorUserId: userId,
+          })
+          await em.flush()
+        }
+      }
+    }
+    return
+  }
+
   // Validate form data against schema (simple validation for MVP)
   // In Phase 7, we'll add comprehensive JSON Schema validation
   if (task.formSchema) {
@@ -109,6 +168,14 @@ export async function completeUserTask(
   task.updatedAt = now
 
   await em.flush()
+
+  if (!task.workflowInstanceId || !task.stepInstanceId) {
+    throw new UserTaskError(
+      'Workflow instance or step is missing for this task',
+      'INVALID_WORKFLOW_TASK',
+      { taskId }
+    )
+  }
 
   // Fetch workflow instance
   const instance = await em.findOne(WorkflowInstance, task.workflowInstanceId)
@@ -276,12 +343,28 @@ export async function claimUserTask(
 
   await em.flush()
 
+  if (task.procurementProcessTaskId) {
+    const procTask = await em.findOne(ProcurementProcessTask, {
+      id: task.procurementProcessTaskId,
+      deletedAt: null,
+    })
+    if (procTask) {
+      procTask.assignedUserId = userId
+      procTask.updatedAt = new Date()
+      await em.flush()
+    }
+  }
+
   // Log event
+  if (!task.workflowInstanceId) {
+    return
+  }
+
   const instance = await em.findOne(WorkflowInstance, task.workflowInstanceId)
   if (instance) {
     await logWorkflowEvent(em, {
       workflowInstanceId: instance.id,
-      stepInstanceId: task.stepInstanceId,
+      stepInstanceId: task.stepInstanceId ?? null,
       eventType: 'USER_TASK_STARTED',
       eventData: {
         taskId: task.id,

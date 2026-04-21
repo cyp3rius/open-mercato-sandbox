@@ -16,6 +16,7 @@ import { resolveAuthActorId } from '../../../customers/lib/interactionRequestCon
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { FilterQuery } from '@mikro-orm/core'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
+import { User } from '@open-mercato/core/modules/auth/data/entities'
 import { ProcurementProcessTimelineEvent } from '../../data/entities'
 import {
   procurementTimelineAppendSchema,
@@ -28,9 +29,18 @@ import {
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['procurement.processes.view'] },
-  POST: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
-  PUT: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
-  DELETE: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
+  POST: {
+    requireAuth: true,
+    requireAnyFeatures: ['procurement.processes.manage', 'procurement.processes.handle'],
+  },
+  PUT: {
+    requireAuth: true,
+    requireAnyFeatures: ['procurement.processes.manage', 'procurement.processes.handle'],
+  },
+  DELETE: {
+    requireAuth: true,
+    requireAnyFeatures: ['procurement.processes.manage', 'procurement.processes.handle'],
+  },
 }
 
 const listQuerySchema = z
@@ -48,13 +58,26 @@ type TimelineRow = {
   eventType: string
   message: string
   actorUserId: string | null
+  /** Resolved display: name, email, or null if unknown */
+  actorLabel: string | null
   metadata: Record<string, unknown> | null
   createdAt: string | null
   organizationId: string
   tenantId: string
 }
 
-const toRow = (row: ProcurementProcessTimelineEvent): TimelineRow => {
+function formatUserActorLabel(user: User): string {
+  const name = typeof user.name === 'string' && user.name.trim().length ? user.name.trim() : ''
+  if (name) return name
+  const email = typeof user.email === 'string' && user.email.trim().length ? user.email.trim() : ''
+  if (email) return email
+  return String(user.id)
+}
+
+const toRow = (
+  row: ProcurementProcessTimelineEvent,
+  actorLabel: string | null,
+): TimelineRow => {
   const proc = row.process
   const processId = typeof proc === 'string' ? proc : proc.id
   return {
@@ -63,6 +86,7 @@ const toRow = (row: ProcurementProcessTimelineEvent): TimelineRow => {
     eventType: row.eventType,
     message: row.message,
     actorUserId: row.actorUserId ?? null,
+    actorLabel,
     metadata: row.metadata ? { ...row.metadata } : null,
     createdAt: row.createdAt ? row.createdAt.toISOString() : null,
     organizationId: String(row.organizationId),
@@ -101,7 +125,18 @@ export async function GET(req: Request) {
   })
   const start = (page - 1) * pageSize
   const paged = all.slice(start, start + pageSize)
-  const items = paged.map(toRow)
+  const actorIds = [...new Set(paged.map((r) => r.actorUserId).filter((id): id is string => Boolean(id)))]
+  const users =
+    actorIds.length > 0
+      ? await em.find(User, { id: { $in: actorIds as unknown as string[] }, deletedAt: null })
+      : []
+  const actorLabelById = new Map<string, string>()
+  for (const u of users) {
+    actorLabelById.set(u.id, formatUserActorLabel(u))
+  }
+  const items = paged.map((row) =>
+    toRow(row, row.actorUserId ? actorLabelById.get(row.actorUserId) ?? null : null),
+  )
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   return NextResponse.json({ items, total, page, pageSize, totalPages })
@@ -338,6 +373,7 @@ export const openApi: OpenApiRouteDoc = {
                 eventType: z.string(),
                 message: z.string(),
                 actorUserId: z.uuid().nullable(),
+                actorLabel: z.string().nullable(),
                 metadata: z.record(z.string(), z.unknown()).nullable(),
                 createdAt: z.string().nullable(),
                 organizationId: z.uuid(),

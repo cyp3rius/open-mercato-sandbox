@@ -27,12 +27,16 @@ import {
 export const todoCreateSchema = z.object({
   title: z.string().min(1),
   is_done: z.boolean().optional(),
+  procurementProcessId: z.string().uuid().optional().nullable(),
+  procurementProcessTaskId: z.string().uuid().optional().nullable(),
 })
 
 export const todoUpdateSchema = z.object({
   id: z.string().uuid(),
   title: z.string().min(1).optional(),
   is_done: z.boolean().optional(),
+  procurementProcessId: z.string().uuid().optional().nullable(),
+  procurementProcessTaskId: z.string().uuid().optional().nullable(),
 })
 
 type SerializedTodo = {
@@ -86,6 +90,8 @@ const createTodoCommand: CommandHandler<Record<string, unknown>, Todo> = {
         isDone: parsed.is_done ?? false,
         tenantId: scope.tenantId,
         organizationId: scope.organizationId,
+        procurementProcessId: parsed.procurementProcessId ?? null,
+        procurementProcessTaskId: parsed.procurementProcessTaskId ?? null,
       },
     })
 
@@ -210,6 +216,12 @@ const updateTodoCommand: CommandHandler<Record<string, unknown>, Todo> = {
       apply: (entity) => {
         if (parsed.title !== undefined) entity.title = parsed.title
         if (parsed.is_done !== undefined) entity.isDone = parsed.is_done
+        if (parsed.procurementProcessId !== undefined) {
+          entity.procurementProcessId = parsed.procurementProcessId ?? null
+        }
+        if (parsed.procurementProcessTaskId !== undefined) {
+          entity.procurementProcessTaskId = parsed.procurementProcessTaskId ?? null
+        }
       },
     })
     if (!todo) throw new CrudHttpError(404, { error: 'Todo not found' })

@@ -32,6 +32,15 @@ Use when building **backend detail** screens that mirror **grouped `CrudForm`** 
 - Cards such as **`LinkedPolicyPreviewCard`** and **`LinkedLeadPreviewCard`** must use **`PreviewFieldCell`** + **`PreviewFieldGrid`** from **`leadDetailPreviewUtils.tsx`** (same labels, value typography, and **`gap-x-4` / `gap-y-5`** as e.g. contact preview).
 - Outer section: **`rounded-lg border bg-card px-4 py-3`**, no **`shadow-sm`**; avoid one-off **`dl`** + **`uppercase`** label stacks for the same information.
 
+## Multi-column overview rows (type / status / handler)
+
+- When a single logical row uses **`grid` + multiple columns** (e.g. typ, status, osoba obsługująca) and one column has **taller content** (e.g. status pipeline with transition buttons), add **`items-start`** on the row (**`md:items-start`**) so shorter columns do **not** stretch to the tallest cell’s height.
+
+## Sidebar sections (relations, notes, attachments)
+
+- **Relations** with **`InlineSelectEditor`** + custom **`renderDisplay`**: association previews and actions should follow **`.cursor/rules/form-ui-consistency.mdc`** (hover-revealed corner actions, `group` on the preview shell).
+- **Notes** and **attachments**: same **card chrome** as elsewhere (**`rounded-lg border bg-card px-4 py-3`**); **attachments** may use **`showHeader={false}`** on **`AttachmentsSection`** when the page supplies the **`h2`** in the card (see **`form-ui-consistency.mdc`** typography).
+
 ## Do not
 
 - Use **`lg:grid-cols-2`** (50/50) for these product detail pages when the create/edit form for the same flow uses **`7fr_3fr`** — keep parity.

@@ -19,7 +19,9 @@ export async function emitProcurementTaskAssignedEvent(
     const eventBus = ctx.container.resolve('eventBus') as {
       emitEvent: (event: string, data: unknown, options?: { persistent?: boolean }) => Promise<void>
     }
-    await eventBus.emitEvent('procurement.process_task.assigned', payload, { persistent: true })
+    // Avoid `{ persistent: true }`: the bus already delivers to subscribers synchronously, and
+    // persistence also enqueues for the events worker — the same subscriber would run twice.
+    await eventBus.emitEvent('procurement.process_task.assigned', payload)
   } catch {
     // non-blocking
   }

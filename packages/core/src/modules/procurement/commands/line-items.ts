@@ -6,14 +6,21 @@ import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import { ProcurementProcessLineItem } from '../data/entities'
+import { ResourcesResource } from '@open-mercato/core/modules/resources/data/entities'
+import {
+  ProcurementProcess,
+  ProcurementProcessLineItem,
+  ProcurementProcessSupplierLineItem,
+} from '../data/entities'
 import {
   procurementLineItemCreateSchema,
   procurementLineItemUpdateSchema,
   type ProcurementLineItemCreateInput,
   type ProcurementLineItemUpdateInput,
 } from '../data/validators'
+import { resolveProcurementCommandActorUserId } from '../lib/commandActor'
 import { appendProcurementTimelineEvent } from '../lib/timeline'
+import { assertProcurementProcessMutationAllowed } from '../lib/procurementProcessAccess'
 import { resolveProcurementProcess } from '../lib/resolveProcess'
 import {
   procurementLineItemCrudEvents,
@@ -29,6 +36,7 @@ type LineItemSnapshot = {
   specification: string | null
   quantity: number | null
   unitLabel: string | null
+  resourceId: string | null
   sortOrder: number
   createdAt: string
   updatedAt: string
@@ -54,10 +62,32 @@ async function loadLineItemSnapshot(em: EntityManager, id: string): Promise<Line
     specification: record.specification ?? null,
     quantity: record.quantity ?? null,
     unitLabel: record.unitLabel ?? null,
+    resourceId: record.resourceId ?? null,
     sortOrder: record.sortOrder,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
   }
+}
+
+async function assertResourceInScope(
+  em: EntityManager,
+  resourceId: string | null | undefined,
+  tenantId: string,
+  organizationId: string,
+): Promise<void> {
+  if (resourceId == null || resourceId === '') return
+  const resource = await findOneWithDecryption(
+    em,
+    ResourcesResource,
+    { id: resourceId, deletedAt: null, tenantId, organizationId },
+    undefined,
+    { tenantId, organizationId },
+  )
+  if (!resource) throw new CrudHttpError(400, { error: 'Resource not found in this organization.' })
+}
+
+async function removeLineItemSupplierLinks(em: EntityManager, lineItemId: string): Promise<void> {
+  await em.nativeDelete(ProcurementProcessSupplierLineItem, { lineItem: lineItemId })
 }
 
 const createLineItemCommand: CommandHandler<ProcurementLineItemCreateInput, { lineItemId: string }> = {
@@ -71,6 +101,8 @@ const createLineItemCommand: CommandHandler<ProcurementLineItemCreateInput, { li
       parsed.organizationId,
       parsed.tenantId,
     )
+    await assertProcurementProcessMutationAllowed(ctx, process)
+    await assertResourceInScope(em, parsed.resourceId ?? null, parsed.tenantId, parsed.organizationId)
     const now = new Date()
     const record = em.create(ProcurementProcessLineItem, {
       tenantId: parsed.tenantId,
@@ -80,17 +112,23 @@ const createLineItemCommand: CommandHandler<ProcurementLineItemCreateInput, { li
       specification: parsed.specification ?? null,
       quantity: parsed.quantity ?? null,
       unitLabel: parsed.unitLabel ?? null,
+      resourceId: parsed.resourceId ?? null,
       sortOrder: 0,
       createdAt: now,
       updatedAt: now,
     })
     em.persist(record)
     await em.flush()
+    const { translate } = await resolveTranslations()
     await appendProcurementTimelineEvent(em, {
       process,
       eventType: 'line_item.added',
-      message: `Line item "${parsed.title}" added to specification.`,
-      actorUserId: ctx.auth?.userId ?? null,
+      message: translate(
+        'procurement.timeline.msg.lineItemAdded',
+        'Specification line “{{title}}” added.',
+        { title: parsed.title },
+      ),
+      actorUserId: resolveProcurementCommandActorUserId(ctx),
       metadata: { lineItemId: record.id },
     })
     await em.flush()
@@ -157,11 +195,21 @@ const updateLineItemCommand: CommandHandler<ProcurementLineItemUpdateInput, { li
     )
     if (!record) throw new CrudHttpError(404, { error: 'Procurement line item not found.' })
 
+    const processForAcl =
+      typeof record.process === 'string'
+        ? await em.findOne(ProcurementProcess, { id: record.process, deletedAt: null })
+        : record.process
+    if (!processForAcl) throw new CrudHttpError(404, { error: 'Procurement process not found.' })
+    await assertProcurementProcessMutationAllowed(ctx, processForAcl)
+
+    await assertResourceInScope(em, parsed.resourceId ?? null, record.tenantId, record.organizationId)
+
     const changes = buildChanges(record as unknown as Record<string, unknown>, parsed as Record<string, unknown>, [
       'title',
       'specification',
       'quantity',
       'unitLabel',
+      'resourceId',
       'sortOrder',
     ])
     for (const [key, change] of Object.entries(changes)) {
@@ -174,11 +222,16 @@ const updateLineItemCommand: CommandHandler<ProcurementLineItemUpdateInput, { li
 
     const process = typeof record.process === 'string' ? null : record.process
     if (process) {
+      const { translate } = await resolveTranslations()
       await appendProcurementTimelineEvent(em, {
         process,
         eventType: 'line_item.updated',
-        message: `Line item "${record.title}" updated.`,
-        actorUserId: ctx.auth?.userId ?? null,
+        message: translate(
+          'procurement.timeline.msg.lineItemUpdated',
+          'Specification line “{{title}}” updated.',
+          { title: record.title },
+        ),
+        actorUserId: resolveProcurementCommandActorUserId(ctx),
         metadata: { lineItemId: record.id },
       })
       await em.flush()
@@ -226,6 +279,7 @@ const updateLineItemCommand: CommandHandler<ProcurementLineItemUpdateInput, { li
     record.specification = before.specification
     record.quantity = before.quantity
     record.unitLabel = before.unitLabel
+    record.resourceId = before.resourceId
     record.sortOrder = before.sortOrder
     record.updatedAt = new Date()
     await em.flush()
@@ -252,6 +306,15 @@ const deleteLineItemCommand: CommandHandler<{ id: string }, { lineItemId: string
     )
     if (!record) throw new CrudHttpError(404, { error: 'Procurement line item not found.' })
 
+    const processForAcl =
+      typeof record.process === 'string'
+        ? await em.findOne(ProcurementProcess, { id: record.process, deletedAt: null })
+        : record.process
+    if (!processForAcl) throw new CrudHttpError(404, { error: 'Procurement process not found.' })
+    await assertProcurementProcessMutationAllowed(ctx, processForAcl)
+
+    await removeLineItemSupplierLinks(em, id)
+
     const process = typeof record.process === 'string' ? null : record.process
     const title = record.title
     const now = new Date()
@@ -260,11 +323,16 @@ const deleteLineItemCommand: CommandHandler<{ id: string }, { lineItemId: string
     await em.flush()
 
     if (process) {
+      const { translate } = await resolveTranslations()
       await appendProcurementTimelineEvent(em, {
         process,
         eventType: 'line_item.removed',
-        message: `Line item "${title}" removed.`,
-        actorUserId: ctx.auth?.userId ?? null,
+        message: translate(
+          'procurement.timeline.msg.lineItemRemoved',
+          'Specification line “{{title}}” removed.',
+          { title },
+        ),
+        actorUserId: resolveProcurementCommandActorUserId(ctx),
         metadata: { lineItemId: id },
       })
       await em.flush()

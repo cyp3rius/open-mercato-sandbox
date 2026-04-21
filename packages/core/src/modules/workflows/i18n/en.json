@@ -859,6 +859,7 @@
   "workflows.tasks.detail.type": "User Task",
   "workflows.tasks.detail.validation.requiredField": "Required field is missing: {{field}}",
   "workflows.tasks.detail.workflowInstance": "Workflow Instance",
+  "workflows.tasks.detail.procurementProcessLabel": "Procurement process",
   "workflows.tasks.dueDate": "Due Date",
   "workflows.tasks.fields.assignment": "Assignment",
   "workflows.tasks.fields.createdAt": "Created At",

@@ -3,7 +3,7 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { ExternalLink, Pencil } from 'lucide-react'
+import { Banknote, CircleCheck, ExternalLink, Pencil, Plus, X } from 'lucide-react'
 import type { ColumnDef, SortingState } from '@tanstack/react-table'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
@@ -23,7 +23,8 @@ import {
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { createCrud, updateCrud, deleteCrud } from '@open-mercato/ui/backend/utils/crud'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
-import { useT } from '@open-mercato/shared/lib/i18n/context'
+import type { Locale } from '@open-mercato/shared/lib/i18n/config'
+import { useLocale, useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import {
   DetailFieldsSection,
@@ -48,6 +49,8 @@ import { DetailTabsLayout } from '@open-mercato/core/modules/customers/component
 import {
   DictionaryValue,
   createDictionaryMap,
+  renderDictionaryColor,
+  renderDictionaryIcon,
   type DictionaryDisplayEntry,
 } from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
 import { PROCUREMENT_PROCESS_ENTITY_TYPE } from '../../../../lib/entityTypes'
@@ -61,6 +64,8 @@ import {
 import {
   type CustomerCompanySupplierPreview,
   fetchCustomerCompanySupplierPreview,
+  fetchProcurementCustomerAssociationPreview,
+  fetchProcurementQuoteAssociationPreview,
   mergeEntitySearchOption,
   remoteSearchAuthUsers,
   remoteSearchCustomerCompanies,
@@ -97,6 +102,8 @@ type ProcessDetail = {
   refinancingNotes: string | null
   closedAt: string | null
   updatedAt: string | null
+  handlerUserId: string | null
+  handlerLabel: string | null
 }
 
 type SupplierRow = {
@@ -109,6 +116,7 @@ type SupplierRow = {
   website: string | null
   notes: string | null
   offerSummary: string | null
+  lineItemIds: string[]
 }
 
 type LineRow = {
@@ -117,6 +125,7 @@ type LineRow = {
   specification: string | null
   quantity: number | null
   unitLabel: string | null
+  resourceId: string | null
 }
 
 type DetailTabId = 'details' | 'specification' | 'suppliers' | 'tasks' | 'history'
@@ -137,6 +146,8 @@ type TimelineRow = {
   eventType: string
   message: string
   createdAt: string | null
+  actorUserId?: string | null
+  actorLabel?: string | null
 }
 
 function optionalUuid(value: string): string | null {
@@ -148,6 +159,7 @@ function optionalUuid(value: string): string | null {
 type StatusAdvanceTargets = {
   enforced: boolean
   items: { toStatusValue: string; toStatusLabel: string }[]
+  terminalProcessStatusValue: string | null
 }
 
 function ProcurementDictionaryInline({
@@ -244,6 +256,106 @@ function ProcurementDictionaryInline({
     [kind, patchProcess],
   )
 
+  const currentStatusTrimmed = kind === 'status' ? (typeof value === 'string' ? value.trim() : '') : ''
+  const terminalCfg = statusAdvance?.terminalProcessStatusValue?.trim() ?? ''
+  const atConfiguredTerminal =
+    kind === 'status' && terminalCfg.length > 0 && currentStatusTrimmed === terminalCfg
+
+  const statusPipelineTerminal =
+    kind === 'status' &&
+    statusAdvance?.enforced === true &&
+    (statusAdvance.items.length === 0 || atConfiguredTerminal)
+  const statusPipelineEnforced =
+    kind === 'status' &&
+    statusAdvance?.enforced === true &&
+    statusAdvance.items.length > 0 &&
+    !atConfiguredTerminal
+
+  if (statusPipelineTerminal) {
+    return (
+      <div className="group overflow-hidden relative rounded border border-border bg-background p-3">
+        <p className="text-sm font-medium text-muted-foreground">
+          {t('procurement.processes.detail.status', 'Status')}
+        </p>
+        <div className="mt-1 text-sm">
+          <DictionaryValue
+            value={value}
+            map={displayMap}
+            fallback={<span className="text-sm text-muted-foreground">{emptyLabel}</span>}
+            className="text-sm font-semibold"
+            iconWrapperClassName="inline-flex h-6 w-6 items-center justify-center rounded border border-border bg-card"
+            iconClassName="h-4 w-4"
+            colorClassName="h-3 w-3 rounded-full"
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (statusPipelineEnforced) {
+    return (
+      <div className="group overflow-hidden relative rounded border border-border bg-background p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 shrink">
+            <p className="text-sm font-medium text-muted-foreground">
+              {t('procurement.processes.detail.status', 'Status')}
+            </p>
+            <div className="mt-1 text-sm">
+              <DictionaryValue
+                value={value}
+                map={displayMap}
+                fallback={<span className="text-sm text-muted-foreground">{emptyLabel}</span>}
+                className="text-sm font-semibold"
+                iconWrapperClassName="inline-flex h-6 w-6 items-center justify-center rounded border border-border bg-card"
+                iconClassName="h-4 w-4"
+                colorClassName="h-3 w-3 rounded-full"
+              />
+            </div>
+          </div>
+          <div
+            className="min-w-0 shrink-0 ps-2"
+            role="group"
+            aria-label={t('procurement.processes.detail.statusTransition', 'Transition')}
+          >
+            <div className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-lg border border-input bg-muted/30 p-1 shadow-xs">
+              <span className="shrink-0 px-1.5 text-sm font-normal text-muted-foreground">
+                {t('procurement.processes.detail.statusTransition', 'Transition')}
+              </span>
+              {statusAdvance.items.map((it) => {
+                const opt = options.find((o) => o.value === it.toStatusValue)
+                return (
+                  <Button
+                    key={it.toStatusValue}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={!allowEdits}
+                    className="inline-flex h-8 items-center gap-2 border-border/80 bg-background px-2.5 font-normal shadow-none hover:bg-accent"
+                    onClick={() => void onAdvanceStatus?.(it.toStatusValue)}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      {opt?.color?.trim() ? (
+                        <span className="inline-flex h-7 shrink-0 items-center justify-center">
+                          {renderDictionaryColor(opt.color.trim(), 'h-3 w-3 rounded-sm')}
+                        </span>
+                      ) : null}
+                      {opt?.icon?.trim() ? (
+                        <span className="inline-flex size-7 shrink-0 items-center justify-center text-muted-foreground">
+                          {renderDictionaryIcon(opt.icon, 'size-4')}
+                        </span>
+                      ) : null}
+                      <span className="font-normal leading-tight">{it.toStatusLabel}</span>
+                    </span>
+                  </Button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-2">
       <InlineSelectEditor
@@ -278,35 +390,34 @@ function ProcurementDictionaryInline({
             value={displayValue}
             map={displayMap}
             fallback={<span className="text-sm text-muted-foreground">{emptyLabel}</span>}
-            className="text-sm"
+            className="text-sm font-semibold"
             iconWrapperClassName="inline-flex h-6 w-6 items-center justify-center rounded border border-border bg-card"
             iconClassName="h-4 w-4"
             colorClassName="h-3 w-3 rounded-full"
           />
         )}
       />
-      {kind === 'status' && allowEdits && statusAdvance?.enforced && statusAdvance.items.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {statusAdvance.items.map((it) => (
-            <Button
-              key={it.toStatusValue}
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => void onAdvanceStatus?.(it.toStatusValue)}
-            >
-              {t('procurement.processes.detail.statusAdvanceTo', 'Go to {{label}}', { label: it.toStatusLabel })}
-            </Button>
-          ))}
-        </div>
-      ) : null}
     </div>
   )
+}
+
+function intlLocaleTag(mercatoLocale: Locale): string {
+  switch (mercatoLocale) {
+    case 'pl':
+      return 'pl-PL'
+    case 'de':
+      return 'de-DE'
+    case 'es':
+      return 'es-ES'
+    default:
+      return 'en-GB'
+  }
 }
 
 export default function ProcurementProcessDetailPage({ params }: { params?: { id?: string } }) {
   const processId = typeof params?.id === 'string' ? params.id : ''
   const t = useT()
+  const locale = useLocale()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -329,12 +440,23 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [canManage, setCanManage] = React.useState(false)
+  const [canHandle, setCanHandle] = React.useState(false)
   const [process, setProcess] = React.useState<ProcessDetail | null>(null)
-  const [statusAdvance, setStatusAdvance] = React.useState<StatusAdvanceTargets>({ enforced: false, items: [] })
+  const [statusAdvance, setStatusAdvance] = React.useState<StatusAdvanceTargets>({
+    enforced: false,
+    items: [],
+    terminalProcessStatusValue: null,
+  })
 
   const [customerLabel, setCustomerLabel] = React.useState('')
   const [quoteLabel, setQuoteLabel] = React.useState('')
   const [resourceLabel, setResourceLabel] = React.useState('')
+  const [customerAssocPreview, setCustomerAssocPreview] = React.useState<Awaited<
+    ReturnType<typeof fetchProcurementCustomerAssociationPreview>
+  > | null>(null)
+  const [quoteAssocPreview, setQuoteAssocPreview] = React.useState<Awaited<
+    ReturnType<typeof fetchProcurementQuoteAssociationPreview>
+  > | null>(null)
 
   const [suppliers, setSuppliers] = React.useState<SupplierRow[]>([])
   const [lines, setLines] = React.useState<LineRow[]>([])
@@ -375,11 +497,16 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
   const [lineFormSpec, setLineFormSpec] = React.useState('')
   const [lineFormQuantity, setLineFormQuantity] = React.useState('')
   const [lineFormUnit, setLineFormUnit] = React.useState('')
+  const [lineFormResourceId, setLineFormResourceId] = React.useState('')
+  const [lineFormResourceLabel, setLineFormResourceLabel] = React.useState('')
+  const [lineResourceLabels, setLineResourceLabels] = React.useState<Record<string, string>>({})
   const [lineSaving, setLineSaving] = React.useState(false)
 
   const [supplierDialog, setSupplierDialog] = React.useState<{ mode: 'create' } | { mode: 'edit'; row: SupplierRow } | null>(
     null,
   )
+  const [supplierFormLineItemIds, setSupplierFormLineItemIds] = React.useState<string[]>([])
+  const [supplierSpecLineComboValue, setSupplierSpecLineComboValue] = React.useState('')
   const [supplierFormNotes, setSupplierFormNotes] = React.useState('')
   const [supplierFormVendorEntityId, setSupplierFormVendorEntityId] = React.useState('')
   const [supplierCompanyPreview, setSupplierCompanyPreview] = React.useState<CustomerCompanySupplierPreview | null>(
@@ -396,14 +523,36 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
   const [taskFormSupplierId, setTaskFormSupplierId] = React.useState('')
   const [taskFormAssigneeLabel, setTaskFormAssigneeLabel] = React.useState('')
   const [taskSaving, setTaskSaving] = React.useState(false)
+  /** Current Open Mercato user id (for default task assignee). */
+  const [sessionUserId, setSessionUserId] = React.useState<string | null>(null)
+  const sessionUserIdRef = React.useRef<string | null>(null)
+  const prevSessionUserIdForTaskDefault = React.useRef<string | null>(null)
+
+  React.useEffect(() => {
+    sessionUserIdRef.current = sessionUserId
+  }, [sessionUserId])
+
+  React.useEffect(() => {
+    let cancelled = false
+    void apiCall<{ userId?: string }>('/api/auth/feature-check', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ features: [] }),
+    }).then((res) => {
+      if (cancelled || !res.ok) return
+      const id = typeof res.result?.userId === 'string' ? res.result.userId.trim() : ''
+      if (id) setSessionUserId(id)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const [tasksSorting, setTasksSorting] = React.useState<SortingState>([{ id: 'dueAt', desc: false }])
   const [timelineSorting, setTimelineSorting] = React.useState<SortingState>([{ id: 'createdAt', desc: true }])
 
-  const [timelineDialog, setTimelineDialog] = React.useState<
-    { mode: 'create' } | { mode: 'edit'; row: TimelineRow } | null
-  >(null)
-  const [timelineFormMessage, setTimelineFormMessage] = React.useState('')
+  const [timelineModalRow, setTimelineModalRow] = React.useState<TimelineRow | null>(null)
+  const [sidebarNoteText, setSidebarNoteText] = React.useState('')
   const [timelineSaving, setTimelineSaving] = React.useState(false)
 
   const [completeResourceId, setCompleteResourceId] = React.useState('')
@@ -456,17 +605,62 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
 
   const unitSelectLabels = React.useMemo(() => procurementDictionarySelectLabels(t, 'unit'), [t])
 
+  const searchRemoteSpecLinesForSupplier = React.useCallback(
+    async (query: string) => {
+      const q = query.trim().toLowerCase()
+      const selected = new Set(supplierFormLineItemIds)
+      return lines
+        .filter((l) => !selected.has(l.id))
+        .filter((l) => {
+          if (!q) return true
+          return (
+            l.title.toLowerCase().includes(q) || (l.specification ?? '').toLowerCase().includes(q)
+          )
+        })
+        .map((l) => ({
+          value: l.id,
+          label: l.title,
+          description: l.specification?.trim() || null,
+        }))
+    },
+    [lines, supplierFormLineItemIds],
+  )
+
+  const supplierSpecLinesAllAdded = React.useMemo(() => {
+    if (!lines.length) return false
+    const selected = new Set(supplierFormLineItemIds)
+    return lines.every((l) => selected.has(l.id))
+  }, [lines, supplierFormLineItemIds])
+
+  const supplierSpecLineEmptyText = React.useMemo(
+    () =>
+      supplierSpecLinesAllAdded
+        ? t(
+            'procurement.processes.detail.suppliers.specLinesAllAdded',
+            'All lines are already added.',
+          )
+        : t(
+            'procurement.processes.detail.suppliers.specLinesNoMatches',
+            'No matching lines.',
+          ),
+    [supplierSpecLinesAllAdded, t],
+  )
+
   React.useEffect(() => {
     let cancelled = false
     async function loadPerm() {
       const call = await apiCall<{ granted?: string[]; ok?: boolean }>('/api/auth/feature-check', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ features: ['procurement.processes.manage'] }),
+        body: JSON.stringify({
+          features: ['procurement.processes.manage', 'procurement.processes.handle'],
+        }),
       })
       if (cancelled) return
       const granted = Array.isArray(call.result?.granted) ? call.result?.granted : []
-      setCanManage(call.result?.ok === true || granted.includes('procurement.processes.manage'))
+      const allOk = call.result?.ok === true
+      setCanManage(allOk || granted.includes('procurement.processes.manage'))
+      setCanHandle(allOk || granted.includes('procurement.processes.handle'))
     }
     void loadPerm()
     return () => {
@@ -517,17 +711,24 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
             website: row.website ?? null,
             notes: row.notes ?? null,
             offerSummary: row.offerSummary ?? null,
+            lineItemIds: Array.isArray((row as SupplierRow & { lineItemIds?: string[] }).lineItemIds)
+              ? (row as SupplierRow & { lineItemIds: string[] }).lineItemIds
+              : [],
           }
         }),
       )
       setLines(
-        (Array.isArray(lineRes.result?.items) ? lineRes.result.items : []).map((line) => ({
-          id: line.id,
-          title: line.title,
-          specification: line.specification ?? null,
-          quantity: typeof line.quantity === 'number' ? line.quantity : null,
-          unitLabel: line.unitLabel ?? null,
-        })),
+        (Array.isArray(lineRes.result?.items) ? lineRes.result.items : []).map((line) => {
+          const l = line as LineRow & { resourceId?: string | null }
+          return {
+            id: l.id,
+            title: l.title,
+            specification: l.specification ?? null,
+            quantity: typeof l.quantity === 'number' ? l.quantity : null,
+            unitLabel: l.unitLabel ?? null,
+            resourceId: typeof l.resourceId === 'string' && l.resourceId.trim().length ? l.resourceId.trim() : null,
+          }
+        }),
       )
       setTasks(Array.isArray(taskRes.result?.items) ? taskRes.result.items : [])
       setTimeline(
@@ -545,23 +746,82 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
   }, [processId, t])
 
   React.useEffect(() => {
+    let cancelled = false
+    const ids = [
+      ...new Set(
+        lines
+          .map((l) => l.resourceId?.trim())
+          .filter((x): x is string => Boolean(x && x.length)),
+      ),
+    ]
+    if (ids.length === 0) {
+      setLineResourceLabels({})
+      return
+    }
+    void (async () => {
+      const next: Record<string, string> = {}
+      await Promise.all(
+        ids.map(async (id) => {
+          const label = await resolveResourceDisplayLabel(id)
+          next[id] = label ?? id
+        }),
+      )
+      if (!cancelled) setLineResourceLabels(next)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [lines])
+
+  React.useEffect(() => {
     void reload()
   }, [reload, scopeVersion])
+
+  const lastOpenedTaskFromUrlRef = React.useRef<string | null>(null)
+
+  React.useEffect(() => {
+    lastOpenedTaskFromUrlRef.current = null
+  }, [processId])
+
+  React.useEffect(() => {
+    const tid = searchParams.get('taskId')
+    if (!tid) {
+      lastOpenedTaskFromUrlRef.current = null
+      return
+    }
+    if (loading || !tasks.length) return
+    if (lastOpenedTaskFromUrlRef.current === tid) return
+    const row = tasks.find((t) => t.id === tid)
+    if (!row) return
+    lastOpenedTaskFromUrlRef.current = tid
+    setActiveTab('tasks')
+    const next = new URLSearchParams(searchParams.toString())
+    next.set('tab', 'tasks')
+    next.delete('taskId')
+    const qs = next.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    queueMicrotask(() => {
+      setTaskDialog({ mode: 'edit', row })
+    })
+  }, [searchParams, tasks, loading, pathname, router])
 
   React.useEffect(() => {
     let cancelled = false
     void (async () => {
       if (!processId || !process) {
-        if (!cancelled) setStatusAdvance({ enforced: false, items: [] })
+        if (!cancelled) {
+          setStatusAdvance({ enforced: false, items: [], terminalProcessStatusValue: null })
+        }
         return
       }
       const call = await apiCall<{
         enforced?: boolean
+        terminalProcessStatusValue?: string | null
         items?: { toStatusValue: string; toStatusLabel: string; sortOrder: number }[]
       }>(`/api/procurement/process-status-transitions?processId=${encodeURIComponent(processId)}`)
       if (cancelled) return
       if (!call.ok) {
-        setStatusAdvance({ enforced: false, items: [] })
+        setStatusAdvance({ enforced: false, items: [], terminalProcessStatusValue: null })
         return
       }
       const raw = Array.isArray(call.result?.items) ? call.result.items : []
@@ -573,9 +833,13 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
         }))
         .filter((r) => r.toStatusValue.length > 0)
         .sort((a, b) => a.sortOrder - b.sortOrder)
+      const tr = call.result?.terminalProcessStatusValue
+      const terminalProcessStatusValue =
+        typeof tr === 'string' && tr.trim().length ? tr.trim() : null
       setStatusAdvance({
         enforced: call.result?.enforced === true,
         items: items.map(({ toStatusValue, toStatusLabel }) => ({ toStatusValue, toStatusLabel })),
+        terminalProcessStatusValue,
       })
     })()
     return () => {
@@ -618,6 +882,38 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
   React.useEffect(() => {
     let cancelled = false
     void (async () => {
+      const cid = process?.customerEntityId?.trim()
+      if (!cid) {
+        if (!cancelled) setCustomerAssocPreview(null)
+        return
+      }
+      const preview = await fetchProcurementCustomerAssociationPreview(cid)
+      if (!cancelled) setCustomerAssocPreview(preview)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [process?.customerEntityId])
+
+  React.useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const qid = process?.salesQuoteId?.trim()
+      if (!qid) {
+        if (!cancelled) setQuoteAssocPreview(null)
+        return
+      }
+      const preview = await fetchProcurementQuoteAssociationPreview(qid)
+      if (!cancelled) setQuoteAssocPreview(preview)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [process?.salesQuoteId])
+
+  React.useEffect(() => {
+    let cancelled = false
+    void (async () => {
       const rid = process?.resourceId?.trim()
       if (!rid) {
         if (!cancelled) setResourceLabel('')
@@ -632,7 +928,11 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
   }, [process?.resourceId])
 
   const isClosed = Boolean(process?.closedAt)
-  const allowEdits = canManage && !isClosed
+  const isAssignedHandler = Boolean(
+    sessionUserId && process?.handlerUserId && sessionUserId === process.handlerUserId,
+  )
+  const allowEdits = !isClosed && (canManage || (canHandle && isAssignedHandler))
+  const canEditHandlerField = canManage && !isClosed
 
   const patchProcess = React.useCallback(
     async (patch: Record<string, unknown>) => {
@@ -654,6 +954,26 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
     [processId, allowEdits, withGuard, t, reload],
   )
 
+  const patchHandlerOnly = React.useCallback(
+    async (patch: Record<string, unknown>) => {
+      if (!processId || !canEditHandlerField) return
+      try {
+        await withGuard('procurement.processes.update', () =>
+          updateCrud(
+            'procurement/processes',
+            { id: processId, ...patch },
+            { errorMessage: t('procurement.processes.detail.saveError', 'Failed to save.') },
+          ),
+        )
+        flash(t('procurement.processes.detail.saved', 'Saved.'), 'success')
+        await reload()
+      } catch {
+        flash(t('procurement.processes.detail.saveError', 'Failed to save.'), 'error')
+      }
+    },
+    [processId, canEditHandlerField, withGuard, t, reload],
+  )
+
   const overviewFields: DetailFieldConfig[] = React.useMemo(() => {
     if (!process) return []
     const emptyLabel = t('procurement.processes.list.noValue', '—')
@@ -665,7 +985,7 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
         value: process.title,
         placeholder: t('procurement.processes.create.fields.title', 'Title'),
         emptyLabel,
-        gridClassName: 'md:col-span-2',
+        gridClassName: 'sm:col-span-2 md:col-span-2',
         showEditTrigger: allowEdits,
         activateOnClick: allowEdits,
         validator: (v) =>
@@ -676,30 +996,69 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
         },
       },
       {
-        key: 'typeValue',
+        key: 'typeAndStatus',
         kind: 'custom',
         label: '',
         emptyLabel,
-        gridClassName: 'md:col-span-1',
+        gridClassName: 'sm:col-span-2 md:col-span-2',
         render: () => (
-          <ProcurementDictionaryInline kind="type" process={process} allowEdits={allowEdits} patchProcess={patchProcess} />
-        ),
-      },
-      {
-        key: 'statusValue',
-        kind: 'custom',
-        label: '',
-        emptyLabel,
-        gridClassName: 'md:col-span-1',
-        render: () => (
-          <ProcurementDictionaryInline
-            kind="status"
-            process={process}
-            allowEdits={allowEdits}
-            patchProcess={patchProcess}
-            statusAdvance={statusAdvance}
-            onAdvanceStatus={(to) => void patchProcess({ statusValue: to })}
-          />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:items-start">
+            <ProcurementDictionaryInline kind="type" process={process} allowEdits={allowEdits} patchProcess={patchProcess} />
+            <ProcurementDictionaryInline
+              kind="status"
+              process={process}
+              allowEdits={allowEdits}
+              patchProcess={patchProcess}
+              statusAdvance={statusAdvance}
+              onAdvanceStatus={(to) => void patchProcess({ statusValue: to })}
+            />
+            <div className="space-y-2">
+              <InlineSelectEditor
+                label={t('procurement.processes.detail.handlerUser', 'Assigned handler')}
+                value={process.handlerUserId ?? ''}
+                emptyLabel={emptyLabel}
+                options={mergeEntitySearchOption(
+                  [],
+                  process.handlerUserId ?? '',
+                  process.handlerLabel?.trim()
+                    ? process.handlerLabel
+                    : (process.handlerUserId ?? ''),
+                ).map((o) => ({
+                  value: o.value,
+                  label: o.label,
+                  description: o.description ?? undefined,
+                }))}
+                onSave={async (next) => {
+                  const id = typeof next === 'string' ? next.trim() : ''
+                  await patchHandlerOnly({ handlerUserId: id.length ? id : null })
+                }}
+                variant="muted"
+                activateOnClick={canEditHandlerField}
+                showEditTrigger={canEditHandlerField}
+                renderEditor={({ value: draft, onChange }) => (
+                  <EntitySearchCombobox
+                    value={draft}
+                    onChange={onChange}
+                    options={mergeEntitySearchOption(
+                      [],
+                      draft,
+                      draft === process.handlerUserId?.trim() ? process.handlerLabel ?? draft : draft,
+                    )}
+                    onRemoteSearch={async (q) => {
+                      const rows = await remoteSearchAuthUsers(q)
+                      return mergeEntitySearchOption(
+                        rows,
+                        draft,
+                        draft === process.handlerUserId?.trim() ? process.handlerLabel ?? draft : draft,
+                      )
+                    }}
+                    placeholder={t('procurement.processes.create.fields.handlerSearch', 'Search users…')}
+                    disabled={!canEditHandlerField}
+                  />
+                )}
+              />
+            </div>
+          </div>
         ),
       },
       {
@@ -709,7 +1068,7 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
         value: process.description ?? null,
         placeholder: t('procurement.processes.create.fields.description', 'Description'),
         emptyLabel,
-        gridClassName: 'md:col-span-2',
+        gridClassName: 'sm:col-span-2 md:col-span-2',
         showEditTrigger: allowEdits,
         activateOnClick: allowEdits,
         onSave: async (v) => {
@@ -718,7 +1077,7 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
         },
       },
     ]
-  }, [process, allowEdits, patchProcess, t, statusAdvance])
+  }, [process, allowEdits, canEditHandlerField, patchProcess, patchHandlerOnly, t, statusAdvance])
 
   const supplierPickOptions = React.useMemo(() => {
     const base = suppliers.map((s) => ({ value: s.id, label: s.vendorLabel }))
@@ -852,14 +1211,33 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
       setLineFormSpec('')
       setLineFormQuantity('')
       setLineFormUnit('')
+      setLineFormResourceId('')
+      setLineFormResourceLabel('')
     } else {
       const row = lineDialog.row
       setLineFormTitle(row.title)
       setLineFormSpec(row.specification ?? '')
       setLineFormQuantity(row.quantity != null ? String(row.quantity) : '')
       setLineFormUnit(row.unitLabel ?? '')
+      setLineFormResourceId(row.resourceId?.trim() ?? '')
+      setLineFormResourceLabel('')
     }
   }, [lineDialog])
+
+  React.useEffect(() => {
+    let cancelled = false
+    const rid = lineFormResourceId.trim()
+    if (!rid) {
+      if (!cancelled) setLineFormResourceLabel('')
+      return
+    }
+    void resolveResourceDisplayLabel(rid).then((label) => {
+      if (!cancelled) setLineFormResourceLabel(label ?? rid)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [lineFormResourceId])
 
   const fetchLineUnitDictionaryOptions = React.useCallback(async () => {
     const rows = await fetchDictionaryOptionsByKey(CATALOG_UNIT_DICTIONARY_KEY)
@@ -876,8 +1254,12 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
       setSupplierFormNotes('')
       setSupplierFormVendorEntityId('')
       setSupplierCompanyPreview(null)
+      setSupplierFormLineItemIds([])
+      setSupplierSpecLineComboValue('')
     } else {
       const row = supplierDialog.row
+      setSupplierFormLineItemIds(row.lineItemIds ?? [])
+      setSupplierSpecLineComboValue('')
       setSupplierFormNotes(row.notes ?? '')
       const cid = row.vendorCustomerEntityId?.trim() ?? ''
       setSupplierFormVendorEntityId(cid)
@@ -901,7 +1283,7 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
       setTaskFormBody('')
       setTaskFormDue(null)
       setTaskFormStatus('open')
-      setTaskFormAssignee('')
+      setTaskFormAssignee(sessionUserIdRef.current ?? '')
       setTaskFormSupplierId('')
       setTaskFormAssigneeLabel('')
     } else {
@@ -919,6 +1301,15 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
       setTaskFormSupplierId(row.supplierId ?? '')
     }
   }, [taskDialog])
+
+  /** If session id loads after the user opened "New task", fill assignee when still empty. */
+  React.useEffect(() => {
+    const prev = prevSessionUserIdForTaskDefault.current
+    prevSessionUserIdForTaskDefault.current = sessionUserId
+    if (prev !== null || !sessionUserId) return
+    if (!taskDialog || taskDialog.mode !== 'create') return
+    setTaskFormAssignee((p) => (p === '' ? sessionUserId : p))
+  }, [sessionUserId, taskDialog])
 
   const submitLineDialog = React.useCallback(async () => {
     if (!processId || !allowEdits || !lineDialog) return
@@ -946,6 +1337,7 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
       specification: specRaw.length ? specRaw : null,
       quantity,
       unitLabel: lineFormUnit.trim() || null,
+      resourceId: optionalUuid(lineFormResourceId),
     }
     setLineSaving(true)
     try {
@@ -987,6 +1379,7 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
     lineFormSpec,
     lineFormQuantity,
     lineFormUnit,
+    lineFormResourceId,
     withGuard,
     t,
     reload,
@@ -1046,6 +1439,7 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
       website: preview.website,
       notes: supplierFormNotes.trim() || null,
       offerSummary: null,
+      lineItemIds: supplierFormLineItemIds,
     }
     setSupplierSaving(true)
     try {
@@ -1086,10 +1480,15 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
     supplierFormNotes,
     supplierFormVendorEntityId,
     supplierCompanyPreview,
+    supplierFormLineItemIds,
     withGuard,
     t,
     reload,
   ])
+
+  const removeSupplierSpecLine = React.useCallback((lineId: string) => {
+    setSupplierFormLineItemIds((prev) => prev.filter((x) => x !== lineId))
+  }, [])
 
   const submitTaskDialog = React.useCallback(async () => {
     if (!processId || !allowEdits || !taskDialog) return
@@ -1291,8 +1690,34 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
         },
         meta: { priority: 4 },
       },
+      {
+        id: 'lineResource',
+        header: t('procurement.processes.detail.lines.lineResource', 'Linked resource'),
+        cell: ({ row }) => {
+          const id = row.original.resourceId?.trim()
+          if (!id) return '—'
+          const label = lineResourceLabels[id] ?? id
+          return (
+            <div className="flex max-w-[min(100%,22rem)] flex-wrap items-center gap-2">
+              <span className="min-w-0 truncate text-sm">{label}</span>
+              <Button type="button" variant="outline" size="sm" className="h-7 shrink-0" asChild>
+                <Link
+                  href={`/backend/resources/resources/${encodeURIComponent(id)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2"
+                >
+                  <ExternalLink className="size-3.5 shrink-0" aria-hidden />
+                  {t('common.open', 'Open')}
+                </Link>
+              </Button>
+            </div>
+          )
+        },
+        meta: { priority: 5 },
+      },
     ],
-    [t, lineUnitDictionaryMap],
+    [t, lineUnitDictionaryMap, lineResourceLabels],
   )
 
   const supplierColumns = React.useMemo<ColumnDef<SupplierRow>[]>(
@@ -1303,25 +1728,36 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
         meta: { priority: 1, sticky: true },
       },
       {
+        id: 'linkedSpecLines',
+        header: t('procurement.processes.detail.suppliers.linkedSpecLines', 'Specification lines'),
+        cell: ({ row }) => {
+          const titles = (row.original.lineItemIds ?? [])
+            .map((id) => lines.find((l) => l.id === id)?.title?.trim())
+            .filter((x): x is string => Boolean(x && x.length))
+          return titles.length ? titles.join(', ') : '—'
+        },
+        meta: { priority: 2 },
+      },
+      {
         accessorKey: 'contactName',
         header: t('procurement.processes.detail.suppliers.contact', 'Contact'),
         cell: ({ row }) => row.original.contactName ?? '—',
-        meta: { priority: 2 },
+        meta: { priority: 3 },
       },
       {
         accessorKey: 'email',
         header: t('procurement.processes.detail.suppliers.email', 'Email'),
         cell: ({ row }) => row.original.email ?? '—',
-        meta: { priority: 3 },
+        meta: { priority: 4 },
       },
       {
         accessorKey: 'phone',
         header: t('procurement.processes.detail.suppliers.phone', 'Phone'),
         cell: ({ row }) => row.original.phone ?? '—',
-        meta: { priority: 4 },
+        meta: { priority: 5 },
       },
     ],
-    [t],
+    [t, lines],
   )
 
   const taskColumns = React.useMemo<ColumnDef<TaskRow>[]>(
@@ -1332,13 +1768,28 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
         meta: { priority: 1, sticky: true },
       },
       {
+        id: 'taskStatus',
         accessorKey: 'taskStatus',
         header: t('procurement.processes.detail.tasks.status', 'Status'),
+        cell: ({ row }) => {
+          const raw = row.original.taskStatus
+          const s = typeof raw === 'string' ? raw.toLowerCase() : ''
+          if (s === 'open') {
+            return t('procurement.processes.detail.tasks.statusOpen', 'Open')
+          }
+          if (s === 'done') {
+            return t('procurement.processes.detail.tasks.statusDone', 'Done')
+          }
+          if (s === 'cancelled') {
+            return t('procurement.processes.detail.tasks.statusCancelled', 'Cancelled')
+          }
+          return raw ?? '—'
+        },
         meta: { priority: 2 },
       },
       {
         accessorKey: 'dueAt',
-        header: t('procurement.processes.detail.tasks.due', 'Due (ISO date)'),
+        header: t('procurement.processes.detail.tasks.due', 'Termin'),
         cell: ({ row }) =>
           row.original.dueAt ? new Date(row.original.dueAt).toLocaleString() : '—',
         meta: { priority: 3 },
@@ -1356,14 +1807,14 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
     [t, suppliers],
   )
 
-  React.useEffect(() => {
-    if (!timelineDialog) return
-    if (timelineDialog.mode === 'create') {
-      setTimelineFormMessage('')
-    } else {
-      setTimelineFormMessage(timelineDialog.row.message)
-    }
-  }, [timelineDialog])
+  const formatProcurementTimelineEventType = React.useCallback(
+    (eventType: string) =>
+      t(
+        `procurement.processes.detail.timeline.eventType.${eventType.replace(/\./g, '_')}`,
+        eventType,
+      ),
+    [t],
+  )
 
   const timelineColumns = React.useMemo<ColumnDef<TimelineRow>[]>(
     () => [
@@ -1371,27 +1822,71 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
         accessorKey: 'createdAt',
         header: t('procurement.processes.detail.timeline.column.when', 'When'),
         cell: ({ row }) =>
-          row.original.createdAt ? new Date(row.original.createdAt).toLocaleString() : '—',
-        meta: { priority: 1 },
+          row.original.createdAt
+            ? new Date(row.original.createdAt).toLocaleString(intlLocaleTag(locale))
+            : '—',
+        meta: { priority: 1, className: 'w-[11rem] align-top' },
       },
       {
         accessorKey: 'eventType',
         header: t('procurement.processes.detail.timeline.column.type', 'Type'),
-        meta: { priority: 2 },
+        cell: ({ row }) => formatProcurementTimelineEventType(row.original.eventType),
+        meta: { priority: 2, className: 'w-[12rem] align-top' },
+      },
+      {
+        id: 'actorLabel',
+        accessorKey: 'actorLabel',
+        header: t('procurement.processes.detail.timeline.column.actor', 'User'),
+        cell: ({ row }) => {
+          const id = typeof row.original.actorUserId === 'string' ? row.original.actorUserId.trim() : ''
+          const label =
+            typeof row.original.actorLabel === 'string' && row.original.actorLabel.trim().length
+              ? row.original.actorLabel.trim()
+              : null
+          if (!id) {
+            if (label) return label
+            return '—'
+          }
+          const display = label ?? id
+          return (
+            <Link
+              href={`/backend/users/${encodeURIComponent(id)}/edit`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex max-w-full min-w-0 items-center gap-1 text-primary hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className="min-w-0 truncate">{display}</span>
+              <ExternalLink className="size-3.5 shrink-0 opacity-70" aria-hidden />
+            </Link>
+          )
+        },
+        meta: {
+          priority: 3,
+          className: 'w-[11rem] min-w-0 max-w-[14rem] align-top',
+          truncate: false,
+        },
       },
       {
         accessorKey: 'message',
         header: t('procurement.processes.detail.timeline.column.message', 'Message'),
-        cell: ({ row }) => <span className="whitespace-pre-wrap">{row.original.message}</span>,
-        meta: { priority: 3 },
+        cell: ({ row }) => (
+          <span className="block min-w-0 w-full whitespace-pre-wrap wrap-break-word">{row.original.message}</span>
+        ),
+        meta: {
+          priority: 4,
+          className: 'min-w-0 w-full align-top',
+          // DataTable defaults unknown columns to TruncatedCell max-width 150px + ellipsis — disable for long notes.
+          truncate: false,
+        },
       },
     ],
-    [t],
+    [t, locale, formatProcurementTimelineEventType],
   )
 
-  const submitTimelineCreate = React.useCallback(async () => {
+  const submitSidebarNote = React.useCallback(async () => {
     if (!processId || !allowEdits) return
-    const msg = timelineFormMessage.trim()
+    const msg = sidebarNoteText.trim()
     if (!msg) {
       flash(
         t('procurement.processes.detail.timeline.messageRequired', 'Enter a message.'),
@@ -1417,87 +1912,20 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
         return call
       })
       flash(t('procurement.processes.detail.saved', 'Saved.'), 'success')
-      setTimelineDialog(null)
+      setSidebarNoteText('')
       await reload()
     } catch {
       flash(t('procurement.processes.detail.timeline.error', 'Failed to add note.'), 'error')
     } finally {
       setTimelineSaving(false)
     }
-  }, [processId, allowEdits, timelineFormMessage, t, reload, withGuard])
-
-  const submitTimelineEdit = React.useCallback(async () => {
-    if (!processId || !allowEdits || !timelineDialog || timelineDialog.mode !== 'edit') return
-    const msg = timelineFormMessage.trim()
-    if (!msg) {
-      flash(
-        t('procurement.processes.detail.timeline.messageRequired', 'Enter a message.'),
-        'error',
-      )
-      return
-    }
-    const row = timelineDialog.row
-    setTimelineSaving(true)
-    try {
-      await withGuard('procurement.timeline.update', async () => {
-        const call = await apiCall<{ ok?: boolean }>(`/api/procurement/process-timeline`, {
-          method: 'PUT',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            id: row.id,
-            processId: row.processId,
-            message: msg,
-          }),
-        })
-        if (!call.ok) {
-          throw new Error(t('procurement.processes.detail.timeline.updateError', 'Failed to update note.'))
-        }
-        return call
-      })
-      flash(t('procurement.processes.detail.saved', 'Saved.'), 'success')
-      setTimelineDialog(null)
-      await reload()
-    } catch {
-      flash(t('procurement.processes.detail.timeline.updateError', 'Failed to update note.'), 'error')
-    } finally {
-      setTimelineSaving(false)
-    }
-  }, [processId, allowEdits, timelineDialog, timelineFormMessage, t, reload, withGuard])
-
-  const deleteTimelineNoteRow = React.useCallback(
-    async (row: TimelineRow) => {
-      if (!processId || !allowEdits || row.eventType !== 'note') return
-      const ok = await confirm({
-        title: t('common.confirm', 'Confirm'),
-        text: t('procurement.processes.detail.timeline.deleteConfirm', 'Remove this note?'),
-        variant: 'destructive',
-      })
-      if (!ok) return
-      try {
-        await withGuard('procurement.timeline.delete', async () => {
-          const call = await apiCall<{ ok?: boolean }>(
-            `/api/procurement/process-timeline?id=${encodeURIComponent(row.id)}&processId=${encodeURIComponent(row.processId)}`,
-            { method: 'DELETE' },
-          )
-          if (!call.ok) {
-            throw new Error(t('procurement.processes.detail.timeline.deleteError', 'Failed to delete note.'))
-          }
-          return call
-        })
-        await reload()
-      } catch {
-        flash(t('procurement.processes.detail.timeline.deleteError', 'Failed to delete note.'), 'error')
-      }
-    },
-    [processId, allowEdits, confirm, withGuard, t, reload],
-  )
+  }, [processId, allowEdits, sidebarNoteText, t, reload, withGuard])
 
   const onComplete = React.useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
       if (!processId || !allowEdits) return
       const rid = completeResourceId.trim()
-      if (!rid) return
       const invRaw = completeInvoiceId.trim()
       if (invRaw) {
         const invErr = invoiceUuidValidator(invRaw)
@@ -1514,7 +1942,7 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
               id: processId,
-              resourceId: rid,
+              resourceId: rid.length ? rid : null,
               salesInvoiceId: optionalUuid(completeInvoiceId),
             }),
           })
@@ -1628,14 +2056,28 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             {allowEdits ? (
-              <Button type="button" variant="outline" size="sm" onClick={() => setRefinancingDialogOpen(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setRefinancingDialogOpen(true)}
+              >
+                <Banknote className="size-4 shrink-0" aria-hidden />
                 {process.refinancingEnabled
                   ? t('procurement.processes.detail.header.editRefinancing', 'Edit refinancing')
                   : t('procurement.processes.detail.header.refinancing', 'Refinancing')}
               </Button>
             ) : null}
             {allowEdits ? (
-              <Button type="button" variant="outline" size="sm" onClick={() => setCompleteDialogOpen(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setCompleteDialogOpen(true)}
+              >
+                <CircleCheck className="size-4 shrink-0" aria-hidden />
                 {t('procurement.processes.detail.header.completeProcess', 'Complete process')}
               </Button>
             ) : null}
@@ -1677,12 +2119,7 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
             >
               {activeTab === 'details' ? (
                 <div className="space-y-4">
-                  <div className="space-y-3">
-                    <h2 className="text-sm font-semibold">
-                      {t('procurement.processes.detail.section.overview', 'Overview')}
-                    </h2>
-                    <DetailFieldsSection fields={overviewFields} className="md:grid-cols-2" />
-                  </div>
+                  <DetailFieldsSection fields={overviewFields} className="md:grid-cols-2" />
                   {process.refinancingEnabled ? (
                     <div className="rounded-lg border bg-card px-4 py-3">
                       <h2 className="text-sm font-semibold">
@@ -1830,7 +2267,13 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
                   }
                   actions={
                     allowEdits ? (
-                      <Button type="button" size="sm" onClick={() => setLineDialog({ mode: 'create' })}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => setLineDialog({ mode: 'create' })}
+                      >
+                        <Plus className="size-4 shrink-0" aria-hidden />
                         {t('procurement.processes.detail.lines.add', 'Add line item')}
                       </Button>
                     ) : undefined
@@ -1874,7 +2317,13 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
                   }
                   actions={
                     allowEdits ? (
-                      <Button type="button" size="sm" onClick={() => setSupplierDialog({ mode: 'create' })}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => setSupplierDialog({ mode: 'create' })}
+                      >
+                        <Plus className="size-4 shrink-0" aria-hidden />
                         {t('procurement.processes.detail.suppliers.add', 'Add supplier')}
                       </Button>
                     ) : undefined
@@ -1921,7 +2370,13 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
                   }
                   actions={
                     allowEdits ? (
-                      <Button type="button" size="sm" onClick={() => setTaskDialog({ mode: 'create' })}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => setTaskDialog({ mode: 'create' })}
+                      >
+                        <Plus className="size-4 shrink-0" aria-hidden />
                         {t('procurement.processes.detail.tasks.add', 'Add task')}
                       </Button>
                     ) : undefined
@@ -1964,6 +2419,7 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
                   title={t('procurement.processes.detail.section.history', 'History')}
                   data={timeline}
                   columns={timelineColumns}
+                  tableClassName="table-fixed"
                   sortable
                   sorting={timelineSorting}
                   onSortingChange={setTimelineSorting}
@@ -1972,45 +2428,12 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
                       {t('procurement.processes.detail.emptyList', 'Nothing here yet.')}
                     </p>
                   }
-                  actions={
-                    allowEdits ? (
-                      <Button type="button" size="sm" onClick={() => setTimelineDialog({ mode: 'create' })}>
-                        {t('procurement.processes.detail.timeline.addNote', 'Add note')}
-                      </Button>
-                    ) : undefined
-                  }
                   refreshButton={{
                     label: t('procurement.processes.list.actions.refresh', 'Refresh'),
                     onRefresh: () => void reload(),
                     isRefreshing: loading,
                   }}
-                  rowActions={(row) => {
-                    if (!allowEdits || row.eventType !== 'note') return null
-                    return (
-                      <RowActions
-                        items={[
-                          {
-                            id: 'edit',
-                            label: t('common.edit', 'Edit'),
-                            onSelect: () => setTimelineDialog({ mode: 'edit', row }),
-                          },
-                          {
-                            id: 'delete',
-                            label: t('procurement.processes.detail.remove', 'Remove'),
-                            destructive: true,
-                            onSelect: () => void deleteTimelineNoteRow(row),
-                          },
-                        ]}
-                      />
-                    )
-                  }}
-                  onRowClick={
-                    allowEdits
-                      ? (row) => {
-                          if (row.eventType === 'note') setTimelineDialog({ mode: 'edit', row })
-                        }
-                      : undefined
-                  }
+                  onRowClick={(row) => setTimelineModalRow(row)}
                 />
               ) : null}
             </DetailTabsLayout>
@@ -2026,110 +2449,317 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
                   <span className="block text-sm font-medium">
                     {t('procurement.processes.create.fields.customerEntity', 'Customer')}
                   </span>
-                  <EntitySearchCombobox
+                  <InlineSelectEditor
+                    label={t('procurement.processes.create.fields.customerEntity', 'Customer')}
+                    hideLabel
                     value={process.customerEntityId ?? ''}
-                    onChange={(next) => void patchProcess({ customerEntityId: optionalUuid(next) })}
-                    options={mergeEntitySearchOption(
-                      [],
-                      process.customerEntityId ?? '',
-                      customerLabel || process.customerEntityId || '',
+                    emptyLabel={t(
+                      'procurement.processes.detail.relations.customerEmpty',
+                      'No customer linked — click to choose.',
                     )}
-                    onRemoteSearch={async (q) => {
-                      const rows = await remoteSearchCustomerEntities(q)
-                      return mergeEntitySearchOption(
-                        rows,
-                        process.customerEntityId ?? '',
-                        customerLabel || process.customerEntityId || '',
+                    options={[]}
+                    onSave={async (next) => {
+                      await patchProcess({ customerEntityId: next })
+                    }}
+                    variant="muted"
+                    activateOnClick={allowEdits}
+                    showEditTrigger={allowEdits}
+                    embedEditTriggerInDisplay={allowEdits}
+                    renderEditor={({ value: draft, onChange }) => (
+                      <EntitySearchCombobox
+                        value={draft}
+                        onChange={onChange}
+                        options={mergeEntitySearchOption(
+                          [],
+                          draft,
+                          draft === process.customerEntityId?.trim()
+                            ? customerLabel || draft
+                            : draft,
+                        )}
+                        onRemoteSearch={async (q) => {
+                          const rows = await remoteSearchCustomerEntities(q)
+                          return mergeEntitySearchOption(
+                            rows,
+                            draft,
+                            draft === process.customerEntityId?.trim()
+                              ? customerLabel || draft
+                              : draft,
+                          )
+                        }}
+                        placeholder={t('procurement.processes.create.fields.customerSearch', 'Search customers…')}
+                        disabled={!allowEdits}
+                        createInNewTabHref="/backend/customers/companies/create"
+                        createInNewTabAriaLabel={t(
+                          'procurement.processes.create.fields.customerAdd',
+                          'Open customers in a new tab',
+                        )}
+                      />
+                    )}
+                    renderDisplay={({ value: vid, emptyLabel: empty, requestEdit }) => {
+                      const id = typeof vid === 'string' ? vid.trim() : ''
+                      const pid = process.customerEntityId?.trim() ?? ''
+                      const preview = id && pid === id ? customerAssocPreview : null
+                      const openHref = preview?.recordHref?.trim() ? preview.recordHref.trim() : null
+                      const hasCornerActions = Boolean(requestEdit || openHref)
+                      const relationActions =
+                        hasCornerActions ? (
+                          <div className="pointer-events-none absolute end-0 top-0 z-10 flex flex-row items-center justify-end gap-1 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+                            {requestEdit ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  requestEdit()
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" aria-hidden />
+                              </Button>
+                            ) : null}
+                            {openHref ? (
+                              <Button type="button" variant="outline" size="sm" asChild className="shrink-0">
+                                <Link
+                                  href={openHref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-2"
+                                >
+                                  <ExternalLink className="size-4 shrink-0" aria-hidden />
+                                  {t('common.open', 'Open')}
+                                </Link>
+                              </Button>
+                            ) : null}
+                          </div>
+                        ) : null
+
+                      if (!id) {
+                        return (
+                          <div className="group relative min-h-10 text-sm">
+                            {relationActions}
+                            <span
+                              className={`text-muted-foreground ${hasCornerActions ? 'block min-h-10 pe-[9.5rem]' : ''}`}
+                            >
+                              {empty}
+                            </span>
+                          </div>
+                        )
+                      }
+                      const title = preview?.title ?? (pid === id ? customerLabel || id : id)
+                      const subtitle = preview?.subtitle ?? null
+                      return (
+                        <div className="group relative text-sm">
+                          {relationActions}
+                          <div className={hasCornerActions ? 'pe-[9.5rem]' : undefined}>
+                            <div className="text-sm font-medium text-muted-foreground">
+                              {t('procurement.processes.detail.relations.customerPreview', 'Selected customer')}
+                            </div>
+                            <div className="mt-2 space-y-1">
+                              <div className="font-semibold leading-snug">{title}</div>
+                              {subtitle ? (
+                                <div className="text-sm text-muted-foreground">{subtitle}</div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
                       )
                     }}
-                    placeholder={t('procurement.processes.create.fields.customerSearch', 'Search customers…')}
-                    disabled={!allowEdits}
-                    createInNewTabHref="/backend/customers/companies/create"
-                    createInNewTabAriaLabel={t(
-                      'procurement.processes.create.fields.customerAdd',
-                      'Open customers in a new tab',
-                    )}
                   />
                 </div>
                 <div className="space-y-2">
                   <span className="block text-sm font-medium">
                     {t('procurement.processes.create.fields.salesQuote', 'Sales quote')}
                   </span>
-                  <EntitySearchCombobox
+                  <InlineSelectEditor
+                    label={t('procurement.processes.create.fields.salesQuote', 'Sales quote')}
+                    hideLabel
                     value={process.salesQuoteId ?? ''}
-                    onChange={(next) => void patchProcess({ salesQuoteId: optionalUuid(next) })}
-                    options={mergeEntitySearchOption(
-                      [],
-                      process.salesQuoteId ?? '',
-                      quoteLabel || process.salesQuoteId || '',
+                    emptyLabel={t(
+                      'procurement.processes.detail.relations.quoteEmpty',
+                      'No quote linked — click to choose.',
                     )}
-                    onRemoteSearch={async (q) => {
-                      const rows = await remoteSearchSalesQuotes(q)
-                      return mergeEntitySearchOption(
-                        rows,
-                        process.salesQuoteId ?? '',
-                        quoteLabel || process.salesQuoteId || '',
+                    options={[]}
+                    onSave={async (next) => {
+                      await patchProcess({ salesQuoteId: next })
+                    }}
+                    variant="muted"
+                    activateOnClick={allowEdits}
+                    showEditTrigger={allowEdits}
+                    embedEditTriggerInDisplay={allowEdits}
+                    renderEditor={({ value: draft, onChange }) => (
+                      <EntitySearchCombobox
+                        value={draft}
+                        onChange={onChange}
+                        options={mergeEntitySearchOption(
+                          [],
+                          draft,
+                          draft === process.salesQuoteId?.trim() ? quoteLabel || draft : draft,
+                        )}
+                        onRemoteSearch={async (q) => {
+                          const rows = await remoteSearchSalesQuotes(q)
+                          return mergeEntitySearchOption(
+                            rows,
+                            draft,
+                            draft === process.salesQuoteId?.trim() ? quoteLabel || draft : draft,
+                          )
+                        }}
+                        placeholder={t('procurement.processes.create.fields.quoteSearch', 'Search quotes…')}
+                        disabled={!allowEdits}
+                        createInNewTabHref="/backend/sales/documents/create"
+                        createInNewTabAriaLabel={t(
+                          'procurement.processes.create.fields.quoteAdd',
+                          'Create sales document in a new tab',
+                        )}
+                      />
+                    )}
+                    renderDisplay={({ value: qv, emptyLabel: empty, requestEdit }) => {
+                      const id = typeof qv === 'string' ? qv.trim() : ''
+                      const pid = process.salesQuoteId?.trim() ?? ''
+                      const preview = id && pid === id ? quoteAssocPreview : null
+                      const openHref = preview?.recordHref?.trim() ? preview.recordHref.trim() : null
+                      const hasCornerActions = Boolean(requestEdit || openHref)
+                      const relationActions =
+                        hasCornerActions ? (
+                          <div className="pointer-events-none absolute end-0 top-0 z-10 flex flex-row items-center justify-end gap-1 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+                            {requestEdit ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  requestEdit()
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" aria-hidden />
+                              </Button>
+                            ) : null}
+                            {openHref ? (
+                              <Button type="button" variant="outline" size="sm" asChild className="shrink-0">
+                                <Link
+                                  href={openHref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-2"
+                                >
+                                  <ExternalLink className="size-4 shrink-0" aria-hidden />
+                                  {t('common.open', 'Open')}
+                                </Link>
+                              </Button>
+                            ) : null}
+                          </div>
+                        ) : null
+
+                      if (!id) {
+                        return (
+                          <div className="group relative min-h-10 text-sm">
+                            {relationActions}
+                            <span
+                              className={`text-muted-foreground ${hasCornerActions ? 'block min-h-10 pe-[9.5rem]' : ''}`}
+                            >
+                              {empty}
+                            </span>
+                          </div>
+                        )
+                      }
+                      const line1 = preview?.quoteLabel ?? (pid === id ? quoteLabel || id : id)
+                      const subtitle = preview?.subtitle ?? null
+                      return (
+                        <div className="group relative text-sm">
+                          {relationActions}
+                          <div className={hasCornerActions ? 'pe-[9.5rem]' : undefined}>
+                            <div className="text-sm font-medium text-muted-foreground">
+                              {t('procurement.processes.detail.relations.quotePreview', 'Selected quote')}
+                            </div>
+                            <div className="mt-2 space-y-1">
+                              <div className="font-semibold leading-snug">{line1}</div>
+                              {subtitle ? (
+                                <div className="text-sm text-muted-foreground">{subtitle}</div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
                       )
                     }}
-                    placeholder={t('procurement.processes.create.fields.quoteSearch', 'Search quotes…')}
-                    disabled={!allowEdits}
-                    createInNewTabHref="/backend/sales/documents/create"
-                    createInNewTabAriaLabel={t(
-                      'procurement.processes.create.fields.quoteAdd',
-                      'Create sales document in a new tab',
-                    )}
                   />
                 </div>
               </div>
             </div>
 
             <div className="rounded-lg border bg-card px-4 py-3">
-              <AttachmentsSection
-                entityId={PROCUREMENT_PROCESS_ENTITY_TYPE}
-                recordId={processId}
-                title={t('procurement.processes.detail.section.files', 'Attachments')}
-              />
+              <h2 className="text-sm font-semibold">
+                {t('procurement.processes.detail.section.notes', 'Notes')}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t(
+                  'procurement.processes.detail.notes.sidebarLead',
+                  'Add a note below. Open History to read entries in full.',
+                )}
+              </p>
+              {allowEdits ? (
+                <div className="mt-3 space-y-2">
+                  <label htmlFor="procurement-sidebar-note" className="sr-only">
+                    {t('procurement.processes.detail.timeline.column.message', 'Message')}
+                  </label>
+                  <textarea
+                    id="procurement-sidebar-note"
+                    className={CRUD_FORM_TEXTAREA_CLASS}
+                    rows={4}
+                    value={sidebarNoteText}
+                    onChange={(e) => setSidebarNoteText(e.target.value)}
+                    placeholder={t('procurement.processes.detail.timeline.placeholder', 'Describe what happened…')}
+                    disabled={timelineSaving}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={timelineSaving}
+                    onClick={() => void submitSidebarNote()}
+                  >
+                    {t('procurement.processes.form.submit', 'Save')}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="rounded-lg border bg-card px-4 py-3">
+              <h2 className="text-sm font-semibold">
+                {t('procurement.processes.detail.section.files', 'Attachments')}
+              </h2>
+              <div className="mt-3">
+                <AttachmentsSection
+                  entityId={PROCUREMENT_PROCESS_ENTITY_TYPE}
+                  recordId={processId}
+                  showHeader={false}
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        <Dialog open={timelineDialog !== null} onOpenChange={(open) => !open && setTimelineDialog(null)}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>
-                {timelineDialog?.mode === 'edit'
-                  ? t('procurement.processes.detail.timeline.dialogEdit', 'Edit note')
-                  : t('procurement.processes.detail.timeline.dialogCreate', 'New note')}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="py-2">
-              <label htmlFor="timeline-note-body" className="sr-only">
-                {t('procurement.processes.detail.timeline.column.message', 'Message')}
-              </label>
-              <textarea
-                id="timeline-note-body"
-                className={CRUD_FORM_TEXTAREA_CLASS}
-                value={timelineFormMessage}
-                onChange={(e) => setTimelineFormMessage(e.target.value)}
-                placeholder={t('procurement.processes.detail.timeline.placeholder', 'Describe what happened…')}
-                rows={5}
-                disabled={!allowEdits}
-              />
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setTimelineDialog(null)}>
-                {t('common.cancel', 'Cancel')}
-              </Button>
-              <Button
-                type="button"
-                disabled={!allowEdits || timelineSaving}
-                onClick={() =>
-                  void (timelineDialog?.mode === 'edit' ? submitTimelineEdit() : submitTimelineCreate())
-                }
-              >
-                {t('procurement.processes.form.submit', 'Save')}
-              </Button>
-            </DialogFooter>
+        <Dialog open={timelineModalRow !== null} onOpenChange={(open) => !open && setTimelineModalRow(null)}>
+          <DialogContent className="max-w-2xl">
+            {timelineModalRow ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle>
+                    {formatProcurementTimelineEventType(timelineModalRow.eventType)}
+                  </DialogTitle>
+                  {timelineModalRow.createdAt ? (
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(timelineModalRow.createdAt).toLocaleString(intlLocaleTag(locale))}
+                    </p>
+                  ) : null}
+                </DialogHeader>
+                <div className="max-h-[min(70vh,28rem)] overflow-y-auto py-2">
+                  <p className="whitespace-pre-wrap wrap-break-word text-sm leading-relaxed text-foreground">
+                    {timelineModalRow.message}
+                  </p>
+                </div>
+              </>
+            ) : null}
           </DialogContent>
         </Dialog>
 
@@ -2229,9 +2859,18 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
               <DialogTitle>{t('procurement.processes.detail.complete.title', 'Complete process')}</DialogTitle>
             </DialogHeader>
             <form onSubmit={onComplete} className="grid gap-4 py-2">
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'procurement.processes.detail.complete.dialogLead',
+                  'Close the process and optionally link one process-level resource. You can also link resources per specification line.',
+                )}
+              </p>
               <div className="space-y-2">
                 <span className="block text-sm font-medium">
-                  {t('procurement.processes.detail.complete.resource', 'Resource')}
+                  {t(
+                    'procurement.processes.detail.complete.processResource',
+                    'Process resource (optional)',
+                  )}
                 </span>
                 <EntitySearchCombobox
                   value={completeResourceId}
@@ -2272,8 +2911,8 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
                 <Button type="button" variant="outline" onClick={() => setCompleteDialogOpen(false)}>
                   {t('common.cancel', 'Cancel')}
                 </Button>
-                <Button type="submit" disabled={completing || !completeResourceId.trim()}>
-                  {t('procurement.processes.detail.complete.submit', 'Complete and link resource')}
+                <Button type="submit" disabled={completing}>
+                  {t('procurement.processes.detail.complete.submit', 'Complete process')}
                 </Button>
               </DialogFooter>
             </form>
@@ -2347,6 +2986,41 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
                   />
                 </div>
               </div>
+              <div className="space-y-2">
+                <span className="block text-sm font-medium">
+                  {t('procurement.processes.detail.lines.lineResource', 'Linked resource')}
+                </span>
+                <EntitySearchCombobox
+                  value={lineFormResourceId}
+                  onChange={setLineFormResourceId}
+                  options={mergeEntitySearchOption(
+                    [],
+                    lineFormResourceId,
+                    lineFormResourceLabel || lineFormResourceId,
+                  )}
+                  onRemoteSearch={async (q) => {
+                    const rows = await remoteSearchResources(q)
+                    return mergeEntitySearchOption(
+                      rows,
+                      lineFormResourceId,
+                      lineFormResourceLabel || lineFormResourceId,
+                    )
+                  }}
+                  placeholder={t('procurement.processes.detail.resourceSearch', 'Search resources…')}
+                  disabled={!allowEdits}
+                  createInNewTabHref="/backend/resources/resources/create"
+                  createInNewTabAriaLabel={t(
+                    'procurement.processes.detail.resourceAdd',
+                    'Create resource in a new tab',
+                  )}
+                />
+                <p className="text-sm text-muted-foreground">
+                  {t(
+                    'procurement.processes.detail.lines.lineResourceHint',
+                    'Optional: link a resource as the outcome for this line only.',
+                  )}
+                </p>
+              </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setLineDialog(null)}>
@@ -2418,32 +3092,32 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
                     </p>
                     <dl className="mt-3 space-y-4">
                       <div>
-                        <dt className="text-muted-foreground">
+                        <dt className="text-sm text-muted-foreground">
                           {t('procurement.processes.detail.suppliers.vendorLabel', 'Vendor name')}
                         </dt>
                         <dd className="mt-0.5 font-medium wrap-break-word">{supplierCompanyPreview.vendorLabel}</dd>
                       </div>
                       <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
                         <div>
-                          <dt className="text-muted-foreground">
+                          <dt className="text-sm text-muted-foreground">
                             {t('procurement.processes.detail.suppliers.contact', 'Contact')}
                           </dt>
                           <dd className="mt-0.5 wrap-break-word">{supplierCompanyPreview.contactName ?? '—'}</dd>
                         </div>
                         <div>
-                          <dt className="text-muted-foreground">
+                          <dt className="text-sm text-muted-foreground">
                             {t('procurement.processes.detail.suppliers.email', 'Email')}
                           </dt>
                           <dd className="mt-0.5 wrap-break-word">{supplierCompanyPreview.email ?? '—'}</dd>
                         </div>
                         <div>
-                          <dt className="text-muted-foreground">
+                          <dt className="text-sm text-muted-foreground">
                             {t('procurement.processes.detail.suppliers.phone', 'Phone')}
                           </dt>
                           <dd className="mt-0.5 wrap-break-word">{supplierCompanyPreview.phone ?? '—'}</dd>
                         </div>
                         <div>
-                          <dt className="text-muted-foreground">
+                          <dt className="text-sm text-muted-foreground">
                             {t('procurement.processes.detail.suppliers.website', 'Website')}
                           </dt>
                           <dd className="mt-0.5 break-all">{supplierCompanyPreview.website ?? '—'}</dd>
@@ -2453,6 +3127,82 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
                   </div>
                 </div>
               ) : null}
+              <div className="space-y-2">
+                <span className="block text-sm font-medium">
+                  {t('procurement.processes.detail.suppliers.specLinesField', 'Specification lines')}
+                </span>
+                {lines.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    {t(
+                      'procurement.processes.detail.suppliers.specLinesEmpty',
+                      'Add lines on the Specification tab first.',
+                    )}
+                  </p>
+                ) : (
+                  <>
+                    <EntitySearchCombobox
+                      value={supplierSpecLineComboValue}
+                      onChange={(next) => {
+                        const id = next.trim()
+                        if (!id) {
+                          setSupplierSpecLineComboValue('')
+                          return
+                        }
+                        setSupplierFormLineItemIds((prev) => (prev.includes(id) ? prev : [...prev, id]))
+                        setSupplierSpecLineComboValue('')
+                      }}
+                      options={[]}
+                      onRemoteSearch={searchRemoteSpecLinesForSupplier}
+                      placeholder={t(
+                        'procurement.processes.detail.suppliers.specLinesAddPlaceholder',
+                        'Add specification line…',
+                      )}
+                      searchPlaceholder={t(
+                        'procurement.processes.detail.suppliers.specLinesSearch',
+                        'Search lines…',
+                      )}
+                      emptyText={supplierSpecLineEmptyText}
+                      disabled={!allowEdits || supplierSpecLinesAllAdded}
+                    />
+                    {supplierFormLineItemIds.length > 0 ? (
+                      <ul className="max-h-48 overflow-y-auto rounded-md border border-border/60 divide-y divide-border/60">
+                        {supplierFormLineItemIds.map((lineId) => {
+                          const line = lines.find((l) => l.id === lineId)
+                          return (
+                            <li key={lineId} className="flex items-center gap-2 px-3 py-2">
+                              <div className="min-w-0 flex-1 text-sm">
+                                <div className="font-medium leading-snug">{line?.title ?? lineId}</div>
+                                {line?.specification?.trim() ? (
+                                  <div className="mt-0.5 text-sm text-muted-foreground line-clamp-2">
+                                    {line.specification}
+                                  </div>
+                                ) : null}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+                                disabled={!allowEdits}
+                                onClick={() => removeSupplierSpecLine(lineId)}
+                                aria-label={t('procurement.processes.detail.suppliers.specLinesRemove', 'Remove line')}
+                              >
+                                <X className="size-4" aria-hidden />
+                              </Button>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    ) : null}
+                    <p className="text-sm text-muted-foreground">
+                      {t(
+                        'procurement.processes.detail.suppliers.specLinesHint',
+                        'The same line can be linked to many suppliers.',
+                      )}
+                    </p>
+                  </>
+                )}
+              </div>
               <div className="space-y-2">
                 <label className="block text-sm font-medium" htmlFor="sup-d-notes">
                   {t('procurement.processes.detail.suppliers.notes', 'Notes')}
@@ -2535,20 +3285,6 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
                 />
               </div>
               <div className="space-y-2">
-                <span className="block text-sm font-medium">
-                  {t('procurement.processes.detail.tasks.supplier', 'Linked supplier')}
-                </span>
-                <EntitySearchCombobox
-                  value={taskFormSupplierId}
-                  onChange={setTaskFormSupplierId}
-                  options={taskSupplierOptions}
-                  placeholder={t(
-                    'procurement.processes.detail.tasks.supplierSearch',
-                    'Choose a linked supplier…',
-                  )}
-                />
-              </div>
-              <div className="space-y-2">
                 <label className="block text-sm font-medium" htmlFor="task-d-status">
                   {t('procurement.processes.detail.tasks.status', 'Status')}
                 </label>
@@ -2586,6 +3322,20 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
                   placeholder={t('procurement.processes.detail.tasks.userSearch', 'Search users…')}
                   createInNewTabHref="/backend/users/create"
                   createInNewTabAriaLabel={t('procurement.processes.detail.tasks.userAdd', 'Create user in a new tab')}
+                />
+              </div>
+              <div className="space-y-2">
+                <span className="block text-sm font-medium">
+                  {t('procurement.processes.detail.tasks.supplier', 'Linked supplier')}
+                </span>
+                <EntitySearchCombobox
+                  value={taskFormSupplierId}
+                  onChange={setTaskFormSupplierId}
+                  options={taskSupplierOptions}
+                  placeholder={t(
+                    'procurement.processes.detail.tasks.supplierSearch',
+                    'Choose a linked supplier…',
+                  )}
                 />
               </div>
             </div>

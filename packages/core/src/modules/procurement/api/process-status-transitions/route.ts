@@ -5,7 +5,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import { ProcurementProcess } from '../../data/entities'
+import { ProcurementOrganizationSettings, ProcurementProcess } from '../../data/entities'
 import {
   listOutgoingProcurementStatusTransitions,
   procurementStatusTransitionsConfigured,
@@ -61,11 +61,17 @@ export async function GET(req: Request) {
 
   const tenantId = process.tenantId
   const organizationId = process.organizationId
+
+  const orgSettings = await em.findOne(ProcurementOrganizationSettings, { tenantId, organizationId })
+  const terminalRaw = orgSettings?.terminalProcessStatusValue?.trim()
+  const terminalProcessStatusValue = terminalRaw?.length ? terminalRaw : null
+
   const enforced = await procurementStatusTransitionsConfigured(em, tenantId, organizationId)
   if (!enforced) {
     return NextResponse.json({
       enforced: false,
       items: [] as ProcurementStatusTransitionOption[],
+      terminalProcessStatusValue,
     })
   }
 
@@ -100,5 +106,5 @@ export async function GET(req: Request) {
     })
   }
 
-  return NextResponse.json({ enforced: true, items })
+  return NextResponse.json({ enforced: true, items, terminalProcessStatusValue })
 }

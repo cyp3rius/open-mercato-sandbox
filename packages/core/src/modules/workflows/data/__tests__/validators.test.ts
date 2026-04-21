@@ -670,6 +670,54 @@ describe('Workflows Validators', () => {
 
       expect(() => createUserTaskSchema.parse(invalidUuid)).toThrow()
     })
+
+    test('should accept procurement-linked task without workflow instance', () => {
+      const procurementOnly = {
+        procurementProcessTaskId: '123e4567-e89b-12d3-a456-426614174099',
+        taskName: 'Procurement follow-up',
+        description: null,
+        status: 'PENDING' as const,
+        formSchema: null,
+        formData: null,
+        assignedTo: null,
+        assignedToRoles: null,
+        claimedBy: null,
+        claimedAt: null,
+        dueDate: null,
+        escalatedAt: null,
+        escalatedTo: null,
+        completedBy: null,
+        completedAt: null,
+        comments: null,
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+        organizationId: '123e4567-e89b-12d3-a456-426614174001',
+      }
+      const result = createUserTaskSchema.parse(procurementOnly)
+      expect(result.procurementProcessTaskId).toBe(procurementOnly.procurementProcessTaskId)
+    })
+
+    test('should reject when neither workflow nor procurement linkage is present', () => {
+      const orphan = {
+        taskName: 'Orphan',
+        description: null,
+        status: 'PENDING' as const,
+        formSchema: null,
+        formData: null,
+        assignedTo: null,
+        assignedToRoles: null,
+        claimedBy: null,
+        claimedAt: null,
+        dueDate: null,
+        escalatedAt: null,
+        escalatedTo: null,
+        completedBy: null,
+        completedAt: null,
+        comments: null,
+        tenantId: '123e4567-e89b-12d3-a456-426614174000',
+        organizationId: '123e4567-e89b-12d3-a456-426614174001',
+      }
+      expect(() => createUserTaskSchema.parse(orphan)).toThrow()
+    })
   })
 
   describe('createWorkflowEventSchema', () => {

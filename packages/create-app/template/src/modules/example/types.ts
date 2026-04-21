@@ -7,6 +7,8 @@ export type TodoListItem = {
   is_done?: boolean
   tenant_id?: string | null
   organization_id?: string | null
+  procurement_process_id?: string | null
+  procurement_process_task_id?: string | null
   cf_priority?: number | null
   cf_severity?: string | null
   cf_blocked?: boolean | null

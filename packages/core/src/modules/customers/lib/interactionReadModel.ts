@@ -183,6 +183,8 @@ export async function hydrateCanonicalInteractions({
       appearanceIcon: interaction.appearanceIcon ?? null,
       appearanceColor: interaction.appearanceColor ?? null,
       source: interaction.source ?? null,
+      procurementProcessId: interaction.procurementProcessId ?? null,
+      procurementProcessTaskId: interaction.procurementProcessTaskId ?? null,
       organizationId: interaction.organizationId,
       tenantId: interaction.tenantId,
       createdAt: interaction.createdAt.toISOString(),

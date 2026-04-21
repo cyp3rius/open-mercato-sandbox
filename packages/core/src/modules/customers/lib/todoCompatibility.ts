@@ -20,6 +20,8 @@ export type CustomerTodoRow = {
   organizationId: string
   tenantId: string
   createdAt: string
+  procurementProcessId?: string | null
+  procurementProcessTaskId?: string | null
   customer: {
     id: string | null
     displayName: string | null
@@ -337,6 +339,8 @@ export function mapInteractionRecordToTodoRow(
     organizationId: interaction.organizationId ?? '',
     tenantId: interaction.tenantId ?? '',
     createdAt: interaction.createdAt,
+    procurementProcessId: interaction.procurementProcessId ?? null,
+    procurementProcessTaskId: interaction.procurementProcessTaskId ?? null,
     customer: customer ?? {
       id: interaction.entityId ?? null,
       displayName: null,

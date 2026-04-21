@@ -3,6 +3,7 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Settings } from 'lucide-react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
@@ -10,6 +11,7 @@ import { RowActions } from '@open-mercato/ui/backend/RowActions'
 import type { FilterDef, FilterValues } from '@open-mercato/ui/backend/FilterBar'
 import type { FilterOption } from '@open-mercato/ui/backend/FilterOverlay'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { IconButton } from '@open-mercato/ui/primitives/icon-button'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { deleteCrud } from '@open-mercato/ui/backend/utils/crud'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -334,11 +336,16 @@ export default function ProcurementProcessesListPage() {
           actions={
             <>
               {canSettings ? (
-                <Button asChild variant="outline">
-                  <Link href="/backend/config/procurement">
-                    {t('procurement.processes.list.actions.settings', 'Module settings')}
+                <IconButton asChild variant="outline" title={t('procurement.processes.list.actions.settings', 'Module settings')}>
+                  <Link
+                    href="/backend/config/procurement"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={t('procurement.processes.list.actions.settings', 'Module settings')}
+                  >
+                    <Settings aria-hidden className="size-4" />
                   </Link>
-                </Button>
+                </IconButton>
               ) : null}
               {canManage ? (
                 <Button asChild>

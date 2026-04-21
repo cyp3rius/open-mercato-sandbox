@@ -52,8 +52,27 @@ if (todoEntity?.fields?.length) {
 
 const cfSel = buildCustomFieldSelectorsForEntity(E.example.todo, baseFieldSets)
 let dynamicCfKeys: string[] = [...cfSel.keys]
-let listFields: any[] = [id, title, tenant_id, organization_id, is_done, created_at, ...cfSel.selectors]
-const sortFieldMapRef: Record<string, unknown> = { id, title, tenant_id, organization_id, is_done, created_at }
+let listFields: any[] = [
+  id,
+  title,
+  tenant_id,
+  organization_id,
+  is_done,
+  created_at,
+  'procurement_process_id',
+  'procurement_process_task_id',
+  ...cfSel.selectors,
+]
+const sortFieldMapRef: Record<string, unknown> = {
+  id,
+  title,
+  tenant_id,
+  organization_id,
+  is_done,
+  created_at,
+  procurement_process_id: 'procurement_process_id',
+  procurement_process_task_id: 'procurement_process_task_id',
+}
 for (const k of dynamicCfKeys) sortFieldMapRef[`cf_${k}`] = `cf:${k}`
 
 type BaseFields = {
@@ -63,6 +82,8 @@ type BaseFields = {
   tenant_id: string | null
   organization_id: string | null
   created_at: Date
+  procurement_process_id?: string | null
+  procurement_process_task_id?: string | null
 } & Record<`cf:${string}` | `cf_${string}`, unknown>
 
 export const { metadata, GET, POST, PUT, DELETE } = makeCrudRoute({
@@ -118,6 +139,14 @@ export const { metadata, GET, POST, PUT, DELETE } = makeCrudRoute({
         tenant_id: (item.tenant_id as string | null) ?? null,
         organization_id: (item.organization_id as string | null) ?? null,
         is_done: Boolean(item.is_done),
+        procurement_process_id:
+          typeof (item as Record<string, unknown>).procurement_process_id === 'string'
+            ? ((item as Record<string, unknown>).procurement_process_id as string)
+            : null,
+        procurement_process_task_id:
+          typeof (item as Record<string, unknown>).procurement_process_task_id === 'string'
+            ? ((item as Record<string, unknown>).procurement_process_task_id as string)
+            : null,
       }
       const cf = extractCustomFieldsFromItem(item as any, dynamicCfKeys)
       return { ...base, ...(cf as any) } as TodoListItem

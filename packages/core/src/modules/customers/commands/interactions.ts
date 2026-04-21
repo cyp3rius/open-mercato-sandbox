@@ -76,6 +76,8 @@ type InteractionSnapshot = {
     appearanceIcon: string | null
     appearanceColor: string | null
     source: string | null
+    procurementProcessId?: string | null
+    procurementProcessTaskId?: string | null
   }
   custom?: Record<string, unknown>
 }
@@ -118,6 +120,8 @@ async function loadInteractionSnapshot(em: EntityManager, id: string): Promise<I
       appearanceIcon: interaction.appearanceIcon ?? null,
       appearanceColor: interaction.appearanceColor ?? null,
       source: interaction.source ?? null,
+      procurementProcessId: interaction.procurementProcessId ?? null,
+      procurementProcessTaskId: interaction.procurementProcessTaskId ?? null,
     },
     custom,
   }
@@ -254,6 +258,8 @@ const createInteractionCommand: CommandHandler<InteractionCreateInput, { interac
         source: parsed.source ?? null,
         appearanceIcon: parsed.appearanceIcon ?? null,
         appearanceColor: parsed.appearanceColor ?? null,
+        procurementProcessId: parsed.procurementProcessId ?? null,
+        procurementProcessTaskId: parsed.procurementProcessTaskId ?? null,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
@@ -385,6 +391,10 @@ const updateInteractionCommand: CommandHandler<InteractionUpdateInput, { interac
       if (parsed.ownerUserId !== undefined) interaction.ownerUserId = parsed.ownerUserId ?? null
       if (parsed.appearanceIcon !== undefined) interaction.appearanceIcon = parsed.appearanceIcon ?? null
       if (parsed.appearanceColor !== undefined) interaction.appearanceColor = parsed.appearanceColor ?? null
+      if (parsed.procurementProcessId !== undefined) interaction.procurementProcessId = parsed.procurementProcessId ?? null
+      if (parsed.procurementProcessTaskId !== undefined) {
+        interaction.procurementProcessTaskId = parsed.procurementProcessTaskId ?? null
+      }
 
       await trx.flush()
 
@@ -479,6 +489,8 @@ const updateInteractionCommand: CommandHandler<InteractionUpdateInput, { interac
           source: before.interaction.source,
           appearanceIcon: before.interaction.appearanceIcon,
           appearanceColor: before.interaction.appearanceColor,
+          procurementProcessId: before.interaction.procurementProcessId ?? null,
+          procurementProcessTaskId: before.interaction.procurementProcessTaskId ?? null,
           createdAt: new Date(),
           updatedAt: new Date(),
         })
@@ -498,6 +510,8 @@ const updateInteractionCommand: CommandHandler<InteractionUpdateInput, { interac
         interaction.source = before.interaction.source
         interaction.appearanceIcon = before.interaction.appearanceIcon
         interaction.appearanceColor = before.interaction.appearanceColor
+        interaction.procurementProcessId = before.interaction.procurementProcessId ?? null
+        interaction.procurementProcessTaskId = before.interaction.procurementProcessTaskId ?? null
       }
 
       await trx.flush()
@@ -885,6 +899,8 @@ const deleteInteractionCommand: CommandHandler<{ body?: Record<string, unknown>;
             source: before.interaction.source,
             appearanceIcon: before.interaction.appearanceIcon,
             appearanceColor: before.interaction.appearanceColor,
+            procurementProcessId: before.interaction.procurementProcessId ?? null,
+            procurementProcessTaskId: before.interaction.procurementProcessTaskId ?? null,
             createdAt: new Date(),
             updatedAt: new Date(),
           })
@@ -905,6 +921,8 @@ const deleteInteractionCommand: CommandHandler<{ body?: Record<string, unknown>;
           interaction.source = before.interaction.source
           interaction.appearanceIcon = before.interaction.appearanceIcon
           interaction.appearanceColor = before.interaction.appearanceColor
+          interaction.procurementProcessId = before.interaction.procurementProcessId ?? null
+          interaction.procurementProcessTaskId = before.interaction.procurementProcessTaskId ?? null
         }
         await trx.flush()
 

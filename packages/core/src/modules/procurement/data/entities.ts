@@ -4,6 +4,7 @@ import {
   ManyToOne,
   PrimaryKey,
   Property,
+  Unique,
 } from '@mikro-orm/core'
 import { CustomerEntity } from '@open-mercato/core/modules/customers/data/entities'
 
@@ -86,6 +87,10 @@ export class ProcurementProcess {
 
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
+
+  /** Open Mercato user responsible for handling this process (see procurement.processes.handle). */
+  @Property({ name: 'handler_user_id', type: 'uuid', nullable: true })
+  handlerUserId?: string | null
 }
 
 @Entity({ tableName: 'procurement_process_suppliers' })
@@ -147,6 +152,7 @@ export class ProcurementProcessSupplier {
 
 @Entity({ tableName: 'procurement_process_line_items' })
 @Index({ name: 'procurement_process_line_items_process_idx', properties: ['process'] })
+@Index({ name: 'procurement_process_line_items_resource_idx', properties: ['resourceId'] })
 export class ProcurementProcessLineItem {
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -175,6 +181,10 @@ export class ProcurementProcessLineItem {
   @Property({ name: 'sort_order', type: 'int', default: 0 })
   sortOrder: number = 0
 
+  /** Optional outcome resource for this specification line (at most one per line). */
+  @Property({ name: 'resource_id', type: 'uuid', nullable: true })
+  resourceId?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 
@@ -183,6 +193,34 @@ export class ProcurementProcessLineItem {
 
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
+}
+
+/** M:N link: a supplier can cover many specification lines; the same line can be linked to many suppliers. */
+@Entity({ tableName: 'procurement_process_supplier_line_items' })
+@Unique({
+  name: 'procurement_proc_supplier_line_uidx',
+  properties: ['supplier', 'lineItem'],
+})
+@Index({ name: 'procurement_supplier_line_supplier_idx', properties: ['supplier'] })
+@Index({ name: 'procurement_supplier_line_line_idx', properties: ['lineItem'] })
+export class ProcurementProcessSupplierLineItem {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @ManyToOne(() => ProcurementProcessSupplier, { fieldName: 'supplier_id' })
+  supplier!: ProcurementProcessSupplier
+
+  @ManyToOne(() => ProcurementProcessLineItem, { fieldName: 'line_item_id' })
+  lineItem!: ProcurementProcessLineItem
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
 }
 
 @Entity({ tableName: 'procurement_process_tasks' })
@@ -224,6 +262,10 @@ export class ProcurementProcessTask {
 
   @Property({ name: 'source_action_value', type: 'text', nullable: true })
   sourceActionValue?: string | null
+
+  /** Workflows `user_tasks.id` — canonical task under /backend/tasks. */
+  @Property({ name: 'work_item_user_task_id', type: 'uuid', nullable: true })
+  workItemUserTaskId?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
@@ -297,6 +339,39 @@ export class ProcurementProcessStatusTransition {
 
   @Property({ name: 'sort_order', type: 'int', default: 0 })
   sortOrder: number = 0
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+@Entity({ tableName: 'procurement_organization_settings' })
+@Unique({
+  name: 'procurement_org_settings_scope_uidx',
+  properties: ['tenantId', 'organizationId'],
+})
+@Index({ name: 'procurement_org_settings_scope_idx', properties: ['tenantId', 'organizationId'] })
+export class ProcurementOrganizationSettings {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  /** Canonical dictionary value for new processes when `statusValue` is not sent. */
+  @Property({ name: 'default_process_status_value', type: 'text', nullable: true })
+  defaultProcessStatusValue?: string | null
+
+  /**
+   * Canonical dictionary value treated as the completed / terminal procurement status for this org (optional).
+   */
+  @Property({ name: 'terminal_process_status_value', type: 'text', nullable: true })
+  terminalProcessStatusValue?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

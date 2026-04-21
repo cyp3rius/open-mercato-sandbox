@@ -16,9 +16,18 @@ import { mergeProcurementCommandScope } from '../mergeScope'
 
 const routeMetadata = {
   GET: { requireAuth: true, requireFeatures: ['procurement.processes.view'] },
-  POST: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
-  PUT: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
-  DELETE: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
+  POST: {
+    requireAuth: true,
+    requireAnyFeatures: ['procurement.processes.manage', 'procurement.processes.handle'],
+  },
+  PUT: {
+    requireAuth: true,
+    requireAnyFeatures: ['procurement.processes.manage', 'procurement.processes.handle'],
+  },
+  DELETE: {
+    requireAuth: true,
+    requireAnyFeatures: ['procurement.processes.manage', 'procurement.processes.handle'],
+  },
 }
 
 export const metadata = routeMetadata

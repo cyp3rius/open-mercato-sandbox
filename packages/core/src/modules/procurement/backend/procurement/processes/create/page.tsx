@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { CrudForm, type CrudField, type CrudFormGroup } from '@open-mercato/ui/backend/CrudForm'
 import { createCrud } from '@open-mercato/ui/backend/utils/crud'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
@@ -14,7 +15,12 @@ import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySear
 import { DictionaryEntrySelect } from '@open-mercato/core/modules/dictionaries/components/DictionaryEntrySelect'
 import { clearProcurementDictionaryIdCache, fetchDictionaryOptionsByKey } from '../../../../lib/fetchDictionaryOptionsByKey'
 import { procurementDictionarySelectLabels } from '../../../../lib/procurementDictionarySelectLabels'
-import { remoteSearchCustomerEntities, remoteSearchSalesQuotes } from '../../../../lib/procurementEntitySearch'
+import {
+  mergeEntitySearchOption,
+  remoteSearchAuthUsers,
+  remoteSearchCustomerEntities,
+  remoteSearchSalesQuotes,
+} from '../../../../lib/procurementEntitySearch'
 import {
   PROCUREMENT_PROCESS_STATUS_DICTIONARY_KEY,
   PROCUREMENT_PROCESS_TYPE_DICTIONARY_KEY,
@@ -27,6 +33,7 @@ type ProcurementProcessCreateValues = {
   salesQuoteId: string
   statusValue?: string
   typeValue?: string
+  handlerUserId?: string
 }
 
 const LIST_HREF = '/backend/procurement/processes'
@@ -44,6 +51,28 @@ export default function ProcurementProcessCreatePage() {
   React.useEffect(() => {
     clearProcurementDictionaryIdCache()
   }, [scopeVersion])
+
+  const [orgDefaultStartStatusConfigured, setOrgDefaultStartStatusConfigured] = React.useState<boolean | null>(null)
+
+  React.useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const res = await apiCall<{ hasOrgDefaultStartStatus?: boolean }>(
+        '/api/procurement/organization-settings/default-for-create',
+      )
+      if (cancelled) return
+      if (!res.ok) {
+        setOrgDefaultStartStatusConfigured(false)
+        return
+      }
+      setOrgDefaultStartStatusConfigured(res.result?.hasOrgDefaultStartStatus === true)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [scopeVersion])
+
+  const hideStatusPicker = orgDefaultStartStatusConfigured === true
 
   const statusDictLabels = React.useMemo(() => procurementDictionarySelectLabels(t, 'status'), [t])
   const typeDictLabels = React.useMemo(() => procurementDictionarySelectLabels(t, 'type'), [t])
@@ -70,63 +99,91 @@ export default function ProcurementProcessCreatePage() {
         salesQuoteId: z.string(),
         statusValue: z.string().optional(),
         typeValue: z.string().optional(),
+        handlerUserId: z.string().optional(),
       }),
     [t],
   )
 
-  const fields = React.useMemo<CrudField[]>(
-    () => [
-      {
-        id: 'title',
-        label: t('procurement.processes.create.fields.title', 'Title'),
-        type: 'text',
-        required: true,
-      },
-      {
-        id: 'typeValue',
-        label: t('procurement.processes.detail.type', 'Type'),
-        type: 'custom',
-        layout: 'half',
-        component: ({ value, setValue, disabled }) => (
-          <DictionaryEntrySelect
-            value={typeof value === 'string' && value.trim() ? value : undefined}
-            onChange={(next) => setValue(next ?? '')}
-            fetchOptions={fetchTypeOptions}
-            labels={typeDictLabels}
-            manageHref={`/backend/config/dictionaries?key=${encodeURIComponent(PROCUREMENT_PROCESS_TYPE_DICTIONARY_KEY)}`}
-            allowInlineCreate={false}
-            allowAppearance
-            selectClassName="w-full"
-            showLabelInput={false}
+  const fields = React.useMemo<CrudField[]>(() => {
+    const titleField: CrudField = {
+      id: 'title',
+      label: t('procurement.processes.create.fields.title', 'Title'),
+      type: 'text',
+      required: true,
+      ...(hideStatusPicker ? { layout: 'half' as const } : { layout: 'full' as const }),
+    }
+
+    const typeField: CrudField = {
+      id: 'typeValue',
+      label: t('procurement.processes.detail.type', 'Type'),
+      type: 'custom',
+      layout: hideStatusPicker ? 'quarter' : 'third',
+      component: ({ value, setValue, disabled }) => (
+        <DictionaryEntrySelect
+          value={typeof value === 'string' && value.trim() ? value : undefined}
+          onChange={(next) => setValue(next ?? '')}
+          fetchOptions={fetchTypeOptions}
+          labels={typeDictLabels}
+          manageHref={`/backend/config/dictionaries?key=${encodeURIComponent(PROCUREMENT_PROCESS_TYPE_DICTIONARY_KEY)}`}
+          allowInlineCreate={false}
+          allowAppearance
+          selectClassName="w-full"
+          showLabelInput={false}
+          disabled={disabled}
+        />
+      ),
+    }
+
+    const statusField: CrudField = {
+      id: 'statusValue',
+      label: t('procurement.processes.detail.status', 'Status'),
+      type: 'custom',
+      layout: 'third',
+      component: ({ value, setValue, disabled }) => (
+        <DictionaryEntrySelect
+          value={typeof value === 'string' && value.trim() ? value : undefined}
+          onChange={(next) => setValue(next ?? '')}
+          fetchOptions={fetchStatusOptions}
+          labels={statusDictLabels}
+          manageHref={`/backend/config/dictionaries?key=${encodeURIComponent(PROCUREMENT_PROCESS_STATUS_DICTIONARY_KEY)}`}
+          allowInlineCreate={false}
+          allowAppearance
+          selectClassName="w-full"
+          showLabelInput={false}
+          disabled={disabled}
+        />
+      ),
+    }
+
+    const handlerField: CrudField = {
+      id: 'handlerUserId',
+      label: t('procurement.processes.create.fields.handlerUser', 'Assigned handler'),
+      type: 'custom',
+      layout: hideStatusPicker ? 'quarter' : 'third',
+      component: ({ value, setValue, disabled }) => {
+        const str = typeof value === 'string' ? value : ''
+        return (
+          <EntitySearchCombobox
+            value={str}
+            onChange={(next) => setValue(next)}
+            options={mergeEntitySearchOption([], str, str)}
+            onRemoteSearch={remoteSearchAuthUsers}
+            placeholder={t('procurement.processes.create.fields.handlerSearch', 'Search users…')}
             disabled={disabled}
           />
-        ),
+        )
       },
-      {
-        id: 'statusValue',
-        label: t('procurement.processes.detail.status', 'Status'),
-        type: 'custom',
-        layout: 'half',
-        component: ({ value, setValue, disabled }) => (
-          <DictionaryEntrySelect
-            value={typeof value === 'string' && value.trim() ? value : undefined}
-            onChange={(next) => setValue(next ?? '')}
-            fetchOptions={fetchStatusOptions}
-            labels={statusDictLabels}
-            manageHref={`/backend/config/dictionaries?key=${encodeURIComponent(PROCUREMENT_PROCESS_STATUS_DICTIONARY_KEY)}`}
-            allowInlineCreate={false}
-            allowAppearance
-            selectClassName="w-full"
-            showLabelInput={false}
-            disabled={disabled}
-          />
-        ),
-      },
+    }
+
+    return [
+      titleField,
+      typeField,
+      ...(hideStatusPicker ? [] : [statusField]),
+      handlerField,
       {
         id: 'description',
         label: t('procurement.processes.create.fields.description', 'Description'),
-        type: 'textarea',
-        rows: 4,
+        type: 'richtext',
       },
       {
         id: 'customerEntityId',
@@ -188,9 +245,15 @@ export default function ProcurementProcessCreatePage() {
           )
         },
       },
-    ],
-    [fetchStatusOptions, fetchTypeOptions, statusDictLabels, typeDictLabels, t],
-  )
+    ]
+  }, [
+    fetchStatusOptions,
+    fetchTypeOptions,
+    hideStatusPicker,
+    statusDictLabels,
+    typeDictLabels,
+    t,
+  ])
 
   const groups = React.useMemo<CrudFormGroup[]>(
     () => [
@@ -198,7 +261,9 @@ export default function ProcurementProcessCreatePage() {
         id: 'basics',
         title: t('procurement.processes.form.groups.basics', 'Basics'),
         column: 1,
-        fields: ['title', 'statusValue', 'typeValue'],
+        fields: hideStatusPicker
+          ? ['title', 'typeValue', 'handlerUserId']
+          : ['title', 'typeValue', 'statusValue', 'handlerUserId'],
       },
       {
         id: 'details',
@@ -213,7 +278,7 @@ export default function ProcurementProcessCreatePage() {
         fields: ['customerEntityId', 'salesQuoteId'],
       },
     ],
-    [t],
+    [hideStatusPicker, t],
   )
 
   const listHref = returnTo ?? LIST_HREF
@@ -235,6 +300,7 @@ export default function ProcurementProcessCreatePage() {
             salesQuoteId: '',
             statusValue: undefined,
             typeValue: undefined,
+            handlerUserId: '',
           }}
           schema={formSchema}
           onSubmit={async (values) => {
@@ -250,6 +316,8 @@ export default function ProcurementProcessCreatePage() {
             if (sv) payload.statusValue = sv
             const tv = typeof values.typeValue === 'string' ? values.typeValue.trim() : ''
             if (tv) payload.typeValue = tv
+            const hu = typeof values.handlerUserId === 'string' ? values.handlerUserId.trim() : ''
+            if (hu) payload.handlerUserId = hu
 
             const call = await runMutation({
               context: { scopeVersion },

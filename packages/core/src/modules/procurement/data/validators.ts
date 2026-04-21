@@ -17,6 +17,7 @@ export const procurementProcessCreateSchema = z.object({
   salesQuoteId: z.string().uuid().optional().nullable(),
   statusValue: z.string().max(200).optional().nullable(),
   typeValue: z.string().max(200).optional().nullable(),
+  handlerUserId: z.string().uuid().optional().nullable(),
 })
 
 export const procurementProcessUpdateSchema = z.object({
@@ -32,6 +33,7 @@ export const procurementProcessUpdateSchema = z.object({
   refinancingNotes: z.string().max(200000).optional().nullable(),
   statusValue: z.string().max(200).optional().nullable(),
   typeValue: z.string().max(200).optional().nullable(),
+  handlerUserId: z.string().uuid().optional().nullable(),
   startedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
 })
@@ -43,7 +45,7 @@ export const procurementProcessDeleteSchema = z.object({
 export const procurementProcessCompleteSchema = z.object({
   ...scopedCreate,
   id: z.string().uuid(),
-  resourceId: z.string().uuid(),
+  resourceId: z.string().uuid().optional().nullable(),
   salesInvoiceId: z.string().uuid().optional().nullable(),
 })
 
@@ -59,6 +61,7 @@ export const procurementSupplierCreateSchema = z.object({
   notes: z.string().max(200000).optional().nullable(),
   offerSummary: z.string().max(200000).optional().nullable(),
   sortOrder: z.coerce.number().int().optional(),
+  lineItemIds: z.array(z.string().uuid()).optional(),
 })
 
 export const procurementSupplierUpdateSchema = z.object({
@@ -72,6 +75,7 @@ export const procurementSupplierUpdateSchema = z.object({
   notes: z.string().max(200000).optional().nullable(),
   offerSummary: z.string().max(200000).optional().nullable(),
   sortOrder: z.coerce.number().int().optional(),
+  lineItemIds: z.array(z.string().uuid()).optional(),
 })
 
 export const procurementSupplierDeleteSchema = z.object({
@@ -85,6 +89,7 @@ export const procurementLineItemCreateSchema = z.object({
   specification: z.string().max(200000).optional().nullable(),
   quantity: z.coerce.number().positive().optional().nullable(),
   unitLabel: z.string().max(80).optional().nullable(),
+  resourceId: z.string().uuid().optional().nullable(),
   sortOrder: z.coerce.number().int().optional(),
 })
 
@@ -94,6 +99,7 @@ export const procurementLineItemUpdateSchema = z.object({
   specification: z.string().max(200000).optional().nullable(),
   quantity: z.coerce.number().positive().optional().nullable(),
   unitLabel: z.string().max(80).optional().nullable(),
+  resourceId: z.string().uuid().optional().nullable(),
   sortOrder: z.coerce.number().int().optional(),
 })
 
@@ -122,10 +128,13 @@ export const procurementTaskUpdateSchema = z.object({
   dueAt: z.coerce.date().optional().nullable(),
   assignedUserId: z.string().uuid().optional().nullable(),
   delegatedFromUserId: z.string().uuid().optional().nullable(),
+  /** When true, do not push changes to linked customer interaction / example todo (e.g. reverse sync). */
+  skipWorkItemSync: z.boolean().optional(),
 })
 
 export const procurementTaskDeleteSchema = z.object({
   ...scopedUpdate,
+  skipWorkItemSync: z.boolean().optional(),
 })
 
 export const procurementTimelineAppendSchema = z.object({
@@ -182,6 +191,11 @@ export const procurementStatusTransitionRulesReorderSchema = z.object({
   orderedIds: z.array(z.string().uuid()).min(1),
 })
 
+export const procurementOrganizationSettingsPutSchema = z.object({
+  defaultProcessStatusValue: z.union([z.string().min(1).max(200), z.null()]),
+  terminalProcessStatusValue: z.union([z.string().min(1).max(200), z.null()]),
+})
+
 export type ProcurementStatusTransitionRuleCreateInput = z.infer<
   typeof procurementStatusTransitionRuleCreateSchema
 >
@@ -190,4 +204,7 @@ export type ProcurementStatusTransitionRuleUpdateInput = z.infer<
 >
 export type ProcurementStatusTransitionRulesReorderInput = z.infer<
   typeof procurementStatusTransitionRulesReorderSchema
+>
+export type ProcurementOrganizationSettingsPutInput = z.infer<
+  typeof procurementOrganizationSettingsPutSchema
 >

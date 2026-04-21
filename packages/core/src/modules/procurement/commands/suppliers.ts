@@ -7,14 +7,21 @@ import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { CustomerEntity } from '@open-mercato/core/modules/customers/data/entities'
-import { ProcurementProcess, ProcurementProcessSupplier } from '../data/entities'
+import {
+  ProcurementProcess,
+  ProcurementProcessLineItem,
+  ProcurementProcessSupplier,
+  ProcurementProcessSupplierLineItem,
+} from '../data/entities'
 import {
   procurementSupplierCreateSchema,
   procurementSupplierUpdateSchema,
   type ProcurementSupplierCreateInput,
   type ProcurementSupplierUpdateInput,
 } from '../data/validators'
+import { resolveProcurementCommandActorUserId } from '../lib/commandActor'
 import { appendProcurementTimelineEvent } from '../lib/timeline'
+import { assertProcurementProcessMutationAllowed } from '../lib/procurementProcessAccess'
 import { resolveProcurementProcess } from '../lib/resolveProcess'
 import {
   procurementSupplierCrudEvents,
@@ -35,6 +42,7 @@ type SupplierSnapshot = {
   notes: string | null
   offerSummary: string | null
   sortOrder: number
+  lineItemIds: string[]
   createdAt: string
   updatedAt: string
 }
@@ -64,6 +72,49 @@ async function resolveVendorCustomerCompany(
   return ent
 }
 
+async function replaceSupplierLineItems(
+  em: EntityManager,
+  supplierId: string,
+  processId: string,
+  organizationId: string,
+  tenantId: string,
+  lineItemIds: string[],
+): Promise<void> {
+  await em.nativeDelete(ProcurementProcessSupplierLineItem, { supplier: supplierId })
+  const unique = [...new Set(lineItemIds)].filter(Boolean)
+  if (!unique.length) return
+  const lines = await em.find(
+    ProcurementProcessLineItem,
+    {
+      id: { $in: unique },
+      deletedAt: null,
+      tenantId,
+      organizationId,
+    },
+    { populate: ['process'] },
+  )
+  if (lines.length !== unique.length) {
+    throw new CrudHttpError(400, { error: 'One or more specification lines were not found.' })
+  }
+  for (const line of lines) {
+    const pid = typeof line.process === 'string' ? line.process : line.process.id
+    if (pid !== processId) {
+      throw new CrudHttpError(400, { error: 'Specification line does not belong to this process.' })
+    }
+  }
+  const now = new Date()
+  for (const line of lines) {
+    em.create(ProcurementProcessSupplierLineItem, {
+      tenantId,
+      organizationId,
+      supplier: em.getReference(ProcurementProcessSupplier, supplierId),
+      lineItem: line,
+      createdAt: now,
+    })
+  }
+  await em.flush()
+}
+
 async function loadSupplierSnapshot(em: EntityManager, id: string): Promise<SupplierSnapshot | null> {
   const record = await em.findOne(
     ProcurementProcessSupplier,
@@ -76,6 +127,15 @@ async function loadSupplierSnapshot(em: EntityManager, id: string): Promise<Supp
   const vce = record.vendorCustomerEntity
   const vendorCustomerEntityId =
     vce && typeof vce === 'object' && 'id' in vce ? String((vce as CustomerEntity).id) : null
+  const links = await em.find(
+    ProcurementProcessSupplierLineItem,
+    { supplier: record.id },
+    { populate: ['lineItem'] },
+  )
+  const lineItemIds = links
+    .map((l) => l.lineItem)
+    .map((li) => (typeof li === 'string' ? li : li.id))
+    .sort()
   return {
     id: record.id,
     organizationId: record.organizationId,
@@ -90,6 +150,7 @@ async function loadSupplierSnapshot(em: EntityManager, id: string): Promise<Supp
     notes: record.notes ?? null,
     offerSummary: record.offerSummary ?? null,
     sortOrder: record.sortOrder,
+    lineItemIds,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
   }
@@ -106,6 +167,7 @@ const createSupplierCommand: CommandHandler<ProcurementSupplierCreateInput, { su
       parsed.organizationId,
       parsed.tenantId,
     )
+    await assertProcurementProcessMutationAllowed(ctx, process)
     const now = new Date()
     let vendorCustomerEntity: CustomerEntity | null = null
     if (parsed.vendorCustomerEntityId) {
@@ -133,11 +195,27 @@ const createSupplierCommand: CommandHandler<ProcurementSupplierCreateInput, { su
     })
     em.persist(record)
     await em.flush()
+    const lineIds = parsed.lineItemIds ?? []
+    if (lineIds.length) {
+      await replaceSupplierLineItems(
+        em,
+        record.id,
+        process.id,
+        parsed.organizationId,
+        parsed.tenantId,
+        lineIds,
+      )
+    }
+    const { translate } = await resolveTranslations()
     await appendProcurementTimelineEvent(em, {
       process,
       eventType: 'supplier.added',
-      message: `Supplier "${parsed.vendorLabel}" added.`,
-      actorUserId: ctx.auth?.userId ?? null,
+      message: translate(
+        'procurement.timeline.msg.supplierAdded',
+        'Supplier “{{label}}” added.',
+        { label: parsed.vendorLabel },
+      ),
+      actorUserId: resolveProcurementCommandActorUserId(ctx),
       metadata: { supplierId: record.id },
     })
     await em.flush()
@@ -175,6 +253,7 @@ const createSupplierCommand: CommandHandler<ProcurementSupplierCreateInput, { su
     const after = payload?.after
     if (!after) return
     const em = (ctx.container.resolve('em') as EntityManager).fork()
+    await em.nativeDelete(ProcurementProcessSupplierLineItem, { supplier: after.id })
     const record = await em.findOne(ProcurementProcessSupplier, { id: after.id })
     if (!record) return
     record.deletedAt = new Date()
@@ -204,6 +283,13 @@ const updateSupplierCommand: CommandHandler<ProcurementSupplierUpdateInput, { su
     )
     if (!record) throw new CrudHttpError(404, { error: 'Procurement supplier not found.' })
 
+    const processForAcl =
+      typeof record.process === 'string'
+        ? await em.findOne(ProcurementProcess, { id: record.process, deletedAt: null })
+        : record.process
+    if (!processForAcl) throw new CrudHttpError(404, { error: 'Procurement process not found.' })
+    await assertProcurementProcessMutationAllowed(ctx, processForAcl)
+
     const changes = buildChanges(record as unknown as Record<string, unknown>, parsed as Record<string, unknown>, [
       'vendorLabel',
       'contactName',
@@ -225,21 +311,38 @@ const updateSupplierCommand: CommandHandler<ProcurementSupplierUpdateInput, { su
       } else {
         record.vendorCustomerEntity = await resolveVendorCustomerCompany(em, {
           id: parsed.vendorCustomerEntityId,
-          tenantId: parsed.tenantId,
-          organizationId: parsed.organizationId,
+          tenantId: record.tenantId,
+          organizationId: record.organizationId,
         })
       }
     }
     record.updatedAt = new Date()
     await em.flush()
 
+    if (parsed.lineItemIds !== undefined) {
+      const processId = typeof record.process === 'string' ? record.process : record.process.id
+      await replaceSupplierLineItems(
+        em,
+        record.id,
+        processId,
+        record.organizationId,
+        record.tenantId,
+        parsed.lineItemIds,
+      )
+    }
+
     const process = typeof record.process === 'string' ? null : record.process
     if (process) {
+      const { translate } = await resolveTranslations()
       await appendProcurementTimelineEvent(em, {
         process,
         eventType: 'supplier.updated',
-        message: `Supplier "${record.vendorLabel}" updated.`,
-        actorUserId: ctx.auth?.userId ?? null,
+        message: translate(
+          'procurement.timeline.msg.supplierUpdated',
+          'Supplier “{{label}}” updated.',
+          { label: record.vendorLabel },
+        ),
+        actorUserId: resolveProcurementCommandActorUserId(ctx),
         metadata: { supplierId: record.id },
       })
       await em.flush()
@@ -296,6 +399,14 @@ const updateSupplierCommand: CommandHandler<ProcurementSupplierUpdateInput, { su
       : null
     record.updatedAt = new Date()
     await em.flush()
+    await replaceSupplierLineItems(
+      em,
+      before.id,
+      before.processId,
+      before.organizationId,
+      before.tenantId,
+      before.lineItemIds,
+    )
   },
 }
 
@@ -319,7 +430,14 @@ const deleteSupplierCommand: CommandHandler<{ id: string }, { supplierId: string
     )
     if (!record) throw new CrudHttpError(404, { error: 'Procurement supplier not found.' })
 
-    const process = typeof record.process === 'string' ? await em.findOne(ProcurementProcess, { id: record.process }) : record.process
+    const process =
+      typeof record.process === 'string'
+        ? await em.findOne(ProcurementProcess, { id: record.process, deletedAt: null })
+        : record.process
+    if (!process) throw new CrudHttpError(404, { error: 'Procurement process not found.' })
+    await assertProcurementProcessMutationAllowed(ctx, process)
+
+    await em.nativeDelete(ProcurementProcessSupplierLineItem, { supplier: id })
     const vendorLabel = record.vendorLabel
     const now = new Date()
     record.deletedAt = now
@@ -331,11 +449,16 @@ const deleteSupplierCommand: CommandHandler<{ id: string }, { supplierId: string
     await em.flush()
 
     if (process) {
+      const { translate } = await resolveTranslations()
       await appendProcurementTimelineEvent(em, {
         process,
         eventType: 'supplier.removed',
-        message: `Supplier "${vendorLabel}" removed.`,
-        actorUserId: ctx.auth?.userId ?? null,
+        message: translate(
+          'procurement.timeline.msg.supplierRemoved',
+          'Supplier “{{label}}” removed.',
+          { label: vendorLabel },
+        ),
+        actorUserId: resolveProcurementCommandActorUserId(ctx),
         metadata: { supplierId: id },
       })
       await em.flush()
@@ -376,6 +499,14 @@ const deleteSupplierCommand: CommandHandler<{ id: string }, { supplierId: string
     record.deletedAt = null
     record.updatedAt = new Date()
     await em.flush()
+    await replaceSupplierLineItems(
+      em,
+      before.id,
+      before.processId,
+      before.organizationId,
+      before.tenantId,
+      before.lineItemIds,
+    )
   },
 }
 

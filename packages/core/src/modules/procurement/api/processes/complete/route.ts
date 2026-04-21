@@ -20,7 +20,10 @@ import {
 } from '../../../data/validators'
 
 export const metadata = {
-  POST: { requireAuth: true, requireFeatures: ['procurement.processes.manage'] },
+  POST: {
+    requireAuth: true,
+    requireAnyFeatures: ['procurement.processes.manage', 'procurement.processes.handle'],
+  },
 }
 
 export async function POST(req: Request) {
@@ -89,7 +92,7 @@ const completeBodySchema = z.object({
   tenantId: z.uuid(),
   organizationId: z.uuid(),
   id: z.uuid(),
-  resourceId: z.uuid(),
+  resourceId: z.uuid().nullable().optional(),
   salesInvoiceId: z.uuid().nullable().optional(),
 })
 
@@ -97,7 +100,8 @@ export const openApi: OpenApiRouteDoc = {
   methods: {
     POST: {
       summary: 'Complete procurement process',
-      description: 'Links the process to a resource, sets closed status, and records the final invoice reference when provided.',
+      description:
+        'Sets closed status and optionally links a process-level resource (line items may have their own linked resources). Records the final invoice reference when provided.',
       tags: ['Procurement'],
       security: ['bearerAuth'],
       requestBody: {

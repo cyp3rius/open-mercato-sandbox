@@ -424,27 +424,39 @@ export type StepInstanceFilter = z.infer<typeof stepInstanceFilterSchema>
 // UserTask Schemas
 // ============================================================================
 
-export const createUserTaskSchema = z.object({
-  workflowInstanceId: uuid,
-  stepInstanceId: uuid,
-  taskName: z.string().min(1).max(255),
-  description: z.string().max(2000).optional().nullable(),
-  status: userTaskStatusSchema,
-  formSchema: z.any().optional().nullable(),
-  formData: z.any().optional().nullable(),
-  assignedTo: z.string().max(255).optional().nullable(),
-  assignedToRoles: z.array(z.string().max(100)).optional().nullable(),
-  claimedBy: z.string().max(255).optional().nullable(),
-  claimedAt: dateOrNull.optional(),
-  dueDate: dateOrNull.optional(),
-  escalatedAt: dateOrNull.optional(),
-  escalatedTo: z.string().max(255).optional().nullable(),
-  completedBy: z.string().max(255).optional().nullable(),
-  completedAt: dateOrNull.optional(),
-  comments: z.string().max(5000).optional().nullable(),
-  tenantId: uuid,
-  organizationId: uuid,
-})
+export const createUserTaskSchema = z
+  .object({
+    workflowInstanceId: uuid.optional().nullable(),
+    stepInstanceId: uuid.optional().nullable(),
+    procurementProcessTaskId: uuid.optional().nullable(),
+    procurementProcessId: uuid.optional().nullable(),
+    taskName: z.string().min(1).max(255),
+    description: z.string().max(2000).optional().nullable(),
+    status: userTaskStatusSchema,
+    formSchema: z.any().optional().nullable(),
+    formData: z.any().optional().nullable(),
+    assignedTo: z.string().max(255).optional().nullable(),
+    assignedToRoles: z.array(z.string().max(100)).optional().nullable(),
+    claimedBy: z.string().max(255).optional().nullable(),
+    claimedAt: dateOrNull.optional(),
+    dueDate: dateOrNull.optional(),
+    escalatedAt: dateOrNull.optional(),
+    escalatedTo: z.string().max(255).optional().nullable(),
+    completedBy: z.string().max(255).optional().nullable(),
+    completedAt: dateOrNull.optional(),
+    comments: z.string().max(5000).optional().nullable(),
+    tenantId: uuid,
+    organizationId: uuid,
+  })
+  .refine(
+    (data) =>
+      Boolean(data.workflowInstanceId && data.stepInstanceId) ||
+      Boolean(data.procurementProcessTaskId),
+    {
+      message:
+        'Either workflowInstanceId+stepInstanceId, or procurementProcessTaskId, must be set for a user task',
+    },
+  )
 
 export type CreateUserTaskInput = z.infer<typeof createUserTaskSchema>
 

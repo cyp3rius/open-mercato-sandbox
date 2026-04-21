@@ -135,7 +135,7 @@ export type CrudFieldBase = {
   placeholder?: string
   description?: React.ReactNode // inline field-level help
   required?: boolean
-  layout?: 'full' | 'half' | 'third'
+  layout?: 'full' | 'half' | 'third' | 'quarter'
   disabled?: boolean
   readOnly?: boolean
 }
@@ -2397,16 +2397,29 @@ export function CrudForm<TValues extends Record<string, unknown>>({
   // no auto-focus; let the browser/user manage focus
 
   const usesResponsiveLayout = allFields.some(
-    (field) => field.layout === 'half' || field.layout === 'third'
+    (field) => field.layout === 'half' || field.layout === 'third' || field.layout === 'quarter',
   )
+  const usesFourColLayout = allFields.some((field) => field.layout === 'quarter')
   const grid = twoColumn
     ? 'grid grid-cols-1 lg:grid-cols-[7fr_3fr] gap-4'
-    : usesResponsiveLayout
-      ? 'grid grid-cols-1 gap-4 md:grid-cols-6'
-      : 'grid grid-cols-1 gap-4'
+    : usesFourColLayout
+      ? 'grid grid-cols-1 gap-4 md:grid-cols-4'
+      : usesResponsiveLayout
+        ? 'grid grid-cols-1 gap-4 md:grid-cols-6'
+        : 'grid grid-cols-1 gap-4'
 
   // Helper to render a list of field configs
   const resolveLayoutClass = (layout?: CrudFieldBase['layout']) => {
+    if (usesFourColLayout) {
+      switch (layout) {
+        case 'half':
+          return 'md:col-span-2'
+        case 'quarter':
+          return 'md:col-span-1'
+        default:
+          return 'md:col-span-4'
+      }
+    }
     switch (layout) {
       case 'half':
         return 'md:col-span-3'
@@ -2419,14 +2432,39 @@ export function CrudForm<TValues extends Record<string, unknown>>({
 
   const renderFields = (fieldList: CrudField[]) => {
     const usesResponsive = fieldList.some(
-      (field) => field.layout === 'half' || field.layout === 'third'
+      (field) => field.layout === 'half' || field.layout === 'third' || field.layout === 'quarter',
     )
-    const gridClass = usesResponsive ? 'grid grid-cols-1 gap-4 md:grid-cols-6' : 'grid grid-cols-1 gap-4'
+    const usesFourFieldGroup = fieldList.some((field) => field.layout === 'quarter')
+    const resolveGroupLayoutClass = (layout?: CrudFieldBase['layout']) => {
+      if (usesFourFieldGroup) {
+        switch (layout) {
+          case 'half':
+            return 'md:col-span-2'
+          case 'quarter':
+            return 'md:col-span-1'
+          default:
+            return 'md:col-span-4'
+        }
+      }
+      switch (layout) {
+        case 'half':
+          return 'md:col-span-3'
+        case 'third':
+          return 'md:col-span-2'
+        default:
+          return 'md:col-span-6'
+      }
+    }
+    const gridClass = usesFourFieldGroup
+      ? 'grid grid-cols-1 gap-4 md:grid-cols-4'
+      : usesResponsive
+        ? 'grid grid-cols-1 gap-4 md:grid-cols-6'
+        : 'grid grid-cols-1 gap-4'
     return (
       <div className={gridClass}>
         {fieldList.map((f) => {
           const layout = f.layout ?? 'full'
-          const wrapperClassName = usesResponsive ? resolveLayoutClass(layout) : undefined
+          const wrapperClassName = usesResponsive ? resolveGroupLayoutClass(layout) : undefined
           return (
             <FieldControl
               key={f.id}

@@ -24,6 +24,7 @@ import { apiCall } from './utils/apiCall'
 import { raiseCrudError } from './utils/serverErrors'
 import { PerspectiveSidebar } from './PerspectiveSidebar'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { cn } from '@open-mercato/shared/lib/utils'
 import { flash } from './FlashMessages'
 import { useConfirmDialog } from './confirm-dialog'
 import type {
@@ -189,6 +190,8 @@ export type DataTableProps<T> = {
   injectionSpotId?: string
   injectionContext?: Record<string, unknown>
   replacementHandle?: string
+  /** Merged onto the inner `<table>` (e.g. `table-fixed` for column width control). */
+  tableClassName?: string
 }
 
 const DEFAULT_EXPORT_FORMATS: DataTableExportFormat[] = ['csv', 'json', 'xml', 'markdown']
@@ -450,7 +453,7 @@ function getColumnTruncateConfig(columnId: string, accessorKey?: string, columnM
   }
 
   // Core informative columns get wider width
-  const wideColumns = ['title', 'name', 'description', 'source', 'companies', 'people']
+  const wideColumns = ['title', 'name', 'description', 'source', 'companies', 'people', 'actorLabel']
   if (wideColumns.includes(key)) {
     return {
       maxWidth: metaMaxWidth || '250px',
@@ -661,6 +664,7 @@ export function DataTable<T>({
   injectionSpotId,
   injectionContext,
   replacementHandle,
+  tableClassName,
 }: DataTableProps<T>) {
   const t = useT()
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
@@ -1882,8 +1886,8 @@ export function DataTable<T>({
   const tableScrollWrapperClassName = embedded ? '' : 'overflow-auto'
 
   const titleContent = hasTitle ? (
-    <div className="text-base font-semibold leading-tight min-h-[2.25rem] flex items-center">
-      {typeof title === 'string' ? <h2 className="text-base font-semibold">{title}</h2> : title}
+    <div className="text-sm font-semibold leading-tight min-h-[2.25rem] flex items-center">
+      {typeof title === 'string' ? <h2 className="text-sm font-semibold">{title}</h2> : title}
     </div>
   ) : <div className="min-h-[2.25rem]" />
 
@@ -1948,7 +1952,7 @@ export function DataTable<T>({
         </div>
       )}
       <div className={tableScrollWrapperClassName}>
-        <Table className="min-w-[640px] md:min-w-0">
+        <Table className={cn('min-w-[640px] md:min-w-0', tableClassName)}>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>

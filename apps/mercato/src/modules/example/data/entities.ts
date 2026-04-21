@@ -33,6 +33,12 @@ export class Todo {
   @Property({ name: 'is_done', type: 'boolean', default: false })
   isDone: boolean = false
 
+  @Property({ name: 'procurement_process_id', type: 'uuid', nullable: true })
+  procurementProcessId?: string | null
+
+  @Property({ name: 'procurement_process_task_id', type: 'uuid', nullable: true })
+  procurementProcessTaskId?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 
