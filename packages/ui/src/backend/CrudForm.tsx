@@ -257,6 +257,11 @@ export type CrudFormProps<TValues extends Record<string, unknown>> = {
   // Optional extra action buttons rendered next to Delete/Cancel/Save
   // Useful for custom links like "Show Records" etc.
   extraActions?: React.ReactNode
+  /**
+   * When true (default), `extraActions` are repeated in the footer as well as the header.
+   * Set false to show `extraActions` only in the top form header.
+   */
+  repeatExtraActionsInFooter?: boolean
   /** When provided, shows a Version History clock icon in the header that opens a side panel. */
   versionHistory?: {
     resourceKind: string
@@ -295,6 +300,8 @@ export type CrudFormGroupComponentProps = {
   values: Record<string, unknown>
   setValue: (id: string, v: unknown) => void
   errors: Record<string, string>
+  /** True when the form is read-only or submitting (same semantics as custom field `disabled`). */
+  disabled?: boolean
 }
 
 // Special group kind for automatic Custom Fields section
@@ -303,8 +310,8 @@ export type CrudFormGroup = {
   title?: string
   column?: 1 | 2
   description?: string
-  /** Rendered in the top-right of the group card (e.g. link to related settings). */
-  headerActions?: React.ReactNode
+  /** Rendered in the top-right of the group card (e.g. add row, link to settings). */
+  headerActions?: React.ReactNode | ((ctx: CrudFormGroupComponentProps) => React.ReactNode)
   // Either list field ids, inline field configs, or mix of both
   fields?: (CrudField | string)[]
   // Inject a custom component into the group card
@@ -456,6 +463,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
   embedded = false,
   hideFooterActions = false,
   extraActions,
+  repeatExtraActionsInFooter = true,
   versionHistory,
   contentHeader,
   readOnly = false,
@@ -2741,7 +2749,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
           if (g.component) {
             nodes.push(
               <div key={`${g.id}-component`} className="rounded-lg border bg-card px-4 py-3">
-                {g.component({ values, setValue, errors })}
+                {g.component({ values, setValue, errors, disabled: pending || formReadOnly })}
               </div>,
             )
           }
@@ -2750,7 +2758,13 @@ export function CrudForm<TValues extends Record<string, unknown>>({
           continue
         }
 
-        const componentNode = g.component ? g.component({ values, setValue, errors }) : null
+        const groupCtx: CrudFormGroupComponentProps = {
+          values,
+          setValue,
+          errors,
+          disabled: pending || formReadOnly,
+        }
+        const componentNode = g.component ? g.component(groupCtx) : null
         if (g.bare) {
           if (componentNode) {
             nodes.push(<React.Fragment key={g.id}>{componentNode}</React.Fragment>)
@@ -2758,9 +2772,15 @@ export function CrudForm<TValues extends Record<string, unknown>>({
           continue
         }
         const groupFields = resolveGroupFields(g)
+        const resolvedHeaderActions =
+          g.headerActions == null
+            ? null
+            : typeof g.headerActions === 'function'
+              ? (g.headerActions as (ctx: CrudFormGroupComponentProps) => React.ReactNode)(groupCtx)
+              : g.headerActions
         nodes.push(
           <div key={g.id} className="rounded-lg border bg-card px-4 py-3 space-y-3">
-            {g.title || g.description || g.headerActions ? (
+            {g.title || g.description || resolvedHeaderActions ? (
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1 space-y-1">
                   {g.title ? (
@@ -2770,7 +2790,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
                     <div className="text-xs text-muted-foreground">{t(g.description, g.description)}</div>
                   ) : null}
                 </div>
-                {g.headerActions ? <div className="shrink-0">{g.headerActions}</div> : null}
+                {resolvedHeaderActions ? <div className="shrink-0">{resolvedHeaderActions}</div> : null}
               </div>
             ) : null}
             {componentNode ? (
@@ -2848,7 +2868,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
                 embedded={embedded}
                 className={dialogFooterClass}
                 actions={{
-                  extraActions,
+                  extraActions: repeatExtraActionsInFooter ? extraActions : undefined,
                   showDelete: !embedded && showDelete,
                   onDelete: handleDelete, // NOSONAR — async→void assignment is valid TypeScript
                   deleteLabel,
@@ -2944,7 +2964,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
                 embedded={embedded}
                 className={dialogFooterClass}
                 actions={{
-                  extraActions,
+                  extraActions: repeatExtraActionsInFooter ? extraActions : undefined,
                   showDelete: !embedded && showDelete,
                   onDelete: handleDelete, // NOSONAR — async→void assignment is valid TypeScript
                   deleteLabel,
@@ -3880,23 +3900,28 @@ const FieldControl = React.memo(function FieldControlImpl({
     </div>
   )
 },
-(prev, next) =>
-  prev.field.id === next.field.id &&
-  prev.field.type === next.field.type &&
-  prev.field.label === next.field.label &&
-  prev.field.description === next.field.description &&
-  prev.field.required === next.field.required &&
-  prev.value === next.value &&
-  prev.error === next.error &&
-  prev.options === next.options &&
-  prev.loadFieldOptions === next.loadFieldOptions &&
-  prev.autoFocus === next.autoFocus &&
-  prev.onSubmitRequest === next.onSubmitRequest &&
-  prev.wrapperClassName === next.wrapperClassName &&
-  prev.entityIdForField === next.entityIdForField &&
-  prev.recordId === next.recordId &&
-  prev.values === next.values &&
-  (prev.field.type !== 'custom' ||
-    (prev.formErrors === next.formErrors &&
-      prev.field.component === (next.field as CrudCustomField).component))
+(prev, next) => {
+  /** Custom fields render sibling state / setFormValue side-effects; skipping updates breaks forms when
+   * `values` keeps the same reference (setValue early-return) while parent re-renders for other reasons. */
+  if (prev.field.type === 'custom' || next.field.type === 'custom') {
+    return false
+  }
+  return (
+    prev.field.id === next.field.id &&
+    prev.field.type === next.field.type &&
+    prev.field.label === next.field.label &&
+    prev.field.description === next.field.description &&
+    prev.field.required === next.field.required &&
+    prev.value === next.value &&
+    prev.error === next.error &&
+    prev.options === next.options &&
+    prev.loadFieldOptions === next.loadFieldOptions &&
+    prev.autoFocus === next.autoFocus &&
+    prev.onSubmitRequest === next.onSubmitRequest &&
+    prev.wrapperClassName === next.wrapperClassName &&
+    prev.entityIdForField === next.entityIdForField &&
+    prev.recordId === next.recordId &&
+    prev.values === next.values
+  )
+}
 )

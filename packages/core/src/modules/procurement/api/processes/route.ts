@@ -105,6 +105,7 @@ type ProcessRow = {
   salesInvoiceId: string | null
   resourceId: string | null
   selectedSupplierId: string | null
+  refinancingLineItemId: string | null
   refinancingEnabled: boolean
   refinancingNotes: string | null
   closedAt: string | null
@@ -142,6 +143,7 @@ const toRow = (row: ProcurementProcess, handlerLabel: string | null): ProcessRow
   salesInvoiceId: row.salesInvoiceId ?? null,
   resourceId: row.resourceId ?? null,
   selectedSupplierId: row.selectedSupplierId ?? null,
+  refinancingLineItemId: row.refinancingLineItemId ?? null,
   refinancingEnabled: Boolean(row.refinancingEnabled),
   refinancingNotes: row.refinancingNotes ?? null,
   closedAt: row.closedAt ? row.closedAt.toISOString() : null,

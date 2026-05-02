@@ -12,6 +12,7 @@ import {
   ProcurementProcess,
   ProcurementProcessLineItem,
   ProcurementProcessSupplier,
+  ProcurementProcessSupplierLineItem,
   ProcurementProcessTask,
 } from '../data/entities'
 import {
@@ -74,6 +75,7 @@ type ProcessSnapshot = {
   salesInvoiceId: string | null
   resourceId: string | null
   selectedSupplierId: string | null
+  refinancingLineItemId: string | null
   refinancingEnabled: boolean
   refinancingNotes: string | null
   closedAt: string | null
@@ -117,6 +119,7 @@ async function loadProcessSnapshot(em: EntityManager, id: string): Promise<Proce
     salesInvoiceId: row.salesInvoiceId ?? null,
     resourceId: row.resourceId ?? null,
     selectedSupplierId: row.selectedSupplierId ?? null,
+    refinancingLineItemId: row.refinancingLineItemId ?? null,
     refinancingEnabled: Boolean(row.refinancingEnabled),
     refinancingNotes: row.refinancingNotes ?? null,
     closedAt: toIso(row.closedAt ?? null),
@@ -134,6 +137,69 @@ async function ensureCustomerInScope(
   const row = await em.findOne(CustomerEntity, { id: customerEntityId, deletedAt: null })
   if (!row || row.organizationId !== organizationId || row.tenantId !== tenantId) {
     throw new CrudHttpError(400, { error: 'Customer not found.' })
+  }
+}
+
+/** Validates refinancing line + supplier + customer and M:N link. */
+async function assertRefinancingLineForProcessRecord(
+  em: EntityManager,
+  record: ProcurementProcess,
+): Promise<void> {
+  const lineId = record.refinancingLineItemId
+  if (!lineId) return
+  if (!record.customerEntityId) {
+    throw new CrudHttpError(400, { error: 'Refinancing requires a linked customer.' })
+  }
+  if (!record.selectedSupplierId) {
+    throw new CrudHttpError(400, { error: 'Refinancing requires a selected supplier.' })
+  }
+  const line = await findOneWithDecryption(
+    em,
+    ProcurementProcessLineItem,
+    { id: lineId, deletedAt: null, tenantId: record.tenantId, organizationId: record.organizationId },
+    undefined,
+    { tenantId: record.tenantId, organizationId: record.organizationId },
+  )
+  if (!line) {
+    throw new CrudHttpError(400, { error: 'Specification line not found.' })
+  }
+  const procId =
+    typeof line.process === 'object' && line.process && 'id' in line.process
+      ? (line.process as ProcurementProcess).id
+      : (line.process as string)
+  if (procId !== record.id) {
+    throw new CrudHttpError(400, { error: 'Specification line does not belong to this process.' })
+  }
+  const sup = await findOneWithDecryption(
+    em,
+    ProcurementProcessSupplier,
+    {
+      id: record.selectedSupplierId,
+      deletedAt: null,
+      tenantId: record.tenantId,
+      organizationId: record.organizationId,
+    },
+    undefined,
+    { tenantId: record.tenantId, organizationId: record.organizationId },
+  )
+  if (!sup) {
+    throw new CrudHttpError(400, { error: 'Supplier not found.' })
+  }
+  const supProcessId =
+    typeof sup.process === 'object' && sup.process && 'id' in sup.process
+      ? (sup.process as ProcurementProcess).id
+      : (sup.process as string)
+  if (supProcessId !== record.id) {
+    throw new CrudHttpError(400, { error: 'Supplier does not belong to this process.' })
+  }
+  const link = await em.findOne(ProcurementProcessSupplierLineItem, {
+    supplier: em.getReference(ProcurementProcessSupplier, record.selectedSupplierId!),
+    lineItem: em.getReference(ProcurementProcessLineItem, lineId),
+  })
+  if (!link) {
+    throw new CrudHttpError(400, {
+      error: 'The specification line is not linked to the selected supplier.',
+    })
   }
 }
 
@@ -390,7 +456,34 @@ const updateProcessCommand: CommandHandler<ProcurementProcessUpdateInput, { proc
     if (parsed.salesQuoteId !== undefined) record.salesQuoteId = parsed.salesQuoteId ?? null
     if (parsed.salesInvoiceId !== undefined) record.salesInvoiceId = parsed.salesInvoiceId ?? null
     if (parsed.resourceId !== undefined) record.resourceId = parsed.resourceId ?? null
-    if (parsed.selectedSupplierId !== undefined) record.selectedSupplierId = parsed.selectedSupplierId ?? null
+    if (parsed.selectedSupplierId !== undefined) {
+      record.selectedSupplierId = parsed.selectedSupplierId ?? null
+      if (!record.selectedSupplierId) {
+        record.refinancingLineItemId = null
+      }
+    }
+    if (parsed.refinancingLineItemId !== undefined) {
+      const nextLine = parsed.refinancingLineItemId ?? null
+      record.refinancingLineItemId = nextLine
+      if (nextLine) {
+        const line = await findOneWithDecryption(
+          em,
+          ProcurementProcessLineItem,
+          {
+            id: nextLine,
+            deletedAt: null,
+            tenantId: record.tenantId,
+            organizationId: record.organizationId,
+          },
+          undefined,
+          { tenantId: record.tenantId, organizationId: record.organizationId },
+        )
+        if (!line) {
+          throw new CrudHttpError(400, { error: 'Specification line not found.' })
+        }
+        record.resourceId = line.resourceId ?? null
+      }
+    }
     if (parsed.refinancingEnabled !== undefined) record.refinancingEnabled = parsed.refinancingEnabled
     if (parsed.refinancingNotes !== undefined) record.refinancingNotes = parsed.refinancingNotes ?? null
     if (parsed.startedAt !== undefined) record.startedAt = parsed.startedAt ?? null
@@ -406,6 +499,8 @@ const updateProcessCommand: CommandHandler<ProcurementProcessUpdateInput, { proc
       )
       record.handlerUserId = parsed.handlerUserId ?? null
     }
+
+    await assertRefinancingLineForProcessRecord(em, record)
 
     const prevStatus = record.statusValue
     const prevType = record.typeValue
@@ -539,6 +634,7 @@ const updateProcessCommand: CommandHandler<ProcurementProcessUpdateInput, { proc
       'salesInvoiceId',
       'resourceId',
       'selectedSupplierId',
+      'refinancingLineItemId',
       'refinancingEnabled',
       'refinancingNotes',
       'closedAt',
@@ -581,6 +677,7 @@ const updateProcessCommand: CommandHandler<ProcurementProcessUpdateInput, { proc
     row.salesInvoiceId = before.salesInvoiceId ?? null
     row.resourceId = before.resourceId ?? null
     row.selectedSupplierId = before.selectedSupplierId ?? null
+    row.refinancingLineItemId = before.refinancingLineItemId ?? null
     row.refinancingEnabled = before.refinancingEnabled
     row.refinancingNotes = before.refinancingNotes ?? null
     row.closedAt = before.closedAt ? new Date(before.closedAt) : null

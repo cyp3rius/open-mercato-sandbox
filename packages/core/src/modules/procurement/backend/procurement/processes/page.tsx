@@ -3,7 +3,7 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Settings } from 'lucide-react'
+import { Plus, Settings } from 'lucide-react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
@@ -348,8 +348,14 @@ export default function ProcurementProcessesListPage() {
                 </IconButton>
               ) : null}
               {canManage ? (
-                <Button asChild>
+                <Button
+                  asChild
+                  type="button"
+                  size="sm"
+                  className="inline-flex items-center gap-2"
+                >
                   <Link href="/backend/procurement/processes/create">
+                    <Plus className="size-4 shrink-0" aria-hidden />
                     {t('procurement.processes.list.actions.new', 'New process')}
                   </Link>
                 </Button>

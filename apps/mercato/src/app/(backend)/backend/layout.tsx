@@ -235,6 +235,7 @@ export default async function BackendLayout({ children, params }: { children: Re
     'customers.nav.group',
     'catalog.nav.group',
     'customers~sales.nav.group',
+    'accounting.nav.group',
     'resources.nav.group',
     'staff.nav.group',
     'entities.nav.group',
@@ -346,6 +347,7 @@ export default async function BackendLayout({ children, params }: { children: Re
     'module-configs': 5,
     'directory': 6,
     'feature-toggles': 7,
+    'accounting': 8,
   }
   const generatedSettingsSections = buildSettingsSections(entries, settingsSectionOrder)
   const settingsPathPrefixes = computeSettingsPathPrefixes(generatedSettingsSections)

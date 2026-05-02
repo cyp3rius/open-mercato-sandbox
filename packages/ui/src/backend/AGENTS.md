@@ -1,6 +1,6 @@
 # Backend UI — Agent Guidelines
 
-Use `@open-mercato/ui/backend` for all admin/backend page components. See `packages/ui/AGENTS.md` for full UI patterns.
+Use `@open-mercato/ui/backend` for all admin/backend page components. See `packages/ui/AGENTS.md` for full UI patterns. When building or changing **module** backend pages (hosts in `apps/mercato` or `packages/core` modules), apply the repo **Cursor** gate **`.cursor/rules/backend-views-conventions.mdc`** and **`module-backend-ui.mdc`** so lists, create, and detail stay aligned (not one-off layouts).
 
 ## MUST Rules
 
@@ -96,6 +96,7 @@ CrudForm emits these extended handlers by default. Disable automatic emission wi
 
 ## When Building Backend Pages
 
+- For hub/list shells that are not a `CrudForm` title bar, use **`Page` + `PageHeader` + `PageBody`** from `@open-mercato/ui/backend/Page`. Pass **`actions`** (toolbar on the right on `sm+`): icon+label `Button` / `Button asChild`+`Link` for primary/secondary operations — see `PageHeader` JSDoc in `Page.tsx`.
 - Use `CrudForm` for create/edit flows — see `packages/ui/AGENTS.md` → CrudForm Guidelines
 - Use `DataTable` for list views — see `packages/ui/AGENTS.md` → DataTable Guidelines
 - Use `FormHeader` with mode `edit` (compact) or `detail` (large title with status)

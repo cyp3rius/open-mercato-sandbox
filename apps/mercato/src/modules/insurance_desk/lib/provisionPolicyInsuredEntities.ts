@@ -4,8 +4,8 @@ import { normalizeAddressRowsForBillingSync } from '@open-mercato/core/modules/c
 import { syncBillingAddressFromMfRegistry } from '@open-mercato/core/modules/customers/lib/syncBillingAddressFromMfRegistry'
 import { isValidRegon, normalizeRegonDigits } from '@open-mercato/core/modules/customers/lib/regon'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { createCrud, fetchCrudList, updateCrud } from '@open-mercato/ui/backend/utils/crud'
-import { createCrudFormError } from '@open-mercato/ui/backend/utils/serverErrors'
+import { createCrud, fetchCrudList, updateCrud, type CrudResponse } from '@open-mercato/ui/backend/utils/crud'
+import { createCrudFormError, mapCrudServerErrorToFormErrors } from '@open-mercato/ui/backend/utils/serverErrors'
 import type { InsuranceLeadContact } from './insuranceLeadPayload'
 import { emptyLeadUsageForm, type LeadUsageFormValue } from './leadUsageForm'
 
@@ -35,6 +35,29 @@ function trimField(raw: string | undefined, max: number): string | undefined {
   const t = raw?.trim() ?? ''
   if (!t.length) return undefined
   return t.length > max ? t.slice(0, max) : t
+}
+
+/**
+ * Re-throw so `CrudForm` keeps server field keys (e.g. primaryPhone). `LeadContactHolderField` maps
+ * them to the matching inputs; do not use `leadContact` here or the whole block highlights twice.
+ */
+function rethrowCustomerProvisionError(err: unknown, fallback: string): never {
+  const { message, fieldErrors } = mapCrudServerErrorToFormErrors(err)
+  if (fieldErrors && Object.keys(fieldErrors).length) {
+    const firstVal = Object.values(fieldErrors).find((m) => typeof m === 'string' && m.trim().length) as
+      | string
+      | undefined
+    const text = (
+      firstVal?.trim() ||
+      (message && message.trim() && !/^invalid input$/i.test(message.trim()) ? message.trim() : '') ||
+      fallback
+    ).trim()
+    throw createCrudFormError(text, { ...fieldErrors })
+  }
+  const unwrapped =
+    message && message.trim() && !/^invalid input$/i.test(message.trim()) ? message.trim() : ''
+  const text = unwrapped || fallback
+  throw createCrudFormError(text, { leadContact: text })
 }
 
 /** Maps lead/policy contact into CustomerPersonProfile fields (not entity `description`). */
@@ -181,11 +204,16 @@ export async function provisionPolicyInsuredEntities(
       }
     }
 
-    const companyRes = await createCrud<{ id?: string; organizationId?: string | null }>(
-      'customers/companies',
-      companyBody,
-      { errorMessage },
-    )
+    let companyRes: CrudResponse<{ id?: string; organizationId?: string | null }>
+    try {
+      companyRes = await createCrud<{ id?: string; organizationId?: string | null }>(
+        'customers/companies',
+        companyBody,
+        { errorMessage },
+      )
+    } catch (e) {
+      rethrowCustomerProvisionError(e, errorMessage)
+    }
     companyEntityId = typeof companyRes.result?.id === 'string' ? companyRes.result.id : null
     if (!companyEntityId) {
       throw createCrudFormError(errorMessage, { leadContact: errorMessage })
@@ -222,23 +250,28 @@ export async function provisionPolicyInsuredEntities(
   }
 
   const displayName = `${names.firstName} ${names.lastName}`.trim()
-  const personRes = await createCrud<{ id?: string }>(
-    'customers/people',
-    {
-      firstName: names.firstName,
-      lastName: names.lastName,
-      displayName,
-      primaryEmail: email,
-      primaryPhone: phone,
-      crmRecordType: 'customer',
-      status: 'active',
-      lifecycleStage: LIFECYCLE_CUSTOMER,
-      ...(source ? { source } : {}),
-      ...personProfile,
-      ...(companyEntityId ? { companyEntityId } : {}),
-    },
-    { errorMessage },
-  )
+  let personRes: CrudResponse<{ id?: string }>
+  try {
+    personRes = await createCrud<{ id?: string }>(
+      'customers/people',
+      {
+        firstName: names.firstName,
+        lastName: names.lastName,
+        displayName,
+        primaryEmail: email,
+        primaryPhone: phone,
+        crmRecordType: 'customer',
+        status: 'active',
+        lifecycleStage: LIFECYCLE_CUSTOMER,
+        ...(source ? { source } : {}),
+        ...personProfile,
+        ...(companyEntityId ? { companyEntityId } : {}),
+      },
+      { errorMessage },
+    )
+  } catch (e) {
+    rethrowCustomerProvisionError(e, errorMessage)
+  }
   const personEntityId = typeof personRes.result?.id === 'string' ? personRes.result.id : null
   if (!personEntityId) {
     throw createCrudFormError(errorMessage, { leadContact: errorMessage })

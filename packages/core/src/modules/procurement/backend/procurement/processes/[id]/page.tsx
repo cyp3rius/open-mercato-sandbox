@@ -98,6 +98,7 @@ type ProcessDetail = {
   salesInvoiceId: string | null
   resourceId: string | null
   selectedSupplierId: string | null
+  refinancingLineItemId?: string | null
   refinancingEnabled?: boolean
   refinancingNotes: string | null
   closedAt: string | null
@@ -562,11 +563,10 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
   const [completing, setCompleting] = React.useState(false)
   const [refinancingDialogOpen, setRefinancingDialogOpen] = React.useState(false)
   const [completeDialogOpen, setCompleteDialogOpen] = React.useState(false)
-  const [rfResourceId, setRfResourceId] = React.useState('')
   const [rfSupplierId, setRfSupplierId] = React.useState('')
+  const [rfLineItemId, setRfLineItemId] = React.useState('')
   const [rfInvoiceId, setRfInvoiceId] = React.useState('')
   const [rfNotes, setRfNotes] = React.useState('')
-  const [rfResourceLabel, setRfResourceLabel] = React.useState('')
   const [rfSaving, setRfSaving] = React.useState(false)
 
   React.useEffect(() => {
@@ -1107,6 +1107,48 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
     )
   }, [suppliers, rfSupplierId])
 
+  const rfLineOptions = React.useMemo(() => {
+    const sid = rfSupplierId.trim()
+    if (!sid) return [] as { value: string; label: string; description: string | null }[]
+    const sup = suppliers.find((s) => s.id === sid)
+    if (!sup?.lineItemIds?.length) return []
+    return sup.lineItemIds
+      .map((id) => {
+        const line = lines.find((l) => l.id === id)
+        if (!line) return null
+        return {
+          value: line.id,
+          label: line.title,
+          description: line.specification?.trim() || null,
+        }
+      })
+      .filter(
+        (x): x is { value: string; label: string; description: string | null } => x !== null,
+      )
+  }, [rfSupplierId, suppliers, lines])
+
+  const rfLineLabel = React.useMemo(() => {
+    const id = rfLineItemId.trim()
+    if (!id) return ''
+    return lines.find((l) => l.id === id)?.title ?? id
+  }, [rfLineItemId, lines])
+
+  const rfLineEmptyText = React.useMemo(() => {
+    if (!rfSupplierId.trim()) {
+      return t(
+        'procurement.processes.detail.refinancing.pickSupplierFirst',
+        'Choose a supplier first.',
+      )
+    }
+    if (!rfLineOptions.length) {
+      return t(
+        'procurement.processes.detail.refinancing.noLinesForSupplier',
+        'No specification lines linked to this supplier. Link lines on the Suppliers tab.',
+      )
+    }
+    return t('procurement.processes.detail.suppliers.specLinesNoMatches', 'No matching lines.')
+  }, [rfSupplierId, rfLineOptions.length, t])
+
   const invoiceUuidValidator = React.useCallback(
     (value: string) => {
       const s = value.trim()
@@ -1120,45 +1162,62 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
 
   React.useEffect(() => {
     if (!refinancingDialogOpen || !process) return
-    setRfResourceId(process.resourceId ?? '')
     setRfSupplierId(process.selectedSupplierId ?? '')
+    setRfLineItemId(process.refinancingLineItemId ?? '')
     setRfInvoiceId(process.salesInvoiceId ?? '')
     setRfNotes(process.refinancingNotes ?? '')
   }, [
     refinancingDialogOpen,
     process?.id,
-    process?.resourceId,
     process?.selectedSupplierId,
+    process?.refinancingLineItemId,
     process?.salesInvoiceId,
     process?.refinancingNotes,
   ])
 
-  React.useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      const rid = rfResourceId.trim()
-      if (!rid) {
-        if (!cancelled) setRfResourceLabel('')
-        return
-      }
-      const label = await resolveResourceDisplayLabel(rid)
-      if (!cancelled) setRfResourceLabel(label ?? rid)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [rfResourceId])
-
   const submitRefinancing = React.useCallback(async () => {
     if (!processId || !allowEdits) return
-    const rid = optionalUuid(rfResourceId)
-    if (!rid) {
+    if (!process?.customerEntityId) {
       flash(
-        t('procurement.processes.detail.refinancing.resourceRequired', 'Select a linked resource.'),
+        t(
+          'procurement.processes.detail.refinancing.customerRequired',
+          'Select a customer on the process first.',
+        ),
         'error',
       )
       return
     }
+    const supId = optionalUuid(rfSupplierId)
+    if (!supId) {
+      flash(
+        t('procurement.processes.detail.refinancing.supplierRequired', 'Select a supplier.'),
+        'error',
+      )
+      return
+    }
+    const lineId = optionalUuid(rfLineItemId)
+    if (!lineId) {
+      flash(
+        t(
+          'procurement.processes.detail.refinancing.lineRequired',
+          'Select a specification line linked to this supplier.',
+        ),
+        'error',
+      )
+      return
+    }
+    const supplier = suppliers.find((s) => s.id === supId)
+    if (!supplier?.lineItemIds?.includes(lineId)) {
+      flash(
+        t(
+          'procurement.processes.detail.refinancing.lineNotLinked',
+          'This specification line is not linked to the selected supplier.',
+        ),
+        'error',
+      )
+      return
+    }
+    const line = lines.find((l) => l.id === lineId)
     const invRaw = rfInvoiceId.trim()
     if (invRaw) {
       const invErr = invoiceUuidValidator(invRaw)
@@ -1175,8 +1234,9 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
           {
             id: processId,
             refinancingEnabled: true,
-            resourceId: rid,
-            selectedSupplierId: optionalUuid(rfSupplierId),
+            selectedSupplierId: supId,
+            refinancingLineItemId: lineId,
+            resourceId: line?.resourceId && line.resourceId.trim().length ? line.resourceId.trim() : null,
             salesInvoiceId: invRaw.length ? invRaw : null,
             refinancingNotes: rfNotes.trim().length ? rfNotes.trim() : null,
           },
@@ -1193,11 +1253,14 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
     }
   }, [
     processId,
+    process?.customerEntityId,
     allowEdits,
-    rfResourceId,
     rfSupplierId,
+    rfLineItemId,
     rfInvoiceId,
     rfNotes,
+    suppliers,
+    lines,
     invoiceUuidValidator,
     withGuard,
     t,
@@ -2055,7 +2118,7 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
             ) : null}
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            {allowEdits ? (
+            {allowEdits && process.customerEntityId ? (
               <Button
                 type="button"
                 variant="outline"
@@ -2128,6 +2191,28 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
                       <div className="mt-3 space-y-4">
                         <div>
                           <div className="text-sm font-medium text-muted-foreground">
+                            {t('procurement.processes.detail.refinancing.supplier', 'Supplier')}
+                          </div>
+                          <p className="mt-1 text-sm">
+                            {process.selectedSupplierId
+                              ? suppliers.find((s) => s.id === process.selectedSupplierId)?.vendorLabel ??
+                                process.selectedSupplierId
+                              : t('procurement.processes.list.noValue', '—')}
+                          </p>
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-muted-foreground">
+                            {t('procurement.processes.detail.refinancing.specLine', 'Specification line')}
+                          </div>
+                          <p className="mt-1 text-sm">
+                            {process.refinancingLineItemId
+                              ? lines.find((l) => l.id === process.refinancingLineItemId)?.title ??
+                                process.refinancingLineItemId
+                              : t('procurement.processes.list.noValue', '—')}
+                          </p>
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-muted-foreground">
                             {t('procurement.processes.detail.refinancing.resource', 'Linked resource')}
                           </div>
                           {process.resourceId ? (
@@ -2158,17 +2243,6 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
                               {t('procurement.processes.list.noValue', '—')}
                             </p>
                           )}
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-muted-foreground">
-                            {t('procurement.processes.detail.refinancing.supplier', 'Supplier')}
-                          </div>
-                          <p className="mt-1 text-sm">
-                            {process.selectedSupplierId
-                              ? suppliers.find((s) => s.id === process.selectedSupplierId)?.vendorLabel ??
-                                process.selectedSupplierId
-                              : t('procurement.processes.list.noValue', '—')}
-                          </p>
                         </div>
                         <div>
                           <div className="text-sm font-medium text-muted-foreground">
@@ -2764,47 +2838,69 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
         </Dialog>
 
         <Dialog open={refinancingDialogOpen} onOpenChange={setRefinancingDialogOpen}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-xl max-h-[min(90vh,40rem)] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{t('procurement.processes.detail.section.refinancing', 'Refinancing')}</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-2">
-              <div className="space-y-2">
-                <span className="block text-sm font-medium">
-                  {t('procurement.processes.detail.refinancing.resource', 'Linked resource')}
-                </span>
-                <EntitySearchCombobox
-                  value={rfResourceId}
-                  onChange={setRfResourceId}
-                  options={mergeEntitySearchOption([], rfResourceId, rfResourceLabel || rfResourceId)}
-                  onRemoteSearch={async (q) => {
-                    const rows = await remoteSearchResources(q)
-                    return mergeEntitySearchOption(rows, rfResourceId, rfResourceLabel || rfResourceId)
-                  }}
-                  placeholder={t('procurement.processes.detail.resourceSearch', 'Search resources…')}
-                  disabled={!allowEdits}
-                  createInNewTabHref="/backend/resources/resources/create"
-                  createInNewTabAriaLabel={t(
-                    'procurement.processes.detail.resourceAdd',
-                    'Create resource in a new tab',
-                  )}
-                />
-              </div>
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'procurement.processes.detail.refinancing.dialogLead',
+                  'Pick the supplier, then a specification line linked to that supplier. The line’s resource (if any) is stored on the process. Add an optional invoice reference or upload a file below.',
+                )}
+              </p>
               <div className="space-y-2">
                 <span className="block text-sm font-medium">
                   {t('procurement.processes.detail.refinancing.supplier', 'Supplier')}
                 </span>
                 <EntitySearchCombobox
                   value={rfSupplierId}
-                  onChange={setRfSupplierId}
+                  onChange={(next) => {
+                    setRfSupplierId(next)
+                    setRfLineItemId('')
+                  }}
                   options={rfSupplierOptions}
                   placeholder={t('procurement.processes.detail.supplierPick', 'Choose a supplier…')}
                   disabled={!allowEdits}
                 />
               </div>
               <div className="space-y-2">
+                <span className="block text-sm font-medium">
+                  {t('procurement.processes.detail.refinancing.specLine', 'Specification line')}
+                </span>
+                <EntitySearchCombobox
+                  value={rfLineItemId}
+                  onChange={setRfLineItemId}
+                  options={mergeEntitySearchOption(
+                    rfLineOptions,
+                    rfLineItemId,
+                    rfLineLabel || rfLineItemId,
+                  )}
+                  onRemoteSearch={async (q) => {
+                    const qq = q.trim().toLowerCase()
+                    const filtered = rfLineOptions.filter(
+                      (o) =>
+                        !qq ||
+                        o.label.toLowerCase().includes(qq) ||
+                        (o.description ?? '').toLowerCase().includes(qq),
+                    )
+                    return mergeEntitySearchOption(
+                      filtered,
+                      rfLineItemId,
+                      rfLineLabel || rfLineItemId,
+                    )
+                  }}
+                  placeholder={t(
+                    'procurement.processes.detail.refinancing.specLinePlaceholder',
+                    'Choose a line for this supplier…',
+                  )}
+                  emptyText={rfLineEmptyText}
+                  disabled={!allowEdits || !rfSupplierId.trim()}
+                />
+              </div>
+              <div className="space-y-2">
                 <label htmlFor="rf-invoice" className="block text-sm font-medium">
-                  {t('procurement.processes.detail.refinancing.invoice', 'Sales invoice ID')}
+                  {t('procurement.processes.detail.refinancing.invoice', 'Sales invoice ID (optional)')}
                 </label>
                 <input
                   id="rf-invoice"
@@ -2819,10 +2915,30 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
                 />
                 <p className="text-sm text-muted-foreground">
                   {t(
-                    'procurement.processes.detail.salesInvoice.hint',
-                    'Optional reference UUID when your deployment records invoices.',
+                    'procurement.processes.detail.refinancing.invoiceFileHint',
+                    'There is no sales invoice list API in this build. Paste a UUID if you store invoice ids, or upload a copy below.',
                   )}
                 </p>
+              </div>
+              <div className="space-y-2 rounded-md border p-3">
+                <p className="text-sm font-medium">
+                  {t('procurement.processes.detail.refinancing.invoiceAttachment', 'Invoice document')}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {t(
+                    'procurement.processes.detail.refinancing.invoiceAttachmentHint',
+                    'Uses the same attachments as the process. Files added here also appear under Details → Attachments.',
+                  )}
+                </p>
+                {processId ? (
+                  <AttachmentsSection
+                    entityId={PROCUREMENT_PROCESS_ENTITY_TYPE}
+                    recordId={processId}
+                    showHeader={false}
+                    compact
+                    onChanged={() => void reload()}
+                  />
+                ) : null}
               </div>
               <div className="space-y-2">
                 <label htmlFor="rf-notes" className="block text-sm font-medium">

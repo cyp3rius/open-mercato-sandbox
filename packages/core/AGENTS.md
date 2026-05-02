@@ -46,6 +46,10 @@ All module paths use `src/modules/<module>/` as shorthand.
 - Prefer colocated `page.meta.ts`, `<name>.meta.ts`, or folder `meta.ts`
 - Alternatively, server components may `export const metadata` from the page file itself
 
+### Backend page UI (consistency)
+
+- For **new and existing** `backend/**` module pages, follow the repo **Cursor** gate **`.cursor/rules/backend-views-conventions.mdc`**, then **`.cursor/rules/module-backend-ui.mdc`**; **DataTable** list hubs: **`.cursor/rules/backend-module-list-datatable.mdc`** (reference: `procurement/.../processes/page.tsx`).
+
 ## API Routes
 
 All API route files MUST export an `openApi` object for automatic API documentation generation.

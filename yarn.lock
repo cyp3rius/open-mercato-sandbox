@@ -5795,6 +5795,7 @@ __metadata:
     date-fns: "npm:^4.1.0"
     date-fns-tz: "npm:^3.2.0"
     html-to-text: "npm:^9.0.5"
+    iban-utils: "npm:^0.1.3"
     jest: "npm:^30.2.0"
     jest-environment-jsdom: "npm:^30.2.0"
     semver: "npm:^7.6.3"
@@ -16283,6 +16284,13 @@ __metadata:
   version: 1.2.0
   resolution: "hyperdyperid@npm:1.2.0"
   checksum: 10/64abb5568ff17aa08ac0175ae55e46e22831c5552be98acdd1692081db0209f36fff58b31432017b4e1772c178962676a2cc3c54e4d5d7f020d7710cec7ad7a6
+  languageName: node
+  linkType: hard
+
+"iban-utils@npm:^0.1.3":
+  version: 0.1.3
+  resolution: "iban-utils@npm:0.1.3"
+  checksum: 10/a1cdfe0650aefb97589eff720945c9f42dcbab361f73ba6673c3e2b2e16ee9a5cd2396bc523447a401bdae1ae785ace7b05f26031d315b892c93960e780be119
   languageName: node
   linkType: hard
 

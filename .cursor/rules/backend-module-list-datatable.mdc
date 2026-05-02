@@ -1,0 +1,56 @@
+---
+description: Standard listy modułowej (DataTable) — layout, filtry, perspektywy, akcje nagłówka; odniesienie procurement
+globs:
+  - packages/core/src/modules/**/backend/**/page.tsx
+  - apps/mercato/src/modules/**/backend/**/page.tsx
+alwaysApply: false
+---
+
+# List page — DataTable (standard modułowy)
+
+**Wzorzec złoty:** `packages/core/src/modules/procurement/backend/procurement/processes/page.tsx` — jeden **`DataTable`** na **`Page`** + **`PageBody`** (bez `PageHeader` jako shell listy).
+
+**Spójność ogólna:** najpierw **`.cursor/rules/backend-views-conventions.mdc`** (nawigacja widok → reguła).
+
+## Shell
+
+- **Nie** używaj `PageHeader` jako głównej obudowy listy: tytuł, wyszukiwarka, filtry i akcje trafiają do **`DataTable`**.
+- Użyj **`Page`** → **`PageBody`** (opcjonalnie `className="space-y-4"`, gdy nad tabelą jest pasek zakładek; zakładki poza `DataTable`, w `PageBody`).
+
+## Pasek filtrów (FilterBar w DataTable)
+
+W `FilterBar` kolejność w jednym rzędzie to: **przycisk Filtry** (gdy `filters.length > 0`) → **perspektywa** → ewent. bulk → **pole szukania**. Aby wzorzec jak procurement (filtry **po lewej** od perspektywy), listy z możliwym filtrowaniem **muszą** przekazywać `filters` / `filterValues` / `onFiltersApply` / `onFiltersClear`, o ile API je obsługuje.
+
+## DataTable
+
+- **`title`**: tytuł listy (i18n `*.list.title` albo `*.hub.table.*` przy zakładkach).
+- **`description`** (opcjonalne): krótki lead pod tytułem; tylko gdy produkt wymaga podpowiedzi modułowej, nie długie opisy.
+- **`refreshButton`**: `{ label, onRefresh }` — przy odświeżeniu w razie potrzeby czyść search/paginację/filtry, potem zwiększ **`reloadToken`** (lub równoważnie), by `useEffect` ładowania wykonał się ponownie.
+- **`searchPlaceholder`**, **`searchValue`**, **`onSearchChange`**: debounce w `FilterBar` jest po stronie komponentu; strona resetuje stronę na 1 przy zmianie.
+- **`filters`** / **`filterValues`** / **`onFiltersApply`** / **`onFiltersClear`**: gdy moduł ma filtry słownikowe lub polowe (wzór: status + typ w procurement).
+- **`columns`**: link w kolumnie identyfikatora; statusy/słowniki przez `DictionaryValue` / `Badge` tam gdzie pasuje.
+- **`rowActions`**: `RowActions` z **View details** (i opcjonalnie **Open in new tab** jak w procurement), potem **Delete** za `canManage`.
+- **`onRowClick`**: ten sam URL co „View details”, nie `/edit`.
+- **`pagination`**, **`isLoading`**, **`perspective`**: `{ tableId: '…' }` dla zapisanych widoków / rozszerzeń.
+
+## Akcje w nagłówku tabeli (od prawej: grupa przy tytule w DataTable)
+
+1. **Ustawienia modułu (opcjonalne):** tylko gdy rola uprawnia — **`IconButton`** + **`Link`**, **sama ikona**; `title` + `aria-label`. Cel: `/backend/config/<module>` (lub udokumentowany URL). Bez widocznego tekstu „Settings”.
+2. **Import (opcjonalny, tylko w tym module):** jeśli moduł **ma** własne ścieżki importu — **popover** wyzwolony przez **`IconButton`** (ten sam rozmiar co ustawienia: **nie** `Button size="icon"`), ikona np. Lucide `Import`, pozycje menu to linki do routów **tego** modułu. **Nie** dokładaj importu faktur / innych domen tylko „dla spójności” na listach, które importu nie obsługują.
+3. **Główne tworzenie:** **`Button`** `size="sm"` + **`Link`**, **ikona + etykieta** (np. `Plus` + „New …” / „Issue …”), `className="inline-flex items-center gap-2"` — ten sam pattern na listach modułowych (baseline jak accounting hub / procurement).
+
+Zanim pokażesz delete / ustawienia / create: **`/api/auth/feature-check`** (lub wzorce guardów z aplikacji) → `canManage` / `canSettings`.
+
+## Zakładki (hub wielu list)
+
+Przy `?tab=` pasek zakładek **nad** jednym `DataTable`, nie w `PageHeader`. Tytuł tabeli może odpowiadać aktywnej zakładce; jedna tabela, dane zależne od `activeTab`.
+
+## i18n
+
+- `*.list.actions.*` (view, delete, refresh, import menu, …). Brak twardych stringów w skorupie listy.
+
+## Zobacz też
+
+- `module-backend-ui.mdc` — routing, create/detail.
+- `form-ui-consistency.mdc` — formularze na stronach create/detail.
+- `backend-views-conventions.mdc` — mapa widoków i straż przed regresją.

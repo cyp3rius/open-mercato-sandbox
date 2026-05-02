@@ -11,13 +11,15 @@ alwaysApply: false
 
 # Form UI consistency (Mercato modules + shared form surfaces)
 
+**Gate:** for any backend create/detail/form change, also follow **`.cursor/rules/backend-views-conventions.mdc`** and **`module-backend-ui.mdc`**.
+
 Use these rules when building or refactoring **backend forms**, **custom CrudForm fields**, and **CRM-style editors** so the UI stays aligned with **`CrudForm`** and avoids one-off “design system drift”.
 
 **Platform references:** `packages/ui/AGENTS.md`, `packages/ui/src/backend/AGENTS.md`, root `AGENTS.md` (UI & HTTP sections).
 
 **Scope:** These rules apply to **any** backend admin UI: app modules under `apps/mercato/src/modules/**/backend/**` **and** first-party **core** module pages under `packages/core/src/modules/**/backend/**` (for example procurement, customers, sales). Do not treat `packages/core/.../backend` as exempt from CrudForm parity or entity search patterns.
 
-**Related Cursor rules:** `.cursor/rules/entity-search-combobox.mdc`, `.cursor/rules/detail-two-column-layout.mdc`, `.cursor/rules/module-backend-ui.mdc`, `.cursor/rules/association-link-open.mdc`.
+**Related Cursor rules:** `.cursor/rules/backend-views-conventions.mdc`, `.cursor/rules/entity-search-combobox.mdc`, `.cursor/rules/detail-two-column-layout.mdc`, `.cursor/rules/module-backend-ui.mdc`, `.cursor/rules/association-link-open.mdc`.
 
 ## Control styling (parity with CrudForm)
 

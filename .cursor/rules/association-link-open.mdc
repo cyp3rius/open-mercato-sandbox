@@ -9,6 +9,8 @@ alwaysApply: false
 
 # Association links — “Open” action (backend UI)
 
+**Gate:** **`.cursor/rules/backend-views-conventions.mdc`** (detail/CRM surfaces).
+
 Use this pattern whenever the UI shows a **read-only preview** of a **linked / associated record** (person, company, policy, resource, lead, etc.) and offers navigation to the target **admin (backend) screen**.
 
 **Do not** use a plain underlined text `<Link>` or raw `<a>` for the primary “open associated record” action — keep parity with Insurance desk and Resources.

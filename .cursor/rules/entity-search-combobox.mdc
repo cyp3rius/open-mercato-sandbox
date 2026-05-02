@@ -10,6 +10,8 @@ alwaysApply: false
 
 # Entity search combobox (system entities & dictionaries)
 
+**Gate:** list/detail/form context is governed by **`.cursor/rules/backend-views-conventions.mdc`**.
+
 Use **`EntitySearchCombobox`** from `@open-mercato/ui/backend/inputs/EntitySearchCombobox` when the user picks a value from a **searchable catalog** — not a short static `<select>`.
 
 **Related:** `.cursor/rules/form-ui-consistency.mdc` (Crud parity, detail grids, `muted` inline editors, `+` in new tab); `.cursor/rules/detail-two-column-layout.mdc` (7fr/3fr detail shell).

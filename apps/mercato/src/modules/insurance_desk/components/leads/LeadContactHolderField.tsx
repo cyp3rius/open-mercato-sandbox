@@ -11,6 +11,44 @@ import { emptyLeadContactForm } from '../../lib/leadContactForm'
 import { isValidPesel, normalizePeselDigits, validatePeselList } from '@open-mercato/core/modules/customers/lib/pesel'
 import { isValidRegon, normalizeRegonDigits } from '@open-mercato/core/modules/customers/lib/regon'
 
+const SERVER_ERR_KEYS = new Set([
+  'primaryPhone',
+  'primaryEmail',
+  'firstName',
+  'lastName',
+  'displayName',
+  'legalName',
+  'description',
+  'pesel',
+  'regon',
+  'nip',
+  'residenceStreet',
+  'residencePostalCode',
+  'residenceCity',
+  'residenceCountry',
+  'status',
+  'crmRecordType',
+  'companyEntityId',
+  'source',
+  'lifecycleStage',
+])
+
+function joinFormErrors(
+  fe: Record<string, string> | undefined,
+  keys: string[],
+  sep: string = ' ',
+): string | undefined {
+  if (!fe) return undefined
+  const parts = keys.map((k) => (typeof fe[k] === 'string' ? fe[k]!.trim() : '')).filter(Boolean)
+  return parts.length ? parts.join(sep) : undefined
+}
+
+function pickFormError(fe: Record<string, string> | undefined, key: string): string | undefined {
+  if (!fe) return undefined
+  const v = fe[key]
+  return typeof v === 'string' && v.trim().length ? v.trim() : undefined
+}
+
 function normalize(raw: unknown): LeadContactFormValue {
   const base = emptyLeadContactForm()
   if (!raw || typeof raw !== 'object') return base
@@ -67,8 +105,44 @@ function HolderTile({
 
 export function LeadContactHolderField(props: CrudCustomFieldRenderProps) {
   const t = useT()
-  const { value, setValue, disabled, error } = props
+  const { value, setValue, disabled, error, formErrors } = props
   const model = normalize(value)
+
+  const fe = formErrors
+  const phoneServer = pickFormError(fe, 'primaryPhone')
+  const emailServer = pickFormError(fe, 'primaryEmail')
+  const nameFromParts = joinFormErrors(fe, ['firstName', 'lastName'])
+  const displayNameServer = pickFormError(fe, 'displayName')
+  const legalNameServer = pickFormError(fe, 'legalName')
+  const peselServer = pickFormError(fe, 'pesel')
+  const regonServer = pickFormError(fe, 'regon')
+  const addressServer = joinFormErrors(
+    fe,
+    ['residenceStreet', 'residencePostalCode', 'residenceCity', 'residenceCountry'],
+    ' · ',
+  )
+
+  const hasServerFieldError = React.useMemo(() => {
+    if (!fe) return false
+    for (const k of Object.keys(fe)) {
+      if (SERVER_ERR_KEYS.has(k) && fe[k] && String(fe[k]).trim().length) return true
+    }
+    return false
+  }, [fe])
+
+  const orphanServerMessage = React.useMemo(() => {
+    if (!fe) return null
+    const out: string[] = []
+    for (const k of Object.keys(fe)) {
+      if (SERVER_ERR_KEYS.has(k) || k === 'leadContact') continue
+      const m = fe[k]
+      if (typeof m === 'string' && m.trim().length) out.push(m.trim())
+    }
+    if (!out.length) return null
+    return out.join(' · ')
+  }, [fe])
+
+  const showBlockError = Boolean(error) && !hasServerFieldError && !orphanServerMessage
 
   const patch = React.useCallback(
     (partial: Partial<LeadContactFormValue>) => {
@@ -104,8 +178,17 @@ export function LeadContactHolderField(props: CrudCustomFieldRenderProps) {
   const regonInvalid =
     regonRaw.length > 0 && (!regonDigits || !isValidRegon(regonDigits))
 
+  const privateSoleNameErr = (ht === 'private' || ht === 'sole') && (nameFromParts || displayNameServer)
+  /** API zwraca first+last; dla JDG/spółek — pole „osoba kontaktowa” */
+  const cfnNameErr = (ht === 'civil' || ht === 'llc') && nameFromParts
+  const civilPartnerNameErr = ht === 'civil' && !nameFromParts && displayNameServer
+  const llcCompanyNameErr = ht === 'llc' && (legalNameServer || (displayNameServer && !nameFromParts))
+
+  const peselErrorBlock = peselServer || (peselInvalid ? t('customers.people.form.peselInvalid', 'Invalid PESEL.') : null)
+  const regonErrorBlock = regonServer || (regonInvalid ? t('customers.companies.form.regonInvalid', 'Invalid REGON.') : null)
+
   return (
-    <div className={cn('space-y-6', error && 'rounded-md border border-destructive/50 p-3')}>
+    <div className={cn('space-y-6', showBlockError && 'rounded-md border border-destructive/50 p-3')}>
       <div className="space-y-3">
         <Label>{t('insurance_desk.leads.contact.holderType', 'Contact type')}</Label>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -136,40 +219,38 @@ export function LeadContactHolderField(props: CrudCustomFieldRenderProps) {
                   <Label htmlFor="lead-fn">{t('insurance_desk.leads.contact.fullName', 'Full name')}</Label>
                   <input
                     id="lead-fn"
-                    className={CRUD_FORM_TEXT_INPUT_CLASS}
+                    className={cn(CRUD_FORM_TEXT_INPUT_CLASS, !!privateSoleNameErr && 'border-destructive')}
                     value={model.fullName}
                     onChange={(e) => patch({ fullName: e.target.value })}
                     disabled={disabled}
                     data-crud-focus-target=""
                   />
+                  {privateSoleNameErr ? <p className="text-sm text-destructive">{String(privateSoleNameErr)}</p> : null}
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="lead-pesel">{t('insurance_desk.leads.contact.pesel', 'PESEL')}</Label>
                     <input
                       id="lead-pesel"
-                      className={cn(CRUD_FORM_TEXT_INPUT_CLASS, peselInvalid && 'border-destructive')}
+                      className={cn(CRUD_FORM_TEXT_INPUT_CLASS, (peselServer || peselInvalid) && 'border-destructive')}
                       value={model.pesel}
                       onChange={(e) => patch({ pesel: e.target.value })}
                       disabled={disabled}
                       data-crud-focus-target=""
                     />
-                    {peselInvalid ? (
-                      <p className="text-sm text-destructive">
-                        {t('customers.people.form.peselInvalid', 'Invalid PESEL.')}
-                      </p>
-                    ) : null}
+                    {peselErrorBlock ? <p className="text-sm text-destructive">{peselErrorBlock}</p> : null}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="lead-addr">{t('insurance_desk.leads.contact.address', 'Address')}</Label>
                     <input
                       id="lead-addr"
-                      className={CRUD_FORM_TEXT_INPUT_CLASS}
+                      className={cn(CRUD_FORM_TEXT_INPUT_CLASS, addressServer && 'border-destructive')}
                       value={model.address}
                       onChange={(e) => patch({ address: e.target.value })}
                       disabled={disabled}
                       data-crud-focus-target=""
                     />
+                    {addressServer ? <p className="text-sm text-destructive">{addressServer}</p> : null}
                   </div>
                 </div>
               </>
@@ -180,45 +261,38 @@ export function LeadContactHolderField(props: CrudCustomFieldRenderProps) {
                   <Label htmlFor="lead-fn2">{t('insurance_desk.leads.contact.fullName', 'Full name')}</Label>
                   <input
                     id="lead-fn2"
-                    className={CRUD_FORM_TEXT_INPUT_CLASS}
+                    className={cn(CRUD_FORM_TEXT_INPUT_CLASS, !!privateSoleNameErr && 'border-destructive')}
                     value={model.fullName}
                     onChange={(e) => patch({ fullName: e.target.value })}
                     disabled={disabled}
                     data-crud-focus-target=""
                   />
+                  {privateSoleNameErr ? <p className="text-sm text-destructive">{String(privateSoleNameErr)}</p> : null}
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="lead-pesel2">{t('insurance_desk.leads.contact.pesel', 'PESEL')}</Label>
                     <input
                       id="lead-pesel2"
-                      className={cn(CRUD_FORM_TEXT_INPUT_CLASS, peselInvalid && 'border-destructive')}
+                      className={cn(CRUD_FORM_TEXT_INPUT_CLASS, (peselServer || peselInvalid) && 'border-destructive')}
                       value={model.pesel}
                       onChange={(e) => patch({ pesel: e.target.value })}
                       disabled={disabled}
                       data-crud-focus-target=""
                     />
-                    {peselInvalid ? (
-                      <p className="text-sm text-destructive">
-                        {t('customers.people.form.peselInvalid', 'Invalid PESEL.')}
-                      </p>
-                    ) : null}
+                    {peselErrorBlock ? <p className="text-sm text-destructive">{peselErrorBlock}</p> : null}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="lead-reg">{t('insurance_desk.leads.contact.regon', 'REGON')}</Label>
                     <input
                       id="lead-reg"
-                      className={cn(CRUD_FORM_TEXT_INPUT_CLASS, regonInvalid && 'border-destructive')}
+                      className={cn(CRUD_FORM_TEXT_INPUT_CLASS, (regonServer || regonInvalid) && 'border-destructive')}
                       value={model.regon}
                       onChange={(e) => patch({ regon: e.target.value })}
                       disabled={disabled}
                       data-crud-focus-target=""
                     />
-                    {regonInvalid ? (
-                      <p className="text-sm text-destructive">
-                        {t('customers.companies.form.regonInvalid', 'Invalid REGON.')}
-                      </p>
-                    ) : null}
+                    {regonErrorBlock ? <p className="text-sm text-destructive">{regonErrorBlock}</p> : null}
                   </div>
                 </div>
               </>
@@ -229,12 +303,13 @@ export function LeadContactHolderField(props: CrudCustomFieldRenderProps) {
                   <Label htmlFor="lead-pn">{t('insurance_desk.leads.contact.partnerNames', 'Partners (names)')}</Label>
                   <input
                     id="lead-pn"
-                    className={CRUD_FORM_TEXT_INPUT_CLASS}
+                    className={cn(CRUD_FORM_TEXT_INPUT_CLASS, civilPartnerNameErr && 'border-destructive')}
                     value={model.partnerNames}
                     onChange={(e) => patch({ partnerNames: e.target.value })}
                     disabled={disabled}
                     data-crud-focus-target=""
                   />
+                  {civilPartnerNameErr ? <p className="text-sm text-destructive">{civilPartnerNameErr}</p> : null}
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
@@ -260,17 +335,13 @@ export function LeadContactHolderField(props: CrudCustomFieldRenderProps) {
                     <Label htmlFor="lead-reg2">{t('insurance_desk.leads.contact.regon', 'REGON')}</Label>
                     <input
                       id="lead-reg2"
-                      className={cn(CRUD_FORM_TEXT_INPUT_CLASS, regonInvalid && 'border-destructive')}
+                      className={cn(CRUD_FORM_TEXT_INPUT_CLASS, (regonServer || regonInvalid) && 'border-destructive')}
                       value={model.regon}
                       onChange={(e) => patch({ regon: e.target.value })}
                       disabled={disabled}
                       data-crud-focus-target=""
                     />
-                    {regonInvalid ? (
-                      <p className="text-sm text-destructive">
-                        {t('customers.companies.form.regonInvalid', 'Invalid REGON.')}
-                      </p>
-                    ) : null}
+                    {regonErrorBlock ? <p className="text-sm text-destructive">{regonErrorBlock}</p> : null}
                   </div>
                 </div>
               </>
@@ -281,28 +352,25 @@ export function LeadContactHolderField(props: CrudCustomFieldRenderProps) {
                   <Label htmlFor="lead-cn">{t('insurance_desk.leads.contact.companyName', 'Company name')}</Label>
                   <input
                     id="lead-cn"
-                    className={CRUD_FORM_TEXT_INPUT_CLASS}
+                    className={cn(CRUD_FORM_TEXT_INPUT_CLASS, llcCompanyNameErr && 'border-destructive')}
                     value={model.companyName}
                     onChange={(e) => patch({ companyName: e.target.value })}
                     disabled={disabled}
                     data-crud-focus-target=""
                   />
+                  {llcCompanyNameErr ? <p className="text-sm text-destructive">{llcCompanyNameErr}</p> : null}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="lead-reg3">{t('insurance_desk.leads.contact.regon', 'REGON')}</Label>
                   <input
                     id="lead-reg3"
-                    className={cn(CRUD_FORM_TEXT_INPUT_CLASS, regonInvalid && 'border-destructive')}
+                    className={cn(CRUD_FORM_TEXT_INPUT_CLASS, (regonServer || regonInvalid) && 'border-destructive')}
                     value={model.regon}
                     onChange={(e) => patch({ regon: e.target.value })}
                     disabled={disabled}
                     data-crud-focus-target=""
                   />
-                  {regonInvalid ? (
-                    <p className="text-sm text-destructive">
-                      {t('customers.companies.form.regonInvalid', 'Invalid REGON.')}
-                    </p>
-                  ) : null}
+                  {regonErrorBlock ? <p className="text-sm text-destructive">{regonErrorBlock}</p> : null}
                 </div>
               </>
             )}
@@ -314,42 +382,46 @@ export function LeadContactHolderField(props: CrudCustomFieldRenderProps) {
                 <Label htmlFor="lead-cfn">{t('insurance_desk.leads.contact.contactPersonName', 'Contact person name')}</Label>
                 <input
                   id="lead-cfn"
-                  className={CRUD_FORM_TEXT_INPUT_CLASS}
+                  className={cn(CRUD_FORM_TEXT_INPUT_CLASS, cfnNameErr && 'border-destructive')}
                   value={model.fullName}
                   onChange={(e) => patch({ fullName: e.target.value })}
                   disabled={disabled}
                   data-crud-focus-target=""
                 />
+                {cfnNameErr ? <p className="text-sm text-destructive">{cfnNameErr}</p> : null}
               </div>
             ) : null}
             <div className="space-y-2">
               <Label htmlFor="lead-ph">{t('insurance_desk.leads.form.contact.phone', 'Phone')}</Label>
               <input
                 id="lead-ph"
-                className={CRUD_FORM_TEXT_INPUT_CLASS}
+                className={cn(CRUD_FORM_TEXT_INPUT_CLASS, phoneServer && 'border-destructive')}
                 type="tel"
                 value={model.phone}
                 onChange={(e) => patch({ phone: e.target.value })}
                 disabled={disabled}
                 data-crud-focus-target=""
               />
+              {phoneServer ? <p className="text-sm text-destructive">{phoneServer}</p> : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="lead-em">{t('insurance_desk.leads.form.contact.email', 'E-mail')}</Label>
               <input
                 id="lead-em"
-                className={CRUD_FORM_TEXT_INPUT_CLASS}
+                className={cn(CRUD_FORM_TEXT_INPUT_CLASS, emailServer && 'border-destructive')}
                 type="email"
                 value={model.email}
                 onChange={(e) => patch({ email: e.target.value })}
                 disabled={disabled}
                 data-crud-focus-target=""
               />
+              {emailServer ? <p className="text-sm text-destructive">{emailServer}</p> : null}
             </div>
           </div>
         </>
       ) : null}
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {orphanServerMessage ? <p className="text-sm text-destructive">{orphanServerMessage}</p> : null}
+      {showBlockError && error ? <p className="text-sm text-destructive">{error}</p> : null}
     </div>
   )
 }

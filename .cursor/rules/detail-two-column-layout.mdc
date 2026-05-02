@@ -9,6 +9,8 @@ alwaysApply: false
 
 # Detail pages — two-column layout & section chrome
 
+**Gate:** start from **`.cursor/rules/backend-views-conventions.mdc`** + **`module-backend-ui.mdc`**; this file deepens layout/chrome only.
+
 Use when building **backend detail** screens that mirror **grouped `CrudForm`** (e.g. insurance desk: inquiry, policy, insurer).
 
 **References:** `packages/ui/src/backend/CrudForm.tsx` (grouped layout grid), `.cursor/rules/module-backend-ui.mdc`, `.cursor/rules/form-ui-consistency.mdc`.

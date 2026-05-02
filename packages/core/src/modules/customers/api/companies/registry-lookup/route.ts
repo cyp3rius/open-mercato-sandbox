@@ -16,7 +16,11 @@ const bodySchema = z
   })
 
 export const metadata = {
-  POST: { requireAuth: true, requireFeatures: ['customers.companies.manage'] },
+  POST: {
+    requireAuth: true,
+    /** VAT whitelist lookup: CRM company editors or accounting invoice flows (read-only public MF API). */
+    requireAnyFeatures: ['customers.companies.manage', 'accounting.invoices.manage'],
+  },
 }
 
 const successSchema = z.object({

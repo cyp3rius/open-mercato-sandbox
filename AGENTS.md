@@ -16,6 +16,7 @@ IMPORTANT: Before any research or coding, match the task to the root `AGENTS.md`
 | Task | Guide |
 |------|-------|
 | **Module Development** | |
+| **Backend module UI (new or changed `**/backend/**` pages: lists, create, detail, forms — avoid one-off layouts)** | **`.cursor/rules/backend-views-conventions.mdc`** (gate, always) + **`.cursor/rules/module-backend-ui.mdc`** + **`.cursor/rules/backend-module-list-datatable.mdc`** (DataTable lists) + `packages/ui/AGENTS.md` + `packages/ui/src/backend/AGENTS.md` |
 | Creating a new module, scaffolding module files, auto-discovery paths | `packages/core/AGENTS.md` |
 | Building CRUD API routes, adding OpenAPI specs, using `makeCrudRoute`, query engine integration | `packages/core/AGENTS.md` → API Routes |
 | Adding `setup.ts` for tenant init, declaring role features, seeding defaults/examples | `packages/core/AGENTS.md` → Module Setup |

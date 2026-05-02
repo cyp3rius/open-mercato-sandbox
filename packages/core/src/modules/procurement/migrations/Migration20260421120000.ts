@@ -3,17 +3,17 @@ import { Migration } from '@mikro-orm/migrations'
 export class Migration20260421120000 extends Migration {
   override async up(): Promise<void> {
     this.addSql(
-      `create table "procurement_organization_settings" ("id" uuid not null default gen_random_uuid(), "tenant_id" uuid not null, "organization_id" uuid not null, "default_process_status_value" text null, "created_at" timestamptz not null, "updated_at" timestamptz not null, constraint "procurement_organization_settings_pkey" primary key ("id"));`,
+      `alter table "procurement_processes" add column "refinancing_line_item_id" uuid null;`,
     )
     this.addSql(
-      `create unique index "procurement_org_settings_scope_uidx" on "procurement_organization_settings" ("tenant_id", "organization_id");`,
-    )
-    this.addSql(
-      `create index "procurement_org_settings_scope_idx" on "procurement_organization_settings" ("tenant_id", "organization_id");`,
+      `alter table "procurement_processes" add constraint "procurement_processes_refinancing_line_item_id_foreign" foreign key ("refinancing_line_item_id") references "procurement_process_line_items" ("id") on update cascade on delete set null;`,
     )
   }
 
   override async down(): Promise<void> {
-    this.addSql(`drop table if exists "procurement_organization_settings" cascade;`)
+    this.addSql(
+      `alter table "procurement_processes" drop constraint if exists "procurement_processes_refinancing_line_item_id_foreign";`,
+    )
+    this.addSql(`alter table "procurement_processes" drop column if exists "refinancing_line_item_id";`)
   }
 }

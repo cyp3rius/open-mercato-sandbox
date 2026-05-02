@@ -1,0 +1,46 @@
+---
+description: Obowiązkowa mapa widoków backend (lista / create / detail) + straż przed regresją przy zmianach; stosuj przy każdym nowym widoku i przy edycji istniejących stron w modułach
+globs: []
+alwaysApply: true
+---
+
+# Backend views — consistency (Open Mercato)
+
+**Scope:** new and existing pages under **`apps/mercato/src/modules/**/backend/**`** and **`packages/core/src/modules/**/backend/**`**, plus shared form/table code that serves them. **Do not introduce one-off layouts** — follow the rules and reference files below. Exceptions only with rationale in the module’s **`AGENTS.md`** or a spec.
+
+## 1) Map view type → one source rule
+
+| View type | Reference (code) | Cursor rule |
+|-----------|------------------|-------------|
+| **List (DataTable CRUD hub)** | `packages/core/src/modules/procurement/backend/procurement/processes/page.tsx` | **`.cursor/rules/backend-module-list-datatable.mdc`** |
+| **Create (full page)** | `packages/core/src/modules/customers/backend/customers/companies/create/page.tsx` | **`.cursor/rules/module-backend-ui.mdc`** (Create) + **`.cursor/rules/form-ui-consistency.mdc`** |
+| **Detail (read / edit)** | `packages/core/src/modules/customers/backend/customers/companies/[id]/page.tsx` | **`module-backend-ui.mdc`** (Detail) + **`.cursor/rules/detail-two-column-layout.mdc`** + **`form-ui-consistency.mdc`** |
+| **Relation / searchable catalog** | CRM patterns | **`.cursor/rules/entity-search-combobox.mdc`** |
+| **Linked-record preview (Open)** | Insurance desk, resources | **`.cursor/rules/association-link-open.mdc`** |
+
+**Umbrella index (routing, i18n, create/detail):** **`.cursor/rules/module-backend-ui.mdc`**.
+
+## 2) Cross-cutting (every new or changed view)
+
+- **i18n:** no hard-coded user-visible strings — keys as in `module-backend-ui` (`*.viewDetails`, `*.detail.*`, `*.list.*`, etc.).
+- **Module registry:** after adding or moving routes, run **`yarn generate`** (or the CLI command from root `AGENTS.md` / `packages/cli/AGENTS.md`) so `modules.generated.ts` stays valid.
+- **Buttons:** `Button` / `IconButton` from `@open-mercato/ui` only — see `packages/ui/AGENTS.md` (MUST: `type="button"` for non-submit).
+
+## 3) Changing existing pages (regression guard)
+
+When you touch a file in **`**/backend/**`**, do not “only patch the one thing” — re-check the row in §1 that applies:
+
+- **List:** re-read `backend-module-list-datatable.mdc` (header: `refreshButton`, action order, optional import popover, filters + perspective + search, `rowActions`, `onRowClick` → detail, not `/edit`).
+- **Form / detail:** `form-ui-consistency.mdc` and, for 7fr/3fr, `detail-two-column-layout.mdc`.
+- **New entity picker:** `entity-search-combobox.mdc` instead of raw UUID fields.
+
+## 4) Other rules in this repo
+
+- **Shell / commands:** **`.cursor/rules/shell-commands.mdc`**
+- **Agents / AI:** **`.cursor/rules/open-mercato-agents-and-ai.mdc`**
+
+## 5) Package docs (extra context)
+
+- `packages/ui/AGENTS.md`, `packages/ui/src/backend/AGENTS.md` — `DataTable`, `CrudForm`, `apiCall`
+- `packages/core/AGENTS.md` — modules, routes, widget injection
+- `AGENTS.md` (root) — **Task Router:** match your task to all applicable rows and read each guide

@@ -1,5 +1,5 @@
-import { normalizeNipDigits } from './nip'
-import { normalizeRegonDigits } from './regon'
+import { normalizeNipDigits } from '@open-mercato/shared/lib/pl/nip'
+import { normalizeRegonDigits } from '@open-mercato/shared/lib/pl/regon'
 
 export type MfRegistryCompanyData = {
   displayName: string
@@ -130,4 +130,18 @@ export async function fetchCompanyFromMfVatRegistry(params: {
   const json = (await response.json()) as { result?: { subject?: MfSubject } }
   const subject = json?.result?.subject
   return parseSubject(subject)
+}
+
+/**
+ * Formats address lines for a free-text field (e.g. selling-entity "address" textarea).
+ */
+export function formatMfRegistryAddressBlock(d: MfRegistryCompanyData): string {
+  const line1 = d.addressLine1?.trim()
+  const cityLine = [d.postalCode, d.city]
+    .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+    .map((x) => x.trim())
+    .join(' ')
+  const country =
+    d.country && d.country.trim().toUpperCase() !== 'PL' ? d.country.trim() : ''
+  return [line1, cityLine, country].filter((x) => x && x.length > 0).join('\n')
 }

@@ -8,6 +8,8 @@ alwaysApply: false
 
 # Backend module UI (app modules)
 
+**View consistency (list / create / detail, including edits to existing pages):** follow **`.cursor/rules/backend-views-conventions.mdc`** first (map + regression guard).
+
 **Reference implementation:** `packages/core/src/modules/customers/backend/customers/companies` — detail at `[id]/page.tsx`, create at `create/page.tsx`.
 
 **Where this applies:** **App** modules under `apps/mercato/src/modules/<module>/backend/...` **and** **core** feature modules that ship backend UI under `packages/core/src/modules/<module>/backend/...` (same URL semantics, CrudForm-first, detail layout, relation pickers). Only the **repository root** differs (`apps/mercato` vs `packages/core`).
@@ -19,6 +21,7 @@ alwaysApply: false
 
 ## List (DataTable)
 
+- **Reference layout (DataTable list):** list pages that are primarily a **CRUD table** should follow **`backend-module-list-datatable.mdc`** — `DataTable` on `Page` + `PageBody` (no `PageHeader` for the list), header actions (icon-only settings, import popover, primary create with `Plus`), `refreshButton`, filters, and row actions. Gold code: `procurement/.../processes/page.tsx`.
 - Prefer **“View details”** over “Edit” (i18n key pattern `*.viewDetails`) — navigate to **`…/{id}`**.
 - **Row click** (if enabled): same destination as “view details”, not `/edit`.
 - **Duplicate**: **prefill the create form only** — link **`…/create?duplicateFrom={id}`** (or equivalent query). Do **not** create a record immediately on duplicate.

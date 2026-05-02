@@ -123,6 +123,7 @@ import { IconButton } from '@open-mercato/ui/primitives/icon-button'
 
 ## DataTable Guidelines
 
+- **Module** list pages (mercato/core hosts): follow **`.cursor/rules/backend-views-conventions.mdc`** and **`.cursor/rules/backend-module-list-datatable.mdc`** so shell, header actions, filters, and row behavior stay consistent.
 - Use `DataTable` as the default list view.
 - DataTable extension spots include: `data-table:<tableId>:columns`, `:row-actions`, `:bulk-actions`, `:filters` (in addition to `:header`/`:footer`).
 - Populate `columns` with explicit renderers and set `meta.truncate`/`meta.maxWidth` where truncation is needed.

@@ -148,6 +148,8 @@ export type DataTableProps<T> = {
   data: T[]
   toolbar?: React.ReactNode
   title?: React.ReactNode
+  /** Shown under `title` in the table header (muted, small). */
+  description?: React.ReactNode
   actions?: React.ReactNode
   refreshButton?: DataTableRefreshButton
   sortable?: boolean
@@ -632,6 +634,7 @@ export function DataTable<T>({
   data,
   toolbar,
   title,
+  description,
   actions,
   refreshButton,
   sortable,
@@ -1866,6 +1869,8 @@ export function DataTable<T>({
   ])
 
   const hasTitle = title != null
+  const hasDescription = description != null && description !== ''
+  const hasHeaderLead = hasTitle || hasDescription
   const hasActions = actions !== undefined && actions !== null && actions !== false
   const shouldReserveActionsSpace = actions === null || actions === false
   const exportConfig = exporter === false ? null : exporter || null
@@ -1878,25 +1883,36 @@ export function DataTable<T>({
   const shouldRenderActionsWrapper = hasActions || hasRefreshButton || shouldReserveActionsSpace || hasExport || hasToolbarInjection
   const renderToolbarInline = embedded && hasToolbar
   const shouldRenderToolbarBelow = hasToolbar && !renderToolbarInline
-  const shouldRenderHeader = hasTitle || renderToolbarInline || shouldRenderActionsWrapper || shouldRenderToolbarBelow
+  const shouldRenderHeader = hasHeaderLead || renderToolbarInline || shouldRenderActionsWrapper || shouldRenderToolbarBelow
   const containerClassName = embedded ? '' : 'rounded-lg border bg-card'
   const headerWrapperClassName = embedded ? 'pb-3' : 'px-4 py-3 border-b'
   const headerContentClassName = 'flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'
   const toolbarWrapperClassName = embedded ? 'mt-2' : 'mt-3 pt-3 border-t'
   const tableScrollWrapperClassName = embedded ? '' : 'overflow-auto'
 
-  const titleContent = hasTitle ? (
-    <div className="text-sm font-semibold leading-tight min-h-[2.25rem] flex items-center">
-      {typeof title === 'string' ? <h2 className="text-sm font-semibold">{title}</h2> : title}
+  const titleContent = hasHeaderLead ? (
+    <div className="min-w-0">
+      {hasTitle ? (
+        <div className="text-sm font-semibold leading-tight min-h-[2.25rem] flex items-center">
+          {typeof title === 'string' ? <h2 className="text-sm font-semibold">{title}</h2> : title}
+        </div>
+      ) : (
+        <div className="min-h-[2.25rem]" />
+      )}
+      {hasDescription ? (
+        <p className="mt-1 text-xs text-muted-foreground leading-snug">{description}</p>
+      ) : null}
     </div>
-  ) : <div className="min-h-[2.25rem]" />
+  ) : (
+    <div className="min-h-[2.25rem]" />
+  )
 
   return (
     <TooltipProvider delayDuration={300}>
     <div ref={containerRef} className={containerClassName} data-component-handle={resolvedReplacementHandle}>
       {shouldRenderHeader && (
         <div className={headerWrapperClassName}>
-          {(hasTitle || shouldRenderActionsWrapper || renderToolbarInline) && (
+          {(hasHeaderLead || shouldRenderActionsWrapper || renderToolbarInline) && (
             <div className={headerContentClassName}>
               <div className="flex-1 min-w-0">
                 {renderToolbarInline ? builtToolbar : titleContent}

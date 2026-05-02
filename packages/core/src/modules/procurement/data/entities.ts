@@ -70,6 +70,10 @@ export class ProcurementProcess {
   @Property({ name: 'selected_supplier_id', type: 'uuid', nullable: true })
   selectedSupplierId?: string | null
 
+  /** Spec line chosen for refinancing (must be linked to `selectedSupplierId`). */
+  @Property({ name: 'refinancing_line_item_id', type: 'uuid', nullable: true })
+  refinancingLineItemId?: string | null
+
   @Property({ name: 'refinancing_notes', type: 'text', nullable: true })
   refinancingNotes?: string | null
 

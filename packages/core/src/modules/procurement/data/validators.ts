@@ -29,6 +29,7 @@ export const procurementProcessUpdateSchema = z.object({
   salesInvoiceId: z.string().uuid().optional().nullable(),
   resourceId: z.string().uuid().optional().nullable(),
   selectedSupplierId: z.string().uuid().optional().nullable(),
+  refinancingLineItemId: z.string().uuid().optional().nullable(),
   refinancingEnabled: z.boolean().optional(),
   refinancingNotes: z.string().max(200000).optional().nullable(),
   statusValue: z.string().max(200).optional().nullable(),
