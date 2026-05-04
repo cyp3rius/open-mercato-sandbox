@@ -70,6 +70,7 @@
   "attachments.library.upload.assignments.type": "Typ",
   "attachments.library.upload.cancel": "Abbrechen",
   "attachments.library.upload.choose": "Dateien auswählen",
+  "attachments.library.upload.disabledReadOnly": "Uploads sind für geschlossene Datensätze deaktiviert.",
   "attachments.library.upload.dropHint": "Dateien hierher ziehen oder klicken, um hochzuladen.",
   "attachments.library.upload.failed": "Hochladen fehlgeschlagen.",
   "attachments.library.upload.file": "Dateien",

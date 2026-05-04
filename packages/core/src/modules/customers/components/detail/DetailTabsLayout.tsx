@@ -50,7 +50,10 @@ export function DetailTabsLayout<TId extends string = string>({
     <div className={cn('space-y-4', className)}>
       <div className={cn('flex flex-wrap items-center justify-between gap-3', headerClassName)}>
         <nav
-          className={cn('flex flex-wrap items-center gap-3 text-sm', navClassName)}
+          className={cn(
+            'inline-flex flex-wrap items-center gap-1 rounded-lg border bg-muted/30 p-1 text-sm text-muted-foreground',
+            navClassName,
+          )}
           role="tablist"
           aria-label={navAriaLabel}
         >
@@ -64,10 +67,10 @@ export function DetailTabsLayout<TId extends string = string>({
               aria-selected={activeTab === tab.id}
               onClick={() => handleTabChange(tab.id)}
               className={cn(
-                'h-auto rounded-none border-b-2 px-0 py-1',
+                'h-8 shrink-0 rounded-md px-3 font-medium shadow-none',
                 activeTab === tab.id
-                  ? 'border-primary text-foreground hover:bg-transparent'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-transparent'
+                  ? 'bg-background text-foreground shadow-sm hover:bg-background'
+                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
               )}
             >
               {tab.label}

@@ -93,6 +93,7 @@ export const messageActionDataSchema = z.object({
 
 export const composeMessageSchema = z.object({
   type: z.string().optional().default('default'),
+  caseId: z.string().uuid().optional().nullable(),
   visibility: z.enum(['public', 'internal']).nullable().optional(),
   sourceEntityType: z.string().min(1).optional(),
   sourceEntityId: z.string().uuid().optional(),
@@ -205,6 +206,7 @@ export const listMessagesSchema = z.object({
   folder: z.enum(['inbox', 'sent', 'drafts', 'archived', 'all']).optional().default('inbox'),
   status: z.enum(['unread', 'read', 'archived']).optional(),
   type: z.string().optional(),
+  caseId: z.string().uuid().optional(),
   visibility: z.enum(['public', 'internal']).optional(),
   sourceEntityType: z.string().optional(),
   sourceEntityId: z.string().uuid().optional(),

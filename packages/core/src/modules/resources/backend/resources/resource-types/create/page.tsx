@@ -26,7 +26,12 @@ export default function ResourcesResourceTypeCreatePage() {
       <PageBody>
         <ResourceTypeCrudForm
           mode="create"
-          initialValues={{ name: '', description: '', appearance: { icon: null, color: null } }}
+          initialValues={{
+            name: '',
+            description: '',
+            vehicleFinancingEligible: false,
+            appearance: { icon: null, color: null },
+          }}
           onSubmit={handleSubmit}
         />
       </PageBody>

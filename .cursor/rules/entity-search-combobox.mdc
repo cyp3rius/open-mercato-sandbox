@@ -18,6 +18,14 @@ Use **`EntitySearchCombobox`** from `@open-mercato/ui/backend/inputs/EntitySearc
 
 **Scope:** Use the same rules for **core** backend pages (`packages/core/src/modules/**/backend/**`) and app modules. Any **FK / association** field that points at another tenant-scoped record (customer entity, user, sales document, resource, supplier row on another entity, etc.) should use **search-backed** pickers (`EntitySearchCombobox` with `onRemoteSearch` when the list is API-driven), not raw UUID `<input>` or unfiltered native `<select>` over large sets.
 
+## CRM: `customerEntityId` (osoba + firma)
+
+- **Wyszukiwanie:** użyj **`remoteSearchCustomerEntities`** (łączy wyniki people + companies) z **`procurementEntitySearch`**, zamiast tylko `/api/customers/companies`.
+- **Merge bieżącej wartości:** **`mergeEntitySearchOption`** w edycji inline / gdy etykieta pochodzi z osobnego ładowania.
+- **Etykieta (tylko ID):** **`resolveCustomerEntityDisplayLabel`**.
+- **Preview + link (szczegóły, sidebar):** **`fetchProcurementCustomerAssociationPreview`** — zwraca `title` / `subtitle` / `recordHref` (osoba → people-v2, firma → companies-v2); nie hard-koduj `/backend/customers/companies/{id}` dla dowolnego UUID.
+- **Wzorcowe strony:** create procesu zaopatrzenia; szczegóły procesu (relacja „Customer”); moduł **cases** (create + zakładka Details).
+
 ## When to use
 
 1. **System / CRM entities** linked by ID (insurers, partner companies/people, products, etc.) when:

@@ -265,18 +265,34 @@ export async function resolveQuoteDisplayLabel(id: string): Promise<string | nul
   return num.length ? num : typeof r.id === 'string' ? r.id : null
 }
 
+/** Primary title for a resource — matches `mapApiResource` / resources DataTable name column. */
+export function formatResourceApiRowLabel(row: Record<string, unknown>): string {
+  const id = typeof row.id === 'string' ? row.id : ''
+  if (typeof row.name === 'string') {
+    const trimmed = row.name.trim()
+    if (trimmed.length) return trimmed
+  }
+  return id
+}
+
 export async function resolveResourceDisplayLabel(id: string): Promise<string | null> {
   const trimmed = id.trim()
   if (!trimmed.length) return null
   const call = await apiCall<Record<string, unknown>>(
-    `/api/resources/resources?id=${encodeURIComponent(trimmed)}&pageSize=1`,
+    `/api/resources/resources?ids=${encodeURIComponent(trimmed)}&pageSize=1`,
   )
+  if (!call.ok) return null
   const items = readItems(call.result ?? undefined)
-  const row = items[0]
+  const row =
+    items.find(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        (item as Record<string, unknown>).id === trimmed,
+    ) ?? items[0]
   if (!row || typeof row !== 'object') return null
-  const r = row as Record<string, unknown>
-  const name = typeof r.name === 'string' ? r.name.trim() : ''
-  return name.length ? name : typeof r.id === 'string' ? r.id : null
+  const label = formatResourceApiRowLabel(row as Record<string, unknown>)
+  return label.length ? label : null
 }
 
 export async function resolveUserDisplayLabel(id: string): Promise<string | null> {
@@ -289,8 +305,9 @@ export async function resolveUserDisplayLabel(id: string): Promise<string | null
   const row = items[0]
   if (!row || typeof row !== 'object') return null
   const r = row as Record<string, unknown>
+  const name = typeof r.name === 'string' ? r.name.trim() : ''
   const email = typeof r.email === 'string' ? r.email.trim() : ''
-  return email.length ? email : typeof r.id === 'string' ? r.id : null
+  return name.length ? name : email.length ? email : typeof r.id === 'string' ? r.id : null
 }
 
 export type ProcurementCustomerAssociationPreview = {

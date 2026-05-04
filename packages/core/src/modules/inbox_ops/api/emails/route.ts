@@ -14,6 +14,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url)
     const query = emailListQuerySchema.parse({
       status: url.searchParams.get('status') || undefined,
+      caseId: url.searchParams.get('caseId') || undefined,
       page: url.searchParams.get('page') || undefined,
       pageSize: url.searchParams.get('pageSize') || undefined,
     })
@@ -28,6 +29,9 @@ export async function GET(req: Request) {
 
     if (query.status) {
       where.status = query.status
+    }
+    if (query.caseId) {
+      where.caseId = query.caseId
     }
 
     const offset = (query.page - 1) * query.pageSize

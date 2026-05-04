@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Banknote, CircleCheck, ExternalLink, Pencil, Plus, X } from 'lucide-react'
 import type { ColumnDef, SortingState } from '@tanstack/react-table'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
+import { FormHeader } from '@open-mercato/ui/backend/forms'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
 import { RowActions } from '@open-mercato/ui/backend/RowActions'
 import {
@@ -2102,63 +2103,62 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
     <Page>
       <PageBody className="space-y-6">
         {ConfirmDialogElement}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="mb-1 text-sm text-muted-foreground">
-              <Link href="/backend/procurement/processes" className="hover:underline">
-                {t('procurement.processes.detail.back', 'Processes')}
-              </Link>
-            </div>
-            <h1 className="text-xl font-semibold">{process.title}</h1>
-            {isClosed ? (
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t('procurement.processes.detail.closed', 'Closed')}
-                {process.closedAt ? ` ${new Date(process.closedAt).toLocaleString()}` : ''}
-              </p>
-            ) : null}
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            {allowEdits && process.customerEntityId ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => setRefinancingDialogOpen(true)}
-              >
-                <Banknote className="size-4 shrink-0" aria-hidden />
-                {process.refinancingEnabled
-                  ? t('procurement.processes.detail.header.editRefinancing', 'Edit refinancing')
-                  : t('procurement.processes.detail.header.refinancing', 'Refinancing')}
-              </Button>
-            ) : null}
-            {allowEdits ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => setCompleteDialogOpen(true)}
-              >
-                <CircleCheck className="size-4 shrink-0" aria-hidden />
-                {t('procurement.processes.detail.header.completeProcess', 'Complete process')}
-              </Button>
-            ) : null}
-            {resourceHref ? (
-              <Button type="button" variant="outline" size="sm" asChild>
-                <Link
-                  href={resourceHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2"
+        <FormHeader
+          mode="detail"
+          backHref="/backend/procurement/processes"
+          backLabel={t('procurement.processes.detail.back', 'Processes')}
+          title={process.title}
+          subtitle={
+            isClosed
+              ? `${t('procurement.processes.detail.closed', 'Closed')}${
+                  process.closedAt ? ` ${new Date(process.closedAt).toLocaleString()}` : ''
+                }`
+              : undefined
+          }
+          actionsContent={(
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              {allowEdits && process.customerEntityId ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setRefinancingDialogOpen(true)}
                 >
-                  <ExternalLink className="size-4 shrink-0" aria-hidden />
-                  {t('common.open', 'Open')}
-                </Link>
-              </Button>
-            ) : null}
-          </div>
-        </div>
+                  <Banknote className="size-4 shrink-0" aria-hidden />
+                  {process.refinancingEnabled
+                    ? t('procurement.processes.detail.header.editRefinancing', 'Edit refinancing')
+                    : t('procurement.processes.detail.header.refinancing', 'Refinancing')}
+                </Button>
+              ) : null}
+              {allowEdits ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setCompleteDialogOpen(true)}
+                >
+                  <CircleCheck className="size-4 shrink-0" aria-hidden />
+                  {t('procurement.processes.detail.header.completeProcess', 'Complete process')}
+                </Button>
+              ) : null}
+              {resourceHref ? (
+                <Button type="button" variant="outline" size="sm" asChild>
+                  <Link
+                    href={resourceHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2"
+                  >
+                    <ExternalLink className="size-4 shrink-0" aria-hidden />
+                    {t('common.open', 'Open')}
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
+          )}
+        />
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[7fr_3fr] lg:items-start">
           <div className="min-w-0">

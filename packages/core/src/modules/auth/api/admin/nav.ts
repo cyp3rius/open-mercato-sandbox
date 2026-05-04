@@ -10,18 +10,43 @@ import { CustomEntity } from '@open-mercato/core/modules/entities/data/entities'
 import { slugifySidebarId } from '@open-mercato/shared/modules/navigation/sidebarPreferences'
 import { applySidebarPreference, loadFirstRoleSidebarPreference, loadSidebarPreference } from '../../services/sidebarPreferencesService'
 import { Role } from '../../data/entities'
+import type { AdminNavItem } from '@open-mercato/ui/backend/utils/nav'
+import {
+  flattenAdminNavItemsForDailyWork,
+  normalizeSidebarHref,
+  type SidebarNavItem,
+} from '@open-mercato/ui/backend/utils/dailyWorkNav'
+import {
+  buildMercatoDailyWorkStructuredGroup,
+  buildMercatoShortcutsSidebarGroup,
+  filterNavGroupsRemoveDedupeHrefs,
+  MERCATO_SIDEBAR_DEDUPE_HREFS,
+} from '@open-mercato/ui/backend/utils/mercatoSidebarNav'
 
 export const metadata = {
   GET: { requireAuth: true },
 }
 
-const sidebarNavItemSchema: z.ZodType<{ href: string; title: string; defaultTitle: string; enabled: boolean; hidden?: boolean; children?: any[] }> = z.lazy(() =>
+const sidebarNavItemSchema: z.ZodType<{
+  id?: string
+  href: string
+  title: string
+  defaultTitle: string
+  enabled: boolean
+  hidden?: boolean
+  variant?: 'section'
+  sidebarNestAlwaysVisible?: boolean
+  children?: any[]
+}> = z.lazy(() =>
   z.object({
+    id: z.string().optional(),
     href: z.string(),
     title: z.string(),
     defaultTitle: z.string(),
     enabled: z.boolean(),
     hidden: z.boolean().optional(),
+    variant: z.literal('section').optional(),
+    sidebarNestAlwaysVisible: z.boolean().optional(),
     children: z.array(sidebarNavItemSchema).optional(),
   })
 )
@@ -316,26 +341,85 @@ export async function GET(req: Request) {
 
   const withPreference = applySidebarPreference(baseForUser, preference)
 
+  function entryTreeToAdminNavItem(entry: Entry): AdminNavItem {
+    const displayTitle = entry.titleKey ? translate(entry.titleKey, entry.title) : entry.title
+    return {
+      group: entry.groupName,
+      groupId: entry.groupId,
+      groupDefaultName: entry.groupName,
+      groupKey: entry.groupKey,
+      title: displayTitle,
+      defaultTitle: displayTitle,
+      titleKey: entry.titleKey,
+      href: entry.href,
+      enabled: entry.enabled,
+      hidden: false,
+      children: entry.children?.map(entryTreeToAdminNavItem),
+    }
+  }
+
+  const flatForDailyWork = flattenAdminNavItemsForDailyWork(roots.map(entryTreeToAdminNavItem))
+
+  const mapSidebarNavItem = (item: AdminNavItem): SidebarNavItem => ({
+    href: item.href,
+    title: item.title,
+    defaultTitle: item.defaultTitle,
+    enabled: item.enabled,
+    hidden: item.hidden,
+    icon: item.icon,
+    pageContext: item.pageContext,
+    children: item.children?.map(mapSidebarNavItem),
+  })
+
+  const shortcutsBlock = buildMercatoShortcutsSidebarGroup(flatForDailyWork, translate, mapSidebarNavItem)
+  const dailyWorkBlock = buildMercatoDailyWorkStructuredGroup(flatForDailyWork, translate, mapSidebarNavItem)
+
+  const mercatoDedupeHrefSet = new Set(MERCATO_SIDEBAR_DEDUPE_HREFS.map((h) => normalizeSidebarHref(h)))
+  const filteredPreference = filterNavGroupsRemoveDedupeHrefs(withPreference, mercatoDedupeHrefSet)
+
+  const serializeSidebarNavItem = (item: SidebarNavItem) => ({
+    id: item.id,
+    href: item.href,
+    title: item.title,
+    defaultTitle: item.defaultTitle,
+    enabled: item.enabled,
+    hidden: item.hidden,
+    pageContext: item.pageContext,
+    variant: item.variant,
+    sidebarNestAlwaysVisible: item.sidebarNestAlwaysVisible,
+    children: item.children?.map(serializeSidebarNavItem),
+  })
+
+  const serializeLegacyTree = (item: SidebarItemNode): Record<string, unknown> => ({
+    href: item.href,
+    title: item.title,
+    defaultTitle: item.defaultTitle,
+    enabled: item.enabled,
+    hidden: item.hidden,
+    children: item.children?.map(serializeLegacyTree),
+  })
+
   const payload = {
-    groups: withPreference.map((group) => ({
-      id: group.id,
-      name: group.name,
-      defaultName: group.defaultName,
-      items: (group.items as SidebarItemNode[]).map((item) => ({
-        href: item.href,
-        title: item.title,
-        defaultTitle: item.defaultTitle,
-        enabled: item.enabled,
-        hidden: item.hidden,
-        children: item.children?.map((child) => ({
-          href: child.href,
-          title: child.title,
-          defaultTitle: child.defaultTitle,
-          enabled: child.enabled,
-          hidden: child.hidden,
-        })),
+    groups: [
+      {
+        id: shortcutsBlock.id,
+        name: shortcutsBlock.name,
+        defaultName: shortcutsBlock.defaultName,
+        items: shortcutsBlock.items.map(serializeSidebarNavItem),
+      },
+      {
+        id: dailyWorkBlock.id,
+        name: dailyWorkBlock.name,
+        defaultName: dailyWorkBlock.defaultName,
+        items: dailyWorkBlock.items.map(serializeSidebarNavItem),
+      },
+      ...filteredPreference.map((group) => ({
+        id: group.id,
+        name: group.name,
+        defaultName: group.defaultName,
+        items: (group.items as SidebarItemNode[]).map((item) => serializeLegacyTree(item)),
       })),
-    })),
+    ],
   }
 
   try {

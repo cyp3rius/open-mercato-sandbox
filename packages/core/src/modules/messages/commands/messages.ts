@@ -166,6 +166,7 @@ const composeMessageCommand: CommandHandler<unknown, { id: string; threadId: str
       const sendViaEmail = isPublicVisibility ? true : input.sendViaEmail
       const message = trx.create(Message, {
         type: input.type,
+        caseId: input.caseId ?? undefined,
         visibility: input.visibility ?? null,
         sourceEntityType: input.sourceEntityType,
         sourceEntityId: input.sourceEntityId,

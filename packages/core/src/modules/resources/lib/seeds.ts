@@ -43,6 +43,7 @@ type ResourcesResourceTypeSeed = {
   description?: string | null
   appearanceIcon?: string | null
   appearanceColor?: string | null
+  vehicleFinancingEligible?: boolean
 }
 
 type ResourcesResourceTagSeed = {
@@ -592,6 +593,15 @@ const RESOURCE_TYPE_SEEDS: ResourcesResourceTypeSeed[] = [
     description: 'Shared vehicle for client visits and errands.',
     appearanceIcon: 'lucide:car',
     appearanceColor: '#7c3aed',
+    vehicleFinancingEligible: true,
+  },
+  {
+    key: 'customer_vehicle',
+    name: 'Customer vehicle',
+    description: 'Externally owned vehicle linked for service and insurance.',
+    appearanceIcon: 'lucide:car-front',
+    appearanceColor: '#64748b',
+    vehicleFinancingEligible: false,
   },
 ]
 
@@ -691,6 +701,11 @@ export async function seedResourcesResourceExamples(
       if (!existing.appearanceColor && seed.appearanceColor) {
         existing.appearanceColor = seed.appearanceColor
       }
+      if (seed.vehicleFinancingEligible !== undefined && existing.vehicleFinancingEligible !== seed.vehicleFinancingEligible) {
+        existing.vehicleFinancingEligible = seed.vehicleFinancingEligible
+        existing.updatedAt = now
+        em.persist(existing)
+      }
       if (existing.appearanceIcon || existing.appearanceColor) {
         existing.updatedAt = now
         em.persist(existing)
@@ -705,6 +720,7 @@ export async function seedResourcesResourceExamples(
       description: seed.description ?? null,
       appearanceIcon: seed.appearanceIcon ?? null,
       appearanceColor: seed.appearanceColor ?? null,
+      vehicleFinancingEligible: seed.vehicleFinancingEligible ?? false,
       createdAt: now,
       updatedAt: now,
     })

@@ -1,0 +1,17 @@
+{
+  "customer_signals.errors.customerRequired": "customerEntityId is required.",
+  "customer_signals.errors.list": "Failed to list signals.",
+  "customer_signals.errors.ingest": "Failed to record signal.",
+  "customer_signals.errors.customerAccess": "CRM customer access is required to view signals.",
+  "customer_signals.widgets.panelTitle": "Behavior signals",
+  "customer_signals.widgets.empty": "No signals recorded for this customer.",
+  "customer_signals.widgets.loadError": "Could not load signals.",
+  "customer_signals.widgets.columns.type": "Type",
+  "customer_signals.widgets.columns.source": "Source",
+  "customer_signals.widgets.columns.time": "Time",
+  "customer_signals.config.nav.title": "Customer signals settings",
+  "customer_signals.config.lead": "Behavior signals are recorded per CRM customer and surfaced on the customer workspace. Ingest uses the API; review signals from a customer record.",
+  "customer_signals.config.operationsTitle": "Where signals appear",
+  "customer_signals.config.operationsLead": "Open a company or person in CRM to view the signals panel. Use the directory below to find customers quickly.",
+  "customer_signals.config.openCompanies": "Customer companies"
+}

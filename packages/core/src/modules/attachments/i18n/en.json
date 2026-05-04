@@ -70,6 +70,7 @@
   "attachments.library.upload.assignments.type": "Type",
   "attachments.library.upload.cancel": "Cancel",
   "attachments.library.upload.choose": "Choose files",
+  "attachments.library.upload.disabledReadOnly": "Uploads are disabled for closed records.",
   "attachments.library.upload.dropHint": "Drag and drop files here or click to upload.",
   "attachments.library.upload.failed": "Upload failed.",
   "attachments.library.upload.file": "Files",

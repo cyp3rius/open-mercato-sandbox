@@ -6,6 +6,7 @@ import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern
 import type { EntityManager } from '@mikro-orm/postgresql'
 import {
   ResourcesResource,
+  ResourcesResourceFinancingProfile,
   ResourcesResourceTagAssignment,
   ResourcesResourceTag,
   ResourcesResourceType,
@@ -18,7 +19,6 @@ import {
   RESOURCES_RESOURCE_FIELDSET_VEHICLE,
   resolveResourcesResourceFieldsetCode,
 } from '../lib/resourceCustomFields'
-
 // Field constants for ResourcesResource entity
 const F = {
   id: "id",
@@ -42,6 +42,7 @@ const F = {
   status_label: "status_label",
   status_color: "status_color",
   status_icon: "status_icon",
+  insurance_policy_id: "insurance_policy_id",
   created_at: "created_at",
   updated_at: "updated_at",
   deleted_at: "deleted_at",
@@ -68,6 +69,8 @@ const listSchema = z
     isActive: z.string().optional(),
     tagIds: z.string().optional(),
     customerEntityId: z.string().uuid().optional(),
+    /** When `true`, only resources with no linked customer (`customer_entity_id` IS NULL). Ignores `customerEntityId`. */
+    customerUnassigned: z.string().optional(),
     sortField: z.string().optional(),
     sortDir: z.enum(['asc', 'desc']).optional(),
     /** When set to `resources_resource_vehicle`, only resources whose type maps to the Vehicles custom-field scope are returned. */
@@ -110,6 +113,7 @@ const crud = makeCrudRoute({
       F.status_label,
       F.status_color,
       F.status_icon,
+      F.insurance_policy_id,
       F.created_at,
       F.updated_at,
     ],
@@ -165,7 +169,12 @@ const crud = makeCrudRoute({
       } else if (query.resourceTypeId) {
         filters[F.resource_type_id] = query.resourceTypeId
       }
-      if (query.customerEntityId) {
+      const customerUnassigned = parseBooleanFlag(
+        typeof query.customerUnassigned === 'string' ? query.customerUnassigned : undefined,
+      )
+      if (customerUnassigned === true) {
+        filters[F.customer_entity_id] = null
+      } else if (query.customerEntityId) {
         filters[F.customer_entity_id] = query.customerEntityId
       }
       const isActive = parseBooleanFlag(query.isActive)
@@ -221,12 +230,31 @@ const crud = makeCrudRoute({
         ),
       )
       const typeNameById = new Map<string, string>()
+      const typeVehicleFinancingById = new Map<string, boolean>()
       if (typeIds.length > 0) {
         const types = await em.find(ResourcesResourceType, { id: { $in: typeIds }, deletedAt: null })
         types.forEach((row) => {
           if (row.name) typeNameById.set(row.id, row.name)
+          typeVehicleFinancingById.set(row.id, row.vehicleFinancingEligible ?? false)
         })
       }
+      const scopeTenantId = ctx.organizationScope?.tenantId ?? ctx.auth?.tenantId ?? null
+      const organizationIds = ctx.organizationIds ?? ctx.organizationScope?.filterIds ?? null
+      const selectedOrganizationId = ctx.selectedOrganizationId ?? ctx.organizationScope?.selectedId ?? null
+      const financingFilters: Record<string, unknown> = { resource: { $in: resourceIds } }
+      if (scopeTenantId) financingFilters.tenantId = scopeTenantId
+      if (Array.isArray(organizationIds) && organizationIds.length > 0) {
+        financingFilters.organizationId = { $in: organizationIds }
+      } else if (selectedOrganizationId) {
+        financingFilters.organizationId = selectedOrganizationId
+      }
+      const financingRows =
+        resourceIds.length > 0 ? await em.find(ResourcesResourceFinancingProfile, financingFilters) : []
+      const financingByResourceId = new Map<string, ResourcesResourceFinancingProfile>()
+      financingRows.forEach((row) => {
+        const rid = typeof row.resource === 'object' && row.resource && 'id' in row.resource ? row.resource.id : null
+        if (rid) financingByResourceId.set(rid, row)
+      })
       const assignments = await em.find(
         ResourcesResourceTagAssignment,
         { resource: { $in: resourceIds } },
@@ -256,6 +284,24 @@ const crud = makeCrudRoute({
         if (typeof tid === 'string' && tid.length > 0) {
           const tname = typeNameById.get(tid)
           if (tname) item.resource_type_name = tname
+          item.vehicle_type_financing_eligible = typeVehicleFinancingById.get(tid) ?? false
+        }
+        if (resourceId) {
+          const fin = financingByResourceId.get(resourceId)
+          if (fin) {
+            item.financing_profile = {
+              financingKind: fin.financingKind,
+              termMonths: fin.termMonths ?? null,
+              vehicleValueAmount: fin.vehicleValueAmount ?? null,
+              installmentAmount: fin.installmentAmount ?? null,
+              currencyCode: fin.currencyCode ?? null,
+              validFrom: fin.validFrom ? fin.validFrom.toISOString() : null,
+              validTo: fin.validTo ? fin.validTo.toISOString() : null,
+              metadata: fin.metadata ?? null,
+            }
+          } else {
+            item.financing_profile = null
+          }
         }
       })
     },
@@ -325,6 +371,9 @@ const resourceListItemSchema = z.object({
   created_at: z.string().nullable().optional(),
   updated_at: z.string().nullable().optional(),
   tags: z.array(resourceTagListItemSchema).optional(),
+  insurance_policy_id: z.string().uuid().nullable().optional(),
+  financing_profile: z.record(z.string(), z.unknown()).nullable().optional(),
+  vehicle_type_financing_eligible: z.boolean().nullable().optional(),
 })
 
 export const openApi = createResourcesCrudOpenApi({

@@ -10,6 +10,8 @@ alwaysApply: false
 
 **View consistency (list / create / detail, including edits to existing pages):** follow **`.cursor/rules/backend-views-conventions.mdc`** first (map + regression guard).
 
+**CRUD consistency (lists + CrudForm + dialogs):** **`.cursor/rules/backend-crud-module-pattern.mdc`** — DataTable-first lists, `CrudForm` for create/detail, `{ConfirmDialogElement}` usage, reference modules (procurement list, accounting entities create/detail).
+
 **Reference implementation:** `packages/core/src/modules/customers/backend/customers/companies` — detail at `[id]/page.tsx`, create at `create/page.tsx`.
 
 **Where this applies:** **App** modules under `apps/mercato/src/modules/<module>/backend/...` **and** **core** feature modules that ship backend UI under `packages/core/src/modules/<module>/backend/...` (same URL semantics, CrudForm-first, detail layout, relation pickers). Only the **repository root** differs (`apps/mercato` vs `packages/core`).
@@ -21,14 +23,16 @@ alwaysApply: false
 
 ## List (DataTable)
 
-- **Reference layout (DataTable list):** list pages that are primarily a **CRUD table** should follow **`backend-module-list-datatable.mdc`** — `DataTable` on `Page` + `PageBody` (no `PageHeader` for the list), header actions (icon-only settings, import popover, primary create with `Plus`), `refreshButton`, filters, and row actions. Gold code: `procurement/.../processes/page.tsx`.
+- **`PageBody` does not accept `title` / `actions`** — current `packages/ui/src/backend/Page.tsx` only renders `children` + `className`. Put the list header row on **`DataTable`** (`title`, `refreshButton`, `actions`, search, filters), or use **`PageHeader`** only on non-tabular pages (not the primary CRUD hub list pattern).
+- **Reference layout (DataTable list):** list pages that are primarily a **CRUD table** should follow **`backend-module-list-datatable.mdc`** + **`backend-crud-module-pattern.mdc`** — `DataTable` on `Page` + `PageBody` (no separate `PageHeader` for the list title), header actions (icon-only settings, import popover, primary create with `Plus`), `refreshButton`, filters, and row actions. Gold code: `procurement/.../processes/page.tsx`.
+- **`useConfirmDialog`:** render **`{ConfirmDialogElement}`** at the end of `Page` — never **`<ConfirmDialogElement />`** (the hook returns an element tree, not a component).
 - Prefer **“View details”** over “Edit” (i18n key pattern `*.viewDetails`) — navigate to **`…/{id}`**.
 - **Row click** (if enabled): same destination as “view details”, not `/edit`.
 - **Duplicate**: **prefill the create form only** — link **`…/create?duplicateFrom={id}`** (or equivalent query). Do **not** create a record immediately on duplicate.
 
 ## Create
 
-- **`CrudForm` as a full page** (default **without** `embedded`): **`title`**, **`backHref`** (list), **`cancelHref`** (same list as back), **`submitLabel`** — header with **Save / Cancel** at the top and bottom right, matching **`customers/companies/create`**.
+- **`CrudForm` as a full page** (default **without** `embedded`): **`title`**, **`backHref`** (list), **`cancelHref`** (same list as back), **`submitLabel`**, **`groups`** (at least **Basics** / `*.form.groups.basics`), optional **`schema` (zod)** — header with **Save / Cancel** at the top and bottom right, matching **`customers/companies/create`** or **`accounting/.../entities/create`** for slimmer entities.
 - Do **not** stack a separate **`FormHeader`** above the form if `CrudForm` already provides the title and action bar.
 - **Sections**: use **`groups`** with **`column: 1` / `column: 2`** (two-column layout like core). Add a **“Basics”** group (`*.form.groups.basics`) for primary fields (ids, status, etc.); put the rest in further groups (“Details”, etc.).
 - **Child records** (e.g. company addresses, **insurer contact drafts**): **`type: 'custom'`** field in the **right column**, value = draft array in form state; after a successful **`POST`** of the parent entity, create child records in a loop (same idea as addresses after company create). On partial failures: user-facing message + redirect to the new record’s detail page.
@@ -38,6 +42,9 @@ alwaysApply: false
 - Prefer **staying on the page after save**: success **`flash`** + reload data (and optionally a **`key`** on the form) instead of **`router.push` to the list** — unless product requirements say otherwise.
 - **Extra actions** (e.g. “Generate policy”) via **`extraActions`** on `CrudForm` — same order as `FormActionButtons`: **extras first**, then Save (extra action **to the left** of Save).
 - Consistent **breadcrumb / `page.meta.ts`**: title and last segment like “Details”, not “Edit”; i18n keys under `*.detail.*`.
+- **Header (record-backed detail without a full-page `CrudForm` shell)**: use **`FormHeader`** with **`mode="detail"`**, **`backHref`** → owning list URL, **`backLabel`** + **`title`** (record title). The back affordance is the **arrow link to the left of the title** (see **`packages/core/src/modules/resources/backend/resources/resources/[id]/page.tsx`**). Avoid duplicating “back to list” as a separate **`PageHeader.actions`** outline button when **`FormHeader`** already covers it.
+- **App-shell breadcrumb for `[id]` pages**: when the last crumb must be the **loaded record** (title), render **`ApplyBreadcrumb`** from **`@open-mercato/ui/backend/AppShell`** once data is ready: **`breadcrumb={[{ labelKey + href to list }, { truncatedTitle }]}`**, **`title={truncatedTitle}`** — same idea as **`packages/core/src/modules/accounting/backend/config/accounting/entities/[id]/page.tsx`**. Route **`page.meta.ts`** `breadcrumb` cannot include the dynamic record name by itself.
+- **Tabs on detail pages**: use **`DetailTabsLayout`** from **`packages/core/src/modules/customers/components/detail/DetailTabsLayout`** — **segmented tablist** (inline group: **`rounded-lg border bg-muted/30 p-1`**, active trigger **`bg-background`** + light **shadow**). Reference: **procurement process** detail, **resources** resource detail (main tabs + notes/activities), **cases** detail.
 - **Two-column detail layout** (when mirroring grouped `CrudForm` for the same entity flow): **`grid grid-cols-1 gap-4 lg:grid-cols-[7fr_3fr] lg:items-start`**, **`min-w-0`** on columns, section chrome **`rounded-lg border bg-card px-4 py-3`** without **`shadow-sm`**, linked-record previews via **`PreviewFieldCell` / `PreviewFieldGrid`**. Full rules: **`.cursor/rules/detail-two-column-layout.mdc`**.
 
 ## i18n

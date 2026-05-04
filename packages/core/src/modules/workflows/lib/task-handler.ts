@@ -19,7 +19,8 @@ import {
   StepInstance,
   WorkflowDefinition,
 } from '../data/entities'
-import { ProcurementProcess, ProcurementProcessTask } from '../../procurement/data/entities'
+import { OperationsTask, ProcurementProcess } from '../../procurement/data/entities'
+import { OPERATIONS_TASK_CONTEXT_PROCUREMENT_PROCESS } from '../../procurement/lib/operationsTaskContext'
 import { appendProcurementTimelineNoteFromUserTask } from '../../procurement/lib/appendUserTaskProcurementNote'
 import { executeWorkflow } from './workflow-executor'
 import * as stepHandler from './step-handler'
@@ -111,24 +112,21 @@ export async function completeUserTask(
 
     await em.flush()
 
-    const procTask = await em.findOne(
-      ProcurementProcessTask,
-      {
-        id: task.procurementProcessTaskId,
-        deletedAt: null,
-      },
-      { populate: ['process'] },
-    )
+    const procTask = await em.findOne(OperationsTask, {
+      id: task.procurementProcessTaskId,
+      deletedAt: null,
+      contextType: OPERATIONS_TASK_CONTEXT_PROCUREMENT_PROCESS,
+    })
     if (procTask) {
       procTask.taskStatus = 'done'
       procTask.updatedAt = now
       await em.flush()
 
       if (comments?.trim()) {
-        const processEntity =
-          typeof procTask.process === 'string'
-            ? await em.findOne(ProcurementProcess, { id: procTask.process, deletedAt: null })
-            : procTask.process
+        const processEntity = await em.findOne(ProcurementProcess, {
+          id: procTask.contextId,
+          deletedAt: null,
+        })
         if (processEntity) {
           await appendProcurementTimelineNoteFromUserTask(em, {
             userTask: task,
@@ -344,9 +342,10 @@ export async function claimUserTask(
   await em.flush()
 
   if (task.procurementProcessTaskId) {
-    const procTask = await em.findOne(ProcurementProcessTask, {
+    const procTask = await em.findOne(OperationsTask, {
       id: task.procurementProcessTaskId,
       deletedAt: null,
+      contextType: OPERATIONS_TASK_CONTEXT_PROCUREMENT_PROCESS,
     })
     if (procTask) {
       procTask.assignedUserId = userId

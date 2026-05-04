@@ -16,8 +16,17 @@ import {
   resourcesResourceCreateSchema,
   resourcesResourceUpdateSchema,
   type ResourcesResourceCreateInput,
+  type ResourcesResourceFinancingProfileInput,
   type ResourcesResourceUpdateInput,
 } from '../data/validators'
+import {
+  assertFinancingProfileAllowed,
+  loadFinancingProfileSnapshot,
+  loadResourceTypeForResource,
+  isVehicleResourceTypeName,
+  syncPrimaryInsurancePolicyForResource,
+  upsertResourceFinancingProfile,
+} from '../lib/resourceInsuranceAndFinancing'
 import { resourcesResourceCrudEvents } from '../lib/crud'
 import { ensureOrganizationScope, ensureTenantScope, extractUndoPayload } from './shared'
 import { RESOURCES_CAPACITY_UNIT_DICTIONARY_KEY } from '../lib/capacityUnits'
@@ -40,6 +49,106 @@ type ResourceStatusSnapshot = {
   label: string
   color: string | null
   icon: string | null
+}
+
+type ResourceFinancingSnapshot = {
+  financingKind: ResourcesResourceFinancingProfileInput['financingKind']
+  termMonths: number | null
+  vehicleValueAmount: number | null
+  installmentAmount: number | null
+  currencyCode: string | null
+  validFrom: string | null
+  validTo: string | null
+  metadata: Record<string, unknown> | null
+}
+
+function serializeFinancingProfile(
+  row: ResourcesResourceFinancingProfileInput | null,
+): ResourceFinancingSnapshot | null {
+  if (!row) return null
+  return {
+    financingKind: row.financingKind,
+    termMonths: row.termMonths ?? null,
+    vehicleValueAmount: row.vehicleValueAmount ?? null,
+    installmentAmount: row.installmentAmount ?? null,
+    currencyCode: row.currencyCode ?? null,
+    validFrom: row.validFrom instanceof Date ? row.validFrom.toISOString() : null,
+    validTo: row.validTo instanceof Date ? row.validTo.toISOString() : null,
+    metadata: row.metadata ?? null,
+  }
+}
+
+function parseFinancingSnapshot(raw: ResourceFinancingSnapshot | null | undefined): ResourcesResourceFinancingProfileInput | null {
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    financingKind: raw.financingKind,
+    termMonths: raw.termMonths ?? null,
+    vehicleValueAmount: raw.vehicleValueAmount ?? null,
+    installmentAmount: raw.installmentAmount ?? null,
+    currencyCode: raw.currencyCode ?? null,
+    validFrom: raw.validFrom ? new Date(raw.validFrom) : null,
+    validTo: raw.validTo ? new Date(raw.validTo) : null,
+    metadata: raw.metadata ?? null,
+  }
+}
+
+async function applyVehicleInsuranceAndFinancingForCreate(
+  em: EntityManager,
+  record: ResourcesResource,
+  parsed: ResourcesResourceCreateInput,
+): Promise<void> {
+  const type = await loadResourceTypeForResource(em, record.resourceTypeId ?? null)
+  const isVehicle = isVehicleResourceTypeName(type?.name ?? null)
+  if (!isVehicle) {
+    if (parsed.insurancePolicyId !== undefined && parsed.insurancePolicyId !== null) {
+      throw new CrudHttpError(400, { error: 'Insurance policies can only be linked to vehicle resource types.' })
+    }
+    if (parsed.financingProfile !== undefined && parsed.financingProfile !== null) {
+      throw new CrudHttpError(400, {
+        error: 'Financing profile is only allowed for resource types marked as vehicle financing eligible.',
+      })
+    }
+    return
+  }
+  if (parsed.insurancePolicyId !== undefined) {
+    await syncPrimaryInsurancePolicyForResource(em, record, parsed.insurancePolicyId)
+  }
+  if (parsed.financingProfile !== undefined) {
+    if (parsed.financingProfile !== null) {
+      await assertFinancingProfileAllowed(em, record.resourceTypeId)
+    }
+    await upsertResourceFinancingProfile(em, record, parsed.financingProfile ?? null)
+  }
+}
+
+async function applyVehicleInsuranceAndFinancingForUpdate(
+  em: EntityManager,
+  record: ResourcesResource,
+  parsed: ResourcesResourceUpdateInput,
+): Promise<void> {
+  const type = await loadResourceTypeForResource(em, record.resourceTypeId ?? null)
+  const isVehicle = isVehicleResourceTypeName(type?.name ?? null)
+  if (!isVehicle) {
+    await syncPrimaryInsurancePolicyForResource(em, record, null)
+    await upsertResourceFinancingProfile(em, record, null)
+    return
+  }
+  if (parsed.insurancePolicyId !== undefined) {
+    await syncPrimaryInsurancePolicyForResource(em, record, parsed.insurancePolicyId)
+  }
+  if (!type?.vehicleFinancingEligible) {
+    if (parsed.financingProfile !== undefined && parsed.financingProfile !== null) {
+      throw new CrudHttpError(400, {
+        error: 'Financing profile is only allowed for resource types marked as vehicle financing eligible.',
+      })
+    }
+    await upsertResourceFinancingProfile(em, record, null)
+  } else if (parsed.financingProfile !== undefined) {
+    if (parsed.financingProfile !== null) {
+      await assertFinancingProfileAllowed(em, record.resourceTypeId)
+    }
+    await upsertResourceFinancingProfile(em, record, parsed.financingProfile)
+  }
 }
 
 type ResourceSnapshot = {
@@ -66,6 +175,8 @@ type ResourceSnapshot = {
   statusIcon: string | null
   tags: string[]
   deletedAt: string | null
+  insurancePolicyId?: string | null
+  financingProfile?: ResourceFinancingSnapshot | null
   customFields?: CustomFieldSnapshot | null
 }
 
@@ -261,6 +372,7 @@ async function loadResourceSnapshot(em: EntityManager, id: string): Promise<Reso
     .map((assignment) => (assignment.tag as ResourcesResourceTag | undefined)?.id ?? null)
     .filter((tagId): tagId is string => typeof tagId === 'string' && tagId.length > 0)
     .sort((a, b) => a.localeCompare(b))
+  const financingRow = await loadFinancingProfileSnapshot(em, resource.id)
   return {
     id: resource.id,
     tenantId: resource.tenantId,
@@ -285,6 +397,8 @@ async function loadResourceSnapshot(em: EntityManager, id: string): Promise<Reso
     statusIcon: resource.statusIcon ?? null,
     tags,
     deletedAt: resource.deletedAt ? resource.deletedAt.toISOString() : null,
+    insurancePolicyId: resource.insurancePolicyId ?? null,
+    financingProfile: serializeFinancingProfile(financingRow),
   }
 }
 
@@ -388,6 +502,7 @@ const createResourceCommand: CommandHandler<ResourcesResourceCreateInput, { reso
       statusLabel: statusSnapshot?.label ?? null,
       statusColor: statusSnapshot?.color ?? null,
       statusIcon: statusSnapshot?.icon ?? null,
+      insurancePolicyId: null,
       createdAt: now,
       updatedAt: now,
     })
@@ -408,6 +523,8 @@ const createResourceCommand: CommandHandler<ResourcesResourceCreateInput, { reso
       tenantId: record.tenantId,
       tagIds: parsed.tags,
     })
+    await em.flush()
+    await applyVehicleInsuranceAndFinancingForCreate(em, record, parsed)
     await em.flush()
     await emitCrudSideEffects({
       dataEngine,
@@ -461,6 +578,8 @@ const createResourceCommand: CommandHandler<ResourcesResourceCreateInput, { reso
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const record = await em.findOne(ResourcesResource, { id: after.id })
     if (record) {
+      await syncPrimaryInsurancePolicyForResource(em, record, null)
+      await upsertResourceFinancingProfile(em, record, null)
       record.deletedAt = new Date()
       record.updatedAt = new Date()
       await em.flush()
@@ -566,6 +685,8 @@ const updateResourceCommand: CommandHandler<ResourcesResourceUpdateInput, { reso
       tagIds: parsed.tags,
     })
     await em.flush()
+    await applyVehicleInsuranceAndFinancingForUpdate(em, record, parsed)
+    await em.flush()
     const dataEngine = (ctx.container.resolve('dataEngine') as DataEngine)
     await setCustomFieldsIfAny({
       dataEngine,
@@ -623,7 +744,11 @@ const updateResourceCommand: CommandHandler<ResourcesResourceUpdateInput, { reso
       'statusColor',
       'statusIcon',
       'deletedAt',
+      'insurancePolicyId',
     ])
+    if (JSON.stringify(before.financingProfile ?? null) !== JSON.stringify(after.financingProfile ?? null)) {
+      changes.financingProfile = { from: before.financingProfile ?? null, to: after.financingProfile ?? null }
+    }
     if (before.tags.join(',') !== after.tags.join(',')) {
       changes.tags = { from: before.tags, to: after.tags }
     }
@@ -679,6 +804,9 @@ const updateResourceCommand: CommandHandler<ResourcesResourceUpdateInput, { reso
     record.statusColor = before.statusColor ?? null
     record.statusIcon = before.statusIcon ?? null
     record.deletedAt = before.deletedAt ? new Date(before.deletedAt) : null
+    if (Object.prototype.hasOwnProperty.call(before, 'insurancePolicyId')) {
+      record.insurancePolicyId = before.insurancePolicyId ?? null
+    }
     record.updatedAt = new Date()
     await em.flush()
     await syncResourcesResourceTags(em, {
@@ -687,6 +815,11 @@ const updateResourceCommand: CommandHandler<ResourcesResourceUpdateInput, { reso
       tenantId: record.tenantId,
       tagIds: before.tags,
     })
+    await em.flush()
+    await syncPrimaryInsurancePolicyForResource(em, record, record.insurancePolicyId ?? null)
+    if (Object.prototype.hasOwnProperty.call(before, 'financingProfile')) {
+      await upsertResourceFinancingProfile(em, record, parseFinancingSnapshot(before.financingProfile))
+    }
     await em.flush()
 
     const dataEngine = (ctx.container.resolve('dataEngine') as DataEngine)
@@ -744,6 +877,8 @@ const deleteResourceCommand: CommandHandler<{ id?: string }, { resourceId: strin
     if (!record) throw new CrudHttpError(404, { error: 'Resources resource not found.' })
     ensureTenantScope(ctx, record.tenantId)
     ensureOrganizationScope(ctx, record.organizationId)
+    await syncPrimaryInsurancePolicyForResource(em, record, null)
+    await upsertResourceFinancingProfile(em, record, null)
     record.deletedAt = new Date()
     record.updatedAt = new Date()
     await em.flush()
@@ -815,6 +950,9 @@ const deleteResourceCommand: CommandHandler<{ id?: string }, { resourceId: strin
         statusLabel: before.statusLabel ?? null,
         statusColor: before.statusColor ?? null,
         statusIcon: before.statusIcon ?? null,
+        insurancePolicyId: Object.prototype.hasOwnProperty.call(before, 'insurancePolicyId')
+          ? before.insurancePolicyId ?? null
+          : null,
         deletedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -839,6 +977,9 @@ const deleteResourceCommand: CommandHandler<{ id?: string }, { resourceId: strin
       record.statusLabel = before.statusLabel ?? null
       record.statusColor = before.statusColor ?? null
       record.statusIcon = before.statusIcon ?? null
+      if (Object.prototype.hasOwnProperty.call(before, 'insurancePolicyId')) {
+        record.insurancePolicyId = before.insurancePolicyId ?? null
+      }
       record.deletedAt = null
       record.updatedAt = new Date()
     }
@@ -849,6 +990,11 @@ const deleteResourceCommand: CommandHandler<{ id?: string }, { resourceId: strin
       tenantId: record.tenantId,
       tagIds: before.tags,
     })
+    await em.flush()
+    await syncPrimaryInsurancePolicyForResource(em, record, record.insurancePolicyId ?? null)
+    if (Object.prototype.hasOwnProperty.call(before, 'financingProfile')) {
+      await upsertResourceFinancingProfile(em, record, parseFinancingSnapshot(before.financingProfile))
+    }
     await em.flush()
 
     const dataEngine = (ctx.container.resolve('dataEngine') as DataEngine)

@@ -12,6 +12,7 @@ export type ResourceTypeFormValues = {
   id?: string
   name: string
   description?: string
+  vehicleFinancingEligible?: boolean
   appearance?: { icon?: string | null; color?: string | null }
 } & Record<string, unknown>
 
@@ -48,6 +49,7 @@ export const buildResourceTypePayload = (
     description,
     appearanceIcon: appearance.icon ?? null,
     appearanceColor: appearance.color ?? null,
+    vehicleFinancingEligible: values.vehicleFinancingEligible === true,
     ...(Object.keys(customFields).length ? { customFields } : {}),
   }
 }
@@ -78,6 +80,15 @@ export function ResourceTypeCrudForm({
 
   const fields = React.useMemo<CrudField[]>(() => [
     { id: 'name', label: t('resources.resourceTypes.form.name', 'Name'), type: 'text', required: true },
+    {
+      id: 'vehicleFinancingEligible',
+      label: t('resources.resourceTypes.form.vehicleFinancingEligible', 'Vehicle financing (internal fleet)'),
+      description: t(
+        'resources.resourceTypes.form.vehicleFinancingEligible.help',
+        'When enabled, resources of this type may store lease/loan details.',
+      ),
+      type: 'checkbox',
+    },
     { id: 'description', label: t('resources.resourceTypes.form.description', 'Description'), type: 'richtext' },
     {
       id: 'appearance',
@@ -99,7 +110,7 @@ export function ResourceTypeCrudForm({
   ], [appearanceLabels, t])
 
   const groups = React.useMemo<CrudFormGroup[]>(() => [
-    { id: 'details', fields: ['name', 'description', 'appearance'] },
+    { id: 'details', fields: ['name', 'vehicleFinancingEligible', 'description', 'appearance'] },
     { id: 'custom', title: t('entities.customFields.title', 'Custom Attributes'), column: 2, kind: 'customFields' },
   ], [t])
 

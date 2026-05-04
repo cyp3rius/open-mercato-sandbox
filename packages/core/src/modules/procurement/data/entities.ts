@@ -1,11 +1,4 @@
-import {
-  Entity,
-  Index,
-  ManyToOne,
-  PrimaryKey,
-  Property,
-  Unique,
-} from '@mikro-orm/core'
+import { Entity, Index, ManyToOne, PrimaryKey, Property, Unique } from '@mikro-orm/core'
 import { CustomerEntity } from '@open-mercato/core/modules/customers/data/entities'
 
 @Entity({ tableName: 'procurement_processes' })
@@ -227,10 +220,13 @@ export class ProcurementProcessSupplierLineItem {
   createdAt: Date = new Date()
 }
 
-@Entity({ tableName: 'procurement_process_tasks' })
-@Index({ name: 'procurement_process_tasks_process_idx', properties: ['process'] })
-@Index({ name: 'procurement_process_tasks_assignee_idx', properties: ['assignedUserId'] })
-export class ProcurementProcessTask {
+@Entity({ tableName: 'operations_tasks' })
+@Index({
+  name: 'operations_tasks_context_idx',
+  properties: ['tenantId', 'organizationId', 'contextType', 'contextId'],
+})
+@Index({ name: 'operations_tasks_assignee_idx', properties: ['assignedUserId'] })
+export class OperationsTask {
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
 
@@ -240,11 +236,14 @@ export class ProcurementProcessTask {
   @Property({ name: 'organization_id', type: 'uuid' })
   organizationId!: string
 
-  @ManyToOne(() => ProcurementProcess, { fieldName: 'process_id' })
-  process!: ProcurementProcess
+  @Property({ name: 'context_type', type: 'text' })
+  contextType!: string
 
-  @ManyToOne(() => ProcurementProcessSupplier, { fieldName: 'supplier_id', nullable: true })
-  supplier?: ProcurementProcessSupplier | null
+  @Property({ name: 'context_id', type: 'uuid' })
+  contextId!: string
+
+  @Property({ name: 'supplier_id', type: 'uuid', nullable: true })
+  supplierId?: string | null
 
   @Property({ type: 'text' })
   title!: string
@@ -267,7 +266,6 @@ export class ProcurementProcessTask {
   @Property({ name: 'source_action_value', type: 'text', nullable: true })
   sourceActionValue?: string | null
 
-  /** Workflows `user_tasks.id` — canonical task under /backend/tasks. */
   @Property({ name: 'work_item_user_task_id', type: 'uuid', nullable: true })
   workItemUserTaskId?: string | null
 

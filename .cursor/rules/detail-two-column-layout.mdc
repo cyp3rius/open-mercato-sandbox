@@ -38,9 +38,14 @@ Use when building **backend detail** screens that mirror **grouped `CrudForm`** 
 
 - When a single logical row uses **`grid` + multiple columns** (e.g. typ, status, osoba obsługująca) and one column has **taller content** (e.g. status pipeline with transition buttons), add **`items-start`** on the row (**`md:items-start`**) so shorter columns do **not** stretch to the tallest cell’s height.
 
+## Detail tabs (main column)
+
+- Prefer **`DetailTabsLayout`** (segmented button-group tablist — see **`module-backend-ui.mdc` → Detail**) for switching detail sections instead of ad-hoc underline tabs or raw **`TabsList`** / border-bottom nav rows.
+
 ## Sidebar sections (relations, notes, attachments)
 
 - **Relations** with **`InlineSelectEditor`** + custom **`renderDisplay`**: association previews and actions should follow **`.cursor/rules/form-ui-consistency.mdc`** (hover-revealed corner actions, `group` on the preview shell).
+- **Do not** repeat the same **primary relation** (e.g. customer) in the sidebar **overview / status** strip when it is already the hero of the main column **Basics** block — keep the sidebar for status, owner, dates, and secondary facts.
 - **Notes** and **attachments**: same **card chrome** as elsewhere (**`rounded-lg border bg-card px-4 py-3`**); **attachments** may use **`showHeader={false}`** on **`AttachmentsSection`** when the page supplies the **`h2`** in the card (see **`form-ui-consistency.mdc`** typography).
 
 ## Do not

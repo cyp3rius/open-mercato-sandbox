@@ -12,17 +12,24 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { RESOURCES_CAPACITY_UNIT_DICTIONARY_KEY } from '@open-mercato/core/modules/resources/lib/capacityUnits'
 import { RESOURCES_RESOURCE_STATUS_DICTIONARY_KEY } from '@open-mercato/core/modules/resources/lib/resourceStatus'
-import { RESOURCES_RESOURCE_FIELDSET_DEFAULT, resolveResourcesResourceFieldsetCode } from '@open-mercato/core/modules/resources/lib/resourceCustomFields'
+import {
+  RESOURCES_RESOURCE_FIELDSET_DEFAULT,
+  RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+  resolveResourcesResourceFieldsetCode,
+} from '@open-mercato/core/modules/resources/lib/resourceCustomFields'
 import Link from 'next/link'
 import { Plus, Settings } from 'lucide-react'
 import { ResourceCustomerLinkField } from './ResourceCustomerLinkField'
 import { ResourceLinkedPoliciesSection } from './detail/ResourceLinkedPoliciesSection'
+import { VehicleGallerySection } from './detail/VehicleGallerySection'
+import { ResourceVehicleCommercialSection } from './ResourceVehicleCommercialSection'
 
 const DEFAULT_PAGE_SIZE = 100
 
 type ResourceTypeRow = {
   id: string
   name: string
+  vehicleFinancingEligible?: boolean
 }
 
 type ResourceTypesResponse = {
@@ -44,12 +51,14 @@ export type ResourcesResourceFormConfig = {
   groups: CrudFormGroup[]
   resolveFieldsetCode: (resourceTypeId?: string | null) => string
   resourceTypesLoaded: boolean
+  financingEligibleByTypeId: Map<string, boolean>
 }
 
 export function useResourcesResourceFormConfig(options: {
   tagsSection?: ResourceTagsSectionConfig
+  resourceId?: string | null
 } = {}): ResourcesResourceFormConfig {
-  const { tagsSection } = options
+  const { tagsSection, resourceId = null } = options
   const t = useT()
   const scopeVersion = useOrganizationScopeVersion()
   const [resourceTypes, setResourceTypes] = React.useState<ResourceTypeRow[]>([])
@@ -65,7 +74,16 @@ export function useResourcesResourceFormConfig(options: {
         const call = await apiCall<ResourceTypesResponse>(`/api/resources/resource-types?${params.toString()}`)
         if (!cancelled) {
           const items = Array.isArray(call.result?.items) ? call.result.items : []
-          setResourceTypes(items)
+          setResourceTypes(
+            items.map((row) => {
+              const raw = row as Record<string, unknown>
+              const id = typeof raw.id === 'string' ? raw.id : ''
+              const name = typeof raw.name === 'string' ? raw.name : ''
+              const vehicleFinancingEligible =
+                raw.vehicle_financing_eligible === true || raw.vehicleFinancingEligible === true
+              return { id, name, vehicleFinancingEligible }
+            }),
+          )
         }
       } catch {
         if (!cancelled) setResourceTypes([])
@@ -123,6 +141,14 @@ export function useResourcesResourceFormConfig(options: {
     if (!resourceTypeId) return RESOURCES_RESOURCE_FIELDSET_DEFAULT
     return resourceFieldsetByTypeId.get(resourceTypeId) ?? RESOURCES_RESOURCE_FIELDSET_DEFAULT
   }, [resourceFieldsetByTypeId])
+
+  const financingEligibleByTypeId = React.useMemo(() => {
+    const map = new Map<string, boolean>()
+    resourceTypes.forEach((type) => {
+      map.set(type.id, type.vehicleFinancingEligible === true)
+    })
+    return map
+  }, [resourceTypes])
 
   const appearanceLabels = React.useMemo(() => ({
     colorLabel: t('resources.resources.form.appearance.colorLabel', 'Color'),
@@ -253,6 +279,22 @@ export function useResourcesResourceFormConfig(options: {
         ),
       },
       {
+        id: 'vehicleCommercial',
+        label: t('resources.resources.form.vehicleCommercial.title', 'Vehicle policy & financing'),
+        type: 'custom',
+        layout: 'full',
+        component: ({ values, setFormValue, disabled }) => (
+          <ResourceVehicleCommercialSection
+            values={values as Record<string, unknown>}
+            setFormValue={(id, value) => setFormValue?.(id, value)}
+            disabled={disabled}
+            resourceId={resourceId}
+            financingEligibleByTypeId={financingEligibleByTypeId}
+            resolveFieldsetCode={resolveFieldsetCode}
+          />
+        ),
+      },
+      {
         id: 'capacity',
         label: t('resources.resources.form.fields.capacity', 'Capacity'),
         description: t(
@@ -318,6 +360,8 @@ export function useResourcesResourceFormConfig(options: {
     resourceStatusDictionaryId,
     resolveFieldsetCode,
     resourceTypes,
+    resourceId,
+    financingEligibleByTypeId,
     t,
   ])
 
@@ -332,6 +376,7 @@ export function useResourcesResourceFormConfig(options: {
           'statusValue',
           'description',
           'customerEntityId',
+          'vehicleCommercial',
           'capacity',
           'capacityUnitValue',
           'appearance',
@@ -368,7 +413,7 @@ export function useResourcesResourceFormConfig(options: {
     return baseGroups
   }, [tagsSection, t])
 
-  return { fields, groups, resolveFieldsetCode, resourceTypesLoaded }
+  return { fields, groups, resolveFieldsetCode, resourceTypesLoaded, financingEligibleByTypeId }
 }
 
 export type ResourcesResourceFormProps = {
@@ -424,9 +469,21 @@ export function ResourcesResourceForm(props: ResourcesResourceFormProps) {
           component: () => <ResourceLinkedPoliciesSection resourceId={recordId} />,
         }
       : null
+    const galleryGroup: CrudFormGroup | null =
+      recordId && initialValues?.customFieldsetCode === RESOURCES_RESOURCE_FIELDSET_VEHICLE
+        ? {
+            id: 'vehicleGallery',
+            column: 1,
+            title: t('resources.gallery.title', 'Vehicle photos'),
+            component: () => <VehicleGallerySection resourceId={recordId} />,
+          }
+        : null
     const base = formConfig.groups
+    const trailing: CrudFormGroup[] = []
+    if (galleryGroup) trailing.push(galleryGroup)
+    trailing.push(attachmentsGroup)
     if (!linkedPoliciesGroup) {
-      return [...base, attachmentsGroup]
+      return [...base, ...trailing]
     }
     const tagsIndex = base.findIndex((g) => g.id === 'tags')
     if (tagsIndex >= 0) {
@@ -434,13 +491,13 @@ export function ResourcesResourceForm(props: ResourcesResourceFormProps) {
         ...base.slice(0, tagsIndex),
         linkedPoliciesGroup,
         ...base.slice(tagsIndex),
-        attachmentsGroup,
+        ...trailing,
       ]
     }
     const customIndex = base.findIndex((g) => g.id === 'custom')
     const insertAt = customIndex >= 0 ? customIndex + 1 : base.length
-    return [...base.slice(0, insertAt), linkedPoliciesGroup, ...base.slice(insertAt), attachmentsGroup]
-  }, [formConfig.groups, recordId, t])
+    return [...base.slice(0, insertAt), linkedPoliciesGroup, ...base.slice(insertAt), ...trailing]
+  }, [formConfig.groups, initialValues?.customFieldsetCode, recordId, t])
 
   return (
     <CrudForm

@@ -40,6 +40,22 @@ import {
   GLOBAL_SIDEBAR_STATUS_BADGES_INJECTION_SPOT_ID,
 } from './injection/spotIds'
 
+export type AppShellSidebarNavItem = {
+  id?: string
+  href: string
+  title: string
+  defaultTitle?: string
+  icon?: React.ReactNode
+  enabled?: boolean
+  hidden?: boolean
+  pageContext?: 'main' | 'admin' | 'settings' | 'profile'
+  /** Section heading with nested links only (no top row link). */
+  variant?: 'section'
+  /** Keep nested links visible while the sidebar group is open (non-section parents). */
+  sidebarNestAlwaysVisible?: boolean
+  children?: AppShellSidebarNavItem[]
+}
+
 export type AppShellProps = {
   productName?: string
   email?: string
@@ -47,26 +63,7 @@ export type AppShellProps = {
     id?: string
     name: string
     defaultName?: string
-    items: {
-      id?: string
-      href: string
-      title: string
-      defaultTitle?: string
-      icon?: React.ReactNode
-      enabled?: boolean
-      hidden?: boolean
-      pageContext?: 'main' | 'admin' | 'settings' | 'profile'
-      children?: {
-        id?: string
-        href: string
-        title: string
-        defaultTitle?: string
-        icon?: React.ReactNode
-        enabled?: boolean
-        hidden?: boolean
-        pageContext?: 'main' | 'admin' | 'settings' | 'profile'
-      }[]
-    }[]
+    items: AppShellSidebarNavItem[]
   }[]
   children: React.ReactNode
   rightHeaderSlot?: React.ReactNode
@@ -718,7 +715,13 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
 
   // Ensure current route's group is expanded on load
   React.useEffect(() => {
-    const activeGroup = navGroups.find((g) => g.items.some((i) => pathname?.startsWith(i.href)))
+    const pathMatchesNavItem = (item: SidebarItem, path: string | null): boolean => {
+      if (!path) return false
+      const href = item.href.trim()
+      if (href.length > 0 && path.startsWith(href)) return true
+      return item.children?.some((ch) => pathMatchesNavItem(ch, path)) ?? false
+    }
+    const activeGroup = navGroups.find((g) => g.items.some((i) => pathMatchesNavItem(i, pathname)))
     if (!activeGroup) return
     const key = resolveGroupKey(activeGroup)
     setOpenGroups((prev) => (prev[key] === false ? { ...prev, [key]: true } : prev))
@@ -765,28 +768,24 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
     }
     function mergePreservingIcons(oldG: AppShellProps['groups'], newG: AppShellProps['groups']): AppShellProps['groups'] {
       const iconMap = indexIcons(oldG)
+      const mapItem = (i: AppShellSidebarNavItem): AppShellSidebarNavItem => ({
+        id: i.id,
+        href: i.href,
+        title: i.title,
+        defaultTitle: i.defaultTitle,
+        enabled: i.enabled,
+        hidden: i.hidden,
+        icon: i.icon ?? iconMap.get(i.href),
+        pageContext: i.pageContext,
+        variant: i.variant,
+        sidebarNestAlwaysVisible: i.sidebarNestAlwaysVisible,
+        children: i.children?.map(mapItem),
+      })
       const merged = newG.map((g) => ({
         id: g.id,
         name: g.name,
         defaultName: g.defaultName,
-        items: g.items.map((i) => ({
-          href: i.href,
-          title: i.title,
-          defaultTitle: i.defaultTitle,
-          enabled: i.enabled,
-          hidden: i.hidden,
-          icon: i.icon ?? iconMap.get(i.href),
-          pageContext: i.pageContext,
-          children: i.children?.map((c) => ({
-            href: c.href,
-            title: c.title,
-            defaultTitle: c.defaultTitle,
-            enabled: c.enabled,
-            hidden: c.hidden,
-            icon: c.icon ?? iconMap.get(c.href),
-            pageContext: c.pageContext,
-          })),
-        })),
+        items: g.items.map(mapItem),
       }))
       return merged
     }
@@ -824,28 +823,24 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
     }
     function mergePreservingIcons(oldG: AppShellProps['groups'], newG: AppShellProps['groups']): AppShellProps['groups'] {
       const iconMap = indexIcons(oldG)
+      const mapItem = (i: AppShellSidebarNavItem): AppShellSidebarNavItem => ({
+        id: i.id,
+        href: i.href,
+        title: i.title,
+        defaultTitle: i.defaultTitle,
+        enabled: i.enabled,
+        hidden: i.hidden,
+        icon: i.icon ?? iconMap.get(i.href),
+        pageContext: i.pageContext,
+        variant: i.variant,
+        sidebarNestAlwaysVisible: i.sidebarNestAlwaysVisible,
+        children: i.children?.map(mapItem),
+      })
       const merged = newG.map((g) => ({
         id: g.id,
         name: g.name,
         defaultName: g.defaultName,
-        items: g.items.map((i) => ({
-          href: i.href,
-          title: i.title,
-          defaultTitle: i.defaultTitle,
-          enabled: i.enabled,
-          hidden: i.hidden,
-          icon: i.icon ?? iconMap.get(i.href),
-          pageContext: i.pageContext,
-          children: i.children?.map((c) => ({
-            href: c.href,
-            title: c.title,
-            defaultTitle: c.defaultTitle,
-            enabled: c.enabled,
-            hidden: c.hidden,
-            icon: c.icon ?? iconMap.get(c.href),
-            pageContext: c.pageContext,
-          })),
-        })),
+        items: g.items.map(mapItem),
       }))
       return merged
     }
@@ -1032,7 +1027,8 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
       if (!customDraft) return null
       return baseItems.map((baseItem) => {
         const itemKey = resolveItemKey(baseItem)
-        const current = currentItems.find((item) => item.href === baseItem.href) ?? baseItem
+        const current =
+          currentItems.find((item) => resolveItemKey(item) === resolveItemKey(baseItem)) ?? baseItem
         const placeholder = baseItem.defaultTitle ?? baseItem.title
         const value = customDraft.itemLabels[itemKey] ?? ''
         const hidden = customDraft.hiddenItemIds[itemKey] === true
@@ -1271,12 +1267,62 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
                             <div className={`flex flex-col ${compact ? 'items-center' : ''} gap-1 ${!compact ? 'pl-1' : ''}`}>
                               {visibleItems.map((i) => {
                                 const childItems = (i.children ?? []).filter((child) => child.hidden !== true)
-                                const showChildren = !!pathname && childItems.length > 0 && pathname.startsWith(i.href)
+                                const itemKey = i.id ?? i.href
+                                if (i.variant === 'section' && childItems.length > 0) {
+                                  return (
+                                    <div key={itemKey} className="flex flex-col gap-1">
+                                      {!compact ? (
+                                        <div className="px-2 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                          {i.title}
+                                        </div>
+                                      ) : null}
+                                      <div
+                                        className={`flex flex-col gap-1 ${!compact ? 'ml-2 border-l border-border/60 pl-2' : 'items-center'}`}
+                                      >
+                                        {childItems.map((c) => {
+                                          const childActive = pathname?.startsWith(c.href)
+                                          const childBase = compact ? 'w-10 h-8 justify-center' : 'px-2 py-1 gap-2'
+                                          return (
+                                            <Link
+                                              key={c.href}
+                                              href={c.href}
+                                              className={`relative text-sm rounded inline-flex items-center ${childBase} ${
+                                                childActive ? 'bg-background border shadow-sm' : 'hover:bg-accent hover:text-accent-foreground'
+                                              } ${c.enabled === false ? 'pointer-events-none opacity-50' : ''}`}
+                                              aria-disabled={c.enabled === false}
+                                              title={compact ? c.title : undefined}
+                                              data-menu-item-id={c.id ?? c.href}
+                                              onClick={() => setMobileOpen(false)}
+                                            >
+                                              {childActive ? (
+                                                <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-foreground" />
+                                              ) : null}
+                                              <span className={`flex items-center justify-center shrink-0 ${compact ? '' : 'text-muted-foreground'}`}>
+                                                {c.icon ??
+                                                  (c.href.includes('/backend/entities/user/') && c.href.endsWith('/records')
+                                                    ? DataTableIcon
+                                                    : DefaultIcon)}
+                                              </span>
+                                              {!compact && <span>{c.title}</span>}
+                                            </Link>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
+                                  )
+                                }
                                 const hasActiveChild = !!(pathname && childItems.some((c) => pathname.startsWith(c.href)))
-                                const isParentActive = (pathname === i.href) || (showChildren && !hasActiveChild)
+                                const showChildren =
+                                  !!pathname &&
+                                  childItems.length > 0 &&
+                                  (Boolean(i.sidebarNestAlwaysVisible) ||
+                                    (i.href.length > 0 && pathname.startsWith(i.href)) ||
+                                    hasActiveChild)
+                                const isParentActive =
+                                  (i.href.length > 0 && pathname === i.href) || (showChildren && !hasActiveChild)
                                 const base = compact ? 'w-10 h-10 justify-center' : 'px-2 py-1 gap-2'
                                 return (
-                                  <React.Fragment key={i.href}>
+                                  <React.Fragment key={itemKey}>
                                     <Link
                                       href={i.href}
                                       className={`relative text-sm rounded inline-flex items-center ${base} ${
@@ -1316,7 +1362,10 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
                                                 <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-foreground" />
                                               ) : null}
                                               <span className={`flex items-center justify-center shrink-0 ${compact ? '' : 'text-muted-foreground'}`}>
-                                                {c.icon ?? (c.href.includes('/backend/entities/user/') && c.href.endsWith('/records') ? DataTableIcon : DefaultIcon)}
+                                                {c.icon ??
+                                                  (c.href.includes('/backend/entities/user/') && c.href.endsWith('/records')
+                                                    ? DataTableIcon
+                                                    : DefaultIcon)}
                                               </span>
                                               {!compact && <span>{c.title}</span>}
                                             </Link>
@@ -1608,6 +1657,8 @@ AppShell.cloneGroups = function cloneGroups(groups: AppShellProps['groups']): Ap
     enabled: item.enabled,
     hidden: item.hidden,
     pageContext: item.pageContext,
+    variant: item.variant,
+    sidebarNestAlwaysVisible: item.sidebarNestAlwaysVisible,
     children: item.children ? item.children.map((child) => cloneItem(child)) : undefined,
   })
   return groups.map((group) => ({

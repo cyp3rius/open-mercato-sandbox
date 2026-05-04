@@ -270,8 +270,13 @@ export const proposalListQuerySchema = z.object({
 
 export const emailListQuerySchema = z.object({
   status: z.enum(['received', 'processing', 'processed', 'needs_review', 'failed']).optional(),
+  caseId: z.string().uuid().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
+})
+
+export const inboxEmailLinkCaseSchema = z.object({
+  caseId: z.string().uuid().nullable(),
 })
 
 export const actionEditSchema = z.object({

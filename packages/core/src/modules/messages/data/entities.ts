@@ -26,6 +26,7 @@ export type MessageActionData = {
 @Entity({ tableName: 'messages' })
 @Index({ name: 'messages_sender_idx', properties: ['senderUserId', 'sentAt'] })
 @Index({ name: 'messages_thread_idx', properties: ['threadId'] })
+@Index({ name: 'messages_case_idx', properties: ['caseId'] })
 @Index({ name: 'messages_type_idx', properties: ['type', 'tenantId'] })
 @Index({ name: 'messages_tenant_idx', properties: ['tenantId', 'organizationId'] })
 export class Message {
@@ -39,6 +40,9 @@ export class Message {
 
   @Property({ name: 'thread_id', type: 'uuid', nullable: true })
   threadId?: string | null
+
+  @Property({ name: 'case_id', type: 'uuid', nullable: true })
+  caseId?: string | null
 
   @Property({ name: 'parent_message_id', type: 'uuid', nullable: true })
   parentMessageId?: string | null

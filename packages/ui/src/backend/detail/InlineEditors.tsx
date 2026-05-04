@@ -779,6 +779,11 @@ export type InlineSelectEditorProps = {
   hideLabel?: boolean
   renderEditor?: (params: { value: string; onChange: (next: string) => void }) => React.ReactNode
   renderDisplay?: (params: InlineSelectDisplayParams) => React.ReactNode
+  /**
+   * When used with `embedEditTriggerInDisplay`, renders in the top-right of the field (same cell as the
+   * default pencil in `InlineTextEditor`), aligned to the label row.
+   */
+  renderDisplayActions?: (params: InlineSelectDisplayParams) => React.ReactNode
 }
 
 export function InlineSelectEditor({
@@ -796,6 +801,7 @@ export function InlineSelectEditor({
   hideLabel = false,
   renderEditor,
   renderDisplay,
+  renderDisplayActions,
 }: InlineSelectEditorProps) {
   const t = useT()
   const [editing, setEditing] = React.useState(false)
@@ -871,6 +877,9 @@ export function InlineSelectEditor({
       : { value, emptyLabel }
 
   const showEndEditTrigger = showEditTrigger && !embedEditTriggerInDisplay
+  const showEmbeddedDisplayActions = Boolean(
+    embedEditTriggerInDisplay && renderDisplayActions && !editing,
+  )
 
   return (
     <div className={containerClasses}>
@@ -935,6 +944,15 @@ export function InlineSelectEditor({
           >
             {editing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
           </Button>
+        ) : showEmbeddedDisplayActions ? (
+          <div
+            className={cn(
+              'pointer-events-none flex shrink-0 items-start justify-end gap-1 opacity-0 transition-opacity duration-150',
+              'group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100',
+            )}
+          >
+            {renderDisplayActions!(displayParams)}
+          </div>
         ) : null}
       </div>
     </div>

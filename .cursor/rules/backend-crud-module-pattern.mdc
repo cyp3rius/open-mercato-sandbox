@@ -1,0 +1,64 @@
+---
+description: Spójny wzorzec CRUD w modułach backend (lista DataTable, CrudForm create/detail, dialog potwierdzenia, konfiguracja formularzy)
+globs:
+  - apps/mercato/src/modules/**/backend/**/*.tsx
+  - packages/core/src/modules/**/backend/**/*.tsx
+alwaysApply: false
+---
+
+# Backend CRUD — wzorzec modułu (Open Mercato)
+
+**Gate:** najpierw **`.cursor/rules/backend-views-conventions.mdc`** oraz **`module-backend-ui.mdc`**; ta reguła zbiera praktyczny zestaw dla **hubów listowych i formularzy CRUD**.
+
+## Moduły referencyjne (złoty standard)
+
+| Obszar | Pakiet / ścieżka | Uwagi |
+|--------|------------------|--------|
+| **Lista CRUD (DataTable)** | `packages/core/src/modules/procurement/backend/procurement/processes/page.tsx` | `title`, `refreshButton`, `search`, filtry, `perspective`, `rowActions`, `onRowClick` → szczegół |
+| **Lista + proste akcje** | `packages/core/src/modules/accounting/backend/config/accounting/entities/page.tsx` | DataTable z `title` / `actions` / wyszukiwarka w toolbarze tabeli |
+| **Create (CrudForm)** | `packages/core/src/modules/accounting/backend/config/accounting/entities/create/page.tsx` | `CrudForm`: `title`, `backHref`, `cancelHref`, `submitLabel`, `groups`, pola z konfiguratora |
+| **Detail (CrudForm)** | `packages/core/src/modules/accounting/backend/config/accounting/entities/[id]/page.tsx` | Ładowanie rekordu, `CrudForm` + `onSubmit` / `onDelete`, stany loading i błędu |
+| **Create (CRM, złożony)** | `packages/core/src/modules/customers/backend/customers/companies/create/page.tsx` | Pełny wzorzec z `entityIds`, custom fields, registry sync |
+| **Detail z zakładkami + CRM FK** | `packages/core/src/modules/cases/backend/cases/[id]/page.tsx` | **`FormHeader`** `mode="detail"` + **`ApplyBreadcrumb`** po wczytaniu rekordu; **`DetailTabsLayout`** (segmented); **`LoadingMessage`**; w kolumnie głównej **Basics**: tytuł + klient w **jednym rzędzie** (`grid md:grid-cols-2`); sidebar **bez** powielania klienta; **brak** `title` / `actions` na **`PageBody`** |
+
+Nowe encje CRM / platformowe trzymaj **w tej samej rodzinie layoutów** — nie składaj osobnego nagłówka strony obok tabeli, jeśli DataTable już dostarcza pasek tytułu i akcji.
+
+## Lista (`**/…/page.tsx` hub)
+
+- **`Page` → `PageBody` → `DataTable`** (bez osobnego **`PageHeader`** dla tytułu listy — tytuł i akcje są propsami **`DataTable`**: `title`, `refreshButton`, `actions`, opcjonalnie filtry).
+- **`{ConfirmDialogElement}`** z **`useConfirmDialog()`** na końcu, **obok** `PageBody` (jak w procurement), nie wewnątrz nagłówka tabeli.
+- **Nigdy** nie renderuj **`\<ConfirmDialogElement />`** — hook zwraca **gotowy węzeł React** (Fragment + dialog). Poprawnie: **`{ConfirmDialogElement}`**.
+- **`rowActions`:** kolejność sensowna dla użytkownika — np. **View details**, **Open in new tab**, potem **Delete** (jeśli RBAC). i18n: wzorzec `*.list.actions.viewDetails`, `*.openInNewTab`.
+- **Wiersz klikalny:** `onRowClick` → ten sam URL co „View details”, nie **`/edit`**.
+
+## Create (pełna strona)
+
+- Preferuj **`CrudForm`** z **`packages/ui`**, nie ręczny układ samego **`Input` + Button** bez nagłówka formularza.
+- Obowiązkowe propsy (minimalnie): **`title`**, **`backHref`**, **`cancelHref`**, **`submitLabel`**, **`fields`**, **`groups`** (np. grupa **Basics** — klucz i18n **`*.form.groups.basics`**), opcjonalnie **`schema`** (zod).
+- Logika pól wydzielona do **`components/*FormConfig.tsx`** w module (np. `buildXFormFields`, `buildXFormGroups`, `defaultXValues`, schema), żeby create i detail współdzieliły te same pola.
+- **`onSubmit`:** `createCrud` / odpowiednik; po sukcesie **`flash`** + **`router.replace`/`push`** na **`…/[id]`**.
+
+## Detail (edycja / podgląd)
+
+- **Powłoka strony:** tytuł i przyciski powrotu w **`PageHeader`**; treść w **`PageBody`**. **`PageBody`** przyjmuje tylko **`children`** i **`className`** — **nie** przekazuj **`title`** ani **`actions`** (patrz `packages/ui/src/backend/Page.tsx`).
+- **Ładowanie:** jak w accounting — stan loading z **`LoadingMessage`** (`@open-mercato/ui/backend/detail`), potem błąd / not found z linkiem powrotu do listy.
+- **Edycja:** **`CrudForm`** z **`initialValues`** z rekordu; po zapisie **`flash`** + **`setFormKey(k => k+1)`** i ponowne **`load()`**, albo inwalidacja zgodnie z modułem referencyjnym.
+- **Uprawnienia:** **`readOnly={!canEdit}`** na `CrudForm` gdy użytkownik nie może edytować; **`onDelete`** tylko gdy **`canDelete`** (nie pokazuj usuwania „na sztywno”).
+- Układ **7fr/3fr** i karty boczne: jeśli produkt wymaga panelu bocznego, stosuj **`.cursor/rules/detail-two-column-layout.mdc`** (np. sprawy **cases** — osobna strona z siatką; proste encje jak playbook mogą być jednokolumnowym **CrudForm**).
+
+## Potwierdzenia i RowActions
+
+- **`useConfirmDialog`:** opcje API to **`text`**, **`confirmText`**, **`variant`** — **nie** używaj **`message`** / **`confirmLabel`** (przestarzałe względem typów).
+- **`RowActions`:** dla akcji destrukcyjnej ustaw **`destructive: true`**, nie **`variant: 'destructive'`** (to nie jest pole typu `RowActionItem`).
+
+## i18n
+
+- **`*.list.actions.*`**, **`*.form.groups.basics`**, **`*.create.success`**, **`*.detail.loading`** — dodawaj w **`en.json`** i **`pl.json`** modułu (lub pełny zestaw locale modułu, jeśli istnieje).
+
+## Krótka lista kontrolna PR
+
+1. Lista = **DataTable** z toolbarsem wbudowanym, nie **PageHeader** + goła tabela.
+2. Create/Detail = **CrudForm** (o ile nie ma uzasadnionego wyjątku w spec / `AGENTS.md`).
+3. **`{ConfirmDialogElement}`** — nie jako komponent JSX.
+4. **Brak** `title=` / `actions=` na **`PageBody`** — aktualny **`Page.tsx`** nie obsługuje tych propsów.
+5. Pola **FK do encji CRM** (np. klient): **`EntitySearchCombobox`** na create; na szczegółach **inline** z **`mergeEntitySearchOption`** + **preview** (`fetchProcurementCustomerAssociationPreview` dla `customerEntityId`) — patrz **`.cursor/rules/entity-search-combobox.mdc`** (sekcja CRM).

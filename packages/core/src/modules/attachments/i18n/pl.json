@@ -70,6 +70,7 @@
   "attachments.library.upload.assignments.type": "Typ",
   "attachments.library.upload.cancel": "Anuluj",
   "attachments.library.upload.choose": "Wybierz pliki",
+  "attachments.library.upload.disabledReadOnly": "Przesyłanie jest wyłączone dla zamkniętych rekordów.",
   "attachments.library.upload.dropHint": "Przeciągnij i upuść pliki tutaj lub kliknij, aby przesłać.",
   "attachments.library.upload.failed": "Przesyłanie nie powiodło się.",
   "attachments.library.upload.file": "Pliki",

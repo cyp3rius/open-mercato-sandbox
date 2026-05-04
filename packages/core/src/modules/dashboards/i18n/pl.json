@@ -109,5 +109,13 @@
   "dashboards.widgets.mode.override": "Nadpisz dla tego użytkownika",
   "dashboards.widgets.reset": "Resetuj",
   "dashboards.widgets.save": "Zapisz widżety",
-  "dashboards.widgets.saving": "Zapisywanie…"
+  "dashboards.widgets.saving": "Zapisywanie…",
+  "dashboards.crm.kpisError": "Nie udało się wczytać wskaźników CRM.",
+  "dashboards.crm.noSettings": "Brak ustawień dla tej karty.",
+  "dashboards.crm.overdueResourceTasks.title": "Przeterminowane zadania na zasobie",
+  "dashboards.crm.overdueResourceTasks.link": "Zasoby",
+  "dashboards.crm.openCasesSla.title": "Otwarte sprawy (48h+)",
+  "dashboards.crm.openCasesSla.link": "Sprawy",
+  "dashboards.crm.qcPending.title": "Przeterminowane zadania workflow",
+  "dashboards.crm.qcPending.link": "Zadania"
 }

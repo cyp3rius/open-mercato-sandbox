@@ -40,8 +40,16 @@ import { PageInjectionBoundary } from '@open-mercato/ui/backend/injection/PageIn
 import { DemoFeedbackWidget } from '@/components/DemoFeedbackWidget'
 import { AiAssistantIntegration, AiChatHeaderButton } from '@open-mercato/ai-assistant/frontend'
 import { CustomEntity } from '@open-mercato/core/modules/entities/data/entities'
+import { findBestSidebarNavMatch, normalizeSidebarHref } from '@open-mercato/ui/backend/utils/dailyWorkNav'
+import {
+  buildMercatoDailyWorkStructuredGroup,
+  buildMercatoShortcutsSidebarGroup,
+  filterNavGroupsRemoveDedupeHrefs,
+  MERCATO_SIDEBAR_DEDUPE_HREFS,
+} from '@open-mercato/ui/backend/utils/mercatoSidebarNav'
 
 type NavItem = {
+  id?: string
   href: string
   title: string
   defaultTitle: string
@@ -49,6 +57,8 @@ type NavItem = {
   hidden?: boolean
   icon?: ReactNode
   pageContext?: 'main' | 'admin' | 'settings' | 'profile'
+  variant?: 'section'
+  sidebarNestAlwaysVisible?: boolean
   children?: NavItem[]
 }
 
@@ -307,6 +317,7 @@ export default async function BackendLayout({ children, params }: { children: Re
   const appliedGroups = sidebarPreference ? applySidebarPreference(baseForUser, sidebarPreference) : baseForUser
 
   const materializeItem = (item: NavItem): NavItem => ({
+    id: item.id,
     href: item.href,
     title: item.title,
     defaultTitle: item.defaultTitle,
@@ -314,22 +325,72 @@ export default async function BackendLayout({ children, params }: { children: Re
     hidden: item.hidden,
     icon: item.icon,
     pageContext: item.pageContext,
+    variant: item.variant,
+    sidebarNestAlwaysVisible: item.sidebarNestAlwaysVisible,
     children: item.children?.map(materializeItem),
   })
 
-  const groups: NavGroup[] = appliedGroups.map((group) => ({
-    id: group.id,
-    name: group.name,
-    defaultName: group.defaultName,
-    items: group.items.map(materializeItem),
-    weight: group.weight,
-  }))
+  const shortcutsGroup = buildMercatoShortcutsSidebarGroup(
+    entries,
+    (key, fallback) => (key ? translate(key, fallback) : fallback),
+    mapItem,
+  )
+
+  const dailyWorkGroup = buildMercatoDailyWorkStructuredGroup(
+    entries,
+    (key, fallback) => (key ? translate(key, fallback) : fallback),
+    mapItem,
+  )
+
+  const mercatoDedupeHrefSet = new Set(MERCATO_SIDEBAR_DEDUPE_HREFS.map((h) => normalizeSidebarHref(h)))
+
+  const filteredAppliedGroups = filterNavGroupsRemoveDedupeHrefs(appliedGroups, mercatoDedupeHrefSet)
+
+  const groups: NavGroup[] = [
+    {
+      id: shortcutsGroup.id,
+      name: shortcutsGroup.name,
+      defaultName: shortcutsGroup.defaultName,
+      weight: shortcutsGroup.weight,
+      items: shortcutsGroup.items.map(materializeItem),
+    },
+    {
+      id: dailyWorkGroup.id,
+      name: dailyWorkGroup.name,
+      defaultName: dailyWorkGroup.defaultName,
+      weight: dailyWorkGroup.weight,
+      items: dailyWorkGroup.items.map(materializeItem),
+    },
+    ...filteredAppliedGroups.map((group) => ({
+      id: group.id,
+      name: group.name,
+      defaultName: group.defaultName,
+      items: group.items.map(materializeItem),
+      weight: group.weight,
+    })),
+  ]
+
+  function flattenNavItemsForMatch(items: NavItem[]): NavItem[] {
+    const out: NavItem[] = []
+    const walk = (xs: NavItem[]) => {
+      for (const x of xs) {
+        if (x.variant === 'section') {
+          if (x.children?.length) walk(x.children)
+          continue
+        }
+        out.push(x)
+        if (x.children?.length) walk(x.children)
+      }
+    }
+    walk(items)
+    return out
+  }
 
   type NavEntry = NavItem & { group: string }
   const allEntries: NavEntry[] = groups.flatMap((group) =>
-    group.items.map((item) => ({ ...item, group: group.name })),
+    flattenNavItemsForMatch(group.items).map((item) => ({ ...item, group: group.name })),
   )
-  const current = allEntries.find((item) => path.startsWith(item.href))
+  const current = findBestSidebarNavMatch(path, allEntries)
   const currentTitle = current?.title || ''
   const match = findBackendMatch(modules, path)
   const rawBreadcrumb = match?.route.breadcrumb

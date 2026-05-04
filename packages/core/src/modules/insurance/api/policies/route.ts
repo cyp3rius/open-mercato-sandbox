@@ -72,6 +72,8 @@ const listQuerySchema = z
     id: z.uuid().optional(),
     insurerId: z.uuid().optional(),
     referringPartnerEntityId: z.uuid().optional(),
+    /** Match policies linked to this CRM entity as referring partner or insured person/company. */
+    customerEntityId: z.uuid().optional(),
     resourceId: z.uuid().optional(),
     page: z.coerce.number().min(1).default(1),
     pageSize: z.coerce.number().min(1).max(100).default(50),
@@ -149,6 +151,7 @@ export async function GET(req: Request) {
     id,
     insurerId,
     referringPartnerEntityId,
+    customerEntityId,
     resourceId,
     page,
     pageSize,
@@ -167,6 +170,13 @@ export async function GET(req: Request) {
   if (id) filter.id = id
   if (insurerId) filter.insurer = insurerId
   if (referringPartnerEntityId) filter.referringPartnerEntityId = referringPartnerEntityId
+  if (customerEntityId) {
+    filter.$or = [
+      { referringPartnerEntityId: customerEntityId },
+      { insuredPersonEntityId: customerEntityId },
+      { insuredCompanyEntityId: customerEntityId },
+    ]
+  }
   if (resourceId) filter.resourceId = resourceId
   if (search) {
     filter.policyNumber = { $ilike: `%${search}%` }

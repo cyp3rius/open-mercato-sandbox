@@ -82,6 +82,10 @@ export async function GET(req: Request) {
     query = query.whereNull('m.organization_id')
   }
 
+  if (input.caseId) {
+    query = query.where('m.case_id', input.caseId)
+  }
+
   const joinRecipient = () => {
     query = query.leftJoin('message_recipients as r', function () {
       this.on('m.id', '=', 'r.message_id').andOn('r.recipient_user_id', '=', knex.raw('?', [scope.userId]))

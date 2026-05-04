@@ -31,6 +31,7 @@ type ResourceTypeSnapshot = {
   description: string | null
   appearanceIcon: string | null
   appearanceColor: string | null
+  vehicleFinancingEligible: boolean
   deletedAt: string | null
 }
 
@@ -58,6 +59,7 @@ async function loadResourceTypeSnapshot(em: EntityManager, id: string): Promise<
     description: resourceType.description ?? null,
     appearanceIcon: resourceType.appearanceIcon ?? null,
     appearanceColor: resourceType.appearanceColor ?? null,
+    vehicleFinancingEligible: resourceType.vehicleFinancingEligible ?? false,
     deletedAt: resourceType.deletedAt ? resourceType.deletedAt.toISOString() : null,
   }
 }
@@ -87,6 +89,7 @@ const createResourceTypeCommand: CommandHandler<ResourcesResourceTypeCreateInput
       description: parsed.description ?? null,
       appearanceIcon: parsed.appearanceIcon ?? null,
       appearanceColor: parsed.appearanceColor ?? null,
+      vehicleFinancingEligible: parsed.vehicleFinancingEligible ?? false,
       createdAt: now,
       updatedAt: now,
     })
@@ -200,6 +203,7 @@ const updateResourceTypeCommand: CommandHandler<ResourcesResourceTypeUpdateInput
     if (parsed.description !== undefined) record.description = parsed.description ?? null
     if (parsed.appearanceIcon !== undefined) record.appearanceIcon = parsed.appearanceIcon ?? null
     if (parsed.appearanceColor !== undefined) record.appearanceColor = parsed.appearanceColor ?? null
+    if (parsed.vehicleFinancingEligible !== undefined) record.vehicleFinancingEligible = parsed.vehicleFinancingEligible
     record.updatedAt = new Date()
 
     await em.flush()
@@ -240,6 +244,7 @@ const updateResourceTypeCommand: CommandHandler<ResourcesResourceTypeUpdateInput
       'description',
       'appearanceIcon',
       'appearanceColor',
+      'vehicleFinancingEligible',
       'deletedAt',
     ])
     const customChanges = diffCustomFieldChanges(customBefore, customAfter)
@@ -277,6 +282,7 @@ const updateResourceTypeCommand: CommandHandler<ResourcesResourceTypeUpdateInput
     resourceType.description = before.description ?? null
     resourceType.appearanceIcon = before.appearanceIcon ?? null
     resourceType.appearanceColor = before.appearanceColor ?? null
+    resourceType.vehicleFinancingEligible = before.vehicleFinancingEligible
     resourceType.deletedAt = before.deletedAt ? new Date(before.deletedAt) : null
     resourceType.updatedAt = new Date()
     await em.flush()
@@ -403,6 +409,7 @@ const deleteResourceTypeCommand: CommandHandler<{ id?: string }, { resourceTypeI
         description: before.description ?? null,
         appearanceIcon: before.appearanceIcon ?? null,
         appearanceColor: before.appearanceColor ?? null,
+        vehicleFinancingEligible: before.vehicleFinancingEligible,
         deletedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -413,6 +420,7 @@ const deleteResourceTypeCommand: CommandHandler<{ id?: string }, { resourceTypeI
       resourceType.description = before.description ?? null
       resourceType.appearanceIcon = before.appearanceIcon ?? null
       resourceType.appearanceColor = before.appearanceColor ?? null
+      resourceType.vehicleFinancingEligible = before.vehicleFinancingEligible
       resourceType.deletedAt = null
       resourceType.updatedAt = new Date()
     }

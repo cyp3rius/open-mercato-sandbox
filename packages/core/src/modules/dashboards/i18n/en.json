@@ -109,5 +109,13 @@
   "dashboards.widgets.mode.override": "Override for this user",
   "dashboards.widgets.reset": "Reset",
   "dashboards.widgets.save": "Save widgets",
-  "dashboards.widgets.saving": "Saving…"
+  "dashboards.widgets.saving": "Saving…",
+  "dashboards.crm.kpisError": "Failed to load CRM KPIs.",
+  "dashboards.crm.noSettings": "No settings for this card.",
+  "dashboards.crm.overdueResourceTasks.title": "Overdue resource tasks",
+  "dashboards.crm.overdueResourceTasks.link": "Open resources",
+  "dashboards.crm.openCasesSla.title": "Open cases (48h+)",
+  "dashboards.crm.openCasesSla.link": "Open cases",
+  "dashboards.crm.qcPending.title": "Overdue workflow tasks",
+  "dashboards.crm.qcPending.link": "Open tasks"
 }

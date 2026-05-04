@@ -1,7 +1,7 @@
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { UserTask } from '../../workflows/data/entities'
-import type { ProcurementProcess, ProcurementProcessTask } from '../data/entities'
+import type { OperationsTask, ProcurementProcess } from '../data/entities'
 
 function mapProcurementTaskStatusToUserTaskStatus(
   taskStatus: string,
@@ -18,7 +18,7 @@ function truncateTaskName(title: string): string {
   return title.length > 255 ? title.slice(0, 255) : title
 }
 
-function copyDueAt(task: ProcurementProcessTask): Date | null {
+function copyDueAt(task: OperationsTask): Date | null {
   const raw = task.dueAt
   if (!raw) return null
   const d = raw instanceof Date ? raw : new Date(raw)
@@ -31,7 +31,7 @@ function copyDueAt(task: ProcurementProcessTask): Date | null {
  */
 export function applyProcurementTaskToUserTask(
   userTask: UserTask,
-  task: ProcurementProcessTask,
+  task: OperationsTask,
   process: ProcurementProcess,
 ): void {
   const processId = process.id
@@ -67,7 +67,7 @@ export async function syncProcurementTaskWorkItemCreate(
   _ctx: CommandRuntimeContext,
   em: EntityManager,
   process: ProcurementProcess,
-  task: ProcurementProcessTask,
+  task: OperationsTask,
 ): Promise<void> {
   if (task.workItemUserTaskId) return
 
@@ -99,7 +99,7 @@ export async function syncProcurementTaskWorkItemUpdate(
   _ctx: CommandRuntimeContext,
   em: EntityManager,
   process: ProcurementProcess,
-  task: ProcurementProcessTask,
+  task: OperationsTask,
 ): Promise<void> {
   if (!task.workItemUserTaskId) return
 
@@ -114,7 +114,7 @@ export async function syncProcurementTaskWorkItemUpdate(
 export async function syncProcurementTaskWorkItemDelete(
   _ctx: CommandRuntimeContext,
   em: EntityManager,
-  task: ProcurementProcessTask,
+  task: OperationsTask,
 ): Promise<void> {
   if (!task.workItemUserTaskId) return
 

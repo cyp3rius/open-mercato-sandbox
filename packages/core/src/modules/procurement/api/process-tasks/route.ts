@@ -5,7 +5,8 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import type { FilterQuery } from '@mikro-orm/core'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
-import { ProcurementProcessTask } from '../../data/entities'
+import { OperationsTask } from '../../data/entities'
+import { OPERATIONS_TASK_CONTEXT_PROCUREMENT_PROCESS } from '../../lib/operationsTaskContext'
 import { procurementTaskCreateSchema, procurementTaskUpdateSchema } from '../../data/validators'
 import {
   buildProcurementCrudOpenApi,
@@ -38,7 +39,7 @@ type CrudInput = Record<string, unknown>
 const crud = makeCrudRoute<CrudInput, CrudInput, Record<string, unknown>>({
   metadata: routeMetadata,
   orm: {
-    entity: ProcurementProcessTask,
+    entity: OperationsTask,
     idField: 'id',
     orgField: 'organizationId',
     tenantField: 'tenantId',
@@ -107,16 +108,11 @@ type TaskRow = {
   tenantId: string
 }
 
-const toRow = (row: ProcurementProcessTask): TaskRow => {
-  const proc = row.process
-  const processId = typeof proc === 'string' ? proc : proc.id
-  const sup = row.supplier
-  const supplierId =
-    sup === null || sup === undefined ? null : typeof sup === 'string' ? sup : sup.id
+const toRow = (row: OperationsTask): TaskRow => {
   return {
     id: String(row.id),
-    processId,
-    supplierId,
+    processId: row.contextId,
+    supplierId: row.supplierId ?? null,
     title: row.title,
     body: row.body ?? null,
     taskStatus: row.taskStatus,
@@ -148,17 +144,18 @@ export async function GET(req: Request) {
 
   const { id, processId, supplierId, assignedUserId, taskStatus, page, pageSize, sortField, sortDir } =
     parsed.data
-  const filter: FilterQuery<ProcurementProcessTask> = {
+  const filter: FilterQuery<OperationsTask> = {
     tenantId: auth.tenantId,
     deletedAt: null,
+    contextType: OPERATIONS_TASK_CONTEXT_PROCUREMENT_PROCESS,
   }
   if (auth.orgId) {
     filter.organizationId = auth.orgId
   }
 
   if (id) filter.id = id
-  if (processId) filter.process = processId
-  if (supplierId) filter.supplier = supplierId
+  if (processId) filter.contextId = processId
+  if (supplierId) filter.supplierId = supplierId
   if (assignedUserId) filter.assignedUserId = assignedUserId
   if (taskStatus) filter.taskStatus = taskStatus
 
@@ -177,9 +174,8 @@ export async function GET(req: Request) {
     orderBy.dueAt = 'ASC'
   }
 
-  const [all, total] = await em.findAndCount(ProcurementProcessTask, filter, {
+  const [all, total] = await em.findAndCount(OperationsTask, filter, {
     orderBy,
-    populate: ['process', 'supplier'],
   })
   const start = (page - 1) * pageSize
   const paged = all.slice(start, start + pageSize)

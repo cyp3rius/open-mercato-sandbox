@@ -3,7 +3,7 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { Trash2, Loader2 } from 'lucide-react'
+import { ArrowLeft, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '../../primitives/button'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { FormActionButtons, type FormActionButtonsProps } from './FormActionButtons'
@@ -21,7 +21,9 @@ type FormHeaderBaseProps = {
 /** Edit mode: compact header for CrudForm pages */
 export type FormHeaderEditProps = FormHeaderBaseProps & {
   mode?: 'edit'
-  /** Small title next to the back link */
+  /** Small uppercase label above the title (same pattern as detail pages, e.g. insurance policy) */
+  entityTypeLabel?: string
+  /** Record title — rendered like detail mode (bold h1) when present */
   title?: string
   /** Structured action buttons (Delete/Cancel/Save) */
   actions?: FormActionButtonsProps
@@ -95,19 +97,31 @@ export function FormHeader(props: FormHeaderProps) {
 function EditHeader({
   backHref,
   resolvedBackLabel,
+  entityTypeLabel,
   title,
   actions,
   actionsContent,
 }: FormHeaderEditProps & { resolvedBackLabel: string }) {
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 md:gap-3">
         {backHref ? (
-          <Link href={backHref} className="text-sm text-muted-foreground hover:text-foreground">
-            &larr; {resolvedBackLabel}
-          </Link>
+          <Button variant="ghost" size="icon" className="shrink-0" asChild>
+            <Link href={backHref} aria-label={resolvedBackLabel}>
+              <ArrowLeft className="size-4" aria-hidden />
+            </Link>
+          </Button>
         ) : null}
-        {title ? <div className="text-base font-medium">{title}</div> : null}
+        {entityTypeLabel || title ? (
+          <div className="min-w-0 space-y-0.5 md:space-y-1">
+            {entityTypeLabel ? (
+              <p className="text-xs uppercase text-muted-foreground">{entityTypeLabel}</p>
+            ) : null}
+            {title ? (
+              <h1 className="text-lg md:text-2xl font-semibold leading-tight truncate">{title}</h1>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       {actionsContent ?? (actions ? <FormActionButtons {...actions} /> : null)}
     </div>
@@ -140,13 +154,11 @@ function DetailHeader({
     <div className="flex flex-col gap-2 md:gap-3 md:flex-row md:items-center md:justify-between">
       <div className="flex flex-wrap items-center gap-2 md:gap-3 min-w-0">
         {backHref ? (
-          <Link
-            href={backHref}
-            className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground shrink-0"
-          >
-            <span aria-hidden className="mr-1 text-base">&larr;</span>
-            <span className="sr-only">{resolvedBackLabel}</span>
-          </Link>
+          <Button variant="ghost" size="icon" className="shrink-0" asChild>
+            <Link href={backHref} aria-label={resolvedBackLabel}>
+              <ArrowLeft className="size-4" aria-hidden />
+            </Link>
+          </Button>
         ) : null}
         <div className="space-y-0.5 md:space-y-1 min-w-0">
           {entityTypeLabel ? (

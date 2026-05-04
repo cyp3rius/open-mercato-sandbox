@@ -1,0 +1,17 @@
+{
+  "customer_signals.errors.customerRequired": "Wymagane jest customerEntityId.",
+  "customer_signals.errors.list": "Nie udało się pobrać sygnałów.",
+  "customer_signals.errors.ingest": "Nie udało się zapisać sygnału.",
+  "customer_signals.errors.customerAccess": "Do podglądu sygnałów wymagany jest dostęp do klienta CRM.",
+  "customer_signals.widgets.panelTitle": "Sygnały zachowań",
+  "customer_signals.widgets.empty": "Brak sygnałów dla tego klienta.",
+  "customer_signals.widgets.loadError": "Nie udało się wczytać sygnałów.",
+  "customer_signals.widgets.columns.type": "Typ",
+  "customer_signals.widgets.columns.source": "Źródło",
+  "customer_signals.widgets.columns.time": "Czas",
+  "customer_signals.config.nav.title": "Ustawienia sygnałów klienta",
+  "customer_signals.config.lead": "Sygnały zachowań są zapisywane per klient CRM i pokazywane w widoku klienta. Zapis odbywa się przez API; podgląd jest na karcie klienta.",
+  "customer_signals.config.operationsTitle": "Gdzie widać sygnały",
+  "customer_signals.config.operationsLead": "Otwórz firmę lub osobę w CRM, aby zobaczyć panel sygnałów. Poniżej skrót do listy firm.",
+  "customer_signals.config.openCompanies": "Firmy (CRM)"
+}

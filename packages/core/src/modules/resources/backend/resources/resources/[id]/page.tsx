@@ -23,6 +23,7 @@ import {
 import type { AvailabilityScheduleItemBuilder } from '@open-mercato/core/modules/planner/components/AvailabilityRulesEditor'
 import { AvailabilityRulesEditor } from '@open-mercato/core/modules/planner/components/AvailabilityRulesEditor'
 import { ResourcesResourceForm, useResourcesResourceFormConfig } from '@open-mercato/core/modules/resources/components/ResourceCrudForm'
+import { DetailTabsLayout } from '@open-mercato/core/modules/customers/components/detail/DetailTabsLayout'
 import { renderDictionaryColor, renderDictionaryIcon, ICON_SUGGESTIONS } from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
 import { createResourceNotesAdapter } from '@open-mercato/core/modules/resources/components/detail/notesAdapter'
 import { createResourceActivitiesAdapter } from '@open-mercato/core/modules/resources/components/detail/activitiesAdapter'
@@ -69,6 +70,9 @@ type ResourceRecord = {
   status_label?: string | null
   status_color?: string | null
   status_icon?: string | null
+  insurancePolicyId?: string | null
+  insurance_policy_id?: string | null
+  financing_profile?: Record<string, unknown> | null
 } & Record<string, unknown>
 
 type ResourceResponse = {
@@ -92,6 +96,7 @@ function normalizeResourceRecord(record: ResourceRecord): ResourceRecord {
     statusLabel: record.statusLabel ?? record.status_label ?? null,
     statusColor: record.statusColor ?? record.status_color ?? null,
     statusIcon: record.statusIcon ?? record.status_icon ?? null,
+    insurancePolicyId: record.insurancePolicyId ?? record.insurance_policy_id ?? null,
   }
 }
 
@@ -301,6 +306,41 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
       customFieldsetCode,
       ...collectCustomFieldValues(values),
     }
+    if (Object.prototype.hasOwnProperty.call(values, 'insurancePolicyId')) {
+      const rawPolicy = values.insurancePolicyId
+      payload.insurancePolicyId =
+        typeof rawPolicy === 'string' && rawPolicy.trim().length > 0 ? rawPolicy.trim() : null
+    }
+    if (Object.prototype.hasOwnProperty.call(values, 'financingProfile')) {
+      const rawFp = values.financingProfile
+      if (rawFp === null) {
+        payload.financingProfile = null
+      } else if (rawFp && typeof rawFp === 'object' && !Array.isArray(rawFp)) {
+        const fp = rawFp as Record<string, unknown>
+        const kind = fp.financingKind
+        if (typeof kind === 'string' && kind.trim().length > 0) {
+          payload.financingProfile = {
+            financingKind: kind,
+            termMonths: fp.termMonths != null && fp.termMonths !== '' ? Number(fp.termMonths) : null,
+            vehicleValueAmount:
+              fp.vehicleValueAmount != null && fp.vehicleValueAmount !== ''
+                ? Number(fp.vehicleValueAmount)
+                : null,
+            installmentAmount:
+              fp.installmentAmount != null && fp.installmentAmount !== ''
+                ? Number(fp.installmentAmount)
+                : null,
+            currencyCode:
+              typeof fp.currencyCode === 'string' && fp.currencyCode.trim().length > 0
+                ? fp.currencyCode.trim()
+                : null,
+            validFrom: null,
+            validTo: null,
+            metadata: null,
+          }
+        }
+      }
+    }
     if (!payload.name || String(payload.name).trim().length === 0) {
       throw createCrudFormError(t('resources.resources.form.errors.nameRequired', 'Name is required.'))
     }
@@ -471,7 +511,7 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
     [createTag, handleTagsSave, loadTagOptions, t, tagLabels, tags],
   )
 
-  const formConfig = useResourcesResourceFormConfig({ tagsSection })
+  const formConfig = useResourcesResourceFormConfig({ tagsSection, resourceId: resourceId ?? null })
   const { resourceTypesLoaded, resolveFieldsetCode } = formConfig
 
   React.useEffect(() => {
@@ -501,6 +541,17 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
                 ? resource.availability_rule_set_id
                 : null,
           )
+          const rawFp = resource.financing_profile
+          const financingProfile =
+            rawFp && typeof rawFp === 'object' && !Array.isArray(rawFp)
+              ? {
+                  financingKind: typeof rawFp.financingKind === 'string' ? rawFp.financingKind : 'lease',
+                  termMonths: rawFp.termMonths != null ? Number(rawFp.termMonths) : null,
+                  vehicleValueAmount: rawFp.vehicleValueAmount != null ? Number(rawFp.vehicleValueAmount) : null,
+                  installmentAmount: rawFp.installmentAmount != null ? Number(rawFp.installmentAmount) : null,
+                  currencyCode: typeof rawFp.currencyCode === 'string' ? rawFp.currencyCode : null,
+                }
+              : undefined
           setInitialValues({
             id: resource.id,
             name: resource.name,
@@ -512,6 +563,8 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
             statusValue: resource.statusValue ?? '',
             appearance: { icon: resource.appearanceIcon ?? null, color: resource.appearanceColor ?? null },
             isActive: resource.isActive ?? true,
+            insurancePolicyId: resource.insurancePolicyId ?? resource.insurance_policy_id ?? '',
+            ...(financingProfile ? { financingProfile } : {}),
             customFieldsetCode: resource.resourceTypeId
               ? resolveFieldsetCode(resource.resourceTypeId)
               : RESOURCES_RESOURCE_FIELDSET_DEFAULT,
@@ -583,29 +636,16 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
             subtitle={t('resources.resources.detail.subtitle', 'Resource profile and activity')}
           />
 
-          <div className="border-b">
-            <nav className="flex flex-wrap items-center gap-5 text-sm" aria-label={t('resources.resources.tabs.label', 'Resource sections')}>
-              {tabs.map((tab) => (
-                <Button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === tab.id}
-                  variant="ghost"
-                  size="sm"
-                  className={`relative -mb-px h-auto rounded-none border-b-2 px-0 py-2 font-medium ${
-                    activeTab === tab.id
-                      ? 'border-primary text-foreground'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  {tab.label}
-                </Button>
-              ))}
-            </nav>
-          </div>
-
+          <DetailTabsLayout<'details' | 'availability' | 'serviceBook' | 'accessories'>
+            tabs={tabs}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            sectionAction={null}
+            onSectionAction={() => {}}
+            navAriaLabel={t('resources.resources.tabs.label', 'Resource sections')}
+            panelContentKey={activeTab}
+            className="space-y-6"
+          >
           {activeTab === 'details' ? (
             <>
               <div className="rounded-lg border bg-card p-4">
@@ -628,38 +668,20 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
               </div>
 
               <div className="rounded-lg border bg-card p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex gap-2">
-                    {detailTabs.map((tab) => (
-                      <Button
-                        key={tab.id}
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className={`relative -mb-px h-auto rounded-none border-b-2 px-0 py-1 font-medium ${
-                          activeDetailTab === tab.id
-                            ? 'border-primary text-foreground'
-                            : 'border-transparent text-muted-foreground hover:text-foreground'
-                        }`}
-                        onClick={() => setActiveDetailTab(tab.id)}
-                      >
-                        {tab.label}
-                      </Button>
-                    ))}
-                  </div>
-                  {sectionAction ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={sectionAction.disabled}
-                      onClick={() => sectionAction.onClick()}
-                    >
-                      {sectionAction.icon ?? null}
-                      {sectionAction.label}
-                    </Button>
-                  ) : null}
-                </div>
-                {activeDetailTab === 'notes' ? (
+                <DetailTabsLayout<'notes' | 'activities'>
+                  tabs={detailTabs}
+                  activeTab={activeDetailTab}
+                  onTabChange={setActiveDetailTab}
+                  sectionAction={sectionAction}
+                  onSectionAction={() => sectionAction?.onClick()}
+                  navAriaLabel={t(
+                    'resources.resources.detail.subTabs.nav',
+                    'Notes and activities',
+                  )}
+                  panelContentKey={activeDetailTab}
+                  className="space-y-4"
+                >
+                  {activeDetailTab === 'notes' ? (
                   <NotesSection
                     entityId={resourceId ?? null}
                     emptyLabel={t('resources.resources.detail.notes.empty', 'No notes yet.')}
@@ -680,8 +702,7 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
                     renderColor={renderDictionaryColor}
                     iconSuggestions={ICON_SUGGESTIONS}
                   />
-                ) : null}
-                {activeDetailTab === 'activities' ? (
+                  ) : (
                   <ActivitiesSection
                     entityId={resourceId ?? null}
                     addActionLabel={t('resources.resources.detail.activities.add', 'Log activity')}
@@ -703,7 +724,8 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
                     manageHref={manageActivityHref}
                     customFieldEntityIds={['resources:resources_resource_activity']}
                   />
-                ) : null}
+                  )}
+                </DetailTabsLayout>
               </div>
             </>
           ) : activeTab === 'serviceBook' ? (
@@ -725,6 +747,7 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
               buildScheduleItems={buildScheduleItems}
             />
           )}
+          </DetailTabsLayout>
         </div>
       </PageBody>
     </Page>

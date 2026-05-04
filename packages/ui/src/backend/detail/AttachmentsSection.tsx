@@ -25,6 +25,8 @@ type Props = {
   showHeader?: boolean
   compact?: boolean
   onChanged?: () => void
+  /** When true, listing stays enabled but upload / drag-and-drop is disabled. */
+  uploadDisabled?: boolean
 }
 
 function AttachmentsSectionImpl({
@@ -36,6 +38,7 @@ function AttachmentsSectionImpl({
   showHeader = true,
   compact = false,
   onChanged,
+  uploadDisabled = false,
 }: Props) {
   const t = useT()
   const [items, setItems] = React.useState<AttachmentItem[]>([])
@@ -150,6 +153,10 @@ function AttachmentsSectionImpl({
       {!recordId ? (
         <div className="rounded-md border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground">
           {t('attachments.library.upload.saveFirst', 'Save the record before uploading files.')}
+        </div>
+      ) : uploadDisabled ? (
+        <div className="rounded-md border border-border/70 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+          {t('attachments.library.upload.disabledReadOnly', 'Uploads are disabled for closed records.')}
         </div>
       ) : (
         <div

@@ -24,6 +24,10 @@ export class ResourcesResourceType {
   @Property({ name: 'appearance_color', type: 'text', nullable: true })
   appearanceColor?: string | null
 
+  /** When true, resources of this type may store a financing profile (e.g. internal fleet vehicles). */
+  @Property({ name: 'vehicle_financing_eligible', type: 'boolean', default: false })
+  vehicleFinancingEligible: boolean = false
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 
@@ -87,6 +91,10 @@ export class ResourcesResource {
 
   @Property({ name: 'procurement_process_id', type: 'uuid', nullable: true })
   procurementProcessId?: string | null
+
+  /** Primary insurance policy for this resource (no ORM link to insurance module). */
+  @Property({ name: 'insurance_policy_id', type: 'uuid', nullable: true })
+  insurancePolicyId?: string | null
 
   @Property({ name: 'status_value', type: 'text', nullable: true })
   statusValue?: string | null
@@ -324,6 +332,82 @@ export class ResourcesResourceTagAssignment {
 
   @ManyToOne(() => ResourcesResource, { fieldName: 'resource_id' })
   resource!: ResourcesResource
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+@Entity({ tableName: 'resources_resource_financing_profiles' })
+@Index({ name: 'resources_resource_financing_profiles_scope_idx', properties: ['tenantId', 'organizationId'] })
+@Index({ name: 'resources_resource_financing_profiles_resource_idx', properties: ['resource'] })
+export class ResourcesResourceFinancingProfile {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @ManyToOne(() => ResourcesResource, { fieldName: 'resource_id' })
+  resource!: ResourcesResource
+
+  @Property({ name: 'financing_kind', type: 'text' })
+  financingKind!: string
+
+  @Property({ name: 'term_months', type: 'int', nullable: true })
+  termMonths?: number | null
+
+  @Property({ name: 'vehicle_value_amount', type: 'float', nullable: true })
+  vehicleValueAmount?: number | null
+
+  @Property({ name: 'installment_amount', type: 'float', nullable: true })
+  installmentAmount?: number | null
+
+  @Property({ name: 'currency_code', type: 'text', nullable: true })
+  currencyCode?: string | null
+
+  @Property({ name: 'valid_from', type: Date, nullable: true })
+  validFrom?: Date | null
+
+  @Property({ name: 'valid_to', type: Date, nullable: true })
+  validTo?: Date | null
+
+  @Property({ type: 'jsonb', nullable: true })
+  metadata?: Record<string, unknown> | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+@Entity({ tableName: 'resources_resource_gallery_items' })
+@Index({ name: 'resources_resource_gallery_items_resource_idx', properties: ['resource'] })
+@Index({ name: 'resources_resource_gallery_items_scope_idx', properties: ['tenantId', 'organizationId'] })
+export class ResourcesResourceGalleryItem {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @ManyToOne(() => ResourcesResource, { fieldName: 'resource_id' })
+  resource!: ResourcesResource
+
+  @Property({ name: 'attachment_id', type: 'uuid' })
+  attachmentId!: string
+
+  @Property({ name: 'sort_order', type: 'int', default: 0 })
+  sortOrder: number = 0
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

@@ -6,11 +6,8 @@ import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import {
-  ProcurementProcess,
-  ProcurementProcessSupplier,
-  ProcurementProcessTask,
-} from '../data/entities'
+import { OperationsTask, ProcurementProcess, ProcurementProcessSupplier } from '../data/entities'
+import { OPERATIONS_TASK_CONTEXT_PROCUREMENT_PROCESS } from '../lib/operationsTaskContext'
 import {
   procurementTaskCreateSchema,
   procurementTaskDeleteSchema,
@@ -54,23 +51,18 @@ type TaskSnapshot = {
 type TaskUndoPayload = UndoPayload<TaskSnapshot>
 
 async function loadTaskSnapshot(em: EntityManager, id: string): Promise<TaskSnapshot | null> {
-  const record = await em.findOne(
-    ProcurementProcessTask,
-    { id, deletedAt: null },
-    { populate: ['process', 'supplier'] },
-  )
+  const record = await em.findOne(OperationsTask, {
+    id,
+    deletedAt: null,
+    contextType: OPERATIONS_TASK_CONTEXT_PROCUREMENT_PROCESS,
+  })
   if (!record) return null
-  const proc = record.process
-  const processId = typeof proc === 'string' ? proc : proc.id
-  const sup = record.supplier
-  const supplierId =
-    sup === null || sup === undefined ? null : typeof sup === 'string' ? sup : sup.id
   return {
     id: record.id,
     organizationId: record.organizationId,
     tenantId: record.tenantId,
-    processId,
-    supplierId,
+    processId: record.contextId,
+    supplierId: record.supplierId ?? null,
     title: record.title,
     body: record.body ?? null,
     taskStatus: record.taskStatus,
@@ -117,11 +109,12 @@ const createTaskCommand: CommandHandler<ProcurementTaskCreateInput, { taskId: st
       supplier = await resolveSupplierOnProcess(em, parsed.supplierId, process.id)
     }
     const now = new Date()
-    const record = em.create(ProcurementProcessTask, {
+    const record = em.create(OperationsTask, {
       tenantId: parsed.tenantId,
       organizationId: parsed.organizationId,
-      process,
-      supplier: supplier ?? null,
+      contextType: OPERATIONS_TASK_CONTEXT_PROCUREMENT_PROCESS,
+      contextId: process.id,
+      supplierId: supplier?.id ?? null,
       title: parsed.title,
       body: parsed.body ?? null,
       taskStatus: 'open',
@@ -191,7 +184,7 @@ const createTaskCommand: CommandHandler<ProcurementTaskCreateInput, { taskId: st
     const after = payload?.after
     if (!after) return
     const em = (ctx.container.resolve('em') as EntityManager).fork()
-    const record = await em.findOne(ProcurementProcessTask, { id: after.id })
+    const record = await em.findOne(OperationsTask, { id: after.id })
     if (!record) return
     await syncProcurementTaskWorkItemDelete(ctx as CommandRuntimeContext, em, record)
     record.deletedAt = new Date()
@@ -215,30 +208,34 @@ const updateTaskCommand: CommandHandler<ProcurementTaskUpdateInput, { taskId: st
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const record = await findOneWithDecryption(
       em,
-      ProcurementProcessTask,
-      { id: parsed.id, deletedAt: null },
-      { populate: ['process', 'supplier'] },
+      OperationsTask,
+      {
+        id: parsed.id,
+        deletedAt: null,
+        contextType: OPERATIONS_TASK_CONTEXT_PROCUREMENT_PROCESS,
+      },
+      undefined,
       { tenantId: ctx.auth?.tenantId ?? null, organizationId: ctx.auth?.orgId ?? null },
     )
     if (!record) throw new CrudHttpError(404, { error: 'Procurement task not found.' })
 
-    const processForAcl =
-      typeof record.process === 'string'
-        ? await em.findOne(ProcurementProcess, { id: record.process, deletedAt: null })
-        : record.process
+    const processForAcl = await em.findOne(ProcurementProcess, {
+      id: record.contextId,
+      deletedAt: null,
+    })
     if (!processForAcl) throw new CrudHttpError(404, { error: 'Procurement process not found.' })
     await assertProcurementProcessMutationAllowed(ctx, processForAcl)
 
-    const processId = typeof record.process === 'string' ? record.process : record.process.id
+    const processId = record.contextId
     const previousAssignee = record.assignedUserId ?? null
 
     if (parsed.supplierId !== undefined) {
       const next = parsed.supplierId ?? null
       if (next) {
         await resolveSupplierOnProcess(em, next, processId)
-        record.supplier = em.getReference(ProcurementProcessSupplier, next)
+        record.supplierId = next
       } else {
-        record.supplier = undefined
+        record.supplierId = null
       }
     }
 
@@ -267,7 +264,7 @@ const updateTaskCommand: CommandHandler<ProcurementTaskUpdateInput, { taskId: st
       )
     }
 
-    const process = typeof record.process === 'string' ? null : record.process
+    const process = processForAcl
     if (process) {
       const { translate } = await resolveTranslations()
       await appendProcurementTimelineEvent(em, {
@@ -330,7 +327,7 @@ const updateTaskCommand: CommandHandler<ProcurementTaskUpdateInput, { taskId: st
     const before = payload?.before
     if (!before) return
     const em = (ctx.container.resolve('em') as EntityManager).fork()
-    const record = await em.findOne(ProcurementProcessTask, { id: before.id }, { populate: ['process'] })
+    const record = await em.findOne(OperationsTask, { id: before.id })
     if (!record) return
     record.title = before.title
     record.body = before.body
@@ -338,11 +335,7 @@ const updateTaskCommand: CommandHandler<ProcurementTaskUpdateInput, { taskId: st
     record.dueAt = before.dueAt ? new Date(before.dueAt) : null
     record.assignedUserId = before.assignedUserId
     record.delegatedFromUserId = before.delegatedFromUserId
-    if (before.supplierId) {
-      record.supplier = em.getReference(ProcurementProcessSupplier, before.supplierId)
-    } else {
-      record.supplier = undefined
-    }
+    record.supplierId = before.supplierId
     record.updatedAt = new Date()
     await em.flush()
   },
@@ -363,21 +356,25 @@ const deleteTaskCommand: CommandHandler<{ id: string; skipWorkItemSync?: boolean
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const record = await findOneWithDecryption(
       em,
-      ProcurementProcessTask,
-      { id, deletedAt: null },
-      { populate: ['process'] },
+      OperationsTask,
+      {
+        id,
+        deletedAt: null,
+        contextType: OPERATIONS_TASK_CONTEXT_PROCUREMENT_PROCESS,
+      },
+      undefined,
       { tenantId: ctx.auth?.tenantId ?? null, organizationId: ctx.auth?.orgId ?? null },
     )
     if (!record) throw new CrudHttpError(404, { error: 'Procurement task not found.' })
 
-    const processEnt =
-      typeof record.process === 'string'
-        ? await em.findOne(ProcurementProcess, { id: record.process, deletedAt: null })
-        : record.process
+    const processEnt = await em.findOne(ProcurementProcess, {
+      id: record.contextId,
+      deletedAt: null,
+    })
     if (!processEnt) throw new CrudHttpError(404, { error: 'Procurement process not found.' })
     await assertProcurementProcessMutationAllowed(ctx, processEnt)
 
-    const process = typeof record.process === 'string' ? null : record.process
+    const process = processEnt
     const title = record.title
     if (!skipWorkItemSync) {
       await syncProcurementTaskWorkItemDelete(ctx as CommandRuntimeContext, em, record)
@@ -429,7 +426,7 @@ const deleteTaskCommand: CommandHandler<{ id: string; skipWorkItemSync?: boolean
     const before = payload?.before
     if (!before) return
     const em = (ctx.container.resolve('em') as EntityManager).fork()
-    const record = await em.findOne(ProcurementProcessTask, { id: before.id })
+    const record = await em.findOne(OperationsTask, { id: before.id })
     if (!record) return
     record.deletedAt = null
     record.updatedAt = new Date()

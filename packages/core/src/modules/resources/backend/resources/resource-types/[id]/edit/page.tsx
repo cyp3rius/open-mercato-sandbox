@@ -43,6 +43,8 @@ export default function ResourcesResourceTypeEditPage({ params }: { params?: { i
           setInitialValues({
             id: typeof item.id === 'string' ? item.id : resourceTypeId,
             name: typeof item.name === 'string' ? item.name : '',
+            vehicleFinancingEligible:
+              item.vehicle_financing_eligible === true || item.vehicleFinancingEligible === true,
             description: typeof item.description === 'string' ? item.description : '',
             appearance: {
               icon: typeof item.appearanceIcon === 'string'
@@ -106,7 +108,13 @@ export default function ResourcesResourceTypeEditPage({ params }: { params?: { i
         ) : null}
         <ResourceTypeCrudForm
           mode="edit"
-          initialValues={initialValues ?? { id: resourceTypeId, name: '', description: '', appearance: { icon: null, color: null } }}
+          initialValues={initialValues ?? {
+            id: resourceTypeId,
+            name: '',
+            description: '',
+            vehicleFinancingEligible: false,
+            appearance: { icon: null, color: null },
+          }}
           isLoading={loading}
           onSubmit={handleSubmit}
           onDelete={handleDelete}

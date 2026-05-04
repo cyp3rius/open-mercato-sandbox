@@ -13,6 +13,7 @@ import {
   createPagedListResponseSchema,
   defaultOkResponseSchema,
 } from '../openapi'
+import { parseBooleanFlag } from '@open-mercato/shared/lib/boolean'
 import { mergeProcurementCommandScope } from '../mergeScope'
 
 const routeMetadata = {
@@ -75,6 +76,8 @@ const listQuerySchema = z
   .object({
     id: z.uuid().optional(),
     customerEntityId: z.uuid().optional(),
+    /** When `true`, only processes with no linked customer. Ignores `customerEntityId`. */
+    customerUnassigned: z.string().optional(),
     resourceId: z.uuid().optional(),
     salesQuoteId: z.uuid().optional(),
     statusValue: z.string().optional(),
@@ -173,6 +176,7 @@ export async function GET(req: Request) {
   const {
     id,
     customerEntityId,
+    customerUnassigned: customerUnassignedRaw,
     resourceId,
     salesQuoteId,
     statusValue,
@@ -183,6 +187,9 @@ export async function GET(req: Request) {
     sortField,
     sortDir,
   } = parsed.data
+  const customerUnassigned = parseBooleanFlag(
+    typeof customerUnassignedRaw === 'string' ? customerUnassignedRaw : undefined,
+  )
   const filter: FilterQuery<ProcurementProcess> = {
     tenantId: auth.tenantId,
     deletedAt: null,
@@ -192,7 +199,11 @@ export async function GET(req: Request) {
   }
 
   if (id) filter.id = id
-  if (customerEntityId) filter.customerEntityId = customerEntityId
+  if (customerUnassigned === true) {
+    filter.customerEntityId = null
+  } else if (customerEntityId) {
+    filter.customerEntityId = customerEntityId
+  }
   if (resourceId) filter.resourceId = resourceId
   if (salesQuoteId) filter.salesQuoteId = salesQuoteId
   const statusFilter = typeof statusValue === 'string' ? statusValue.trim() : ''

@@ -9,12 +9,13 @@ import { CustomerEntity } from '@open-mercato/core/modules/customers/data/entiti
 import { ResourcesResource } from '@open-mercato/core/modules/resources/data/entities'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import {
+  OperationsTask,
   ProcurementProcess,
   ProcurementProcessLineItem,
   ProcurementProcessSupplier,
   ProcurementProcessSupplierLineItem,
-  ProcurementProcessTask,
 } from '../data/entities'
+import { OPERATIONS_TASK_CONTEXT_PROCUREMENT_PROCESS } from '../lib/operationsTaskContext'
 import {
   resolveInitialProcurementProcessStatus,
   resolveProcurementProcessCompletionStatus,
@@ -730,7 +731,11 @@ const deleteProcessCommand: CommandHandler<Record<string, unknown>, { processId:
       row.deletedAt = now
       row.updatedAt = now
     }
-    const tasks = await em.find(ProcurementProcessTask, { process: record, deletedAt: null })
+    const tasks = await em.find(OperationsTask, {
+      contextType: OPERATIONS_TASK_CONTEXT_PROCUREMENT_PROCESS,
+      contextId: record.id,
+      deletedAt: null,
+    })
     for (const row of tasks) {
       row.deletedAt = now
       row.updatedAt = now

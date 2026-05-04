@@ -20,6 +20,7 @@ export const resourcesResourceTypeCreateSchema = z.object({
     .regex(/^#([0-9a-fA-F]{6})$/)
     .optional()
     .nullable(),
+  vehicleFinancingEligible: z.boolean().optional(),
 })
 
 export const resourcesResourceTypeUpdateSchema = z.object({
@@ -33,7 +34,31 @@ export const resourcesResourceTypeUpdateSchema = z.object({
     .regex(/^#([0-9a-fA-F]{6})$/)
     .optional()
     .nullable(),
+  vehicleFinancingEligible: z.boolean().optional(),
 })
+
+export const resourcesResourceFinancingProfileSchema = z
+  .object({
+    financingKind: z.enum(['lease', 'loan', 'cash', 'other']),
+    termMonths: z.coerce.number().int().positive().optional().nullable(),
+    vehicleValueAmount: z.coerce.number().finite().optional().nullable(),
+    installmentAmount: z.coerce.number().finite().optional().nullable(),
+    currencyCode: z.string().trim().max(8).optional().nullable(),
+    validFrom: z.coerce.date().optional().nullable(),
+    validTo: z.coerce.date().optional().nullable(),
+    metadata: z.record(z.string(), z.unknown()).optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.validFrom && data.validTo && data.validTo < data.validFrom) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'validTo must be on or after validFrom.',
+        path: ['validTo'],
+      })
+    }
+  })
+
+export type ResourcesResourceFinancingProfileInput = z.infer<typeof resourcesResourceFinancingProfileSchema>
 
 export const resourcesResourceCreateSchema = z.object({
   ...scopedCreateFields,
@@ -54,6 +79,8 @@ export const resourcesResourceCreateSchema = z.object({
   availabilityRuleSetId: z.string().uuid().optional().nullable(),
   customerEntityId: z.string().uuid().optional().nullable(),
   procurementProcessId: z.string().uuid().optional().nullable(),
+  insurancePolicyId: z.string().uuid().optional().nullable(),
+  financingProfile: z.union([resourcesResourceFinancingProfileSchema, z.null()]).optional(),
   statusValue: z.string().max(200).optional().nullable(),
 })
 
@@ -76,7 +103,27 @@ export const resourcesResourceUpdateSchema = z.object({
   availabilityRuleSetId: z.string().uuid().optional().nullable(),
   customerEntityId: z.string().uuid().optional().nullable(),
   procurementProcessId: z.string().uuid().optional().nullable(),
+  insurancePolicyId: z.string().uuid().optional().nullable(),
+  financingProfile: z.union([resourcesResourceFinancingProfileSchema, z.null()]).optional(),
   statusValue: z.string().max(200).optional().nullable(),
+})
+
+export const resourcesResourceGalleryItemCreateSchema = z.object({
+  ...scopedCreateFields,
+  resourceId: z.string().uuid(),
+  attachmentId: z.string().uuid(),
+  sortOrder: z.coerce.number().int().min(0).optional(),
+})
+
+export const resourcesResourceGalleryReorderSchema = z.object({
+  ...scopedCreateFields,
+  resourceId: z.string().uuid(),
+  orderedItemIds: z.array(z.string().uuid()).min(1),
+})
+
+export const resourcesResourceGalleryItemDeleteSchema = z.object({
+  ...scopedCreateFields,
+  id: z.string().uuid(),
 })
 
 export const resourcesResourceAccessoryLinkCreateSchema = z.object({
@@ -204,3 +251,6 @@ export type ResourcesResourceActivityCreateInput = z.infer<typeof resourcesResou
 export type ResourcesResourceActivityUpdateInput = z.infer<typeof resourcesResourceActivityUpdateSchema>
 export type ResourcesResourceServiceBookEntryCreateInput = z.infer<typeof resourcesResourceServiceBookEntryCreateSchema>
 export type ResourcesResourceServiceBookEntryUpdateInput = z.infer<typeof resourcesResourceServiceBookEntryUpdateSchema>
+export type ResourcesResourceGalleryItemCreateInput = z.infer<typeof resourcesResourceGalleryItemCreateSchema>
+export type ResourcesResourceGalleryReorderInput = z.infer<typeof resourcesResourceGalleryReorderSchema>
+export type ResourcesResourceGalleryItemDeleteInput = z.infer<typeof resourcesResourceGalleryItemDeleteSchema>

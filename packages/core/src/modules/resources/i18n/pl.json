@@ -451,6 +451,7 @@
   "resources.resources.detail.tabs.notes": "Notatki",
   "resources.resources.detail.tabs.serviceBook": "Książka serwisowa",
   "resources.resources.detail.tabs.accessories": "Akcesoria",
+  "resources.resources.detail.subTabs.nav": "Notatki i działania",
   "resources.resources.detail.serviceBook.add": "Dodaj wpis",
   "resources.resources.detail.serviceBook.delete": "Usuń",
   "resources.resources.detail.serviceBook.delete.description": "Ten wpis książki serwisowej zostanie usunięty.",

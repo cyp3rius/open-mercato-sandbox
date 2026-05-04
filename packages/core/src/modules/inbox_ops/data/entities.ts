@@ -127,7 +127,7 @@ export class InboxSettings {
   options: { where: 'content_hash IS NOT NULL' },
 })
 export class InboxEmail {
-  [OptionalProps]?: 'status' | 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt'
+  [OptionalProps]?: 'status' | 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'caseId'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -191,6 +191,10 @@ export class InboxEmail {
 
   @Property({ name: 'metadata', type: 'json', nullable: true })
   metadata?: Record<string, unknown> | null
+
+  @Index()
+  @Property({ name: 'case_id', type: 'uuid', nullable: true })
+  caseId?: string | null
 
   @Property({ name: 'organization_id', type: 'uuid' })
   organizationId!: string

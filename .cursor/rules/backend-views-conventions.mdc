@@ -12,9 +12,9 @@ alwaysApply: true
 
 | View type | Reference (code) | Cursor rule |
 |-----------|------------------|-------------|
-| **List (DataTable CRUD hub)** | `packages/core/src/modules/procurement/backend/procurement/processes/page.tsx` | **`.cursor/rules/backend-module-list-datatable.mdc`** |
-| **Create (full page)** | `packages/core/src/modules/customers/backend/customers/companies/create/page.tsx` | **`.cursor/rules/module-backend-ui.mdc`** (Create) + **`.cursor/rules/form-ui-consistency.mdc`** |
-| **Detail (read / edit)** | `packages/core/src/modules/customers/backend/customers/companies/[id]/page.tsx` | **`module-backend-ui.mdc`** (Detail) + **`.cursor/rules/detail-two-column-layout.mdc`** + **`form-ui-consistency.mdc`** |
+| **List (DataTable CRUD hub)** | `packages/core/src/modules/procurement/backend/procurement/processes/page.tsx` | **`.cursor/rules/backend-module-list-datatable.mdc`** + **`.cursor/rules/backend-crud-module-pattern.mdc`** |
+| **Create (full page)** | `packages/core/src/modules/customers/backend/customers/companies/create/page.tsx` · slim: **`accounting/.../entities/create/page.tsx`** | **`module-backend-ui.mdc`** (Create) + **`backend-crud-module-pattern.mdc`** + **`form-ui-consistency.mdc`** |
+| **Detail (read / edit)** | `packages/core/src/modules/customers/backend/customers/companies/[id]/page.tsx` · CrudForm detail: **`accounting/.../entities/[id]/page.tsx`** | **`module-backend-ui.mdc`** (Detail) + **`backend-crud-module-pattern.mdc`** + **`detail-two-column-layout.mdc`** (when sidebar layout) + **`form-ui-consistency.mdc`** |
 | **Relation / searchable catalog** | CRM patterns | **`.cursor/rules/entity-search-combobox.mdc`** |
 | **Linked-record preview (Open)** | Insurance desk, resources | **`.cursor/rules/association-link-open.mdc`** |
 

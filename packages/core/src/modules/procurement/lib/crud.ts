@@ -1,10 +1,10 @@
 import type { CrudEventsConfig } from '@open-mercato/shared/lib/crud/types'
 import type { CrudIndexerConfig } from '@open-mercato/shared/lib/crud/types'
 import type {
+  OperationsTask,
   ProcurementProcess,
   ProcurementProcessLineItem,
   ProcurementProcessSupplier,
-  ProcurementProcessTask,
 } from '../data/entities'
 import {
   PROCUREMENT_LINE_ITEM_ENTITY_TYPE,
@@ -58,7 +58,7 @@ export const procurementLineItemCrudIndexer: CrudIndexerConfig<ProcurementProces
   entityType: PROCUREMENT_LINE_ITEM_ENTITY_TYPE,
 }
 
-export const procurementTaskCrudEvents: CrudEventsConfig<ProcurementProcessTask> = {
+export const procurementTaskCrudEvents: CrudEventsConfig<OperationsTask> = {
   module: 'procurement',
   entity: 'process_task',
   persistent: true,
@@ -69,6 +69,6 @@ export const procurementTaskCrudEvents: CrudEventsConfig<ProcurementProcessTask>
   }),
 }
 
-export const procurementTaskCrudIndexer: CrudIndexerConfig<ProcurementProcessTask> = {
+export const procurementTaskCrudIndexer: CrudIndexerConfig<OperationsTask> = {
   entityType: PROCUREMENT_TASK_ENTITY_TYPE,
 }

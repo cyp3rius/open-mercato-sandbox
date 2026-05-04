@@ -1,0 +1,123 @@
+{
+  "partner_programs": {
+    "nav": {
+      "group": "Partner programs",
+      "programs": "Programs"
+    },
+    "list": {
+      "title": "Partner programs",
+      "description": "Loyalty and B2B agreement programs scoped to CRM partner companies.",
+      "table": {
+        "name": "Name",
+        "validFrom": "Valid from",
+        "validTo": "Valid to",
+        "isActive": "Active",
+        "updatedAt": "Updated",
+        "empty": "No programs yet.",
+        "search": "Search programs…"
+      },
+      "actions": {
+        "new": "New program",
+        "refresh": "Refresh",
+        "view": "View details",
+        "delete": "Delete",
+        "deleteConfirm": "Delete program \"{{name}}\"?",
+        "openNewTab": "Open in new tab"
+      },
+      "messages": {
+        "deleted": "Program deleted."
+      },
+      "errors": {
+        "load": "Failed to load programs.",
+        "delete": "Failed to delete program."
+      }
+    },
+    "form": {
+      "createTitle": "Create partner program",
+      "editTitle": "Program details",
+      "back": "Programs",
+      "name": "Name",
+      "description": "Description",
+      "validFrom": "Valid from",
+      "validTo": "Valid to",
+      "isActive": "Active",
+      "actions": {
+        "create": "Create",
+        "save": "Save",
+        "cancel": "Cancel"
+      },
+      "groups": {
+        "basics": "Basics"
+      },
+      "errors": {
+        "load": "Failed to load program.",
+        "save": "Failed to save program.",
+        "nameRequired": "Name is required.",
+        "scope": "Organization context is missing."
+      },
+      "flash": {
+        "created": "Program created.",
+        "updated": "Program updated."
+      }
+    },
+    "partners": {
+      "tab": "Partners",
+      "title": "Program partners",
+      "description": "Only CRM records with type Partner can be added.",
+      "pickerLabel": "Partner company",
+      "pickerPlaceholder": "Search partner companies…",
+      "role": "Role (optional)",
+      "add": "Add partner",
+      "table": {
+        "customer": "Partner",
+        "role": "Role",
+        "joinedAt": "Joined",
+        "actions": "Actions",
+        "remove": "Remove",
+        "empty": "No partners in this program yet.",
+        "removeConfirm": "Remove this partner from the program?"
+      },
+      "errors": {
+        "load": "Failed to load partners.",
+        "add": "Failed to add partner.",
+        "remove": "Failed to remove partner.",
+        "pickPartner": "Select a partner company."
+      },
+      "messages": {
+        "added": "Partner added.",
+        "removed": "Partner removed."
+      }
+    },
+    "search": {
+      "badge": "Partner program"
+    },
+    "audit": {
+      "programs": {
+        "create": "Create partner program",
+        "update": "Update partner program",
+        "delete": "Delete partner program"
+      },
+      "memberships": {
+        "create": "Add partner program member",
+        "delete": "Remove partner program member"
+      }
+    },
+    "config": {
+      "nav": {
+        "title": "Partner programs settings"
+      },
+      "lead": "Central hub for loyalty and B2B partner programs. Open the workspace to manage programs and partner memberships.",
+      "operationsTitle": "Programs workspace",
+      "operationsLead": "Create programs, define validity windows, and attach CRM partner companies.",
+      "openPrograms": "Open programs"
+    },
+    "errors": {
+      "invalidProgramId": "Invalid program id.",
+      "programNotFound": "Program not found.",
+      "loadMembers": "Failed to load members.",
+      "createMember": "Failed to add member.",
+      "deleteMember": "Failed to remove member.",
+      "membershipIdRequired": "Membership id is required."
+    }
+  }
+}

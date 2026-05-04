@@ -1,0 +1,123 @@
+{
+  "partner_programs": {
+    "nav": {
+      "group": "Programy partnerskie",
+      "programs": "Programy"
+    },
+    "list": {
+      "title": "Programy partnerskie",
+      "description": "Programy lojalnościowe i umowy B2B dla partnerów CRM.",
+      "table": {
+        "name": "Nazwa",
+        "validFrom": "Ważny od",
+        "validTo": "Ważny do",
+        "isActive": "Aktywny",
+        "updatedAt": "Aktualizacja",
+        "empty": "Brak programów.",
+        "search": "Szukaj programów…"
+      },
+      "actions": {
+        "new": "Nowy program",
+        "refresh": "Odśwież",
+        "view": "Szczegóły",
+        "delete": "Usuń",
+        "deleteConfirm": "Usunąć program „{{name}}”?",
+        "openNewTab": "Otwórz w nowej karcie"
+      },
+      "messages": {
+        "deleted": "Program usunięty."
+      },
+      "errors": {
+        "load": "Nie udało się wczytać programów.",
+        "delete": "Nie udało się usunąć programu."
+      }
+    },
+    "form": {
+      "createTitle": "Nowy program partnerski",
+      "editTitle": "Szczegóły programu",
+      "back": "Programy",
+      "name": "Nazwa",
+      "description": "Opis",
+      "validFrom": "Ważny od",
+      "validTo": "Ważny do",
+      "isActive": "Aktywny",
+      "actions": {
+        "create": "Utwórz",
+        "save": "Zapisz",
+        "cancel": "Anuluj"
+      },
+      "groups": {
+        "basics": "Podstawowe"
+      },
+      "errors": {
+        "load": "Nie udało się wczytać programu.",
+        "save": "Nie udało się zapisać programu.",
+        "nameRequired": "Nazwa jest wymagana.",
+        "scope": "Brak kontekstu organizacji."
+      },
+      "flash": {
+        "created": "Program utworzony.",
+        "updated": "Program zapisany."
+      }
+    },
+    "partners": {
+      "tab": "Partnerzy",
+      "title": "Partnerzy w programie",
+      "description": "Tylko rekordy CRM typu Partner mogą być dodane.",
+      "pickerLabel": "Firma partnerska",
+      "pickerPlaceholder": "Szukaj firm partnerskich…",
+      "role": "Rola (opcjonalnie)",
+      "add": "Dodaj partnera",
+      "table": {
+        "customer": "Partner",
+        "role": "Rola",
+        "joinedAt": "Dołączył",
+        "actions": "Akcje",
+        "remove": "Usuń",
+        "empty": "Brak partnerów w programie.",
+        "removeConfirm": "Usunąć tego partnera z programu?"
+      },
+      "errors": {
+        "load": "Nie udało się wczytać partnerów.",
+        "add": "Nie udało się dodać partnera.",
+        "remove": "Nie udało się usunąć partnera.",
+        "pickPartner": "Wybierz firmę partnerską."
+      },
+      "messages": {
+        "added": "Partner dodany.",
+        "removed": "Partner usunięty."
+      }
+    },
+    "search": {
+      "badge": "Program partnerski"
+    },
+    "audit": {
+      "programs": {
+        "create": "Utworzenie programu partnerskiego",
+        "update": "Aktualizacja programu partnerskiego",
+        "delete": "Usunięcie programu partnerskiego"
+      },
+      "memberships": {
+        "create": "Dodanie partnera do programu",
+        "delete": "Usunięcie partnera z programu"
+      }
+    },
+    "config": {
+      "nav": {
+        "title": "Ustawienia programów partnerskich"
+      },
+      "lead": "Punkt startowy dla programów lojalnościowych i B2B. Otwórz obszar roboczy, aby zarządzać programami i członkostwem partnerów.",
+      "operationsTitle": "Obszar programów",
+      "operationsLead": "Twórz programy, ustawiaj okresy ważności i przypisuj firmy-partnerów z CRM.",
+      "openPrograms": "Otwórz programy"
+    },
+    "errors": {
+      "invalidProgramId": "Nieprawidłowy identyfikator programu.",
+      "programNotFound": "Nie znaleziono programu.",
+      "loadMembers": "Nie udało się wczytać członków.",
+      "createMember": "Nie udało się dodać członka.",
+      "deleteMember": "Nie udało się usunąć członka.",
+      "membershipIdRequired": "Wymagany identyfikator członkostwa."
+    }
+  }
+}

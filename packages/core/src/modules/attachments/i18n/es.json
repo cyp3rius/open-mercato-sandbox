@@ -70,6 +70,7 @@
   "attachments.library.upload.assignments.type": "Tipo",
   "attachments.library.upload.cancel": "Cancelar",
   "attachments.library.upload.choose": "Seleccionar archivos",
+  "attachments.library.upload.disabledReadOnly": "Las cargas están desactivadas para registros cerrados.",
   "attachments.library.upload.dropHint": "Arrastre y suelte archivos aquí o haga clic para subir.",
   "attachments.library.upload.failed": "Error al subir.",
   "attachments.library.upload.file": "Archivos",

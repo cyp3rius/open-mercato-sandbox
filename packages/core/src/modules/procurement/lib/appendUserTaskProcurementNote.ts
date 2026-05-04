@@ -1,14 +1,14 @@
 import type { EntityManager } from '@mikro-orm/core'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { UserTask } from '../../workflows/data/entities'
-import type { ProcurementProcess, ProcurementProcessTask } from '../data/entities'
+import type { OperationsTask, ProcurementProcess } from '../data/entities'
 import { appendProcurementTimelineEvent } from './timeline'
 
 export async function appendProcurementTimelineNoteFromUserTask(
   em: EntityManager,
   opts: {
     userTask: UserTask
-    procurementTask: ProcurementProcessTask
+    procurementTask: OperationsTask
     process: ProcurementProcess
     text: string
     actorUserId: string | null
