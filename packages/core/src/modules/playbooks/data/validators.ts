@@ -12,7 +12,7 @@ export const playbookCreateSchema = z.object({
   contextTags: z.array(z.string().min(1).max(80)).optional().default([]),
   procedureDefinition: procedureBlocksArraySchema.optional().default([]),
   audience: z.enum(['internal', 'customer_facing', 'both']).optional().default('internal'),
-  version: z.number().int().min(1).optional().default(1),
+  version: z.number().int().min(0).optional().default(0),
   publishedAt: z.coerce.date().optional().nullable(),
   isActive: z.boolean().optional().default(true),
 })
@@ -25,7 +25,7 @@ export const playbookUpdateSchema = z.object({
   contextTags: z.array(z.string().min(1).max(80)).optional(),
   procedureDefinition: procedureBlocksArraySchema.optional(),
   audience: z.enum(['internal', 'customer_facing', 'both']).optional(),
-  version: z.number().int().min(1).optional(),
+  version: z.number().int().min(0).optional(),
   publishedAt: z.coerce.date().optional().nullable(),
   isActive: z.boolean().optional(),
 })

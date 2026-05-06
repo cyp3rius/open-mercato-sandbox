@@ -33,11 +33,13 @@ import {
 } from '../../../../procurement/lib/procurementEntitySearch'
 import {
   remoteSearchInsurancePoliciesForCaseCustomer,
+  remoteSearchPlaybooksForCase,
   remoteSearchProcurementProcessesForCaseCustomer,
   remoteSearchResourcesForCaseCustomer,
   resolveInsurancePolicyDisplayLabel,
   resolveProcurementProcessDisplayLabel,
 } from '../../../lib/caseRelationsSearch'
+import { formatProcedurePlaybookLabel } from '../../../lib/formatProcedurePlaybookLabel'
 import { AttachmentsSection } from '@open-mercato/ui/backend/detail/AttachmentsSection'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
 import { DetailTabsLayout } from '@open-mercato/core/modules/customers/components/detail/DetailTabsLayout'
@@ -47,9 +49,25 @@ import { CaseInterruptCloseDialog, type CaseInterruptOutcome } from '../../../co
 import { CaseProcedureStepExecutor } from '../../../components/CaseProcedureStepExecutor'
 import { CaseStatusBadge } from '../../../components/CaseStatusBadge'
 
+type InvokeProcedureOptionHead = {
+  slug: string
+  playbookId: string | null
+  title: string | null
+  version: number | null
+}
+
+type ProcedureTaskSummaryHead = {
+  id: string
+  title: string
+  dueAt: string | null
+  taskStatus: string
+  userTaskId?: string | null
+}
+
 type CaseProcedureState = {
   playbookId: string | null
   playbookTitle: string | null
+  playbookVersion?: number | null
   startedAt: string | null
   locked: boolean
   currentBlock: CaseProcedureBlockJson | null
@@ -60,6 +78,10 @@ type CaseProcedureState = {
   canAnswerYesNo: boolean
   isOwner: boolean
   isVerifier: boolean
+  invokeProcedureOptions?: InvokeProcedureOptionHead[]
+  canLaunchInvokeProcedure?: boolean
+  procedureTaskSummary?: ProcedureTaskSummaryHead | null
+  canScheduleProcedureTask?: boolean
 }
 
 function procedureErrorMessage(err: string | null | undefined, t: (key: string, fallback: string) => string) {
@@ -67,24 +89,6 @@ function procedureErrorMessage(err: string | null | undefined, t: (key: string, 
   if (err === 'Case not found.') return t('cases.errors.notFound', 'Case not found.')
   if (err.startsWith('cases.')) return t(err, err)
   return err
-}
-
-async function remoteSearchPlaybooks(q: string) {
-  const call = await apiCall<{
-    items?: Array<{ id: string; title: string; contextTags?: string[]; isActive?: boolean }>
-  }>('/api/playbooks/match')
-  if (!call.ok || !Array.isArray(call.result?.items)) return []
-  const term = q.trim().toLowerCase()
-  const raw = call.result.items.filter((r) => r.isActive !== false)
-  const filtered = !term.length
-    ? raw
-    : raw.filter((r) => {
-        const title = (r.title ?? '').toLowerCase()
-        if (title.includes(term)) return true
-        const tags = Array.isArray(r.contextTags) ? r.contextTags : []
-        return tags.some((tag) => String(tag).toLowerCase().includes(term))
-      })
-  return filtered.slice(0, 20).map((r) => ({ value: r.id, label: r.title }))
 }
 
 function truncateCaseBreadcrumbTitle(name: string, maxLen = 48): string {
@@ -209,6 +213,7 @@ type TimelineRow = {
   occurredAt: string
   actorUserId?: string | null
   actorLabel?: string | null
+  sourceRef?: Record<string, unknown> | null
 }
 
 export default function CaseDetailPage({ params }: { params?: { id?: string } }) {
@@ -712,6 +717,20 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
     [t],
   )
 
+  const procedurePlaybookDisplayLabel = React.useMemo(() => {
+    if (!procedure?.playbookId?.trim()) return ''
+    return (
+      formatProcedurePlaybookLabel(
+        procedure.playbookTitle?.trim() ?? '',
+        procedure.playbookVersion ?? null,
+        t,
+      ).trim() ||
+      procedure.playbookTitle?.trim() ||
+      procedure.playbookId?.trim() ||
+      ''
+    )
+  }, [procedure?.playbookId, procedure?.playbookTitle, procedure?.playbookVersion, t])
+
   if (!caseId) return null
 
   if (!loaded) {
@@ -1011,6 +1030,112 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
                         <div className="mt-2 whitespace-pre-wrap text-sm">
                           {(() => {
                             const raw = ev.body?.trim() ?? ''
+                            if (
+                              ev.eventType === 'system' &&
+                              raw === 'cases.timeline.system.procedure_task_scheduled' &&
+                              ev.sourceRef &&
+                              typeof ev.sourceRef === 'object'
+                            ) {
+                              const ref = ev.sourceRef as Record<string, unknown>
+                              const scheduledTitle =
+                                typeof ref.title === 'string' ? ref.title.trim() : ''
+                              const head = t(raw, 'A task was scheduled for this procedure step.')
+                              return (
+                                <>
+                                  <div>{head}</div>
+                                  {scheduledTitle.length ? (
+                                    <div className="text-muted-foreground mt-2 text-sm font-medium">
+                                      {scheduledTitle}
+                                    </div>
+                                  ) : null}
+                                </>
+                              )
+                            }
+                            if (
+                              ev.eventType === 'system' &&
+                              raw === 'cases.timeline.system.invoke_procedure_launched' &&
+                              ev.sourceRef &&
+                              typeof ev.sourceRef === 'object'
+                            ) {
+                              const ref = ev.sourceRef as Record<string, unknown>
+                              const slug = typeof ref.slug === 'string' ? ref.slug : ''
+                              const title = typeof ref.title === 'string' ? ref.title.trim() : ''
+                              const ver =
+                                typeof ref.version === 'number' && Number.isFinite(ref.version)
+                                  ? Math.trunc(ref.version)
+                                  : null
+                              const head = t(
+                                raw,
+                                'Linked procedure launched; active procedure replaced with latest version.',
+                              )
+                              const detail =
+                                title.length && ver !== null
+                                  ? `${title} (${slug}) · v${ver}`
+                                  : title.length
+                                    ? `${title} (${slug})`
+                                    : slug.length
+                                      ? slug
+                                      : '—'
+                              return (
+                                <>
+                                  <div>{head}</div>
+                                  <div className="text-muted-foreground mt-2 whitespace-pre-wrap font-mono text-xs">
+                                    {detail}
+                                  </div>
+                                </>
+                              )
+                            }
+                            if (
+                              ev.eventType === 'system' &&
+                              raw === 'cases.timeline.system.invoke_procedure_step' &&
+                              ev.sourceRef &&
+                              typeof ev.sourceRef === 'object'
+                            ) {
+                              const refResolved = (ev.sourceRef as { resolved?: unknown }).resolved
+                              const resolved = Array.isArray(refResolved) ? refResolved : []
+                              const head = t(
+                                raw,
+                                'Procedure step: linked procedures resolved at latest active versions.',
+                              )
+                              const lines = resolved
+                                .map((entry) => {
+                                  if (!entry || typeof entry !== 'object') return null
+                                  const rec = entry as Record<string, unknown>
+                                  const slug = typeof rec.slug === 'string' ? rec.slug : ''
+                                  const title = typeof rec.title === 'string' ? rec.title.trim() : ''
+                                  const ver =
+                                    typeof rec.version === 'number' && Number.isFinite(rec.version)
+                                      ? Math.trunc(rec.version)
+                                      : null
+                                  const playbookId = typeof rec.playbookId === 'string' ? rec.playbookId : null
+                                  if (!slug.length && !playbookId) return null
+                                  const missing = !playbookId?.length
+                                  const label =
+                                    title.length && ver !== null
+                                      ? `${title} (${slug}) · v${ver}`
+                                      : title.length
+                                        ? `${title} (${slug})`
+                                        : slug
+                                  return missing
+                                    ? `${label} — ${t('cases.timeline.invokeProcedureMissing', 'no active version')}`
+                                    : label
+                                })
+                                .filter((line): line is string => typeof line === 'string' && line.length > 0)
+                              return (
+                                <>
+                                  <div>{head}</div>
+                                  {lines.length ? (
+                                    <ul className="text-muted-foreground mt-2 list-inside list-disc space-y-1">
+                                      {lines.map((line, lineIdx) => (
+                                        <li key={lineIdx} className="font-mono text-xs">
+                                          {line}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : null}
+                                </>
+                              )
+                            }
                             if (ev.eventType === 'system' && raw.startsWith('cases.timeline.')) {
                               return t(raw, raw)
                             }
@@ -1093,9 +1218,17 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
                         options={mergeEntitySearchOption(
                           [],
                           procedure.playbookId?.trim() ?? '',
-                          procedure.playbookTitle?.trim() || procedure.playbookId?.trim() || '',
+                          procedurePlaybookDisplayLabel || procedure.playbookId?.trim() || '',
                         )}
-                        onRemoteSearch={remoteSearchPlaybooks}
+                        onRemoteSearch={async (q) => {
+                          const rows = await remoteSearchPlaybooksForCase(q, (title, version) =>
+                            formatProcedurePlaybookLabel(title, version ?? null, t))
+                          return mergeEntitySearchOption(
+                            rows,
+                            procedure.playbookId?.trim() ?? '',
+                            procedurePlaybookDisplayLabel || procedure.playbookId?.trim() || '',
+                          )
+                        }}
                         placeholder={t('cases.detail.procedure.selectPlaybook', 'Search procedures…')}
                         disabled={procedureAction || isCaseTerminal}
                         createInNewTabHref="/backend/playbooks/create"
@@ -1103,7 +1236,7 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
                       />
                     ) : procedure.playbookId ? (
                       <p className="text-sm font-semibold leading-snug">
-                        {procedure.playbookTitle ?? procedure.playbookId}
+                        {procedurePlaybookDisplayLabel || procedure.playbookId}
                       </p>
                     ) : (
                       <p className="text-muted-foreground text-sm">
@@ -1137,10 +1270,15 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
                   {procedure.startedAt && procedure.currentBlock ? (
                     <CaseProcedureStepExecutor
                       block={procedure.currentBlock}
+                      caseId={caseId ?? ''}
                       disabled={procedureAction || isCaseTerminal}
                       canNext={Boolean(procedure.canNext && canMutate)}
                       canSendNotify={procedure.canSendNotify}
                       canAnswerYesNo={procedure.canAnswerYesNo}
+                      invokeProcedureOptions={procedure.invokeProcedureOptions ?? []}
+                      canLaunchInvokeProcedure={Boolean(procedure.canLaunchInvokeProcedure && canMutate)}
+                      procedureTaskSummary={procedure.procedureTaskSummary ?? null}
+                      canScheduleProcedureTask={Boolean(procedure.canScheduleProcedureTask && canMutate)}
                       onNext={(opts) =>
                         void runProcedurePost({
                           action: 'next',
@@ -1149,6 +1287,17 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
                       }
                       onSendNotify={(plain) => void runProcedurePost({ action: 'sendNotify', body: plain })}
                       onAnswer={(branch) => void runProcedurePost({ action: 'answer', branch })}
+                      onLaunchInvokeProcedure={(slug) =>
+                        void runProcedurePost({ action: 'launchInvokeProcedure', slug })
+                      }
+                      onScheduleProcedureTask={(payload) =>
+                        runProcedurePost({
+                          action: 'scheduleProcedureTask',
+                          title: payload.title,
+                          ...(payload.body !== undefined ? { body: payload.body } : {}),
+                          ...(payload.dueAt !== undefined ? { dueAt: payload.dueAt } : {}),
+                        })
+                      }
                     />
                   ) : null}
 

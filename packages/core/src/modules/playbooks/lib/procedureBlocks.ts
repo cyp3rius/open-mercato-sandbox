@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { validateProcedureExecutionFlow } from './procedureFlowValidation'
 
 export type ProcedureActionVariant = 'notify' | 'task' | 'other'
 export type ProcedureConditionMode = 'manual' | 'verification'
@@ -29,6 +30,8 @@ export type ProcedureBlock =
       no: ProcedureBlock[]
     }
   | { id: string; kind: 'goto'; label?: string | null; targetStepId: string }
+  /** References other playbooks by slug; runtime resolves latest active version per slug. */
+  | { id: string; kind: 'invoke_procedure'; label?: string | null; playbookSlugs: string[] }
 
 export function newProcedureBlockId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -70,6 +73,8 @@ export function createProcedureBlock(
       }
     case 'goto':
       return { id, kind: 'goto', label: '', targetStepId: '' }
+    case 'invoke_procedure':
+      return { id, kind: 'invoke_procedure', label: '', playbookSlugs: [] }
   }
 }
 
@@ -111,10 +116,52 @@ const procedureBlockSchema: z.ZodType<ProcedureBlock> = z.lazy(() =>
       label: z.string().max(400).nullish(),
       targetStepId: z.union([z.string().uuid(), z.literal('')]),
     }),
+    z.object({
+      id: z.string().uuid(),
+      kind: z.literal('invoke_procedure'),
+      label: z.string().max(400).nullish(),
+      playbookSlugs: z.array(z.string().min(1).max(160)).max(20),
+    }),
   ]),
 )
 
-export const procedureBlocksArraySchema = z.array(procedureBlockSchema)
+export const procedureBlocksArraySchema = z.array(procedureBlockSchema).superRefine((blocks, ctx) => {
+  const typed = blocks as ProcedureBlock[]
+  const walk = (arr: ProcedureBlock[], pathPrefix: (string | number)[]): void => {
+    arr.forEach((block, index) => {
+      const path = [...pathPrefix, index]
+      if (block.kind === 'invoke_procedure' && block.playbookSlugs.length < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'invoke_procedure.playbookSlugsMin',
+          path: [...path, 'playbookSlugs'],
+        })
+      }
+      if (block.kind === 'condition') {
+        walk(block.yes, [...path, 'yes'])
+        walk(block.no, [...path, 'no'])
+      }
+    })
+  }
+  walk(typed, [])
+  if (typed.length > 0 && typed[0].kind !== 'start') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'playbooks.procedure.validation.mustStartWithStart',
+      path: [0],
+    })
+  }
+  if (typed.length > 0 && typed[0].kind === 'start') {
+    const flow = validateProcedureExecutionFlow(typed)
+    if (!flow.ok) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: flow.code,
+        path: [],
+      })
+    }
+  }
+})
 
 export function parseProcedureBlocksJson(raw: unknown): ProcedureBlock[] {
   if (raw == null) return []
@@ -129,9 +176,28 @@ export function parseProcedureBlocksJson(raw: unknown): ProcedureBlock[] {
   return normalizeProcedureBlocks(raw)
 }
 
+function normalizeProcedureInvokeSlugs(blocks: ProcedureBlock[]): ProcedureBlock[] {
+  return blocks.map((b) => {
+    if (b.kind === 'invoke_procedure') {
+      const slugs = Array.from(
+        new Set((b.playbookSlugs ?? []).map((s) => String(s).trim().toLowerCase()).filter(Boolean)),
+      )
+      return { ...b, playbookSlugs: slugs }
+    }
+    if (b.kind === 'condition') {
+      return {
+        ...b,
+        yes: normalizeProcedureInvokeSlugs(b.yes),
+        no: normalizeProcedureInvokeSlugs(b.no),
+      }
+    }
+    return b
+  })
+}
+
 function normalizeProcedureBlocks(raw: unknown): ProcedureBlock[] {
   const res = procedureBlocksArraySchema.safeParse(raw)
-  return res.success ? res.data : []
+  return res.success ? normalizeProcedureInvokeSlugs(res.data) : []
 }
 
 /** DFS preorder: root lists then recursively yes branch then no branch for each condition. */

@@ -8,6 +8,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
 import { RowActions } from '@open-mercato/ui/backend/RowActions'
+import type { FilterDef, FilterValues } from '@open-mercato/ui/backend/FilterBar'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { deleteCrud } from '@open-mercato/ui/backend/utils/crud'
@@ -18,6 +19,10 @@ import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { parsePlaybookBooleanField } from '../../lib/playbookFields'
 
 const PAGE_SIZE = 20
+
+const PLAYBOOK_ACTIVE_FILTER_ID = 'playbookActive' as const
+
+type PlaybookActiveFilterValue = 'all' | 'active' | 'inactive'
 
 type PlaybookRow = {
   id: string
@@ -74,6 +79,9 @@ export default function PlaybooksListPage() {
   const [totalPages, setTotalPages] = React.useState(1)
   const [total, setTotal] = React.useState(0)
   const [search, setSearch] = React.useState('')
+  const [filterValues, setFilterValues] = React.useState<FilterValues>({
+    [PLAYBOOK_ACTIVE_FILTER_ID]: 'active' satisfies PlaybookActiveFilterValue,
+  })
   const [isLoading, setIsLoading] = React.useState(true)
   const [canManage, setCanManage] = React.useState(false)
   const [reloadToken, setReloadToken] = React.useState(0)
@@ -101,11 +109,44 @@ export default function PlaybooksListPage() {
     }
   }, [])
 
+  const filters = React.useMemo<FilterDef[]>(
+    () => [
+      {
+        id: PLAYBOOK_ACTIVE_FILTER_ID,
+        label: t('playbooks.list.filters.show', 'Show'),
+        type: 'select',
+        options: [
+          { value: 'all', label: t('playbooks.list.filters.all', 'All') },
+          { value: 'active', label: t('playbooks.list.filters.active', 'Active') },
+          { value: 'inactive', label: t('playbooks.list.filters.inactive', 'Inactive') },
+        ],
+      },
+    ],
+    [t],
+  )
+
   const queryParams = React.useMemo(() => {
     const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) })
     if (search.trim()) params.set('search', search.trim())
+    const visibility = filterValues[PLAYBOOK_ACTIVE_FILTER_ID]
+    if (visibility === 'active') params.set('isActive', 'true')
+    else if (visibility === 'inactive') params.set('isActive', 'false')
     return params.toString()
-  }, [page, search])
+  }, [filterValues, page, search])
+
+  const handleFiltersApply = React.useCallback((values: FilterValues) => {
+    const next: FilterValues = {}
+    Object.entries(values).forEach(([key, value]) => {
+      if (value !== undefined) next[key] = value
+    })
+    setFilterValues(next)
+    setPage(1)
+  }, [])
+
+  const handleFiltersClear = React.useCallback(() => {
+    setFilterValues({})
+    setPage(1)
+  }, [])
 
   React.useEffect(() => {
     let cancelled = false
@@ -119,11 +160,11 @@ export default function PlaybooksListPage() {
           setRows([])
           return
         }
-        const rawItems = Array.isArray(call.result.items) ? call.result.items : []
+        const rawItems: unknown[] = Array.isArray(call.result.items) ? call.result.items : []
         setRows(
           rawItems
-            .filter((item): item is Record<string, unknown> => item != null && typeof item === 'object')
-            .map((item) => normalizePlaybookListItem(item)),
+            .filter((item) => item != null && typeof item === 'object' && !Array.isArray(item))
+            .map((item) => normalizePlaybookListItem(item as Record<string, unknown>)),
         )
         setTotalPages(typeof call.result.totalPages === 'number' ? call.result.totalPages : 1)
         setTotal(typeof call.result.total === 'number' ? call.result.total : 0)
@@ -262,6 +303,10 @@ export default function PlaybooksListPage() {
             setPage(1)
           }}
           searchPlaceholder={t('playbooks.list.searchPlaceholder', 'Search playbooks…')}
+          filters={filters}
+          filterValues={filterValues}
+          onFiltersApply={handleFiltersApply}
+          onFiltersClear={handleFiltersClear}
           perspective={{ tableId: 'playbooks.list' }}
           rowActions={(row) => (
             <RowActions

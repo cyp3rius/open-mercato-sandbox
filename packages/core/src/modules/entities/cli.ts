@@ -1,7 +1,7 @@
 import type { ModuleCli } from '@open-mercato/shared/modules/registry'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { CacheStrategy } from '@open-mercato/cache/types'
-import { CustomEntity, CustomFieldDef, EncryptionMap } from './data/entities'
+import { CustomEntity, CustomFieldDef, EncryptionMap } from './data/entities.js'
 import {
   installCustomEntitiesFromModules,
   getAggregatedCustomEntityConfigs,

@@ -40,10 +40,17 @@ export async function GET(req: Request) {
     }
     const rows = await em.find(Playbook, where, { orderBy: { updatedAt: 'DESC' } })
     const activeRows = rows.filter((row) => row.isActive === true)
+    const bySlug = new Map<string, Playbook>()
+    for (const row of activeRows) {
+      const key = row.slug.trim().toLowerCase()
+      const prev = bySlug.get(key)
+      if (!prev || row.version > prev.version) bySlug.set(key, row)
+    }
+    const heads = Array.from(bySlug.values())
     const filtered =
       tags.length === 0
-        ? activeRows
-        : activeRows.filter((row) => {
+        ? heads
+        : heads.filter((row) => {
             const ct = Array.isArray(row.contextTags) ? row.contextTags.map((x) => String(x).toLowerCase()) : []
             return tags.some((tag) => ct.includes(tag))
           })

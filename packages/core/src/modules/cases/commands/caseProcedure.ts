@@ -10,6 +10,7 @@ import { User } from '../../auth/data/entities'
 import { CustomerEntity } from '../../customers/data/entities'
 import { Playbook } from '../../playbooks/data/entities'
 import { parseProcedureBlocksJson, type ProcedureBlock } from '../../playbooks/lib/procedureBlocks'
+import { resolveLatestActivePlaybooksBySlugs } from '../../playbooks/lib/resolveLatestActivePlaybooksBySlugs'
 import { CaseTimelineEvent, ServiceCase } from '../data/entities'
 import { OperationsTask } from '../../procurement/data/entities'
 import { OPERATIONS_TASK_CONTEXT_CASE_SERVICE } from '../../procurement/lib/operationsTaskContext'
@@ -20,6 +21,7 @@ import {
   firstInList,
   nextGlobal,
 } from '../lib/caseProcedureEngine'
+import { syncCaseServiceProcedureTaskWorkItemCreate } from '../lib/caseProcedureTaskUserTaskSync'
 import { caseCrudEvents } from '../lib/crud'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
 
@@ -58,6 +60,22 @@ export const casePlaybookSendNotifySchema = z.object({
   body: z.string().min(1).max(50000),
 })
 
+export const casePlaybookLaunchInvokeSchema = z.object({
+  tenantId: uuid,
+  organizationId: uuid,
+  caseId: uuid,
+  slug: z.string().min(1).max(200),
+})
+
+export const casePlaybookScheduleProcedureTaskSchema = z.object({
+  tenantId: uuid,
+  organizationId: uuid,
+  caseId: uuid,
+  title: z.string().min(1).max(500),
+  body: z.string().max(20000).optional().nullable(),
+  dueAt: z.string().max(60).optional().nullable(),
+})
+
 function getMetaObject(row: ServiceCase): Record<string, unknown> {
   const m = row.metadata
   return m && typeof m === 'object' && !Array.isArray(m) ? { ...(m as Record<string, unknown>) } : {}
@@ -78,7 +96,6 @@ async function ensurePlaybook(
     tenantId,
     organizationId,
     deletedAt: null,
-    isActive: true,
   })
   if (!row) {
     throw new CrudHttpError(404, { error: 'cases.procedure.playbookNotFound' })
@@ -91,6 +108,7 @@ async function appendSystemTimeline(
   caseRow: ServiceCase,
   body: string,
   actorUserId: string | null,
+  sourceRef?: Record<string, unknown> | null,
 ) {
   const now = new Date()
   em.create(CaseTimelineEvent, {
@@ -104,6 +122,7 @@ async function appendSystemTimeline(
     createdAt: now,
     updatedAt: now,
     deletedAt: null,
+    sourceRef: sourceRef ?? null,
   })
 }
 
@@ -382,8 +401,45 @@ const nextPlaybookStepCommand: CommandHandler<
       await em.flush()
       return { ok: true as const }
     }
+    if (block.kind === 'invoke_procedure') {
+      throw new CrudHttpError(400, { error: 'cases.procedure.useLaunchForInvokeProcedure' })
+    }
+    if (block.kind === 'action' && block.actionVariant === 'task') {
+      const tid =
+        typeof run.actionTaskByActionBlockId?.[block.id] === 'string'
+          ? run.actionTaskByActionBlockId[block.id].trim()
+          : ''
+      if (!tid.length) {
+        throw new CrudHttpError(400, { error: 'cases.procedure.scheduleTaskBeforeNext' })
+      }
+      const taskRow = await em.findOne(OperationsTask, {
+        id: tid,
+        tenantId: caseRow.tenantId,
+        organizationId: caseRow.organizationId,
+        deletedAt: null,
+      })
+      if (
+        !taskRow ||
+        taskRow.contextType !== OPERATIONS_TASK_CONTEXT_CASE_SERVICE ||
+        taskRow.contextId !== caseRow.id
+      ) {
+        throw new CrudHttpError(400, { error: 'cases.procedure.linkedTaskMissing' })
+      }
+      if (taskRow.taskStatus !== 'done') {
+        throw new CrudHttpError(400, { error: 'cases.procedure.taskMustBeDoneBeforeNext' })
+      }
+    }
     const nextId = nextGlobal(def, run.currentBlockId)
     let nextRun: CasePlaybookRunMetadata = { ...run, currentBlockId: nextId }
+    if (block.kind === 'action' && block.actionVariant === 'task' && nextRun.actionTaskByActionBlockId) {
+      const map = { ...nextRun.actionTaskByActionBlockId }
+      delete map[block.id]
+      if (Object.keys(map).length) {
+        nextRun.actionTaskByActionBlockId = map
+      } else {
+        delete nextRun.actionTaskByActionBlockId
+      }
+    }
     if (nextId) {
       const loc = findWithPath(def, nextId)
       if (loc?.block) {
@@ -627,8 +683,176 @@ const sendNotifyPlaybookStepCommand: CommandHandler<
   },
 }
 
+const scheduleProcedureTaskCommand: CommandHandler<
+  z.infer<typeof casePlaybookScheduleProcedureTaskSchema>,
+  { ok: true; taskId: string }
+> = {
+  id: 'cases.playbook.scheduleProcedureTask',
+  async execute(input, ctx) {
+    const parsed = casePlaybookScheduleProcedureTaskSchema.parse(input)
+    ensureTenantScope(ctx, parsed.tenantId)
+    ensureOrganizationScope(ctx, parsed.organizationId)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const caseRow = await resolveCase(em, ctx, parsed.caseId)
+    assertOwner(caseRow, ctx)
+    const uid = typeof ctx.auth?.sub === 'string' ? ctx.auth.sub.trim() : ''
+    if (!uid.length) {
+      throw new CrudHttpError(401, { error: 'cases.procedure.actorRequired' })
+    }
+    const meta = getMetaObject(caseRow)
+    const run = readCasePlaybookRun(meta)
+    if (!run?.startedAt || !run.playbookId || !run.currentBlockId) {
+      throw new CrudHttpError(400, { error: 'cases.procedure.notRunning' })
+    }
+    const pb = await ensurePlaybook(em, run.playbookId, parsed.tenantId, parsed.organizationId)
+    const def = loadDefinition(pb)
+    const cur = findWithPath(def, run.currentBlockId)
+    if (!cur || cur.block.kind !== 'action' || cur.block.actionVariant !== 'task') {
+      throw new CrudHttpError(400, { error: 'cases.procedure.notOnTaskAction' })
+    }
+    const actionBlock = cur.block
+    const existing =
+      typeof run.actionTaskByActionBlockId?.[actionBlock.id] === 'string'
+        ? run.actionTaskByActionBlockId[actionBlock.id].trim()
+        : ''
+    if (existing.length) {
+      throw new CrudHttpError(400, { error: 'cases.procedure.taskActionAlreadyScheduled' })
+    }
+    let dueAt: Date | null = null
+    const dueRaw = typeof parsed.dueAt === 'string' ? parsed.dueAt.trim() : ''
+    if (dueRaw.length) {
+      const dt = new Date(dueRaw)
+      if (!Number.isNaN(dt.getTime())) {
+        dueAt = dt
+      }
+    }
+    const bodyRaw = typeof parsed.body === 'string' ? parsed.body.trim() : ''
+    const now = new Date()
+    const task = em.create(OperationsTask, {
+      tenantId: caseRow.tenantId,
+      organizationId: caseRow.organizationId,
+      contextType: OPERATIONS_TASK_CONTEXT_CASE_SERVICE,
+      contextId: caseRow.id,
+      supplierId: null,
+      title: parsed.title.trim(),
+      body: bodyRaw.length ? bodyRaw : null,
+      taskStatus: 'open',
+      dueAt,
+      assignedUserId: uid,
+      delegatedFromUserId: null,
+      sourceActionValue: JSON.stringify({
+        kind: 'case_playbook_action_task',
+        actionBlockId: actionBlock.id,
+      }),
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    })
+    em.persist(task)
+    await em.flush()
+    await syncCaseServiceProcedureTaskWorkItemCreate(em, caseRow, task)
+    const map = { ...(run.actionTaskByActionBlockId ?? {}) }
+    map[actionBlock.id] = task.id
+    const nextRun: CasePlaybookRunMetadata = { ...run, actionTaskByActionBlockId: map }
+    caseRow.metadata = writeCasePlaybookRun(meta, nextRun)
+    caseRow.updatedAt = new Date()
+    await em.flush()
+    await appendSystemTimeline(em, caseRow, 'cases.timeline.system.procedure_task_scheduled', uid, {
+      kind: 'procedure_task_scheduled',
+      taskId: task.id,
+      title: parsed.title.trim(),
+    })
+    await em.flush()
+    return { ok: true as const, taskId: task.id }
+  },
+}
+
+function normalizePlaybookSlug(raw: string): string {
+  return raw.trim().toLowerCase()
+}
+
+const launchInvokeProcedureCommand: CommandHandler<
+  z.infer<typeof casePlaybookLaunchInvokeSchema>,
+  { ok: true }
+> = {
+  id: 'cases.playbook.launchInvoke',
+  async execute(input, ctx) {
+    const parsed = casePlaybookLaunchInvokeSchema.parse(input)
+    ensureTenantScope(ctx, parsed.tenantId)
+    ensureOrganizationScope(ctx, parsed.organizationId)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const caseRow = await resolveCase(em, ctx, parsed.caseId)
+    assertOwner(caseRow, ctx)
+    const meta = getMetaObject(caseRow)
+    const run = readCasePlaybookRun(meta)
+    if (!run?.startedAt || !run.playbookId || !run.currentBlockId) {
+      throw new CrudHttpError(400, { error: 'cases.procedure.notRunning' })
+    }
+    const previousPb = await ensurePlaybook(em, run.playbookId, parsed.tenantId, parsed.organizationId)
+    const def = loadDefinition(previousPb)
+    const cur = findWithPath(def, run.currentBlockId)
+    if (!cur || cur.block.kind !== 'invoke_procedure') {
+      throw new CrudHttpError(400, { error: 'cases.procedure.notOnInvokeProcedure' })
+    }
+    const invokeBlock = cur.block
+    const slugList = Array.isArray(invokeBlock.playbookSlugs) ? invokeBlock.playbookSlugs : []
+    const allowed = new Set(
+      slugList
+        .map((s) => normalizePlaybookSlug(typeof s === 'string' ? s : ''))
+        .filter((s) => s.length > 0),
+    )
+    const want = normalizePlaybookSlug(parsed.slug)
+    if (!want.length || !allowed.has(want)) {
+      throw new CrudHttpError(400, { error: 'cases.procedure.invokeSlugNotAllowed' })
+    }
+    const resolvedList = await resolveLatestActivePlaybooksBySlugs(
+      em,
+      caseRow.tenantId,
+      caseRow.organizationId,
+      [want],
+    )
+    const resolvedHead = resolvedList[0]
+    const newPlaybookId = resolvedHead?.playbookId ?? null
+    if (!newPlaybookId) {
+      throw new CrudHttpError(404, { error: 'cases.procedure.invokePlaybookMissing' })
+    }
+    const newPb = await ensurePlaybook(em, newPlaybookId, parsed.tenantId, parsed.organizationId)
+    const newDef = loadDefinition(newPb)
+    const first = firstExecutableBlockId(newDef)
+    const startedAt = new Date().toISOString()
+    let nextRun: CasePlaybookRunMetadata = {
+      playbookId: newPb.id,
+      startedAt,
+      currentBlockId: first,
+    }
+    if (first) {
+      const loc = findWithPath(newDef, first)
+      if (loc?.block) {
+        nextRun = await tryCreateVerificationTask(em, caseRow, loc.block, nextRun)
+      }
+    }
+    caseRow.metadata = writeCasePlaybookRun(meta, nextRun)
+    caseRow.updatedAt = new Date()
+    await em.flush()
+    const uid = typeof ctx.auth?.sub === 'string' ? ctx.auth.sub.trim() : null
+    await appendSystemTimeline(em, caseRow, 'cases.timeline.system.invoke_procedure_launched', uid, {
+      kind: 'invoke_procedure_launched',
+      slug: want,
+      playbookId: newPb.id,
+      title: typeof newPb.title === 'string' ? newPb.title : null,
+      version:
+        typeof newPb.version === 'number' && Number.isFinite(newPb.version) ? Math.trunc(newPb.version) : null,
+      previousPlaybookId: previousPb.id,
+    })
+    await em.flush()
+    return { ok: true as const }
+  },
+}
+
 registerCommand(selectPlaybookCommand)
 registerCommand(startPlaybookCommand)
+registerCommand(launchInvokeProcedureCommand)
+registerCommand(scheduleProcedureTaskCommand)
 registerCommand(nextPlaybookStepCommand)
 registerCommand(answerConditionCommand)
 registerCommand(sendNotifyPlaybookStepCommand)

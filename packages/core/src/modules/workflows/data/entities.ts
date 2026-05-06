@@ -375,6 +375,7 @@ export class StepInstance {
 @Index({ name: 'user_tasks_status_due_date_idx', properties: ['status', 'dueDate'] })
 @Index({ name: 'user_tasks_tenant_org_idx', properties: ['tenantId', 'organizationId'] })
 @Index({ name: 'user_tasks_procurement_process_idx', properties: ['procurementProcessId'] })
+@Index({ name: 'user_tasks_service_case_idx', properties: ['serviceCaseId'] })
 export class UserTask {
   [OptionalProps]?: 'createdAt' | 'updatedAt'
 
@@ -400,6 +401,14 @@ export class UserTask {
   /** Denormalized process title for /backend/tasks (procurement-linked tasks). */
   @Property({ name: 'procurement_process_title', type: 'varchar', length: 500, nullable: true })
   procurementProcessTitle?: string | null
+
+  /** Denormalized service case link when this row mirrors a case playbook procedure task (`operations_tasks.context_type = case_service`). */
+  @Property({ name: 'service_case_id', type: 'uuid', nullable: true })
+  serviceCaseId?: string | null
+
+  /** Denormalized case title for /backend/tasks list and detail links. */
+  @Property({ name: 'service_case_title', type: 'varchar', length: 500, nullable: true })
+  serviceCaseTitle?: string | null
 
   @Property({ name: 'task_name', type: 'varchar', length: 255 })
   taskName!: string

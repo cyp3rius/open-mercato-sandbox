@@ -1,5 +1,5 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { CustomFieldDef } from '../data/entities'
+import { CustomFieldDef } from '../data/entities.js'
 import type { CustomFieldDefinition } from '@open-mercato/shared/modules/entities'
 
 export type FieldSetInput = {

@@ -24,6 +24,8 @@ export const userTaskSchema = z.object({
   procurementProcessTaskId: z.string().uuid().nullable().optional(),
   procurementProcessId: z.string().uuid().nullable().optional(),
   procurementProcessTitle: z.string().nullable().optional(),
+  serviceCaseId: z.string().uuid().nullable().optional(),
+  serviceCaseTitle: z.string().nullable().optional(),
   taskName: z.string(),
   description: z.string().nullable().optional(),
   status: userTaskStatusSchema,

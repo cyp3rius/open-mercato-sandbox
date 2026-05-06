@@ -35,7 +35,7 @@ export function playbookFormSchema() {
     procedureDefinition: procedureBlocksArraySchema.default([]),
     contextTags: z.array(z.string()).default([]),
     audience: z.enum(['internal', 'customer_facing', 'both']),
-    version: z.coerce.number().int().min(1),
+    version: z.coerce.number().int().min(0),
     isActive: z.boolean(),
   })
 }
@@ -48,7 +48,7 @@ export function defaultPlaybookFormValues(): PlaybookFormValues {
     procedureDefinition: [],
     contextTags: [],
     audience: 'internal',
-    version: 1,
+    version: 0,
     isActive: true,
   }
 }
@@ -83,7 +83,7 @@ export function rowToPlaybookFormValues(row: {
     procedureDefinition: parseProcedureBlocksJson(procRaw),
     contextTags: pickContextTags(row),
     audience: aud,
-    version: typeof row.version === 'number' ? row.version : 1,
+    version: typeof row.version === 'number' ? row.version : 0,
     isActive: resolvedActive === undefined ? true : resolvedActive,
   }
   if (typeof row.id === 'string' && row.id.length) out.id = row.id
@@ -137,7 +137,12 @@ export function buildPlaybookFormFields(t: PlaybookFormTranslator): CrudField[] 
       id: 'version',
       type: 'number',
       label: t('playbooks.form.version', 'Version'),
+      description: t(
+        'playbooks.form.versionHint',
+        'Increases automatically when you change procedure content; older versions stay linked to cases that already used them.',
+      ),
       required: true,
+      disabled: true,
       layout: 'full',
     },
     {

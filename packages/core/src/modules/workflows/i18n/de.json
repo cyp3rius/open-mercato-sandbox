@@ -859,6 +859,7 @@
   "workflows.tasks.detail.type": "Benutzeraufgabe",
   "workflows.tasks.detail.validation.requiredField": "Pflichtfeld fehlt: {{field}}",
   "workflows.tasks.detail.workflowInstance": "Workflow-Instanz",
+  "workflows.tasks.detail.serviceCaseLabel": "Vorgang",
   "workflows.tasks.dueDate": "Fälligkeitsdatum",
   "workflows.tasks.fields.assignment": "Zuweisung",
   "workflows.tasks.fields.createdAt": "Erstellt am",

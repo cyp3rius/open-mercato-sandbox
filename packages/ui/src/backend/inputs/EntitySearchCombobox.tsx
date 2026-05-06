@@ -183,48 +183,55 @@ export function EntitySearchCombobox({
               onWheel={(e) => e.stopPropagation()}
               onTouchMove={(e) => e.stopPropagation()}
             >
-              {remoteLoading ? (
-                <div className="px-3 py-2 text-xs text-muted-foreground">
-                  {t('common.loading', 'Loading…')}
-                </div>
-              ) : (
-                <>
-                  <Command.Empty className="px-3 py-2 text-center text-xs text-muted-foreground">
-                    {defaultEmpty}
-                  </Command.Empty>
-                  <Command.Group>
-                    {rows.map((opt, index) => (
-                      <Command.Item
-                        key={opt.value ? opt.value : `empty-${index}`}
-                        value={`${opt.label} ${opt.value}`}
-                        onSelect={() => {
-                          onChange(opt.value)
-                          setOpen(false)
-                        }}
-                        className="flex cursor-pointer flex-col gap-0.5 rounded-sm px-2 py-1.5 text-sm aria-selected:bg-accent"
-                      >
-                        <div className="flex w-full min-w-0 flex-col gap-0.5">
-                          <div className="flex w-full min-w-0 items-center gap-2">
-                            <Check
-                              className={cn('size-4 shrink-0', value === opt.value ? 'opacity-100' : 'opacity-0')}
-                            />
-                            <DictionaryAppearancePreview
-                              color={opt.color}
-                              icon={opt.icon}
-                              label={opt.label}
-                              className="min-w-0 flex-1"
-                              labelClassName="truncate font-medium"
-                            />
-                          </div>
-                          {opt.description ? (
-                            <span className="pl-6 text-xs text-muted-foreground">{opt.description}</span>
-                          ) : null}
+              <Command.Empty
+                className={cn(
+                  'px-3 py-2 text-center text-xs text-muted-foreground',
+                  remoteLoading && 'hidden',
+                )}
+              >
+                {defaultEmpty}
+              </Command.Empty>
+              <Command.Group>
+                {remoteLoading ? (
+                  <Command.Item
+                    value="__entity_search_remote_loading__"
+                    disabled
+                    className="cursor-default px-3 py-2 text-xs text-muted-foreground opacity-100 aria-selected:bg-transparent data-disabled:opacity-100"
+                  >
+                    {t('common.loading', 'Loading…')}
+                  </Command.Item>
+                ) : (
+                  rows.map((opt, index) => (
+                    <Command.Item
+                      key={opt.value ? opt.value : `empty-${index}`}
+                      value={`${opt.label} ${opt.value}`}
+                      onSelect={() => {
+                        onChange(opt.value)
+                        setOpen(false)
+                      }}
+                      className="flex cursor-pointer flex-col gap-0.5 rounded-sm px-2 py-1.5 text-sm aria-selected:bg-accent"
+                    >
+                      <div className="flex w-full min-w-0 flex-col gap-0.5">
+                        <div className="flex w-full min-w-0 items-center gap-2">
+                          <Check
+                            className={cn('size-4 shrink-0', value === opt.value ? 'opacity-100' : 'opacity-0')}
+                          />
+                          <DictionaryAppearancePreview
+                            color={opt.color}
+                            icon={opt.icon}
+                            label={opt.label}
+                            className="min-w-0 flex-1"
+                            labelClassName="truncate font-medium"
+                          />
                         </div>
-                      </Command.Item>
-                    ))}
-                  </Command.Group>
-                </>
-              )}
+                        {opt.description ? (
+                          <span className="pl-6 text-xs text-muted-foreground">{opt.description}</span>
+                        ) : null}
+                      </div>
+                    </Command.Item>
+                  ))
+                )}
+              </Command.Group>
             </Command.List>
           </Command>
         </PopoverContent>

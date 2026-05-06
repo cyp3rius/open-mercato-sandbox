@@ -859,6 +859,7 @@
   "workflows.tasks.detail.type": "Tarea de usuario",
   "workflows.tasks.detail.validation.requiredField": "Falta el campo obligatorio: {{field}}",
   "workflows.tasks.detail.workflowInstance": "Instancia del flujo de trabajo",
+  "workflows.tasks.detail.serviceCaseLabel": "Caso",
   "workflows.tasks.dueDate": "Fecha limite",
   "workflows.tasks.fields.assignment": "Asignacion",
   "workflows.tasks.fields.createdAt": "Fecha de creacion",

@@ -6,10 +6,12 @@ import { FieldRegistry } from '@open-mercato/ui/backend/fields/registry'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { DictionarySelectControl } from '../components/DictionarySelectControl'
+import { DictionaryMultiSelectControl } from '../components/DictionaryMultiSelectControl'
 
 type DictionaryFieldDefinition = {
   dictionaryId?: string
   dictionaryInlineCreate?: boolean
+  multi?: boolean
 }
 
 type Props = CrudCustomFieldRenderProps & { def?: DictionaryFieldDefinition }
@@ -28,6 +30,7 @@ function DictionaryFieldDefEditor({ def, onChange }: { def: { configJson?: Dicti
   const [error, setError] = React.useState<string | null>(null)
   const selectedId = typeof def?.configJson?.dictionaryId === 'string' ? def?.configJson?.dictionaryId : ''
   const inlineCreate = def?.configJson?.dictionaryInlineCreate !== false
+  const allowMultiple = Boolean(def?.configJson?.multi)
 
   React.useEffect(() => {
     let cancelled = false
@@ -121,8 +124,29 @@ function DictionaryFieldDefEditor({ def, onChange }: { def: { configJson?: Dicti
         />
         {t('dictionaries.customFields.allowInlineCreate', 'Allow inline creation inside forms')}
       </label>
+      <label className="inline-flex items-center gap-2 text-xs">
+        <input
+          type="checkbox"
+          checked={allowMultiple}
+          onChange={(event) => onChange({ multi: event.target.checked })}
+          disabled={!selectedId}
+        />
+        {t('dictionaries.customFields.allowMultipleSelections', 'Allow multiple selections')}
+      </label>
     </div>
   )
+}
+
+function normalizeDictionarySingleValue(raw: unknown): string | undefined {
+  if (typeof raw === 'string') return raw
+  if (Array.isArray(raw) && raw.length > 0 && typeof raw[0] === 'string') return raw[0]
+  return undefined
+}
+
+function normalizeDictionaryMultiValue(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+  if (typeof raw === 'string' && raw.trim().length > 0) return [raw.trim()]
+  return []
 }
 
 function DictionaryFieldInput({ value, setValue, disabled, def }: Props) {
@@ -135,7 +159,19 @@ function DictionaryFieldInput({ value, setValue, disabled, def }: Props) {
       </div>
     )
   }
-  const normalizedValue = typeof value === 'string' ? value : Array.isArray(value) ? String(value[0] ?? '') : undefined
+  const isMulti = Boolean(def?.multi)
+  if (isMulti) {
+    return (
+      <DictionaryMultiSelectControl
+        dictionaryId={dictionaryId}
+        value={normalizeDictionaryMultiValue(value)}
+        onChange={(next) => setValue(next.length ? next : undefined)}
+        allowInlineCreate={def?.dictionaryInlineCreate !== false}
+        disabled={disabled}
+      />
+    )
+  }
+  const normalizedValue = normalizeDictionarySingleValue(value)
   return (
     <DictionarySelectControl
       dictionaryId={dictionaryId}

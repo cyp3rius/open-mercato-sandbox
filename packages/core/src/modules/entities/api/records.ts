@@ -8,7 +8,7 @@ import type { RbacService } from '@open-mercato/core/modules/auth/services/rbacS
 import { resolveOrganizationScope, getSelectedOrganizationFromRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { parseBooleanToken, parseBooleanWithDefault } from '@open-mercato/shared/lib/boolean'
 import { setRecordCustomFields } from '../lib/helpers'
-import { CustomFieldValue } from '../data/entities'
+import { CustomFieldValue } from '../data/entities.js'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 
 export const metadata = {
@@ -81,7 +81,7 @@ export async function GET(req: Request) {
     let organizationIds: string[] | null = scope.filterIds
     let isCustomEntity = false
     try {
-      const { CustomEntity } = await import('../data/entities')
+      const { CustomEntity } = await import('../data/entities.js')
       const found = await em.findOne(CustomEntity as any, { entityId, isActive: true })
       isCustomEntity = !!found
     } catch {}

@@ -10,7 +10,9 @@ import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
+import { User } from '@open-mercato/core/modules/auth/data/entities'
 import { UserTask } from '../../../data/entities'
+import { serializeUserTaskForApi } from '../../../lib/serializeUserTask'
 import {
   workflowsTag,
   userTaskDetailResponseSchema,
@@ -64,8 +66,27 @@ export async function GET(
       )
     }
 
+    const userIds = [task.assignedTo, task.claimedBy].filter(
+      (id): id is string => typeof id === 'string' && id.length > 0,
+    )
+    const users =
+      userIds.length > 0
+        ? await em.find(User, { id: { $in: userIds as unknown[] }, deletedAt: null })
+        : []
+    const displayById = new Map(
+      users.map((u: User) => {
+        const name = typeof u.name === 'string' && u.name.trim().length ? u.name.trim() : null
+        const label = name ?? u.email ?? u.id
+        return [u.id, label] as const
+      }),
+    )
+
     return NextResponse.json({
-      data: task,
+      data: {
+        ...serializeUserTaskForApi(task),
+        assignedToDisplayName: task.assignedTo ? displayById.get(task.assignedTo) ?? null : null,
+        claimedByDisplayName: task.claimedBy ? displayById.get(task.claimedBy) ?? null : null,
+      },
     })
   } catch (error) {
     console.error('Error fetching user task:', error)

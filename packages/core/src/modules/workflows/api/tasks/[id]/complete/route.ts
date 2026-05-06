@@ -12,6 +12,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { completeUserTask } from '../../../../lib/task-handler'
+import { serializeUserTaskForApi } from '../../../../lib/serializeUserTask'
 import {
   workflowsTag,
   completeTaskRequestSchema as openApiCompleteTaskSchema,
@@ -118,8 +119,12 @@ export async function POST(
       organizationId,
     })
 
+    if (!updatedTask) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+    }
+
     return NextResponse.json({
-      data: updatedTask,
+      data: serializeUserTaskForApi(updatedTask),
       message: 'Task completed successfully. Workflow resumed.',
     })
   } catch (error) {

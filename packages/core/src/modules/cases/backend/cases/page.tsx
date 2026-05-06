@@ -26,6 +26,7 @@ type CaseRow = {
   statusValue?: string
   customerEntityId?: string
   customerDisplayName?: string | null
+  procedureDisplayLabel?: string | null
   ownerUserId?: string | null
   updatedAt?: string | null
 }
@@ -210,6 +211,14 @@ export default function CasesListPage() {
         cell: ({ row }) => {
           const name = row.original.customerDisplayName?.trim()
           return <span className="text-sm">{name || '—'}</span>
+        },
+      },
+      {
+        id: 'procedure',
+        header: t('cases.list.columns.procedure', 'Procedure'),
+        cell: ({ row }) => {
+          const label = row.original.procedureDisplayLabel?.trim()
+          return <span className="text-sm">{label || '—'}</span>
         },
       },
     ],

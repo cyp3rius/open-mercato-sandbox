@@ -1,12 +1,16 @@
 import { z } from 'zod'
+import type { FilterQuery } from '@mikro-orm/core'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
 import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { resolveCrudRecordId, parseScopedCommandInput } from '@open-mercato/shared/lib/api/scoped'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
+import { Playbook } from '../../playbooks/data/entities'
 import { CustomerEntity } from '../../customers/data/entities'
 import { ServiceCase } from '../data/entities'
+import { formatProcedurePlaybookLabel } from '../lib/formatProcedurePlaybookLabel'
+import { readCasePlaybookRun } from '../lib/casePlaybookMetadata'
 import { caseCreateSchema, caseUpdateSchema } from '../data/validators'
 import { E } from '#generated/entities.ids.generated'
 import { createCasesCrudOpenApi, createPagedListResponseSchema, defaultOkResponseSchema } from './openapi'
@@ -170,39 +174,96 @@ const crud = makeCrudRoute({
       const items = Array.isArray(payload.items) ? payload.items : []
       if (!items.length) return
       const tenantId = ctx.auth?.tenantId
+      const em = ctx.container.resolve('em') as EntityManager
+      const organizationId = ctx.selectedOrganizationId ?? null
+
       if (!tenantId) {
         for (const item of items) {
-          if (item && typeof item === 'object') (item as Record<string, unknown>).customerDisplayName = null
+          if (item && typeof item === 'object') {
+            const row = item as Record<string, unknown>
+            row.customerDisplayName = null
+            row.procedureDisplayLabel = null
+          }
         }
         return
       }
-      const idSet = new Set<string>()
+
+      const customerIdSet = new Set<string>()
       for (const item of items) {
         if (!item || typeof item !== 'object') continue
         const raw = (item as Record<string, unknown>).customerEntityId
-        if (typeof raw === 'string' && raw.trim().length) idSet.add(raw.trim())
+        if (typeof raw === 'string' && raw.trim().length) customerIdSet.add(raw.trim())
       }
-      if (idSet.size === 0) {
+      if (customerIdSet.size === 0) {
         for (const item of items) {
           if (item && typeof item === 'object') (item as Record<string, unknown>).customerDisplayName = null
         }
-        return
+      } else {
+        const customers = await findWithDecryption(
+          em,
+          CustomerEntity,
+          { id: { $in: [...customerIdSet] }, tenantId },
+          { fields: ['id', 'displayName', 'organizationId', 'tenantId'] },
+          { tenantId, organizationId },
+        )
+        const customerById = new Map(customers.map((c) => [c.id, c.displayName]))
+        for (const item of items) {
+          if (!item || typeof item !== 'object') continue
+          const cid = (item as Record<string, unknown>).customerEntityId
+          const key = typeof cid === 'string' && cid.trim().length ? cid.trim() : ''
+          ;(item as Record<string, unknown>).customerDisplayName = key ? (customerById.get(key) ?? null) : null
+        }
       }
-      const em = ctx.container.resolve('em') as EntityManager
-      const organizationId = ctx.selectedOrganizationId ?? null
-      const customers = await findWithDecryption(
-        em,
-        CustomerEntity,
-        { id: { $in: [...idSet] }, tenantId },
-        { fields: ['id', 'displayName', 'organizationId', 'tenantId'] },
-        { tenantId, organizationId },
-      )
-      const byId = new Map(customers.map((c) => [c.id, c.displayName]))
+
+      const playbookIdSet = new Set<string>()
       for (const item of items) {
         if (!item || typeof item !== 'object') continue
-        const cid = (item as Record<string, unknown>).customerEntityId
-        const key = typeof cid === 'string' && cid.trim().length ? cid.trim() : ''
-        ;(item as Record<string, unknown>).customerDisplayName = key ? (byId.get(key) ?? null) : null
+        const meta = (item as Record<string, unknown>).metadata
+        const run = readCasePlaybookRun(meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : null)
+        const pid = run?.playbookId?.trim()
+        if (pid) playbookIdSet.add(pid)
+      }
+
+      let playbookById = new Map<string, { title: string; version: number | null }>()
+      let translate: Awaited<ReturnType<typeof resolveTranslations>>['translate'] | null = null
+      if (playbookIdSet.size > 0) {
+        const scopeOrgId = ctx.selectedOrganizationId ?? ctx.auth?.orgId ?? null
+        const where: FilterQuery<Playbook> = {
+          id: { $in: [...playbookIdSet] },
+          tenantId,
+          deletedAt: null,
+        }
+        if (scopeOrgId) {
+          where.organizationId = scopeOrgId
+        }
+        const playbooks = await em.find(Playbook, where)
+        playbookById = new Map(
+          playbooks.map((p) => [
+            p.id,
+            {
+              title: typeof p.title === 'string' ? p.title : '',
+              version:
+                typeof p.version === 'number' && Number.isFinite(p.version) ? Math.trunc(p.version) : null,
+            },
+          ]),
+        )
+        translate = (await resolveTranslations()).translate
+      }
+
+      for (const item of items) {
+        if (!item || typeof item !== 'object') continue
+        const row = item as Record<string, unknown>
+        const meta = row.metadata
+        const run = readCasePlaybookRun(meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : null)
+        const pid = run?.playbookId?.trim()
+        if (!pid || !translate) {
+          row.procedureDisplayLabel = null
+          continue
+        }
+        const pb = playbookById.get(pid)
+        row.procedureDisplayLabel = pb
+          ? formatProcedurePlaybookLabel(pb.title, pb.version, translate)
+          : null
       }
     },
   },
@@ -254,6 +315,7 @@ const caseRowSchema = z.object({
   statusColor: z.string().nullable(),
   customerEntityId: z.string().uuid(),
   customerDisplayName: z.string().nullable(),
+  procedureDisplayLabel: z.string().nullable().optional(),
   resourceId: z.string().uuid().nullable(),
   procurementProcessId: z.string().uuid().nullable(),
   insurancePolicyId: z.string().uuid().nullable(),

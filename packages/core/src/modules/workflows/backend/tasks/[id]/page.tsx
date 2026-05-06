@@ -481,6 +481,21 @@ export default function UserTaskDetailPage({ params }: { params: { id: string } 
                   </a>
                 </div>
               ) : null}
+              {task.serviceCaseId ? (
+                <div className="sm:col-span-2">
+                  <span className="text-muted-foreground">
+                    {t('workflows.tasks.detail.serviceCaseLabel', 'Case')}
+                    :
+                  </span>{' '}
+                  <Link
+                    href={`/backend/cases/${encodeURIComponent(task.serviceCaseId)}`}
+                    className="ml-2 inline-flex items-center gap-1 text-primary hover:underline text-sm font-medium"
+                  >
+                    {task.serviceCaseTitle?.trim() || `${task.serviceCaseId.slice(0, 8)}…`}
+                    <SquareArrowOutUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  </Link>
+                </div>
+              ) : null}
             </div>
           </div>
 

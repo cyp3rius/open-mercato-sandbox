@@ -12,6 +12,11 @@ import {
   type PlaybookDeleteInput,
   type PlaybookUpdateInput,
 } from '../data/validators'
+import {
+  mergePlaybookUpdateIntoSnapshot,
+  playbookContentSnapshotsEqual,
+  snapshotPlaybookContent,
+} from '../lib/playbookVersioning'
 import { playbookCrudEvents } from '../lib/crud'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
 import { E } from '#generated/entities.ids.generated'
@@ -26,13 +31,14 @@ const createPlaybookCommand: CommandHandler<PlaybookCreateInput, { playbookId: s
     ensureOrganizationScope(ctx, parsed.organizationId)
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const slugLower = parsed.slug.trim().toLowerCase()
-    const dup = await em.findOne(Playbook, {
+    const activeDup = await em.findOne(Playbook, {
       organizationId: parsed.organizationId,
       tenantId: parsed.tenantId,
       slug: slugLower,
       deletedAt: null,
+      isActive: true,
     })
-    if (dup) {
+    if (activeDup) {
       throw new CrudHttpError(409, { error: 'Playbook slug already exists for this organization.' })
     }
     const now = new Date()
@@ -45,7 +51,7 @@ const createPlaybookCommand: CommandHandler<PlaybookCreateInput, { playbookId: s
       contextTags: parsed.contextTags ?? [],
       procedureDefinition: parsed.procedureDefinition ?? [],
       audience: parsed.audience ?? 'internal',
-      version: parsed.version ?? 1,
+      version: parsed.version ?? 0,
       publishedAt: parsed.publishedAt ?? null,
       isActive: parsed.isActive ?? true,
       createdAt: now,
@@ -67,7 +73,7 @@ const createPlaybookCommand: CommandHandler<PlaybookCreateInput, { playbookId: s
   },
 }
 
-const updatePlaybookCommand: CommandHandler<PlaybookUpdateInput, { ok: true }> = {
+const updatePlaybookCommand: CommandHandler<PlaybookUpdateInput, { ok: true; playbookId?: string }> = {
   id: 'playbooks.playbooks.update',
   async execute(input, ctx) {
     const parsed = playbookUpdateSchema.parse(input)
@@ -78,30 +84,79 @@ const updatePlaybookCommand: CommandHandler<PlaybookUpdateInput, { ok: true }> =
     }
     ensureTenantScope(ctx, row.tenantId)
     ensureOrganizationScope(ctx, row.organizationId)
-    if (parsed.slug !== undefined) {
-      const slugLower = parsed.slug.trim().toLowerCase()
-      const dup = await em.findOne(Playbook, {
-        organizationId: row.organizationId,
-        tenantId: row.tenantId,
-        slug: slugLower,
-        deletedAt: null,
-        id: { $ne: row.id },
-      })
-      if (dup) {
-        throw new CrudHttpError(409, { error: 'Playbook slug already exists for this organization.' })
-      }
-      row.slug = slugLower
+    if (!row.isActive) {
+      throw new CrudHttpError(400, { error: 'playbooks.errors.archivedVersionReadOnly' })
     }
-    if (parsed.title !== undefined) row.title = parsed.title.trim()
-    if (parsed.body !== undefined) row.body = parsed.body
-    if (parsed.contextTags !== undefined) row.contextTags = parsed.contextTags
-    if (parsed.procedureDefinition !== undefined) row.procedureDefinition = parsed.procedureDefinition
-    if (parsed.audience !== undefined) row.audience = parsed.audience
-    if (parsed.version !== undefined) row.version = parsed.version
-    if (parsed.publishedAt !== undefined) row.publishedAt = parsed.publishedAt
-    if (parsed.isActive !== undefined) row.isActive = parsed.isActive
+
+    const before = snapshotPlaybookContent(row)
+    const merged = mergePlaybookUpdateIntoSnapshot(before, parsed)
+    const contentChanged = !playbookContentSnapshotsEqual(before, merged)
+    const isActiveChanged = parsed.isActive !== undefined && parsed.isActive !== row.isActive
+
+    if (!contentChanged && !isActiveChanged) {
+      return { ok: true as const }
+    }
+
+    if (!contentChanged && isActiveChanged) {
+      row.isActive = parsed.isActive!
+      row.updatedAt = new Date()
+      await em.flush()
+      const dataEngine = ctx.container.resolve('dataEngine') as DataEngine
+      await emitCrudSideEffects({
+        dataEngine,
+        action: 'updated',
+        entity: row,
+        identifiers: { id: row.id, organizationId: row.organizationId, tenantId: row.tenantId },
+        events: playbookCrudEvents,
+        indexer: playbookIndexer,
+      })
+      return { ok: true as const }
+    }
+
+    const conflictingHead = await em.findOne(Playbook, {
+      organizationId: row.organizationId,
+      tenantId: row.tenantId,
+      slug: merged.slug,
+      deletedAt: null,
+      isActive: true,
+      id: { $ne: row.id },
+    })
+    if (conflictingHead) {
+      throw new CrudHttpError(409, { error: 'Playbook slug already exists for this organization.' })
+    }
+
+    const tags =
+      parsed.contextTags !== undefined
+        ? parsed.contextTags.map((x) => String(x).trim()).filter(Boolean)
+        : [...(row.contextTags ?? [])]
+    const proc =
+      parsed.procedureDefinition !== undefined
+        ? JSON.parse(JSON.stringify(parsed.procedureDefinition))
+        : JSON.parse(JSON.stringify(row.procedureDefinition ?? []))
+
+    row.isActive = false
     row.updatedAt = new Date()
+
+    const now = new Date()
+    const newRow = em.create(Playbook, {
+      tenantId: row.tenantId,
+      organizationId: row.organizationId,
+      slug: merged.slug,
+      title: merged.title,
+      body: merged.body,
+      contextTags: tags,
+      procedureDefinition: proc,
+      audience: merged.audience,
+      version: row.version + 1,
+      publishedAt: parsed.publishedAt !== undefined ? parsed.publishedAt : row.publishedAt ?? null,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    })
+    em.persist(newRow)
     await em.flush()
+
     const dataEngine = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({
       dataEngine,
@@ -111,7 +166,15 @@ const updatePlaybookCommand: CommandHandler<PlaybookUpdateInput, { ok: true }> =
       events: playbookCrudEvents,
       indexer: playbookIndexer,
     })
-    return { ok: true }
+    await emitCrudSideEffects({
+      dataEngine,
+      action: 'created',
+      entity: newRow,
+      identifiers: { id: newRow.id, organizationId: newRow.organizationId, tenantId: newRow.tenantId },
+      events: playbookCrudEvents,
+      indexer: playbookIndexer,
+    })
+    return { ok: true as const, playbookId: newRow.id }
   },
 }
 

@@ -16,6 +16,9 @@ import { isCrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { Playbook } from '../../../../playbooks/data/entities'
 import { parseProcedureBlocksJson } from '../../../../playbooks/lib/procedureBlocks'
+import { resolveLatestActivePlaybooksBySlugs } from '../../../../playbooks/lib/resolveLatestActivePlaybooksBySlugs'
+import { OperationsTask } from '../../../../procurement/data/entities'
+import { OPERATIONS_TASK_CONTEXT_CASE_SERVICE } from '../../../../procurement/lib/operationsTaskContext'
 import { ServiceCase } from '../../../data/entities'
 import { readCasePlaybookRun } from '../../../lib/casePlaybookMetadata'
 import { findWithPath } from '../../../lib/caseProcedureEngine'
@@ -25,6 +28,8 @@ import {
   casePlaybookAnswerSchema,
   casePlaybookNextSchema,
   casePlaybookSelectSchema,
+  casePlaybookLaunchInvokeSchema,
+  casePlaybookScheduleProcedureTaskSchema,
   casePlaybookSendNotifySchema,
   casePlaybookStartSchema,
 } from '../../../commands/caseProcedure'
@@ -45,6 +50,13 @@ const postBodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('next'), closingNote: z.string().max(10000).optional() }),
   z.object({ action: z.literal('sendNotify'), body: z.string().min(1).max(50000) }),
   z.object({ action: z.literal('answer'), branch: z.enum(['yes', 'no']) }),
+  z.object({ action: z.literal('launchInvokeProcedure'), slug: z.string().min(1).max(200) }),
+  z.object({
+    action: z.literal('scheduleProcedureTask'),
+    title: z.string().min(1).max(500),
+    body: z.string().max(20000).optional(),
+    dueAt: z.string().max(60).optional().nullable(),
+  }),
 ])
 
 async function buildContext(req: Request) {
@@ -111,6 +123,7 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
     const isOwner = Boolean(uid.length && ownerId.length && uid === ownerId)
 
     let playbookTitle: string | null = null
+    let playbookVersion: number | null = null
     let currentBlock: CaseProcedureBlockJson | null = null
 
     if (run?.playbookId) {
@@ -121,6 +134,8 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
         deletedAt: null,
       })
       playbookTitle = pb?.title ?? null
+      playbookVersion =
+        pb && typeof pb.version === 'number' && Number.isFinite(pb.version) ? Math.trunc(pb.version) : null
       if (pb && run.currentBlockId) {
         const def = parseProcedureBlocksJson(pb.procedureDefinition ?? null)
         const loc = findWithPath(def, run.currentBlockId)
@@ -143,6 +158,57 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
     const isNotifyAction =
       currentBlock?.kind === 'action' && currentBlock.actionVariant === 'notify'
 
+    const isTaskActionStep =
+      Boolean(currentBlock?.kind === 'action' && currentBlock.actionVariant === 'task')
+
+    const linkedProcedureTaskId =
+      started &&
+      isTaskActionStep &&
+      typeof run?.currentBlockId === 'string' &&
+      run.currentBlockId.trim().length
+        ? run.actionTaskByActionBlockId?.[run.currentBlockId.trim()]?.trim() ?? ''
+        : ''
+
+    let procedureTaskSummary: {
+      id: string
+      title: string
+      dueAt: string | null
+      taskStatus: string
+      userTaskId: string | null
+    } | null = null
+    if (linkedProcedureTaskId.length) {
+      const taskRow = await em.findOne(OperationsTask, {
+        id: linkedProcedureTaskId,
+        tenantId: caseRow.tenantId,
+        organizationId: caseRow.organizationId,
+        deletedAt: null,
+      })
+      if (
+        taskRow &&
+        taskRow.contextType === OPERATIONS_TASK_CONTEXT_CASE_SERVICE &&
+        taskRow.contextId === caseRow.id
+      ) {
+        procedureTaskSummary = {
+          id: taskRow.id,
+          title: taskRow.title,
+          dueAt: taskRow.dueAt ? taskRow.dueAt.toISOString() : null,
+          taskStatus: taskRow.taskStatus,
+          userTaskId: taskRow.workItemUserTaskId ?? null,
+        }
+      }
+    }
+
+    const taskStepAllowsNext =
+      !isTaskActionStep ||
+      Boolean(
+        linkedProcedureTaskId.length &&
+          procedureTaskSummary?.id === linkedProcedureTaskId &&
+          procedureTaskSummary.taskStatus === 'done',
+      )
+
+    const canScheduleProcedureTask =
+      started && isOwner && isTaskActionStep && !linkedProcedureTaskId.length
+
     const canSelectPlaybook = !locked
     const canStart = hasPlaybook && !started
     const canNext =
@@ -151,7 +217,30 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
       isOwner &&
       currentBlock &&
       currentBlock.kind !== 'condition' &&
-      !isNotifyAction
+      currentBlock.kind !== 'invoke_procedure' &&
+      !isNotifyAction &&
+      taskStepAllowsNext
+
+    let invokeProcedureOptions: {
+      slug: string
+      playbookId: string | null
+      title: string | null
+      version: number | null
+    }[] = []
+    if (currentBlock?.kind === 'invoke_procedure') {
+      const rawSlugs = Array.isArray(currentBlock.playbookSlugs) ? currentBlock.playbookSlugs : []
+      invokeProcedureOptions = await resolveLatestActivePlaybooksBySlugs(
+        em,
+        caseRow.tenantId,
+        caseRow.organizationId,
+        rawSlugs,
+      )
+    }
+    const canLaunchInvokeProcedure =
+      started &&
+      isOwner &&
+      currentBlock?.kind === 'invoke_procedure' &&
+      invokeProcedureOptions.some((o) => Boolean(o.playbookId?.trim().length))
     const canSendNotify = started && Boolean(run?.currentBlockId) && isOwner && isNotifyAction
     const condBlock = currentBlock?.kind === 'condition' ? currentBlock : null
     const canAnswerYesNo =
@@ -164,6 +253,7 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
     return NextResponse.json({
       playbookId: run?.playbookId ?? null,
       playbookTitle,
+      playbookVersion,
       startedAt: run?.startedAt ?? null,
       locked,
       currentBlock,
@@ -174,6 +264,10 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
       canAnswerYesNo,
       isOwner,
       isVerifier,
+      invokeProcedureOptions,
+      canLaunchInvokeProcedure,
+      procedureTaskSummary,
+      canScheduleProcedureTask,
     })
   } catch (err) {
     if (isCrudHttpError(err)) {
@@ -234,6 +328,31 @@ export async function POST(req: Request, routeContext: { params?: { caseId?: str
         translate,
       )
       const { result } = await commandBus.execute('cases.playbook.sendNotify', { input, ctx })
+      return NextResponse.json(result)
+    }
+    if (body.data.action === 'launchInvokeProcedure') {
+      const input = parseScopedCommandInput(
+        casePlaybookLaunchInvokeSchema,
+        { ...merged, slug: body.data.slug },
+        ctx,
+        translate,
+      )
+      const { result } = await commandBus.execute('cases.playbook.launchInvoke', { input, ctx })
+      return NextResponse.json(result)
+    }
+    if (body.data.action === 'scheduleProcedureTask') {
+      const input = parseScopedCommandInput(
+        casePlaybookScheduleProcedureTaskSchema,
+        {
+          ...merged,
+          title: body.data.title,
+          ...(typeof body.data.body === 'string' ? { body: body.data.body } : {}),
+          dueAt: body.data.dueAt ?? null,
+        },
+        ctx,
+        translate,
+      )
+      const { result } = await commandBus.execute('cases.playbook.scheduleProcedureTask', { input, ctx })
       return NextResponse.json(result)
     }
     const input = parseScopedCommandInput(

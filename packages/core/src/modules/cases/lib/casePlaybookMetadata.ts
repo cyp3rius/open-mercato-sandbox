@@ -5,6 +5,8 @@ export type CasePlaybookRunMetadata = {
   currentBlockId: string | null
   /** condition block id → operations task id (verification) */
   verificationTaskByConditionId?: Record<string, string>
+  /** action (task) block id → operations task id (owner-scheduled step task) */
+  actionTaskByActionBlockId?: Record<string, string>
 }
 
 const KEY = 'casePlaybookRun'
@@ -29,11 +31,16 @@ export function readCasePlaybookRun(meta: Record<string, unknown> | null | undef
     o.verificationTaskByConditionId && typeof o.verificationTaskByConditionId === 'object'
       ? (o.verificationTaskByConditionId as Record<string, string>)
       : undefined
+  const actionTaskByActionBlockId =
+    o.actionTaskByActionBlockId && typeof o.actionTaskByActionBlockId === 'object'
+      ? (o.actionTaskByActionBlockId as Record<string, string>)
+      : undefined
   return {
     playbookId,
     startedAt,
     currentBlockId,
     verificationTaskByConditionId,
+    actionTaskByActionBlockId,
   }
 }
 
@@ -52,6 +59,9 @@ export function writeCasePlaybookRun(
     currentBlockId: run.currentBlockId,
     ...(run.verificationTaskByConditionId && Object.keys(run.verificationTaskByConditionId).length
       ? { verificationTaskByConditionId: run.verificationTaskByConditionId }
+      : {}),
+    ...(run.actionTaskByActionBlockId && Object.keys(run.actionTaskByActionBlockId).length
+      ? { actionTaskByActionBlockId: run.actionTaskByActionBlockId }
       : {}),
   }
   return base

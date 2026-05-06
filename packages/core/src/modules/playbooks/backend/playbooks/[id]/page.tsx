@@ -139,7 +139,7 @@ export default function PlaybookDetailPage({ params }: { params?: { id?: string 
         body: '',
         contextTags: [],
         audience: 'internal',
-        version: 1,
+        version: 0,
         isActive: true,
       })
     }
@@ -175,6 +175,8 @@ export default function PlaybookDetailPage({ params }: { params?: { id?: string 
     )
   }
 
+  const isArchived = row != null && row.isActive === false
+
   if (error || !row) {
     return (
       <Page>
@@ -194,6 +196,14 @@ export default function PlaybookDetailPage({ params }: { params?: { id?: string 
       <ApplyBreadcrumb breadcrumb={playbookDetailBreadcrumb} title={truncatePlaybookBreadcrumbTitle(row.title)} />
       <Page>
         <PageBody>
+          {isArchived ? (
+            <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-foreground">
+              {t(
+                'playbooks.detail.archivedVersionHint',
+                'You are viewing an inactive version. Cases that started on this version keep it; new cases use the current active version.',
+              )}
+            </div>
+          ) : null}
           <PlaybookFormTabProvider>
           <CrudForm<PlaybookFormValues>
             key={formKey}
@@ -205,15 +215,15 @@ export default function PlaybookDetailPage({ params }: { params?: { id?: string 
             fields={fields}
             groups={groups}
             initialValues={initialValues}
-            readOnly={!canEdit}
+            readOnly={!canEdit || isArchived}
             onDelete={canDelete ? handleDelete : undefined}
             onSubmit={async (values) => {
-              if (!canEdit) return
+              if (!canEdit || isArchived) return
               const slug = values.slug.trim().toLowerCase()
               const tags = Array.isArray(values.contextTags)
                 ? values.contextTags.map((x) => String(x).trim()).filter(Boolean)
                 : []
-              await updateCrud(
+              const resp = await updateCrud<{ ok?: boolean; playbookId?: string }>(
                 'playbooks',
                 {
                   id: row.id,
@@ -223,11 +233,17 @@ export default function PlaybookDetailPage({ params }: { params?: { id?: string 
                   contextTags: tags,
                   procedureDefinition: Array.isArray(values.procedureDefinition) ? values.procedureDefinition : [],
                   audience: values.audience,
-                  version: values.version,
                   isActive: values.isActive,
                 },
                 { errorMessage: t('playbooks.detail.saveError', 'Could not save.') },
               )
+              const nextId =
+                resp.ok && typeof resp.result?.playbookId === 'string' ? resp.result.playbookId.trim() : ''
+              if (nextId.length && nextId !== row.id) {
+                flash(t('playbooks.detail.newVersionSaved', 'Saved as a new version. You are now editing the latest revision.'), 'success')
+                router.replace(`/backend/playbooks/${encodeURIComponent(nextId)}`)
+                return
+              }
               flash(t('playbooks.detail.saved', 'Saved.'), 'success')
               setFormKey((k) => k + 1)
               void load()

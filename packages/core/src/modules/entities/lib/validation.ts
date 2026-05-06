@@ -1,5 +1,5 @@
 import type { EntityManager } from '@mikro-orm/core'
-import { CustomFieldDef } from '../data/entities'
+import { CustomFieldDef } from '../data/entities.js'
 import { validateValuesAgainstDefs } from '@open-mercato/shared/modules/entities/validation'
 
 export async function validateCustomFieldValuesServer(

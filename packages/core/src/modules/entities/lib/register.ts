@@ -1,5 +1,5 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { CustomEntity } from '../data/entities'
+import { CustomEntity } from '../data/entities.js'
 
 export type UpsertEntityOptions = {
   label: string

@@ -20,7 +20,10 @@ import {
   WorkflowDefinition,
 } from '../data/entities'
 import { OperationsTask, ProcurementProcess } from '../../procurement/data/entities'
-import { OPERATIONS_TASK_CONTEXT_PROCUREMENT_PROCESS } from '../../procurement/lib/operationsTaskContext'
+import {
+  OPERATIONS_TASK_CONTEXT_CASE_SERVICE,
+  OPERATIONS_TASK_CONTEXT_PROCUREMENT_PROCESS,
+} from '../../procurement/lib/operationsTaskContext'
 import { appendProcurementTimelineNoteFromUserTask } from '../../procurement/lib/appendUserTaskProcurementNote'
 import { executeWorkflow } from './workflow-executor'
 import * as stepHandler from './step-handler'
@@ -139,6 +142,43 @@ export async function completeUserTask(
         }
       }
     }
+    return
+  }
+
+  /** Case playbook procedure tasks: mirrored on `UserTask` via `operations_tasks.work_item_user_task_id` (no workflow). */
+  const caseServiceOpsTask =
+    !task.procurementProcessTaskId &&
+    (await em.findOne(OperationsTask, {
+      workItemUserTaskId: task.id,
+      deletedAt: null,
+      contextType: OPERATIONS_TASK_CONTEXT_CASE_SERVICE,
+    }))
+  if (caseServiceOpsTask) {
+    if (task.formSchema) {
+      try {
+        validateFormData(formData, task.formSchema)
+      } catch (error) {
+        throw new UserTaskError(
+          error instanceof Error ? error.message : 'Form validation failed',
+          'FORM_VALIDATION_FAILED',
+          { taskId, formSchema: task.formSchema, formData }
+        )
+      }
+    }
+
+    const now = new Date()
+    task.status = 'COMPLETED'
+    task.formData = formData
+    task.completedBy = userId
+    task.completedAt = now
+    task.comments = comments || null
+    task.updatedAt = now
+
+    await em.flush()
+
+    caseServiceOpsTask.taskStatus = 'done'
+    caseServiceOpsTask.updatedAt = now
+    await em.flush()
     return
   }
 

@@ -32,8 +32,8 @@ export class Playbook {
   @Property({ type: 'text' })
   audience: string = 'internal'
 
-  @Property({ type: 'int', default: 1 })
-  version: number = 1
+  @Property({ type: 'int', default: 0 })
+  version: number = 0
 
   @Property({ name: 'published_at', type: Date, nullable: true })
   publishedAt?: Date | null

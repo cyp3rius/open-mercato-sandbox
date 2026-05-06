@@ -118,7 +118,12 @@ const crud = makeCrudRoute({
         const { translate } = await resolveTranslations()
         return parseScopedCommandInput(playbookUpdateSchema, raw ?? {}, ctx, translate)
       },
-      response: () => ({ ok: true }),
+      response: ({ result }) => {
+        const payload = result as { ok?: boolean; playbookId?: string }
+        return typeof payload?.playbookId === 'string' && payload.playbookId.length
+          ? { ok: true, playbookId: payload.playbookId }
+          : { ok: true }
+      },
     },
     delete: {
       commandId: 'playbooks.playbooks.delete',

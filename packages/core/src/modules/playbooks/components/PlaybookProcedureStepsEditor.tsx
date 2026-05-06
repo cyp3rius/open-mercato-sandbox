@@ -7,6 +7,7 @@ import {
   CornerDownLeft,
   GripVertical,
   GitBranch,
+  Layers,
   PlayCircle,
   StopCircle,
   Trash2,
@@ -25,6 +26,7 @@ import {
 } from '@open-mercato/ui/backend/CrudForm'
 import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
 import { mergeEntitySearchOption, remoteSearchAuthUsers } from '../../procurement/lib/procurementEntitySearch'
+import { remoteSearchPlaybookHeadsForProcedureInvoke } from '../lib/procedureInvokePlaybookSearch'
 import {
   buildProcedureStepTargetLabels,
   createProcedureBlock,
@@ -51,6 +53,8 @@ function kindIcon(kind: ProcedureBlockKind) {
       return GitBranch
     case 'goto':
       return CornerDownLeft
+    case 'invoke_procedure':
+      return Layers
   }
 }
 
@@ -65,14 +69,16 @@ function KindTag({ kind }: { kind: ProcedureBlockKind }) {
           ? t('playbooks.procedure.kind.action', 'Action')
           : kind === 'condition'
             ? t('playbooks.procedure.kind.condition', 'Condition')
-            : t('playbooks.procedure.kind.goto', 'Go to step')
+            : kind === 'goto'
+              ? t('playbooks.procedure.kind.goto', 'Go to step')
+              : t('playbooks.procedure.kind.invoke_procedure', 'Procedure')
   const Icon = kindIcon(kind)
   return (
     <span
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-input bg-muted/40 px-2 py-1 text-xs font-medium text-foreground"
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground shadow-xs"
       title={label}
     >
-      <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <Icon className="size-3.5 shrink-0 opacity-80" aria-hidden />
       <span className="max-w-[8rem] truncate sm:max-w-[10rem]">{label}</span>
     </span>
   )
@@ -486,6 +492,76 @@ function ProcedureBlockList({
                 </div>
               ) : null}
 
+              {block.kind === 'invoke_procedure' ? (
+                <div className="space-y-2 pl-0 sm:pl-[calc(0.5rem+4rem+0.5rem)]">
+                  <p className="max-w-2xl text-xs leading-snug text-muted-foreground">
+                    {t(
+                      'playbooks.procedure.invokeProcedureHint',
+                      'Procedures are referenced by slug. At runtime the latest active version is used for each slug.',
+                    )}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {block.playbookSlugs.map((slug) => (
+                      <span
+                        key={slug}
+                        className="inline-flex max-w-full items-center gap-1 rounded-md border border-input bg-muted/40 px-2 py-1 text-xs"
+                      >
+                        <span className="truncate font-mono">{slug}</span>
+                        <IconButton
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          disabled={disabled}
+                          className="shrink-0"
+                          aria-label={t('playbooks.procedure.invokeProcedureRemoveSlug', 'Remove')}
+                          onClick={() =>
+                            updateAt(index, {
+                              ...block,
+                              playbookSlugs: block.playbookSlugs.filter((entry) => entry !== slug),
+                            })
+                          }
+                        >
+                          <Trash2 className="size-3.5" />
+                        </IconButton>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="max-w-xl space-y-1">
+                    <Label className="text-xs">
+                      {t('playbooks.procedure.invokeProcedureAdd', 'Add procedure')}
+                    </Label>
+                    <EntitySearchCombobox
+                      key={`invoke-procedure-${block.id}-${block.playbookSlugs.length}`}
+                      value=""
+                      onChange={(nextSlug) => {
+                        const slugNorm = nextSlug.trim().toLowerCase()
+                        if (!slugNorm.length || block.playbookSlugs.includes(slugNorm)) return
+                        if (block.playbookSlugs.length >= 20) return
+                        updateAt(index, {
+                          ...block,
+                          playbookSlugs: [...block.playbookSlugs, slugNorm],
+                        })
+                      }}
+                      options={mergeEntitySearchOption([], '', '')}
+                      onRemoteSearch={(query) =>
+                        remoteSearchPlaybookHeadsForProcedureInvoke(query, block.playbookSlugs)
+                      }
+                      placeholder={t('playbooks.procedure.invokeProcedurePickerPlaceholder', 'Search procedures…')}
+                      searchPlaceholder={t(
+                        'playbooks.procedure.invokeProcedureSearch',
+                        'Search by title or slug…',
+                      )}
+                      disabled={disabled || block.playbookSlugs.length >= 20}
+                      createInNewTabHref="/backend/playbooks/create"
+                      createInNewTabAriaLabel={t(
+                        'playbooks.procedure.invokeProcedureOpenCreate',
+                        'Open new procedure in a new tab',
+                      )}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
               {block.kind === 'condition' ? (
                 <div className="space-y-3 pt-1 pl-0 sm:pl-[calc(0.5rem+4rem+0.5rem)]">
                   <div className="space-y-2">
@@ -598,8 +674,8 @@ function ProcedureBlockList({
       <div className={cn('flex flex-wrap gap-2', blocks.length === 0 && 'pt-1')}>
         {(
           depth > 0
-            ? (['action', 'condition', 'goto', 'end'] as const)
-            : (['start', 'action', 'condition', 'goto', 'end'] as const)
+            ? (['action', 'condition', 'goto', 'invoke_procedure', 'end'] as const)
+            : (['start', 'action', 'condition', 'goto', 'invoke_procedure', 'end'] as const)
         ).map((kind) => {
           const Icon =
             kind === 'start'
@@ -610,12 +686,15 @@ function ProcedureBlockList({
                   ? GitBranch
                   : kind === 'goto'
                     ? CornerDownLeft
-                    : StopCircle
+                    : kind === 'invoke_procedure'
+                      ? Layers
+                      : StopCircle
+          const isTerminalToolbarKind = kind === 'start' || kind === 'end'
           return (
             <Button
               key={kind}
               type="button"
-              variant="outline"
+              variant={isTerminalToolbarKind ? 'secondary' : 'outline'}
               size="sm"
               disabled={disabled}
               onClick={() => addBlock(kind)}
@@ -630,7 +709,9 @@ function ProcedureBlockList({
                     ? t('playbooks.procedure.addCondition', 'Condition')
                     : kind === 'goto'
                       ? t('playbooks.procedure.addGoto', 'Go to')
-                      : t('playbooks.procedure.addEnd', 'End')}
+                      : kind === 'invoke_procedure'
+                        ? t('playbooks.procedure.addInvokeProcedure', 'Procedure')
+                        : t('playbooks.procedure.addEnd', 'End')}
             </Button>
           )
         })}
@@ -667,7 +748,9 @@ function ProcedureStepsInner({
               ? t('playbooks.procedure.targetShort.action', 'Action')
               : kind === 'condition'
                 ? t('playbooks.procedure.targetShort.condition', 'Condition')
-                : t('playbooks.procedure.targetShort.goto', 'Jump'),
+                : kind === 'goto'
+                  ? t('playbooks.procedure.targetShort.goto', 'Jump')
+                  : t('playbooks.procedure.targetShort.invoke_procedure', 'Procedure'),
       ),
     [value, t],
   )

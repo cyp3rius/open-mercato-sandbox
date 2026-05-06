@@ -1,7 +1,7 @@
 import type { EntityManager } from '@mikro-orm/core'
 import type { TenantDataEncryptionService } from '@open-mercato/shared/lib/encryption/tenantDataEncryptionService'
 import { encryptCustomFieldValue, resolveTenantEncryptionService } from '@open-mercato/shared/lib/encryption/customFieldValues'
-import { CustomFieldDef, CustomFieldValue } from '../data/entities'
+import { CustomFieldDef, CustomFieldValue } from '../data/entities.js'
 
 type Primitive = string | number | boolean | null | undefined
 type PrimitiveOrArray = Primitive | Primitive[]

@@ -36,6 +36,12 @@ export type CaseProcedureBlockJson =
       label: string | null
       targetStepId: string | null
     }
+  | {
+      id: string
+      kind: 'invoke_procedure'
+      label: string | null
+      playbookSlugs: string[]
+    }
 
 export function procedureBlockToCaseJson(block: ProcedureBlock): CaseProcedureBlockJson {
   switch (block.kind) {
@@ -72,6 +78,13 @@ export function procedureBlockToCaseJson(block: ProcedureBlock): CaseProcedureBl
         kind: 'goto',
         label: block.label?.trim() ? block.label.trim() : null,
         targetStepId: typeof block.targetStepId === 'string' && block.targetStepId.trim() ? block.targetStepId.trim() : null,
+      }
+    case 'invoke_procedure':
+      return {
+        id: block.id,
+        kind: 'invoke_procedure',
+        label: block.label?.trim() ? block.label.trim() : null,
+        playbookSlugs: Array.isArray(block.playbookSlugs) ? [...block.playbookSlugs] : [],
       }
   }
 }

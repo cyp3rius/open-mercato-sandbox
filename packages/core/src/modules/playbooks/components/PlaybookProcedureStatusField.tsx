@@ -5,17 +5,13 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { DictionaryEntrySelect } from '@open-mercato/core/modules/dictionaries/components/DictionaryEntrySelect'
+import { DictionaryEntryMultiSelect } from '@open-mercato/core/modules/dictionaries/components/DictionaryEntryMultiSelect'
 import {
   ensureDictionaryEntries,
   invalidateDictionaryEntries,
 } from '@open-mercato/core/modules/dictionaries/components/hooks/useDictionaryEntries'
-import { IconButton } from '@open-mercato/ui/primitives/icon-button'
-import { X } from 'lucide-react'
 import type { CrudCustomFieldRenderProps } from '@open-mercato/ui/backend/CrudForm'
 import type { PlaybookFormTranslator } from './playbookFormConfig'
-
-type EntryDisplay = { label: string; color: string | null; icon: string | null }
 
 export function buildPlaybookProcedureStatusField(
   t: PlaybookFormTranslator,
@@ -28,8 +24,6 @@ export function buildPlaybookProcedureStatusField(
     const selected = Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
     const [dictionaryId, setDictionaryId] = React.useState<string | null>(null)
     const [loadError, setLoadError] = React.useState<string | null>(null)
-    const [adderKey, setAdderKey] = React.useState(0)
-    const [entryDisplay, setEntryDisplay] = React.useState<Record<string, EntryDisplay>>({})
 
     React.useEffect(() => {
       let cancelled = false
@@ -41,9 +35,7 @@ export function buildPlaybookProcedureStatusField(
             setLoadError(null)
             return
           }
-          setLoadError(
-            t('playbooks.dictionary.errors.ensure', 'Could not ensure playbook status dictionary.'),
-          )
+          setLoadError(t('playbooks.dictionary.errors.ensure', 'Could not ensure playbook status dictionary.'))
         })
         .catch(() => {
           if (!cancelled) {
@@ -65,11 +57,6 @@ export function buildPlaybookProcedureStatusField(
         icon: entry.icon ?? null,
       }))
     }, [dictionaryId, queryClient, scopeVersion])
-
-    const fetchOptionsForAdder = React.useCallback(async () => {
-      const all = await fetchOptions()
-      return all.filter((o) => !selected.includes(o.value))
-    }, [fetchOptions, selected])
 
     const createOption = React.useCallback(
       async (input: { value: string; label?: string; color?: string | null; icon?: string | null }) => {
@@ -102,22 +89,6 @@ export function buildPlaybookProcedureStatusField(
       },
       [dictionaryId, queryClient],
     )
-
-    React.useEffect(() => {
-      if (!dictionaryId) return
-      let cancelled = false
-      void fetchOptions().then((opts) => {
-        if (cancelled) return
-        const next: Record<string, EntryDisplay> = {}
-        for (const o of opts) {
-          next[o.value] = { label: o.label, color: o.color, icon: o.icon ?? null }
-        }
-        setEntryDisplay(next)
-      })
-      return () => {
-        cancelled = true
-      }
-    }, [dictionaryId, fetchOptions, adderKey])
 
     const labels = React.useMemo(
       () => ({
@@ -165,21 +136,6 @@ export function buildPlaybookProcedureStatusField(
       [tGlobal],
     )
 
-    const appendSelection = React.useCallback(
-      (next: string | undefined) => {
-        const trimmed = typeof next === 'string' ? next.trim() : ''
-        if (!trimmed.length) return
-        if (selected.includes(trimmed)) return
-        setValue([...selected, trimmed])
-        setAdderKey((k) => k + 1)
-      },
-      [selected, setValue],
-    )
-
-    const remove = (v: string) => {
-      setValue(selected.filter((x) => x !== v))
-    }
-
     if (loadError) {
       return <div className="text-sm text-red-600">{loadError}</div>
     }
@@ -190,50 +146,19 @@ export function buildPlaybookProcedureStatusField(
 
     return (
       <div className="space-y-2">
-        <div key={adderKey}>
-          <DictionaryEntrySelect
-            value={undefined}
-            onChange={(next) => {
-              appendSelection(next)
-            }}
-            fetchOptions={fetchOptionsForAdder}
-            createOption={createOption}
-            labels={labels}
-            appearanceLabels={appearanceLabels}
-            allowAppearance
-            allowInlineCreate
-            disabled={disabled}
-            manageHref="/backend/config/dictionaries"
-          />
-        </div>
-
-        {selected.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {selected.map((v) => {
-              const meta = entryDisplay[v]
-              const label = meta?.label ?? v
-              return (
-                <span
-                  key={v}
-                  className="inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-sm"
-                >
-                  <span className="min-w-0 flex-1 truncate">{label}</span>
-                  <IconButton
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
-                    disabled={disabled}
-                    aria-label={t('playbooks.form.contextTagsRemove', 'Remove tag')}
-                    onClick={() => remove(v)}
-                  >
-                    <X className="size-3.5" />
-                  </IconButton>
-                </span>
-              )
-            })}
-          </div>
-        ) : null}
+        <DictionaryEntryMultiSelect
+          value={selected}
+          onChange={(next) => setValue(next)}
+          fetchOptions={fetchOptions}
+          createOption={createOption}
+          labels={labels}
+          appearanceLabels={appearanceLabels}
+          allowAppearance
+          allowInlineCreate
+          disabled={disabled}
+          manageHref="/backend/config/dictionaries"
+          removeEntryAriaLabel={t('playbooks.form.contextTagsRemove', 'Remove tag')}
+        />
 
         {error ? <div className="text-xs text-red-600">{error}</div> : null}
       </div>

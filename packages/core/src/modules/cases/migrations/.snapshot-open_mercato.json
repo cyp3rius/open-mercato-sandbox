@@ -33731,7 +33731,7 @@
           "length": null,
           "precision": 32,
           "scale": 0,
-          "default": "1",
+          "default": "0",
           "comment": null,
           "enumItems": [],
           "mappedType": "integer"
@@ -33844,14 +33844,15 @@
         {
           "columnNames": [
             "organization_id",
-            "slug"
+            "slug",
+            "version"
           ],
           "composite": true,
           "constraint": false,
-          "keyName": "playbooks_slug_scope_uidx",
+          "keyName": "playbooks_slug_version_scope_uidx",
           "unique": true,
           "primary": false,
-          "expression": "CREATE UNIQUE INDEX playbooks_slug_scope_uidx ON public.playbooks_playbooks USING btree (organization_id, slug) WHERE (deleted_at IS NULL)"
+          "expression": "CREATE UNIQUE INDEX playbooks_slug_version_scope_uidx ON public.playbooks_playbooks USING btree (organization_id, slug, version) WHERE (deleted_at IS NULL)"
         }
       ],
       "checks": [],

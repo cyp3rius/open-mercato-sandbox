@@ -1,25 +1,34 @@
 "use client"
 
 import * as React from 'react'
+import Link from 'next/link'
 import {
+  CalendarDays,
   Check,
   CheckCheck,
+  ChevronRight,
   CornerDownLeft,
+  ExternalLink,
   GitBranch,
+  Layers,
   PlayCircle,
   Send,
   StopCircle,
-  ChevronRight,
   X,
   Zap,
 } from 'lucide-react'
+import { formatDateTime } from '@open-mercato/shared/lib/time'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
+import { CRUD_FORM_TEXT_INPUT_CLASS, CRUD_FORM_TEXTAREA_CLASS } from '@open-mercato/ui/backend/CrudForm'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Badge } from '@open-mercato/ui/primitives/badge'
-import { CRUD_FORM_TEXTAREA_CLASS } from '@open-mercato/ui/backend/CrudForm'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@open-mercato/ui/primitives/dialog'
+import { Input } from '@open-mercato/ui/primitives/input'
+import { Label } from '@open-mercato/ui/primitives/label'
 import { HtmlRichTextEditor } from '@open-mercato/ui/backend/richtext/HtmlRichTextEditor'
 import type { CaseProcedureBlockJson } from '../lib/procedureBlockJson'
+import { formatProcedurePlaybookLabel } from '../lib/formatProcedurePlaybookLabel'
 import { defaultHtmlFromNotifyBody, htmlToPlainText } from '../lib/htmlToPlainText'
 import { resolveUserDisplayLabel } from '../../procurement/lib/procurementEntitySearch'
 
@@ -30,6 +39,7 @@ function blockKindIcon(kind: Kind) {
   if (kind === 'end') return StopCircle
   if (kind === 'action') return Zap
   if (kind === 'condition') return GitBranch
+  if (kind === 'invoke_procedure') return Layers
   return CornerDownLeft
 }
 
@@ -44,7 +54,9 @@ function BlockKindBadge({ kind }: { kind: Kind }) {
           ? t('playbooks.procedure.kind.action', 'Action')
           : kind === 'condition'
             ? t('playbooks.procedure.kind.condition', 'Condition')
-            : t('playbooks.procedure.kind.goto', 'Go to step')
+            : kind === 'goto'
+              ? t('playbooks.procedure.kind.goto', 'Go to step')
+              : t('playbooks.procedure.kind.invoke_procedure', 'Procedure')
   const Icon = blockKindIcon(kind)
   return (
     <span
@@ -57,36 +69,95 @@ function BlockKindBadge({ kind }: { kind: Kind }) {
   )
 }
 
+export type InvokeProcedureOptionHead = {
+  slug: string
+  playbookId: string | null
+  title: string | null
+  version: number | null
+}
+
+export type ProcedureTaskSummaryHead = {
+  id: string
+  title: string
+  dueAt: string | null
+  taskStatus: string
+  userTaskId?: string | null
+}
+
 export type CaseProcedureStepExecutorProps = {
   block: CaseProcedureBlockJson | null
+  caseId?: string
   disabled?: boolean
   canNext?: boolean
   canSendNotify?: boolean
   canAnswerYesNo?: boolean
+  invokeProcedureOptions?: InvokeProcedureOptionHead[]
+  canLaunchInvokeProcedure?: boolean
+  procedureTaskSummary?: ProcedureTaskSummaryHead | null
+  canScheduleProcedureTask?: boolean
   onNext?: (options?: { closingNote?: string }) => void
   onSendNotify?: (plainBody: string) => void
   onAnswer?: (branch: 'yes' | 'no') => void
+  onLaunchInvokeProcedure?: (slug: string) => void
+  onScheduleProcedureTask?: (payload: {
+    title: string
+    body?: string
+    dueAt?: string | null
+  }) => boolean | Promise<boolean>
 }
 
 export function CaseProcedureStepExecutor({
   block,
+  caseId: caseIdProp,
   disabled = false,
   canNext = false,
   canSendNotify = false,
   canAnswerYesNo = false,
+  invokeProcedureOptions = [],
+  canLaunchInvokeProcedure = false,
+  procedureTaskSummary = null,
+  canScheduleProcedureTask = false,
   onNext,
   onSendNotify,
   onAnswer,
+  onLaunchInvokeProcedure,
+  onScheduleProcedureTask,
 }: CaseProcedureStepExecutorProps) {
   const t = useT()
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const [notifyHtml, setNotifyHtml] = React.useState('')
   const [verifierDisplayLabel, setVerifierDisplayLabel] = React.useState('')
   const [closingNoteDraft, setClosingNoteDraft] = React.useState('')
+  const [pickedInvokeSlug, setPickedInvokeSlug] = React.useState('')
+  const [scheduleOpen, setScheduleOpen] = React.useState(false)
+  const [scheduleTitle, setScheduleTitle] = React.useState('')
+  const [scheduleDueLocal, setScheduleDueLocal] = React.useState('')
+  const [scheduleSaving, setScheduleSaving] = React.useState(false)
 
   React.useEffect(() => {
     setClosingNoteDraft('')
   }, [block?.id])
+
+  React.useEffect(() => {
+    const resolved = invokeProcedureOptions.filter((o) => Boolean(o.playbookId?.trim().length))
+    setPickedInvokeSlug((prev) => {
+      if (resolved.length === 1) {
+        return resolved[0].slug
+      }
+      if (prev && resolved.some((r) => r.slug === prev)) {
+        return prev
+      }
+      return resolved[0]?.slug ?? ''
+    })
+  }, [block?.id, invokeProcedureOptions])
+
+  React.useEffect(() => {
+    if (block?.kind === 'action' && block.actionVariant === 'task') {
+      setScheduleTitle(block.taskTitle?.trim() ?? '')
+      setScheduleDueLocal('')
+      setScheduleOpen(false)
+    }
+  }, [block?.id, block?.kind, block?.actionVariant])
 
   React.useEffect(() => {
     if (block?.kind === 'action' && block.actionVariant === 'notify') {
@@ -148,11 +219,100 @@ export function CaseProcedureStepExecutor({
             ? t('playbooks.procedure.kind.action', 'Action')
             : block.kind === 'condition'
               ? t('playbooks.procedure.kind.condition', 'Condition')
-              : t('playbooks.procedure.kind.goto', 'Go to step')
+              : block.kind === 'goto'
+                ? t('playbooks.procedure.kind.goto', 'Go to step')
+                : t('playbooks.procedure.kind.invoke_procedure', 'Procedure')
+
+  const onPlaybookTaskStep = block.kind === 'action' && block.actionVariant === 'task'
+  const showSchedulePlaybookTask =
+    onPlaybookTaskStep && Boolean(canScheduleProcedureTask && onScheduleProcedureTask)
+  const showNextButton = Boolean(canNext && onNext && !showSchedulePlaybookTask)
+
+  const submitScheduleTask = async () => {
+    const title = scheduleTitle.trim()
+    if (!title.length || !onScheduleProcedureTask) return
+    setScheduleSaving(true)
+    try {
+      let dueAt: string | null | undefined
+      if (scheduleDueLocal.trim().length) {
+        const dt = new Date(scheduleDueLocal)
+        dueAt = Number.isNaN(dt.getTime()) ? null : dt.toISOString()
+      }
+      const ok = await onScheduleProcedureTask({
+        title,
+        dueAt,
+      })
+      if (ok !== false) {
+        setScheduleOpen(false)
+      }
+    } finally {
+      setScheduleSaving(false)
+    }
+  }
 
   return (
     <>
       {ConfirmDialogElement}
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent
+          className="flex flex-col sm:max-w-md sm:min-h-[20rem]"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault()
+              void submitScheduleTask()
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{t('cases.detail.procedure.scheduleTaskDialogTitle', 'Schedule a task')}</DialogTitle>
+          </DialogHeader>
+          <div className="flex min-h-[11rem] flex-1 flex-col space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label htmlFor="case-procedure-task-title">{t('cases.detail.procedure.taskTitleField', 'Title')}</Label>
+              <Input
+                id="case-procedure-task-title"
+                className={CRUD_FORM_TEXT_INPUT_CLASS}
+                value={scheduleTitle}
+                onChange={(e) => setScheduleTitle(e.target.value)}
+                disabled={disabled || scheduleSaving}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="case-procedure-task-due">
+                {t('cases.detail.procedure.taskDueField', 'Due date')}
+              </Label>
+              <Input
+                id="case-procedure-task-due"
+                type="datetime-local"
+                className={CRUD_FORM_TEXT_INPUT_CLASS}
+                value={scheduleDueLocal}
+                onChange={(e) => setScheduleDueLocal(e.target.value)}
+                disabled={disabled || scheduleSaving}
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-auto gap-3 pt-2 sm:gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={scheduleSaving}
+              onClick={() => setScheduleOpen(false)}
+            >
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="default"
+              disabled={disabled || scheduleSaving || !scheduleTitle.trim().length}
+              className="gap-2"
+              onClick={() => void submitScheduleTask()}
+            >
+              <CalendarDays className="size-4 shrink-0" aria-hidden />
+              {t('cases.detail.procedure.scheduleTaskConfirm', 'Save task')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     <div className="space-y-3 border-t border-border pt-3">
       <div className="flex flex-wrap items-center gap-2">
         <BlockKindBadge kind={block.kind} />
@@ -225,9 +385,81 @@ export function CaseProcedureStepExecutor({
       ) : null}
 
       {block.kind === 'action' && block.actionVariant === 'task' ? (
-        <p className="text-muted-foreground text-sm leading-relaxed">
-          {block.taskTitle?.trim() || t('cases.detail.procedure.taskNoTitle', 'No task title.')}
-        </p>
+        <div className="space-y-3">
+          {!procedureTaskSummary ? (
+            block.taskTitle?.trim().length ? (
+              <p className="text-muted-foreground text-sm leading-relaxed">{block.taskTitle.trim()}</p>
+            ) : (
+              <p className="text-muted-foreground text-sm italic leading-relaxed">
+                {t('cases.detail.procedure.taskPlaybookNoHint', 'No hint defined for this task step.')}
+              </p>
+            )
+          ) : null}
+          {procedureTaskSummary ? (
+            <div className="rounded-md border border-border/60 bg-muted/15 px-3 py-2.5 space-y-2">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {t('cases.detail.procedure.scheduledTaskLabel', 'Your task')}
+                  </div>
+                  <div className="text-sm font-semibold leading-snug">{procedureTaskSummary.title}</div>
+                  {procedureTaskSummary.dueAt ? (
+                    <div className="text-muted-foreground text-xs">
+                      {t('cases.detail.procedure.taskDueShortLabel', 'Due')}:{' '}
+                      <span className="text-foreground">
+                        {formatDateTime(procedureTaskSummary.dueAt) ?? procedureTaskSummary.dueAt}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-muted-foreground text-xs">
+                      {t('cases.detail.procedure.taskNoDue', 'No due date')}
+                    </div>
+                  )}
+                  <div className="text-muted-foreground text-xs">
+                    {t('cases.detail.procedure.taskStatusShortLabel', 'Status')}:{' '}
+                    {t(
+                      `cases.detail.procedure.taskStatusValue.${procedureTaskSummary.taskStatus}`,
+                      procedureTaskSummary.taskStatus,
+                    )}
+                  </div>
+                </div>
+                {procedureTaskSummary.userTaskId?.trim().length ? (
+                  <Button type="button" variant="outline" size="sm" className="shrink-0 gap-2" asChild>
+                    <Link
+                      href={`/backend/tasks/${encodeURIComponent(procedureTaskSummary.userTaskId!.trim())}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="size-4 shrink-0" aria-hidden />
+                      {t('cases.detail.procedure.taskOpenInNewTab', 'Open')}
+                    </Link>
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {procedureTaskSummary && procedureTaskSummary.taskStatus !== 'done' ? (
+            <p className="text-muted-foreground text-xs leading-relaxed">
+              {t(
+                'cases.detail.procedure.taskCompleteBeforeNextHint',
+                'Mark this task as done before you can continue to the next step.',
+              )}
+            </p>
+          ) : null}
+          {canScheduleProcedureTask && onScheduleProcedureTask ? (
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              className="gap-2"
+              disabled={disabled}
+              onClick={() => setScheduleOpen(true)}
+            >
+              <CalendarDays className="size-4 shrink-0" aria-hidden />
+              {t('cases.detail.procedure.scheduleTask', 'Schedule')}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
       {block.kind === 'action' && block.actionVariant === 'other' ? (
@@ -267,6 +499,98 @@ export function CaseProcedureStepExecutor({
         </p>
       ) : null}
 
+      {block.kind === 'invoke_procedure' ? (
+        <div className="space-y-3">
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            {t(
+              'cases.detail.procedure.invokeProcedureHint',
+              'Choose a linked procedure from the list, or launch the suggested one.',
+            )}
+          </p>
+          {!block.playbookSlugs.length ? (
+            <p className="text-muted-foreground text-sm">
+              {t('cases.detail.procedure.invokeProcedureEmpty', 'No procedures linked.')}
+            </p>
+          ) : invokeProcedureOptions.length ? (
+            <div
+              className="space-y-2"
+              role="radiogroup"
+              aria-label={t('cases.detail.procedure.invokeProcedurePickGroup', 'Procedure to launch')}
+            >
+              {invokeProcedureOptions.map((opt) => {
+                const resolved = Boolean(opt.playbookId?.trim().length)
+                const titleTrimmed = typeof opt.title === 'string' ? opt.title.trim() : ''
+                const primaryLabel = resolved
+                  ? titleTrimmed.length > 0
+                    ? formatProcedurePlaybookLabel(titleTrimmed, opt.version, t)
+                    : formatProcedurePlaybookLabel(
+                        t('cases.detail.procedure.invokeProcedureUntitled', 'Untitled procedure'),
+                        opt.version,
+                        t,
+                      )
+                  : t(
+                      'cases.detail.procedure.invokeProcedureNoActiveVersion',
+                      'No active procedure version for this slug.',
+                    )
+                const selected = pickedInvokeSlug === opt.slug
+                return (
+                  <button
+                    key={opt.slug}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    aria-label={primaryLabel}
+                    disabled={disabled || !resolved}
+                    onClick={() => setPickedInvokeSlug(opt.slug)}
+                    className={`flex w-full items-start gap-3 rounded-md border px-3 py-2.5 text-start transition-colors ${
+                      selected
+                        ? 'border-foreground/40 bg-muted/40'
+                        : 'border-border/60 bg-muted/10 hover:bg-muted/25'
+                    } ${!resolved ? 'cursor-not-allowed opacity-60' : ''}`}
+                  >
+                    <span
+                      className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 border-muted-foreground/45 bg-background"
+                      aria-hidden
+                    >
+                      {selected && resolved ? (
+                        <span className="size-2 shrink-0 rounded-full bg-foreground" />
+                      ) : null}
+                    </span>
+                    <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-foreground">
+                      {primaryLabel}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              {t('cases.detail.procedure.invokeProcedureEmpty', 'No procedures linked.')}
+            </p>
+          )}
+          {onLaunchInvokeProcedure && block.playbookSlugs.length ? (
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              className="gap-2"
+              disabled={
+                disabled ||
+                !canLaunchInvokeProcedure ||
+                !pickedInvokeSlug.trim().length ||
+                !invokeProcedureOptions.some(
+                  (o) => o.slug === pickedInvokeSlug && Boolean(o.playbookId?.trim().length),
+                )
+              }
+              onClick={() => onLaunchInvokeProcedure(pickedInvokeSlug.trim())}
+            >
+              <PlayCircle className="size-4 shrink-0" aria-hidden />
+              {t('cases.detail.procedure.launchInvokeProcedure', 'Launch procedure')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
       {block.kind === 'end' ? (
         <div className="space-y-1.5">
           <span className="text-xs font-medium text-foreground">
@@ -290,7 +614,7 @@ export function CaseProcedureStepExecutor({
       ) : null}
 
       <div className="flex flex-wrap gap-2 pt-1">
-        {canNext && onNext ? (
+        {showNextButton ? (
           <Button
             type="button"
             variant="default"
@@ -298,7 +622,7 @@ export function CaseProcedureStepExecutor({
             className="gap-1"
             disabled={disabled}
             onClick={() =>
-              onNext(
+              onNext!(
                 block.kind === 'end'
                   ? { closingNote: closingNoteDraft.trim() || undefined }
                   : undefined,

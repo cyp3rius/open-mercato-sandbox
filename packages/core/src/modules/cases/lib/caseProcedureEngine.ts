@@ -93,6 +93,13 @@ export function describeBlock(block: ProcedureBlock): { title: string; detail: s
     }
     case 'goto':
       return { title: label ?? 'Goto', detail: block.targetStepId ?? '' }
+    case 'invoke_procedure': {
+      const slugs = Array.isArray(block.playbookSlugs) ? block.playbookSlugs.filter(Boolean) : []
+      return {
+        title: label ?? 'Procedure',
+        detail: slugs.join(', '),
+      }
+    }
     default:
       return { title: label ?? '—', detail: '' }
   }

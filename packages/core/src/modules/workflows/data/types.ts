@@ -28,6 +28,8 @@ export type UserTaskResponse = {
   procurementProcessTaskId?: string | null
   procurementProcessId?: string | null
   procurementProcessTitle?: string | null
+  serviceCaseId?: string | null
+  serviceCaseTitle?: string | null
   taskName: string
   description: string | null
   status: import('./validators').UserTaskStatus

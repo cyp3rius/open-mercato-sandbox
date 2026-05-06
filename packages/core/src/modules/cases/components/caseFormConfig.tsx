@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { z } from 'zod'
+import type { TranslateFn } from '@open-mercato/shared/lib/i18n/context'
 import type { CrudField, CrudFormGroup } from '@open-mercato/ui/backend/CrudForm'
 import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
 import {
@@ -14,7 +15,9 @@ import {
   remoteSearchPlaybooksForCase,
   remoteSearchProcurementProcessesForCaseCustomer,
   remoteSearchResourcesForCaseCustomer,
+  resolvePlaybookTitleVersion,
 } from '../lib/caseRelationsSearch'
+import { formatProcedurePlaybookLabel } from '../lib/formatProcedurePlaybookLabel'
 
 export type CaseCreateFormValues = {
   title: string
@@ -25,7 +28,7 @@ export type CaseCreateFormValues = {
   insurancePolicyId: string
 }
 
-export type CaseFormTranslator = (key: string, fallback?: string) => string
+export type CaseFormTranslator = TranslateFn
 
 function optionalRelationIdField() {
   return z.string().refine((s) => {
@@ -110,14 +113,32 @@ export function buildCaseCreateFormFields(t: CaseFormTranslator): CrudField[] {
       layout: 'full',
       component: ({ value, setValue, disabled }) => {
         const str = typeof value === 'string' ? value : ''
+        const [playbookLabel, setPlaybookLabel] = React.useState('')
+        React.useEffect(() => {
+          let cancelled = false
+          if (!str.trim().length || !z.string().uuid().safeParse(str.trim()).success) {
+            setPlaybookLabel('')
+            return
+          }
+          void resolvePlaybookTitleVersion(str.trim()).then((row) => {
+            if (!cancelled) {
+              setPlaybookLabel(row ? formatProcedurePlaybookLabel(row.title, row.version, t) : '')
+            }
+          })
+          return () => {
+            cancelled = true
+          }
+        }, [str, t])
+        const resolvedMergeLabel = playbookLabel.trim().length ? playbookLabel : str
         return (
           <EntitySearchCombobox
             value={str}
             onChange={(next) => setValue(next)}
-            options={mergeEntitySearchOption([], str, str)}
+            options={mergeEntitySearchOption([], str, resolvedMergeLabel)}
             onRemoteSearch={async (q) => {
-              const rows = await remoteSearchPlaybooksForCase(q)
-              return mergeEntitySearchOption(rows, str, str)
+              const rows = await remoteSearchPlaybooksForCase(q, (title, version) =>
+                formatProcedurePlaybookLabel(title, version ?? null, t))
+              return mergeEntitySearchOption(rows, str, resolvedMergeLabel)
             }}
             placeholder={t('cases.form.procedure.playbookSearch', 'Search procedures…')}
             disabled={disabled}

@@ -1,4 +1,4 @@
-import { CustomFieldEntityConfig } from '../data/entities'
+import { CustomFieldEntityConfig } from '../data/entities.js'
 
 export type CustomFieldsetGroup = {
   code: string

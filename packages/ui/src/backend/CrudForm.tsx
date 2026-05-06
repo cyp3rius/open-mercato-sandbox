@@ -3158,12 +3158,14 @@ function NumberInput({
   placeholder,
   autoFocus,
   onSubmit,
+  disabled,
 }: {
   value: number | string | null | undefined
   onChange: (v: number | undefined) => void
   placeholder?: string
   autoFocus?: boolean
   onSubmit?: () => void
+  disabled?: boolean
 }) {
   const serializedValue = value !== undefined && value !== null ? String(value) : ''
   const [local, setLocal] = React.useState<string>(serializedValue)
@@ -3182,11 +3184,12 @@ function NumberInput({
   }, [serializedValue])
   
   const handleChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (disabled) return
     const next = e.target.value
     setLocal(next)
     const numValue = next === '' ? undefined : Number(next)
     onChange(numValue)
-  }, [onChange])
+  }, [disabled, onChange])
 
   const handleKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -3216,6 +3219,7 @@ function NumberInput({
       onFocus={handleFocus}
       onBlur={handleBlur}
       autoFocus={autoFocus}
+      disabled={disabled}
       data-crud-focus-target=""
     />
   )
@@ -3558,6 +3562,7 @@ const FieldControl = React.memo(function FieldControlImpl({
           onChange={fieldSetValue}
           autoFocus={autoFocusField}
           onSubmit={onSubmitRequest}
+          disabled={disabled}
         />
       )}
       {field.type === 'date' && (

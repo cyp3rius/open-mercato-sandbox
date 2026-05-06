@@ -9,6 +9,8 @@ export function serializeUserTaskForApi(task: UserTask): Record<string, unknown>
     procurementProcessTaskId: task.procurementProcessTaskId ?? null,
     procurementProcessId: task.procurementProcessId ?? null,
     procurementProcessTitle: task.procurementProcessTitle ?? null,
+    serviceCaseId: task.serviceCaseId ?? null,
+    serviceCaseTitle: task.serviceCaseTitle ?? null,
     taskName: task.taskName,
     description: task.description ?? null,
     status: task.status,
