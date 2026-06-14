@@ -4,6 +4,7 @@
  * Uses the globally registered event configs (registered during bootstrap).
  */
 
+import '@/bootstrap'
 import { NextRequest, NextResponse } from 'next/server'
 import { getDeclaredEvents } from '@open-mercato/shared/modules/events'
 

@@ -77,14 +77,14 @@ export type DetailFieldsSectionProps = {
 
 function DetailFieldsSectionImpl({ fields, className }: DetailFieldsSectionProps) {
   return (
-    <div className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3', className)}>
+    <div className={cn('grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 md:grid-cols-3', className)}>
       {fields.map((field) => {
         const variant = field.editorVariant ?? 'muted'
         const activateOnClick = field.activateOnClick ?? true
         const showEditTrigger = field.showEditTrigger ?? true
         const containerClassName = field.containerClassName ?? undefined
         const triggerClassName = field.triggerClassName ?? undefined
-        const wrapperClassName = field.gridClassName ?? undefined
+        const wrapperClassName = cn('h-full min-h-0', field.gridClassName ?? undefined)
 
         if (field.kind === 'text') {
           return (

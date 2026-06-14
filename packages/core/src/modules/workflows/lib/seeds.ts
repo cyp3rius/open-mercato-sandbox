@@ -181,4 +181,5 @@ export async function seedExampleWorkflows(em: EntityManager, scope: WorkflowSee
   await seedWorkflowDefinition(em, scope, 'simple-approval-definition.json')
   await seedGuardRules(em, scope, 'order-approval-guard-rules.json')
   await seedWorkflowDefinition(em, scope, 'order-approval-definition.json')
+  await seedWorkflowDefinition(em, scope, 'insurance-policy-signing-case-definition.json')
 }

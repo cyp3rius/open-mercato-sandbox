@@ -8,11 +8,12 @@ import {
   ruleTypeSchema,
   type RuleType,
 } from '../data/validators'
-import {
-  getEntityTypeSuggestions,
-  getEventTypeSuggestions,
-  generateRuleId,
-} from './utils/formHelpers'
+import { getEntityTypeSuggestions, generateRuleId } from './utils/formHelpers'
+
+export type BusinessRuleFormSuggestionOptions = {
+  /** Declared domain event IDs (and optional lifecycle verbs); defaults load on client via hook. */
+  eventTypeSuggestions?: string[]
+}
 
 /**
  * Form Values Type
@@ -75,7 +76,11 @@ export function getRuleTypeOptions(t: (key: string) => string) {
  * Create Field Definitions
  * Returns field configurations for the CrudForm
  */
-export function createFieldDefinitions(t: (key: string) => string): CrudField[] {
+export function createFieldDefinitions(
+  t: (key: string) => string,
+  options?: BusinessRuleFormSuggestionOptions,
+): CrudField[] {
+  const eventSuggestions = options?.eventTypeSuggestions ?? []
   return [
     {
       id: 'ruleId',
@@ -126,7 +131,7 @@ export function createFieldDefinitions(t: (key: string) => string): CrudField[] 
       label: t('business_rules.rules.form.eventType'),
       type: 'combobox',
       placeholder: t('business_rules.rules.form.placeholders.eventType'),
-      suggestions: getEventTypeSuggestions(),
+      suggestions: eventSuggestions,
       description: t('business_rules.rules.form.descriptions.eventType'),
       allowCustomValues: true,
     },

@@ -36,6 +36,7 @@ import { resolveFeatureCheckContext } from '@open-mercato/core/modules/directory
 import { profileSections, profilePathPrefixes } from '@open-mercato/core/modules/auth/lib/profile-sections'
 import { APP_VERSION } from '@open-mercato/shared/lib/version'
 import { parseBooleanWithDefault } from '@open-mercato/shared/lib/boolean'
+import { resolveAppBranding } from '@open-mercato/shared/lib/branding'
 import { PageInjectionBoundary } from '@open-mercato/ui/backend/injection/PageInjectionBoundary'
 import { DemoFeedbackWidget } from '@/components/DemoFeedbackWidget'
 import { AiAssistantIntegration, AiChatHeaderButton } from '@open-mercato/ai-assistant/frontend'
@@ -440,9 +441,12 @@ export default async function BackendLayout({ children, params }: { children: Re
   const demoModeEnabled = parseBooleanWithDefault(process.env.DEMO_MODE, true)
   const deployEnv = process.env.DEPLOY_ENV
   const baseProductName = translate('appShell.productName', 'Open Mercato')
-  const productName = deployEnv && deployEnv !== 'local'
-    ? `${baseProductName} (${deployEnv.charAt(0).toUpperCase() + deployEnv.slice(1)})`
-    : baseProductName
+  const branding = resolveAppBranding({ fallbackName: baseProductName })
+  let productName = branding.productName
+  if (productName !== null && deployEnv && deployEnv !== 'local') {
+    productName = `${productName} (${deployEnv.charAt(0).toUpperCase()}${deployEnv.slice(1)})`
+  }
+  const logoSrc = branding.logoSrc
   const injectionContext = {
     path,
     userId: auth?.sub ?? null,
@@ -460,6 +464,7 @@ export default async function BackendLayout({ children, params }: { children: Re
           <AppShell
             key={path}
             productName={productName}
+            logoSrc={logoSrc}
             email={auth?.email}
             groups={groups}
             currentTitle={currentTitle}

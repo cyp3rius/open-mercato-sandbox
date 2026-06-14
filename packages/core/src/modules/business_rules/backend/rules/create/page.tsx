@@ -14,6 +14,7 @@ import {
   defaultFormValues,
   type BusinessRuleFormValues,
 } from '../../../components/formConfig'
+import { useBusinessRuleFormEventSuggestions } from '../../../hooks/useBusinessRuleFormEventSuggestions'
 import { ConditionBuilder } from '../../../components/ConditionBuilder'
 import { ActionBuilder } from '../../../components/ActionBuilder'
 import { buildRulePayload } from '../../../components/utils/formHelpers'
@@ -21,6 +22,7 @@ import { buildRulePayload } from '../../../components/utils/formHelpers'
 export default function CreateBusinessRulePage() {
   const router = useRouter()
   const t = useT()
+  const eventTypeSuggestions = useBusinessRuleFormEventSuggestions()
 
   const handleSubmit = async (values: BusinessRuleFormValues) => {
     // Note: tenantId and organizationId are injected by the API from auth token
@@ -59,7 +61,10 @@ export default function CreateBusinessRulePage() {
     router.refresh()
   }
 
-  const fields = React.useMemo(() => createFieldDefinitions(t), [t])
+  const fields = React.useMemo(
+    () => createFieldDefinitions(t, { eventTypeSuggestions }),
+    [t, eventTypeSuggestions],
+  )
 
   const formGroups = React.useMemo(
     () => createFormGroups(t, ConditionBuilder, ActionBuilder),

@@ -17,6 +17,7 @@ import {
   createFieldDefinitions,
   type BusinessRuleFormValues,
 } from '../../../components/formConfig'
+import { useBusinessRuleFormEventSuggestions } from '../../../hooks/useBusinessRuleFormEventSuggestions'
 import { ConditionBuilder } from '../../../components/ConditionBuilder'
 import { ActionBuilder } from '../../../components/ActionBuilder'
 import { buildRulePayload, parseRuleToFormValues } from '../../../components/utils/formHelpers'
@@ -24,6 +25,7 @@ import { buildRulePayload, parseRuleToFormValues } from '../../../components/uti
 export default function EditBusinessRulePage() {
   const router = useRouter()
   const params = useParams()
+  const eventTypeSuggestions = useBusinessRuleFormEventSuggestions()
 
   // Handle catch-all route: params.slug = ['rules', 'uuid']
   let ruleId: string | undefined
@@ -88,7 +90,10 @@ export default function EditBusinessRulePage() {
     router.refresh()
   }
 
-  const fields = React.useMemo(() => createFieldDefinitions(t), [t])
+  const fields = React.useMemo(
+    () => createFieldDefinitions(t, { eventTypeSuggestions }),
+    [t, eventTypeSuggestions],
+  )
 
   const formGroups = React.useMemo(
     () => createFormGroups(t, ConditionBuilder, ActionBuilder),

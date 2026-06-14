@@ -1,0 +1,138 @@
+{
+  "workflowId": "insurance_policy_signing_case_v1",
+  "workflowName": "Polisa — utworzenie sprawy przy podpisaniu",
+  "description": "Po aktualizacji polisy: weryfikacja statusu, wybór playbooka (metadata polisy / ubezpieczyciela), utworzenie sprawy powiązanej z klientem i polisą. Wymaga EXECUTE_FUNCTION guardAndPlanInsuranceSigningCase (moduł insurance).",
+  "version": 1,
+  "enabled": true,
+  "metadata": {
+    "category": "Insurance",
+    "tags": ["insurance", "policy", "cases", "playbook"],
+    "icon": "file-text",
+    "entityType": "insurance.policy"
+  },
+  "definition": {
+    "steps": [
+      {
+        "stepId": "start",
+        "stepName": "Start",
+        "stepType": "START",
+        "description": "Wejście z triggera insurance.policy.updated lub ręcznego uruchomienia"
+      },
+      {
+        "stepId": "ensure_case",
+        "stepName": "Utworzenie sprawy",
+        "stepType": "AUTOMATED",
+        "description": "Plan (status + playbook) i komenda utworzenia sprawy",
+        "timeout": "PT120S"
+      },
+      {
+        "stepId": "end",
+        "stepName": "Koniec",
+        "stepType": "END",
+        "description": "Zakończenie"
+      }
+    ],
+    "triggers": [
+      {
+        "triggerId": "on_insurance_policy_updated",
+        "name": "Aktualizacja polisy",
+        "description": "Payload zdarzenia CRUD ma tylko id/tenant/org — filtrowanie po statusie odbywa się w guardAndPlanInsuranceSigningCase.",
+        "eventPattern": "insurance.policy.updated",
+        "enabled": true,
+        "priority": 10,
+        "config": {
+          "contextMapping": [
+            {
+              "targetKey": "policyId",
+              "sourceExpression": "id"
+            }
+          ],
+          "maxConcurrentInstances": 20
+        }
+      }
+    ],
+    "transitions": [
+      {
+        "transitionId": "start_to_ensure_case",
+        "transitionName": "Przygotuj i utwórz sprawę",
+        "fromStepId": "start",
+        "toStepId": "ensure_case",
+        "trigger": "auto",
+        "priority": 100,
+        "continueOnActivityFailure": false,
+        "activities": [
+          {
+            "activityId": "guard_and_plan",
+            "activityName": "plan",
+            "activityType": "EXECUTE_FUNCTION",
+            "async": false,
+            "timeout": "PT60S",
+            "config": {
+              "functionName": "guardAndPlanInsuranceSigningCase",
+              "args": {
+                "policyId": "{{context.policyId}}"
+              }
+            },
+            "retryPolicy": {
+              "maxAttempts": 3,
+              "initialIntervalMs": 1000,
+              "backoffCoefficient": 2,
+              "maxIntervalMs": 15000
+            }
+          },
+          {
+            "activityId": "create_service_case",
+            "activityName": "create_case",
+            "activityType": "UPDATE_ENTITY",
+            "async": false,
+            "timeout": "PT30S",
+            "config": {
+              "commandId": "cases.cases.create",
+              "input": {
+                "tenantId": "{{workflow.tenantId}}",
+                "organizationId": "{{workflow.organizationId}}",
+                "title": "{{context.plan.title}}",
+                "customerEntityId": "{{context.plan.customerEntityId}}",
+                "insurancePolicyId": "{{context.policyId}}",
+                "playbookId": "{{context.plan.playbookId}}",
+                "priority": "normal"
+              }
+            },
+            "retryPolicy": {
+              "maxAttempts": 3,
+              "initialIntervalMs": 1000,
+              "backoffCoefficient": 2,
+              "maxIntervalMs": 10000
+            }
+          }
+        ]
+      },
+      {
+        "transitionId": "ensure_case_to_end",
+        "transitionName": "Zakończ",
+        "fromStepId": "ensure_case",
+        "toStepId": "end",
+        "trigger": "auto",
+        "priority": 100,
+        "activities": [
+          {
+            "activityId": "emit_case_created_signal",
+            "activityName": "emit_signing_case_ensured",
+            "activityType": "EMIT_EVENT",
+            "async": true,
+            "config": {
+              "eventName": "insurance.policy.signing.case_ensured",
+              "payload": {
+                "policyId": "{{context.policyId}}",
+                "workflowInstanceId": "{{workflow.instanceId}}",
+                "planTitle": "{{context.plan.title}}",
+                "customerEntityId": "{{context.plan.customerEntityId}}",
+                "playbookId": "{{context.plan.playbookId}}"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

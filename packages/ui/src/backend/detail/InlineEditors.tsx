@@ -34,6 +34,11 @@ function resolveInlineErrorMessage(err: unknown, fallbackMessage: string): strin
 
 type EditorVariant = 'default' | 'muted' | 'plain'
 
+const INLINE_MUTED_CONTAINER_CLASS =
+  'relative flex h-full min-h-full flex-col rounded border border-border bg-background p-3'
+
+const INLINE_MUTED_INNER_ROW_CLASS = 'flex min-h-0 flex-1 items-start justify-between gap-2 min-w-0'
+
 export type InlineFieldType = 'text' | 'email' | 'tel' | 'url'
 
 export type InlineTextEditorProps = {
@@ -120,7 +125,7 @@ export function InlineTextEditor({
   const containerClasses = cn(
     'group overflow-hidden',
     variant === 'muted'
-      ? 'relative rounded border border-border bg-background p-3'
+      ? INLINE_MUTED_CONTAINER_CLASS
       :     variant === 'plain'
         ? 'relative flex items-center gap-3 rounded-none border-0 p-0'
         : 'rounded-lg border p-4',
@@ -281,7 +286,7 @@ export function InlineTextEditor({
 
   return (
     <div className={containerClasses} onClick={handleInteractiveClick}>
-      <div className="flex items-start justify-between gap-2 min-w-0">
+      <div className={variant === 'muted' ? INLINE_MUTED_INNER_ROW_CLASS : 'flex items-start justify-between gap-2 min-w-0'}>
         <div className={readOnlyWrapperClasses} {...interactiveProps}>
           {hideLabel ? null : <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>}
           {editing ? (
@@ -572,7 +577,7 @@ export function InlineMultilineEditor({
 
   const containerClasses = cn(
     'group overflow-hidden',
-    variant === 'muted' ? 'relative rounded border border-border bg-background p-3' : 'rounded-lg border p-4',
+    variant === 'muted' ? INLINE_MUTED_CONTAINER_CLASS : 'rounded-lg border p-4',
     showEditTrigger && activateOnClick && !editing ? 'cursor-pointer' : null,
     containerClassName ?? null,
   )
@@ -604,7 +609,7 @@ export function InlineMultilineEditor({
 
   return (
     <div className={containerClasses} onClick={handleInteractiveClick}>
-      <div className="flex items-start justify-between gap-2">
+      <div className={variant === 'muted' ? INLINE_MUTED_INNER_ROW_CLASS : 'flex items-start justify-between gap-2'}>
         <div
           className={cn(
             'flex-1 min-w-0',
@@ -821,7 +826,7 @@ export function InlineSelectEditor({
   const containerClasses = cn(
     'group overflow-hidden',
     variant === 'muted'
-      ? 'relative rounded border border-border bg-background p-3'
+      ? INLINE_MUTED_CONTAINER_CLASS
       : variant === 'plain'
         ? 'relative flex flex-col gap-1 rounded-none border-0 p-0'
         : 'rounded-lg border bg-card p-4',
@@ -883,7 +888,7 @@ export function InlineSelectEditor({
 
   return (
     <div className={containerClasses}>
-      <div className="flex items-start justify-between gap-2">
+      <div className={variant === 'muted' ? INLINE_MUTED_INNER_ROW_CLASS : 'flex items-start justify-between gap-2'}>
         <div className="flex-1 min-w-0" {...interactiveProps}>
           {hideLabel ? null : <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>}
           {editing ? (

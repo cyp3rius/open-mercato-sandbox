@@ -50,8 +50,6 @@ import { DetailTabsLayout } from '@open-mercato/core/modules/customers/component
 import {
   DictionaryValue,
   createDictionaryMap,
-  renderDictionaryColor,
-  renderDictionaryIcon,
   type DictionaryDisplayEntry,
 } from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
 import { PROCUREMENT_PROCESS_ENTITY_TYPE } from '../../../../lib/entityTypes'
@@ -62,6 +60,11 @@ import {
   PROCUREMENT_PROCESS_STATUS_DICTIONARY_KEY,
   PROCUREMENT_PROCESS_TYPE_DICTIONARY_KEY,
 } from '../../../../lib/dictionaryKeys'
+import {
+  ProcurementProcessStatusTransitionBar,
+  resolveProcurementStatusPipelineMode,
+  type ProcurementStatusAdvanceTargets,
+} from '../../../../components/ProcurementProcessStatusTransitionBar'
 import {
   type CustomerCompanySupplierPreview,
   fetchCustomerCompanySupplierPreview,
@@ -158,26 +161,18 @@ function optionalUuid(value: string): string | null {
   return s
 }
 
-type StatusAdvanceTargets = {
-  enforced: boolean
-  items: { toStatusValue: string; toStatusLabel: string }[]
-  terminalProcessStatusValue: string | null
-}
-
 function ProcurementDictionaryInline({
   kind,
   process,
   allowEdits,
   patchProcess,
-  statusAdvance,
-  onAdvanceStatus,
+  statusPipelineMode,
 }: {
   kind: 'status' | 'type'
   process: ProcessDetail
   allowEdits: boolean
   patchProcess: (patch: Record<string, unknown>) => Promise<void>
-  statusAdvance?: StatusAdvanceTargets
-  onAdvanceStatus?: (toStatusValue: string) => void | Promise<void>
+  statusPipelineMode?: 'terminal' | 'enforced' | 'editable'
 }) {
   const t = useT()
   const scopeVersion = useOrganizationScopeVersion()
@@ -258,28 +253,17 @@ function ProcurementDictionaryInline({
     [kind, patchProcess],
   )
 
-  const currentStatusTrimmed = kind === 'status' ? (typeof value === 'string' ? value.trim() : '') : ''
-  const terminalCfg = statusAdvance?.terminalProcessStatusValue?.trim() ?? ''
-  const atConfiguredTerminal =
-    kind === 'status' && terminalCfg.length > 0 && currentStatusTrimmed === terminalCfg
-
-  const statusPipelineTerminal =
+  const statusPipelineReadonly =
     kind === 'status' &&
-    statusAdvance?.enforced === true &&
-    (statusAdvance.items.length === 0 || atConfiguredTerminal)
-  const statusPipelineEnforced =
-    kind === 'status' &&
-    statusAdvance?.enforced === true &&
-    statusAdvance.items.length > 0 &&
-    !atConfiguredTerminal
+    (statusPipelineMode === 'terminal' || statusPipelineMode === 'enforced')
 
-  if (statusPipelineTerminal) {
+  if (statusPipelineReadonly) {
     return (
-      <div className="group overflow-hidden relative rounded border border-border bg-background p-3">
-        <p className="text-sm font-medium text-muted-foreground">
+      <div className="group relative flex h-full min-h-full flex-col overflow-hidden rounded border border-border bg-background p-3">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">
           {t('procurement.processes.detail.status', 'Status')}
         </p>
-        <div className="mt-1 text-sm">
+        <div className="mt-1 flex-1 text-sm">
           <DictionaryValue
             value={value}
             map={displayMap}
@@ -294,73 +278,8 @@ function ProcurementDictionaryInline({
     )
   }
 
-  if (statusPipelineEnforced) {
-    return (
-      <div className="group overflow-hidden relative rounded border border-border bg-background p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1 shrink">
-            <p className="text-sm font-medium text-muted-foreground">
-              {t('procurement.processes.detail.status', 'Status')}
-            </p>
-            <div className="mt-1 text-sm">
-              <DictionaryValue
-                value={value}
-                map={displayMap}
-                fallback={<span className="text-sm text-muted-foreground">{emptyLabel}</span>}
-                className="text-sm font-semibold"
-                iconWrapperClassName="inline-flex h-6 w-6 items-center justify-center rounded border border-border bg-card"
-                iconClassName="h-4 w-4"
-                colorClassName="h-3 w-3 rounded-full"
-              />
-            </div>
-          </div>
-          <div
-            className="min-w-0 shrink-0 ps-2"
-            role="group"
-            aria-label={t('procurement.processes.detail.statusTransition', 'Transition')}
-          >
-            <div className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-lg border border-input bg-muted/30 p-1 shadow-xs">
-              <span className="shrink-0 px-1.5 text-sm font-normal text-muted-foreground">
-                {t('procurement.processes.detail.statusTransition', 'Transition')}
-              </span>
-              {statusAdvance.items.map((it) => {
-                const opt = options.find((o) => o.value === it.toStatusValue)
-                return (
-                  <Button
-                    key={it.toStatusValue}
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={!allowEdits}
-                    className="inline-flex h-8 items-center gap-2 border-border/80 bg-background px-2.5 font-normal shadow-none hover:bg-accent"
-                    onClick={() => void onAdvanceStatus?.(it.toStatusValue)}
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      {opt?.color?.trim() ? (
-                        <span className="inline-flex h-7 shrink-0 items-center justify-center">
-                          {renderDictionaryColor(opt.color.trim(), 'h-3 w-3 rounded-sm')}
-                        </span>
-                      ) : null}
-                      {opt?.icon?.trim() ? (
-                        <span className="inline-flex size-7 shrink-0 items-center justify-center text-muted-foreground">
-                          {renderDictionaryIcon(opt.icon, 'size-4')}
-                        </span>
-                      ) : null}
-                      <span className="font-normal leading-tight">{it.toStatusLabel}</span>
-                    </span>
-                  </Button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="space-y-2">
-      <InlineSelectEditor
+    <InlineSelectEditor
         label={
           kind === 'status'
             ? t('procurement.processes.detail.status', 'Status')
@@ -399,7 +318,6 @@ function ProcurementDictionaryInline({
           />
         )}
       />
-    </div>
   )
 }
 
@@ -444,7 +362,7 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
   const [canManage, setCanManage] = React.useState(false)
   const [canHandle, setCanHandle] = React.useState(false)
   const [process, setProcess] = React.useState<ProcessDetail | null>(null)
-  const [statusAdvance, setStatusAdvance] = React.useState<StatusAdvanceTargets>({
+  const [statusAdvance, setStatusAdvance] = React.useState<ProcurementStatusAdvanceTargets>({
     enforced: false,
     items: [],
     terminalProcessStatusValue: null,
@@ -975,6 +893,11 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
     [processId, canEditHandlerField, withGuard, t, reload],
   )
 
+  const statusPipelineMode = React.useMemo(
+    () => resolveProcurementStatusPipelineMode(process?.statusValue, statusAdvance),
+    [process?.statusValue, statusAdvance],
+  )
+
   const overviewFields: DetailFieldConfig[] = React.useMemo(() => {
     if (!process) return []
     const emptyLabel = t('procurement.processes.list.noValue', '—')
@@ -1003,17 +926,20 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
         emptyLabel,
         gridClassName: 'sm:col-span-2 md:col-span-2',
         render: () => (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:items-start">
-            <ProcurementDictionaryInline kind="type" process={process} allowEdits={allowEdits} patchProcess={patchProcess} />
-            <ProcurementDictionaryInline
-              kind="status"
-              process={process}
-              allowEdits={allowEdits}
-              patchProcess={patchProcess}
-              statusAdvance={statusAdvance}
-              onAdvanceStatus={(to) => void patchProcess({ statusValue: to })}
-            />
-            <div className="space-y-2">
+          <div className="grid h-full grid-cols-1 items-stretch gap-4 md:grid-cols-3">
+            <div className="h-full min-h-0">
+              <ProcurementDictionaryInline kind="type" process={process} allowEdits={allowEdits} patchProcess={patchProcess} />
+            </div>
+            <div className="h-full min-h-0">
+              <ProcurementDictionaryInline
+                kind="status"
+                process={process}
+                allowEdits={allowEdits}
+                patchProcess={patchProcess}
+                statusPipelineMode={statusPipelineMode}
+              />
+            </div>
+            <div className="h-full min-h-0">
               <InlineSelectEditor
                 label={t('procurement.processes.detail.handlerUser', 'Assigned handler')}
                 value={process.handlerUserId ?? ''}
@@ -1078,7 +1004,7 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
         },
       },
     ]
-  }, [process, allowEdits, canEditHandlerField, patchProcess, patchHandlerOnly, t, statusAdvance])
+  }, [process, allowEdits, canEditHandlerField, patchProcess, patchHandlerOnly, t, statusPipelineMode])
 
   const supplierPickOptions = React.useMemo(() => {
     const base = suppliers.map((s) => ({ value: s.id, label: s.vendorLabel }))
@@ -2117,6 +2043,13 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
           }
           actionsContent={(
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              {statusPipelineMode === 'enforced' ? (
+                <ProcurementProcessStatusTransitionBar
+                  statusAdvance={statusAdvance}
+                  allowEdits={allowEdits}
+                  onAdvanceStatus={(to) => void patchProcess({ statusValue: to })}
+                />
+              ) : null}
               {allowEdits && process.customerEntityId ? (
                 <Button
                   type="button"

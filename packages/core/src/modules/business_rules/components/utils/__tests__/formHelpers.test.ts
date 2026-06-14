@@ -2,6 +2,8 @@ import {
   generateRuleId,
   getEntityTypeSuggestions,
   getEventTypeSuggestions,
+  getLifecycleEventVerbSuggestions,
+  mergeEventTypeSuggestions,
 } from '../formHelpers'
 
 describe('formHelpers', () => {
@@ -36,12 +38,12 @@ describe('formHelpers', () => {
       expect(suggestions.length).toBeGreaterThan(0)
     })
 
-    it('should include common entity types', () => {
+    it('should include Open Mercato registry entity IDs', () => {
       const suggestions = getEntityTypeSuggestions()
-      expect(suggestions).toContain('WorkOrder')
-      expect(suggestions).toContain('Order')
-      expect(suggestions).toContain('Invoice')
-      expect(suggestions).toContain('Customer')
+      expect(suggestions).toContain('insurance:insurance_policy')
+      expect(suggestions).toContain('cases:service_case')
+      expect(suggestions).toContain('playbooks:playbook')
+      expect(suggestions.some((id) => id.startsWith('procurement:'))).toBe(true)
     })
   })
 
@@ -53,12 +55,19 @@ describe('formHelpers', () => {
     })
 
     it('should include common lifecycle events', () => {
-      const suggestions = getEventTypeSuggestions()
+      const suggestions = getLifecycleEventVerbSuggestions()
       expect(suggestions).toContain('beforeCreate')
       expect(suggestions).toContain('afterCreate')
       expect(suggestions).toContain('beforeUpdate')
       expect(suggestions).toContain('afterUpdate')
       expect(suggestions).toContain('onStatusChange')
+    })
+
+    it('should merge domain event IDs with lifecycle verbs', () => {
+      const merged = mergeEventTypeSuggestions(['insurance.policy.updated', 'cases.case.created'])
+      expect(merged).toContain('insurance.policy.updated')
+      expect(merged).toContain('cases.case.created')
+      expect(merged).toContain('beforeCreate')
     })
 
     it('should accept optional entityType parameter', () => {

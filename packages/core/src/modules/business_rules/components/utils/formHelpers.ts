@@ -1,5 +1,6 @@
 import type { BusinessRuleFormValues } from '../formConfig'
 import type { CreateBusinessRuleInput } from '../../data/validators'
+import { collectRegisteredEntityTypeIds } from '../../lib/registryEntityIds'
 
 /**
  * Convert form values to API payload
@@ -77,27 +78,16 @@ export function generateRuleId(ruleName: string): string {
 }
 
 /**
- * Get common entity type suggestions
+ * Entity type suggestions: all registered Open Mercato entity IDs (`module:entity`).
  */
 export function getEntityTypeSuggestions(): string[] {
-  return [
-    'WorkOrder',
-    'Order',
-    'Invoice',
-    'Customer',
-    'Product',
-    'User',
-    'Task',
-    'Ticket',
-    'Deal',
-    'Contact',
-  ]
+  return collectRegisteredEntityTypeIds()
 }
 
 /**
- * Get common event type suggestions based on entity type
+ * Generic lifecycle-style hooks (non-domain); kept for rules that use pseudo-events.
  */
-export function getEventTypeSuggestions(entityType?: string): string[] {
+export function getLifecycleEventVerbSuggestions(): string[] {
   return [
     'beforeCreate',
     'afterCreate',
@@ -110,6 +100,28 @@ export function getEventTypeSuggestions(entityType?: string): string[] {
     'onStatusChange',
     'onAssign',
   ]
+}
+
+/**
+ * Default combobox suggestions before `/api/events` loads (client).
+ */
+export function getDefaultEventTypeSuggestions(): string[] {
+  return getLifecycleEventVerbSuggestions()
+}
+
+/**
+ * Merge lifecycle verbs with declared domain event IDs (dedupe, sorted).
+ */
+export function mergeEventTypeSuggestions(domainEventIds: string[]): string[] {
+  const merged = new Set<string>([...getLifecycleEventVerbSuggestions(), ...domainEventIds])
+  return Array.from(merged).sort((left, right) => left.localeCompare(right))
+}
+
+/**
+ * @deprecated Prefer `getLifecycleEventVerbSuggestions` or merged API-driven suggestions.
+ */
+export function getEventTypeSuggestions(_entityType?: string): string[] {
+  return getLifecycleEventVerbSuggestions()
 }
 
 /**

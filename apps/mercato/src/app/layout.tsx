@@ -8,6 +8,7 @@ import { AppProviders } from '@/components/AppProviders'
 // Bootstrap all package registrations at module load time
 bootstrap()
 import { detectLocale, loadDictionary } from '@open-mercato/shared/lib/i18n/server'
+import { resolveAppBranding } from '@open-mercato/shared/lib/branding'
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,12 +20,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: 'Open Mercato',
-  description: 'AI-supportive, modular ERP foundation for product & service companies',
-  icons: {
-    icon: '/open-mercato.svg',
-  },
+export async function generateMetadata(): Promise<Metadata> {
+  const { faviconSrc, productName } = resolveAppBranding({ fallbackName: 'Open Mercato' })
+  return {
+    title: productName ?? 'Open Mercato',
+    description: 'AI-supportive, modular ERP foundation for product & service companies',
+    icons: {
+      icon: faviconSrc,
+    },
+  }
 }
 
 export default async function RootLayout({

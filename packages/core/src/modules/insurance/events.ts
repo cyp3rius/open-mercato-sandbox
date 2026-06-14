@@ -25,6 +25,12 @@ const events = [
   { id: 'insurance.policy.created', label: 'Policy created', entity: 'policy', category: 'crud' },
   { id: 'insurance.policy.updated', label: 'Policy updated', entity: 'policy', category: 'crud' },
   { id: 'insurance.policy.deleted', label: 'Policy deleted', entity: 'policy', category: 'crud' },
+  {
+    id: 'insurance.policy.signing.case_ensured',
+    label: 'Policy signing case ensured (workflow)',
+    entity: 'policy',
+    category: 'lifecycle',
+  },
   { id: 'insurance.lead.created', label: 'Lead created', entity: 'lead', category: 'crud' },
   { id: 'insurance.lead.updated', label: 'Lead updated', entity: 'lead', category: 'crud' },
   { id: 'insurance.lead.deleted', label: 'Lead deleted', entity: 'lead', category: 'crud' },

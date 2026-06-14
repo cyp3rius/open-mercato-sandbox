@@ -2,7 +2,6 @@
 import * as React from 'react'
 import { createContext, useContext } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import { Button } from '../primitives/button'
 import { IconButton } from '../primitives/icon-button'
@@ -26,6 +25,7 @@ import { useInjectedMenuItems } from './injection/useInjectedMenuItems'
 import { resolveInjectedIcon } from './injection/resolveInjectedIcon'
 import { useEventBridge } from './injection/eventBridge'
 import { StatusBadgeInjectionSpot } from './injection/StatusBadgeInjectionSpot'
+import { BrandLogo } from './BrandLogo'
 import { UmesDevToolsPanel } from './devtools'
 import {
   BACKEND_LAYOUT_FOOTER_INJECTION_SPOT_ID,
@@ -57,7 +57,9 @@ export type AppShellSidebarNavItem = {
 }
 
 export type AppShellProps = {
-  productName?: string
+  /** When `null`, sidebar/header show logo only. When omitted, i18n fallback is used. */
+  productName?: string | null
+  logoSrc?: string
   email?: string
   groups: {
     id?: string
@@ -360,7 +362,7 @@ function Chevron({ open }: { open: boolean }) {
   )
 }
 
-export function AppShell({ productName, email, groups, rightHeaderSlot, children, sidebarCollapsedDefault = false, currentTitle, breadcrumb, adminNavApi, version, settingsSectionTitle, settingsPathPrefixes = [], settingsSections, profileSections, profileSectionTitle, profilePathPrefixes = [], mobileSidebarSlot }: AppShellProps) {
+export function AppShell({ productName, logoSrc, email, groups, rightHeaderSlot, children, sidebarCollapsedDefault = false, currentTitle, breadcrumb, adminNavApi, version, settingsSectionTitle, settingsPathPrefixes = [], settingsSections, profileSections, profileSectionTitle, profilePathPrefixes = [], mobileSidebarSlot }: AppShellProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const t = useT()
@@ -370,7 +372,9 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
   const { items: profileSidebarInjectedMenuItems } = useInjectedMenuItems('menu:sidebar:profile')
   const { items: topbarInjectedMenuItems } = useInjectedMenuItems('menu:topbar:actions')
   useEventBridge() // SSE DOM Event Bridge — singleton SSE connection for real-time server events
-  const resolvedProductName = productName ?? t('appShell.productName')
+  const resolvedProductName = productName === undefined ? t('appShell.productName') : productName
+  const showProductName = resolvedProductName !== null && resolvedProductName.length > 0
+  const logoAlt = resolvedProductName ?? t('appShell.productName')
   const [mobileOpen, setMobileOpen] = React.useState(false)
   // Initialize from server-provided prop only to avoid hydration flicker
   const [collapsed, setCollapsed] = React.useState(sidebarCollapsedDefault)
@@ -875,8 +879,12 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
         {!hideHeader && (
           <div className={`flex items-center ${compact ? 'justify-center' : 'justify-between'} mb-2`}>
             <Link href="/backend" className="flex items-center gap-2" aria-label={t('appShell.goToDashboard')}>
-              <Image src="/open-mercato.svg" alt={resolvedProductName} width={32} height={32} className="rounded m-4" />
-              {!compact && <div className="text-m font-semibold">{resolvedProductName}</div>}
+              <BrandLogo
+                src={logoSrc}
+                alt={logoAlt}
+                variant={compact ? (showProductName ? 'sidebarCompact' : 'mobile') : 'sidebar'}
+              />
+              {!compact && showProductName ? <div className="text-m font-semibold">{resolvedProductName}</div> : null}
             </Link>
           </div>
         )}
@@ -1199,8 +1207,12 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
         {!hideHeader && (
           <div className={`flex items-center ${compact ? 'justify-center' : 'justify-between'} mb-2`}>
             <Link href="/backend" className="flex items-center gap-2" aria-label={t('appShell.goToDashboard')}>
-              <Image src="/open-mercato.svg" alt={resolvedProductName} width={32} height={32} className="rounded m-4" />
-              {!compact && <div className="text-m font-semibold">{resolvedProductName}</div>}
+              <BrandLogo
+                src={logoSrc}
+                alt={logoAlt}
+                variant={compact ? (showProductName ? 'sidebarCompact' : 'mobile') : 'sidebar'}
+              />
+              {!compact && showProductName ? <div className="text-m font-semibold">{resolvedProductName}</div> : null}
             </Link>
           </div>
         )}
@@ -1622,8 +1634,8 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
           <aside className="absolute left-0 top-0 flex h-full w-[260px] flex-col bg-background border-r overflow-hidden">
             <div className="shrink-0 p-3 pb-2 flex items-center justify-between border-b">
               <Link href="/backend" className="flex items-center gap-2 text-sm font-semibold" onClick={() => setMobileOpen(false)} aria-label={t('appShell.goToDashboard')}>
-                <Image src="/open-mercato.svg" alt={resolvedProductName} width={28} height={28} className="rounded" />
-                {resolvedProductName}
+                <BrandLogo src={logoSrc} alt={logoAlt} variant="mobile" />
+                {showProductName ? resolvedProductName : null}
               </Link>
               <IconButton variant="outline" size="sm" onClick={() => setMobileOpen(false)} aria-label={t('appShell.closeMenu')}>✕</IconButton>
             </div>

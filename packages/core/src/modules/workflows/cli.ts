@@ -286,6 +286,65 @@ const seedSimpleApproval: ModuleCli = {
 }
 
 /**
+ * Seed insurance policy → case (signing) workflow
+ */
+const seedInsurancePolicySigningCase: ModuleCli = {
+  command: 'seed-insurance-policy-signing-case',
+  async run(rest: string[]) {
+    const args = parseArgs(rest)
+    const tenantId = String(args.tenantId ?? args.tenant ?? args.t ?? '')
+    const organizationId = String(args.organizationId ?? args.orgId ?? args.org ?? args.o ?? '')
+
+    if (!tenantId || !organizationId) {
+      console.error(
+        'Usage: mercato workflows seed-insurance-policy-signing-case --tenant <tenantId> --org <organizationId>',
+      )
+      console.error('   or: mercato workflows seed-insurance-policy-signing-case -t <tenantId> -o <organizationId>')
+      return
+    }
+
+    try {
+      const { resolve } = await createRequestContainer()
+      const em = resolve<EntityManager>('em')
+
+      const filePath = path.join(__dirname, 'examples', 'insurance-policy-signing-case-definition.json')
+      const workflowData = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+
+      const existing = await em.findOne(WorkflowDefinition, {
+        workflowId: workflowData.workflowId,
+        tenantId,
+        organizationId,
+      })
+
+      if (existing) {
+        console.log(
+          `ℹ️  Workflow '${workflowData.workflowId}' already exists for this org (ID: ${existing.id})`,
+        )
+        return
+      }
+
+      const workflow = em.create(WorkflowDefinition, {
+        ...workflowData,
+        tenantId,
+        organizationId,
+      })
+
+      await em.persistAndFlush(workflow)
+
+      console.log(`✅ Seeded workflow: ${workflow.workflowName}`)
+      console.log(`  - workflowId: ${workflow.workflowId}`)
+      console.log(`  - definition id: ${workflow.id}`)
+      console.log('')
+      console.log('Requires insurance DI: workflowFunction:guardAndPlanInsuranceSigningCase')
+      console.log('Statuses: set OM_INSURANCE_POLICY_SIGNING_CASE_STATUSES or policy.metadata.signingCaseTriggerStatuses')
+    } catch (error) {
+      console.error('Error seeding insurance policy signing case workflow:', error)
+      throw error
+    }
+  },
+}
+
+/**
  * Seed order approval example
  */
 const seedOrderApproval: ModuleCli = {
@@ -477,6 +536,9 @@ const seedAll: ModuleCli = {
       await seedOrderApproval.run(rest)
       console.log('')
 
+      await seedInsurancePolicySigningCase.run(rest)
+      console.log('')
+
       console.log('✅ All example workflows seeded successfully!')
     } catch (error) {
       console.error('Error seeding workflows:', error)
@@ -553,6 +615,7 @@ const workflowsCliCommands = [
   seedDemoWithRules,
   seedSalesPipeline,
   seedSimpleApproval,
+  seedInsurancePolicySigningCase,
   seedOrderApproval,
   seedAll,
 ]
