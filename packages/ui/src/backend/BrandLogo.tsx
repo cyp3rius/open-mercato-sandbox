@@ -7,7 +7,7 @@ import { DEFAULT_BRAND_LOGO_SRC } from '@open-mercato/shared/lib/branding'
 type BrandLogoProps = {
   src?: string | null
   alt: string
-  variant?: 'sidebar' | 'sidebarCompact' | 'mobile' | 'inline'
+  variant?: 'sidebar' | 'sidebarCompact' | 'mobile' | 'inline' | 'hero'
   className?: string
 }
 
@@ -16,6 +16,7 @@ const VARIANT_CLASS: Record<NonNullable<BrandLogoProps['variant']>, string> = {
   sidebarCompact: 'h-8 w-8 object-contain',
   mobile: 'h-7 w-auto max-w-[140px] object-contain',
   inline: 'h-8 w-auto max-w-[160px] object-contain',
+  hero: 'h-auto w-full max-w-[240px] object-contain',
 }
 
 const VARIANT_SIZE: Record<NonNullable<BrandLogoProps['variant']>, { width: number; height: number }> = {
@@ -23,6 +24,7 @@ const VARIANT_SIZE: Record<NonNullable<BrandLogoProps['variant']>, { width: numb
   sidebarCompact: { width: 32, height: 32 },
   mobile: { width: 140, height: 28 },
   inline: { width: 160, height: 32 },
+  hero: { width: 240, height: 64 },
 }
 
 export function BrandLogo({
@@ -41,7 +43,7 @@ export function BrandLogo({
       width={size.width}
       height={size.height}
       className={cn('shrink-0', VARIANT_CLASS[variant], className)}
-      priority={variant !== 'inline'}
+      priority={variant === 'inline' ? false : true}
     />
   )
 }

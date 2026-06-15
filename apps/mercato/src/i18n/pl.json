@@ -15,6 +15,8 @@
   "lead_intake.error.person": "Nie udało się utworzyć osoby.",
   "lead_intake.error.deal": "Nie udało się utworzyć szansy sprzedaży.",
   "lead_intake.error.generic": "Zapis leada nie powiódł się.",
+  "lead_intake.deals.inject.error.createFailed": "Nie udało się utworzyć szansy sprzedaży.",
+  "lead_intake.deals.inject.error.generic": "Import szansy nie powiódł się.",
   "lead_intake.note.vehicle": "Pojazd",
   "api_docs.nav.title": "Dokumentacja API",
   "app.exampleAdmin": "Panel przykładowy",

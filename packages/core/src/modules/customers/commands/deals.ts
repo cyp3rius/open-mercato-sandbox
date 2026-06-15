@@ -37,6 +37,7 @@ import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { resolveNotificationService } from '../../notifications/lib/notificationService'
 import { buildNotificationFromType } from '../../notifications/lib/notificationBuilder'
 import { notificationTypes } from '../notifications'
+import { assertCustomerIsReferringParty } from '../lib/referringParty'
 
 const DEAL_ENTITY_ID = 'customers:customer_deal'
 const dealCrudIndexer: CrudIndexerConfig<CustomerDeal> = {
@@ -88,6 +89,9 @@ type DealSnapshot = {
     expectedCloseAt: Date | null
     ownerUserId: string | null
     source: string | null
+    externalId: string | null
+    payload: Record<string, unknown> | null
+    referringPartnerEntityId: string | null
   }
   people: string[]
   companies: string[]
@@ -144,6 +148,9 @@ async function loadDealSnapshot(em: EntityManager, id: string): Promise<DealSnap
       expectedCloseAt: deal.expectedCloseAt ?? null,
       ownerUserId: deal.ownerUserId ?? null,
       source: deal.source ?? null,
+      externalId: deal.externalId ?? null,
+      payload: deal.payload ? { ...deal.payload } : null,
+      referringPartnerEntityId: deal.referringPartnerEntityId ?? null,
     },
     people: peopleLinks.map((link) =>
       typeof link.person === 'string' ? link.person : link.person.id
@@ -200,6 +207,16 @@ async function syncDealCompanies(
   }
 }
 
+async function enforceReferringPartnerOptional(
+  em: EntityManager,
+  entityId: string | null | undefined,
+  organizationId: string,
+  tenantId: string,
+): Promise<void> {
+  if (entityId == null || entityId === '') return
+  await assertCustomerIsReferringParty(em, entityId, organizationId, tenantId)
+}
+
 const createDealCommand: CommandHandler<DealCreateInput, { dealId: string }> = {
   id: 'customers.deals.create',
   async execute(rawInput, ctx) {
@@ -208,6 +225,25 @@ const createDealCommand: CommandHandler<DealCreateInput, { dealId: string }> = {
     ensureOrganizationScope(ctx, parsed.organizationId)
 
     const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const externalId =
+      parsed.externalId && parsed.externalId.trim().length > 0 ? parsed.externalId.trim() : null
+    if (externalId) {
+      const dup = await em.findOne(CustomerDeal, {
+        organizationId: parsed.organizationId,
+        tenantId: parsed.tenantId,
+        externalId,
+        deletedAt: null,
+      })
+      if (dup) {
+        throw new CrudHttpError(400, { error: 'customers.deals.errors.duplicateExternalId' })
+      }
+    }
+    await enforceReferringPartnerOptional(
+      em,
+      parsed.referringPartnerEntityId,
+      parsed.organizationId,
+      parsed.tenantId,
+    )
     const deal = em.create(CustomerDeal, {
       organizationId: parsed.organizationId,
       tenantId: parsed.tenantId,
@@ -223,6 +259,9 @@ const createDealCommand: CommandHandler<DealCreateInput, { dealId: string }> = {
       expectedCloseAt: parsed.expectedCloseAt ?? null,
       ownerUserId: parsed.ownerUserId ?? null,
       source: parsed.source ?? null,
+      externalId,
+      payload: parsed.payload ?? null,
+      referringPartnerEntityId: parsed.referringPartnerEntityId ?? null,
     })
     em.persist(deal)
 
@@ -333,6 +372,34 @@ const updateDealCommand: CommandHandler<DealUpdateInput, { dealId: string }> = {
     if (parsed.expectedCloseAt !== undefined) record.expectedCloseAt = parsed.expectedCloseAt ?? null
     if (parsed.ownerUserId !== undefined) record.ownerUserId = parsed.ownerUserId ?? null
     if (parsed.source !== undefined) record.source = parsed.source ?? null
+    if (parsed.externalId !== undefined) {
+      const externalId =
+        parsed.externalId && String(parsed.externalId).trim().length > 0
+          ? String(parsed.externalId).trim()
+          : null
+      if (externalId && externalId !== record.externalId) {
+        const dup = await em.findOne(CustomerDeal, {
+          organizationId: record.organizationId,
+          tenantId: record.tenantId,
+          externalId,
+          deletedAt: null,
+        })
+        if (dup && dup.id !== record.id) {
+          throw new CrudHttpError(400, { error: 'customers.deals.errors.duplicateExternalId' })
+        }
+      }
+      record.externalId = externalId
+    }
+    if (parsed.payload !== undefined) record.payload = parsed.payload ?? null
+    if (parsed.referringPartnerEntityId !== undefined) {
+      await enforceReferringPartnerOptional(
+        em,
+        parsed.referringPartnerEntityId,
+        record.organizationId,
+        record.tenantId,
+      )
+      record.referringPartnerEntityId = parsed.referringPartnerEntityId ?? null
+    }
 
     await syncDealPeople(em, record, parsed.personIds)
     await syncDealCompanies(em, record, parsed.companyIds)
@@ -446,6 +513,9 @@ const updateDealCommand: CommandHandler<DealUpdateInput, { dealId: string }> = {
         expectedCloseAt: before.deal.expectedCloseAt,
         ownerUserId: before.deal.ownerUserId,
         source: before.deal.source,
+        externalId: before.deal.externalId,
+        payload: before.deal.payload,
+        referringPartnerEntityId: before.deal.referringPartnerEntityId,
       })
       em.persist(deal)
     } else {
@@ -461,6 +531,9 @@ const updateDealCommand: CommandHandler<DealUpdateInput, { dealId: string }> = {
       deal.expectedCloseAt = before.deal.expectedCloseAt
       deal.ownerUserId = before.deal.ownerUserId
       deal.source = before.deal.source
+      deal.externalId = before.deal.externalId
+      deal.payload = before.deal.payload
+      deal.referringPartnerEntityId = before.deal.referringPartnerEntityId
     }
     await em.flush()
     await syncDealPeople(em, deal, before.people)

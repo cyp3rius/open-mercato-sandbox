@@ -214,6 +214,9 @@ export const dealCreateSchema = scopedSchema.extend({
   expectedCloseAt: z.coerce.date().optional(),
   ownerUserId: uuid().optional(),
   source: z.string().max(150).optional(),
+  externalId: z.string().trim().min(1).max(191).optional().nullable(),
+  payload: z.record(z.string(), z.unknown()).optional().nullable(),
+  referringPartnerEntityId: uuid().optional().nullable(),
   companyIds: z.array(uuid()).optional(),
   personIds: z.array(uuid()).optional(),
 })

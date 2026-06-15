@@ -21,9 +21,9 @@ const geistMono = Geist_Mono({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { faviconSrc, productName } = resolveAppBranding({ fallbackName: 'Open Mercato' })
+  const { faviconSrc, documentTitle } = resolveAppBranding({ fallbackName: 'Open Mercato' })
   return {
-    title: productName ?? 'Open Mercato',
+    title: documentTitle,
     description: 'AI-supportive, modular ERP foundation for product & service companies',
     icons: {
       icon: faviconSrc,

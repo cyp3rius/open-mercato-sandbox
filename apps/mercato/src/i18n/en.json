@@ -15,6 +15,8 @@
   "lead_intake.error.person": "Failed to create person.",
   "lead_intake.error.deal": "Failed to create deal.",
   "lead_intake.error.generic": "Lead intake failed.",
+  "lead_intake.deals.inject.error.createFailed": "Failed to create deal.",
+  "lead_intake.deals.inject.error.generic": "Deal inject failed.",
   "lead_intake.note.vehicle": "Vehicle",
   "api_docs.nav.title": "API documentation",
   "app.exampleAdmin": "Example admin",

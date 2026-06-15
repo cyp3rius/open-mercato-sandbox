@@ -1,9 +1,12 @@
+import { bootstrap } from '@/bootstrap'
 import { modules } from '@/.mercato/generated/modules.generated'
 import { buildOpenApiDocument, generateMarkdownFromOpenApi, sanitizeOpenApiDocument } from '@open-mercato/shared/lib/openapi'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { APP_VERSION } from '@open-mercato/shared/lib/version'
 
 export const dynamic = 'force-dynamic'
+
+bootstrap()
 
 function resolveBaseUrl() {
   return (

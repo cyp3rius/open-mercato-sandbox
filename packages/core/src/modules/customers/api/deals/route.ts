@@ -108,6 +108,8 @@ const crud = makeCrudRoute<unknown, unknown, DealListQuery>({
       'expected_close_at',
       'owner_user_id',
       'source',
+      'external_id',
+      'referring_partner_entity_id',
       'organization_id',
       'tenant_id',
       'created_at',

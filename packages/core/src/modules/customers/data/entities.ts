@@ -291,6 +291,10 @@ export class CustomerCompanyProfile {
 
 @Entity({ tableName: 'customer_deals' })
 @Index({ name: 'customer_deals_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Unique({
+  name: 'customer_deals_external_scope_unique',
+  properties: ['organizationId', 'tenantId', 'externalId'],
+})
 export class CustomerDeal {
   [OptionalProps]?: 'status' | 'createdAt' | 'updatedAt' | 'deletedAt'
 
@@ -338,6 +342,17 @@ export class CustomerDeal {
 
   @Property({ name: 'source', type: 'text', nullable: true })
   source?: string | null
+
+  /** Idempotent key for external systems (webhook / sync). */
+  @Property({ name: 'external_id', type: 'text', nullable: true })
+  externalId?: string | null
+
+  /** Structured payload from external channels (e.g. Strapi insurance wizard). */
+  @Property({ type: 'jsonb', nullable: true })
+  payload?: Record<string, unknown> | null
+
+  @Property({ name: 'referring_partner_entity_id', type: 'uuid', nullable: true })
+  referringPartnerEntityId?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

@@ -2,7 +2,7 @@ import type { ModuleSetupConfig } from '@open-mercato/shared/modules/setup'
 
 export const setup: ModuleSetupConfig = {
   defaultRoleFeatures: {
-    admin: ['insurance_desk.access', 'insurance.*'],
+    admin: ['insurance_desk.access', 'insurance_desk.leads.inject', 'insurance.*'],
     employee: [
       'insurance_desk.access',
       'insurance.insurers.view',
