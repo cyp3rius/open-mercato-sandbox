@@ -114,8 +114,15 @@ export async function POST(req: Request) {
     const raw = await req.json().catch(() => ({}))
     const input = parseScopedCommandInput(customerSignalCreateSchema, raw ?? {}, ctx, translate)
     const commandBus = ctx.container.resolve('commandBus') as CommandBus
-    const { result } = await commandBus.execute<{ signalId: string }>('customer_signals.signals.create', { input, ctx })
-    return NextResponse.json({ id: result.signalId }, { status: 201 })
+    const { result } = await commandBus.execute<typeof input, { signalId: string }>(
+      'customer_signals.signals.create',
+      { input, ctx },
+    )
+    const signalId = result?.signalId
+    if (!signalId) {
+      return NextResponse.json({ error: translate('customer_signals.errors.ingest', 'Failed to record signal.') }, { status: 400 })
+    }
+    return NextResponse.json({ id: signalId }, { status: 201 })
   } catch (err) {
     if (isCrudHttpError(err)) {
       return NextResponse.json(err.body, { status: err.status })

@@ -2,16 +2,17 @@ import type { Dispatch, SetStateAction } from 'react'
 import type { CrudCustomFieldRenderProps } from '@open-mercato/ui/backend/CrudForm'
 
 export function makeLeadDetailFieldProps(
-  form: Record<string, unknown>,
-  setForm: Dispatch<SetStateAction<Record<string, unknown>>>,
+  form: Record<string, unknown> | null,
+  setForm: Dispatch<SetStateAction<Record<string, unknown> | null>>,
   fieldId: string,
 ): CrudCustomFieldRenderProps {
+  const values = form ?? {}
   return {
     id: fieldId,
-    value: form[fieldId],
-    setValue: (v) => setForm((f) => ({ ...f, [fieldId]: v })),
-    setFormValue: (id, v) => setForm((f) => ({ ...f, [id]: v })),
-    values: form,
+    value: values[fieldId],
+    setValue: (v) => setForm((current) => (current ? { ...current, [fieldId]: v } : current)),
+    setFormValue: (id, v) => setForm((current) => (current ? { ...current, [id]: v } : current)),
+    values,
     entityId: 'insurance_desk:lead-detail',
   }
 }

@@ -23,7 +23,7 @@ export type PolicyStatusDisplayEntry = {
 
 type Props = {
   form: Record<string, unknown>
-  setForm: React.Dispatch<React.SetStateAction<Record<string, unknown>>>
+  setForm: React.Dispatch<React.SetStateAction<Record<string, unknown> | null>>
   persistPolicy: (values: Record<string, unknown>) => Promise<void>
   insurerOptions: InlineSelectOption[]
   partnerOptions: InlineSelectOption[]

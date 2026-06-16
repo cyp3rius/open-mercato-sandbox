@@ -157,7 +157,7 @@ export function CaseProcedureStepExecutor({
       setScheduleDueLocal('')
       setScheduleOpen(false)
     }
-  }, [block?.id, block?.kind, block?.actionVariant])
+  }, [block?.id, block?.kind, block?.kind === 'action' ? block.actionVariant : undefined])
 
   React.useEffect(() => {
     if (block?.kind === 'action' && block.actionVariant === 'notify') {

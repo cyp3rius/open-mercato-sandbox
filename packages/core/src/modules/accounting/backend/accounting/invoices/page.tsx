@@ -22,7 +22,7 @@ export default function AccountingInvoicesListRedirectPage() {
   return (
     <Page>
       <PageBody>
-        <LoadingMessage message={t('accounting.list.redirecting', 'Redirecting…')} />
+        <LoadingMessage label={t('accounting.list.redirecting', 'Redirecting…')} />
       </PageBody>
     </Page>
   )

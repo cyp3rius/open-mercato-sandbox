@@ -363,9 +363,9 @@ export default async function BackendLayout({ children, params }: { children: Re
       items: dailyWorkGroup.items.map(materializeItem),
     },
     ...filteredAppliedGroups.map((group) => ({
-      id: group.id,
+      id: group.id ?? group.name,
       name: group.name,
-      defaultName: group.defaultName,
+      defaultName: group.defaultName ?? group.name,
       items: group.items.map(materializeItem),
       weight: group.weight,
     })),

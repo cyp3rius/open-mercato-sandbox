@@ -19,6 +19,7 @@ import {
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 
 export const metadata = {
+  path: '/lead-intake',
   POST: {
     requireAuth: true,
     requireFeatures: ['lead_intake.submit'],

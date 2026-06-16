@@ -41,7 +41,7 @@ export function ProtectionCatalogLucideIcon({
   className?: string
 }) {
   const trimmed = name?.trim() ?? ''
-  const map = LucideIcons as Record<string, LucideIcon>
+  const map = LucideIcons as unknown as Record<string, LucideIcon>
   const Fallback = LucideIcons.Shield
   if (!trimmed) {
     return <Fallback className={className} aria-hidden />

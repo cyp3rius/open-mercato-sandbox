@@ -122,7 +122,7 @@ export default function InsurancePolicyCreatePage() {
           if (cancelled) return
           const merged = buildPolicyCreateInitialValuesFromLead(lead, t)
           if (cancelled) return
-          setInitialValues(merged)
+          setInitialValues({ ...emptyInitial, ...merged })
           setFormKey((k) => k + 1)
         } finally {
           if (!cancelled) setLeadFlowReady(true)
@@ -211,7 +211,7 @@ export default function InsurancePolicyCreatePage() {
       }
       try {
         const merged = buildPolicyCreateInitialValuesFromLead(lead, t)
-        setInitialValues(merged)
+        setInitialValues({ ...emptyInitial, ...merged })
         setFormKey((k) => k + 1)
         return 'merged' as const
       } catch {

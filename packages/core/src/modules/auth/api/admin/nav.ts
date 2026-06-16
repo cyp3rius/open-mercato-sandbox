@@ -371,19 +371,43 @@ export async function GET(req: Request) {
     children: item.children?.map(mapSidebarNavItem),
   })
 
-  const shortcutsBlock = buildMercatoShortcutsSidebarGroup(flatForDailyWork, translate, mapSidebarNavItem)
-  const dailyWorkBlock = buildMercatoDailyWorkStructuredGroup(flatForDailyWork, translate, mapSidebarNavItem)
+  const translateNav = (key: string | undefined, fallback: string) =>
+    key && key.length ? translate(key, fallback) : fallback
+
+  const shortcutsBlock = buildMercatoShortcutsSidebarGroup(flatForDailyWork, translateNav, mapSidebarNavItem)
+  const dailyWorkBlock = buildMercatoDailyWorkStructuredGroup(flatForDailyWork, translateNav, mapSidebarNavItem)
 
   const mercatoDedupeHrefSet = new Set(MERCATO_SIDEBAR_DEDUPE_HREFS.map((h) => normalizeSidebarHref(h)))
-  const filteredPreference = filterNavGroupsRemoveDedupeHrefs(withPreference, mercatoDedupeHrefSet)
+  const filteredPreference = filterNavGroupsRemoveDedupeHrefs(
+    withPreference.map((group) => ({
+      ...group,
+      id: group.id ?? group.name,
+      defaultName: group.defaultName ?? group.name,
+      weight: typeof group.weight === 'number' ? group.weight : 10_000,
+    })),
+    mercatoDedupeHrefSet,
+  )
 
-  const serializeSidebarNavItem = (item: SidebarNavItem) => ({
+  type SerializedSidebarNavItem = {
+    id?: string
+    href: string
+    title: string
+    defaultTitle: string
+    enabled: boolean
+    hidden: boolean
+    pageContext?: SidebarNavItem['pageContext']
+    variant?: SidebarNavItem['variant']
+    sidebarNestAlwaysVisible?: boolean
+    children?: SerializedSidebarNavItem[]
+  }
+
+  const serializeSidebarNavItem = (item: SidebarNavItem): SerializedSidebarNavItem => ({
     id: item.id,
     href: item.href,
     title: item.title,
     defaultTitle: item.defaultTitle,
-    enabled: item.enabled,
-    hidden: item.hidden,
+    enabled: item.enabled ?? true,
+    hidden: item.hidden ?? false,
     pageContext: item.pageContext,
     variant: item.variant,
     sidebarNestAlwaysVisible: item.sidebarNestAlwaysVisible,

@@ -10,7 +10,7 @@ import { makePolicyDetailFieldProps } from './policyDetailFieldProps'
 
 type Props = {
   form: Record<string, unknown>
-  setForm: React.Dispatch<React.SetStateAction<Record<string, unknown>>>
+  setForm: React.Dispatch<React.SetStateAction<Record<string, unknown> | null>>
   insurerOptions: InlineSelectOption[]
   partnerOptions: InlineSelectOption[]
   productOptions: InlineSelectOption[]

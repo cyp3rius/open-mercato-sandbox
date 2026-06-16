@@ -199,7 +199,9 @@ export default function InsurancePoliciesListPage() {
         setTotal(typeof call.result.total === 'number' ? call.result.total : 0)
         setTotalPages(typeof call.result.totalPages === 'number' ? call.result.totalPages : 1)
 
-        const partnerIds = list.map((r) => r.referringPartnerEntityId).filter(Boolean)
+        const partnerIds = list
+          .map((r) => r.referringPartnerEntityId)
+          .filter((x): x is string => typeof x === 'string' && x.length > 0)
         const resourceIds = list.map((r) => r.resourceId).filter((x): x is string => typeof x === 'string' && x.length > 0)
         const [pMap, rMap] = await Promise.all([
           fetchPartnerLabelsByIds(partnerIds),

@@ -54,7 +54,7 @@ export default function CaseProcedureTaskPage({
       setRow(null)
       setError(
         call.result && typeof call.result === 'object' && typeof (call.result as { error?: unknown }).error === 'string'
-          ? (call.result as { error: string }).error
+          ? (call.result as unknown as { error: string }).error
           : t('cases.errors.notFound', 'Case not found.'),
       )
       return
@@ -101,7 +101,7 @@ export default function CaseProcedureTaskPage({
 
   return (
     <>
-      <ApplyBreadcrumb trail={[{ label: t('cases.detail.title', 'Case'), href: backHref }, { label: row?.title ?? '…' }]} />
+      <ApplyBreadcrumb breadcrumb={[{ label: t('cases.detail.title', 'Case'), href: backHref }, { label: row?.title ?? '…' }]} />
       <Page>
         <PageBody className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -116,7 +116,7 @@ export default function CaseProcedureTaskPage({
           {loading ? (
             <LoadingMessage label={t('cases.detail.procedure.taskLoading', 'Loading task…')} />
           ) : error ? (
-            <ErrorMessage message={error} />
+            <ErrorMessage label={error} />
           ) : row ? (
             <div className="rounded-lg border bg-card px-4 py-4 space-y-4">
               <div>
