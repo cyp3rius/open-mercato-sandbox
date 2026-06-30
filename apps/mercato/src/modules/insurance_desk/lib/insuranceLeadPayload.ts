@@ -37,6 +37,8 @@ export type InsuranceLeadPayload = {
   subject?: { vehicle?: Record<string, unknown> }
   /** Insured / applicant contact — used when issuing a policy from the inquiry (CRM person/company + resource). */
   contact?: InsuranceLeadContact
+  /** CRM person created at inject time for the inquiry contact (dedup on policy issue). */
+  crmContactEntityId?: string
   /** Suggested policy number when creating a policy from this lead. */
   policyNumber?: string
   /** @deprecated Set on the policy; kept for older payloads. */

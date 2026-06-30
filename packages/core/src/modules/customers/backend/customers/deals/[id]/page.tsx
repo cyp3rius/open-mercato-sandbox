@@ -18,6 +18,10 @@ import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { NotesSection, type SectionAction } from '@open-mercato/ui/backend/detail'
 import { ActivitiesSection } from '../../../../components/detail/ActivitiesSection'
 import { DealForm, type DealFormSubmitPayload } from '../../../../components/detail/DealForm'
+import {
+  DealReferringPartnerPreview,
+  type DealReferringPartnerAssociation,
+} from '../../../../components/detail/DealReferringPartnerPreview'
 import { useCustomerDictionary } from '../../../../components/detail/hooks/useCustomerDictionary'
 import type { CustomerDictionaryMap } from '../../../../lib/dictionaries'
 import { createTranslatorWithFallback } from '@open-mercato/shared/lib/i18n/translate'
@@ -55,6 +59,7 @@ type DealDetailPayload = {
   }
   people: DealAssociation[]
   companies: DealAssociation[]
+  referringPartner: DealReferringPartnerAssociation | null
   customFields: Record<string, unknown>
   viewer?: {
     userId: string | null
@@ -580,6 +585,17 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
                   />
                 ) : null}
               </div>
+
+              {data.referringPartner ? (
+                <div className="rounded-lg border bg-card p-4">
+                  <div className="mb-3 space-y-1">
+                    <h3 className="text-sm font-semibold text-foreground">
+                      {t('customers.deals.detail.referringPartnerSection', 'Referring party')}
+                    </h3>
+                  </div>
+                  <DealReferringPartnerPreview partner={data.referringPartner} />
+                </div>
+              ) : null}
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-lg border bg-card p-4">

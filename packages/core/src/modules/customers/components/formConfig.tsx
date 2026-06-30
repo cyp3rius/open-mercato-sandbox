@@ -83,6 +83,12 @@ function createCrmRecordTypeAndReferralField(t: Translator, variant: 'company' |
       const crmRaw = typeof value === 'string' && value.length ? value : 'customer'
       const referral = typeof values?.referralCode === 'string' ? values.referralCode : ''
       const showReferral = crmRaw === 'partner' || crmRaw === 'referrer'
+      const recordTypeOptions: Array<'customer' | 'partner' | 'referrer'> =
+        variant === 'person'
+          ? crmRaw === 'referrer'
+            ? ['customer', 'partner', 'referrer']
+            : ['customer', 'partner']
+          : ['customer', 'partner', 'referrer']
       React.useEffect(() => {
         if (!showReferral && referral.length > 0) {
           setFormValue?.('referralCode', '')
@@ -104,9 +110,11 @@ function createCrmRecordTypeAndReferralField(t: Translator, variant: 'company' |
               autoFocus={autoFocus}
               data-crud-focus-target=""
             >
-              <option value="customer">{t(`${pf}.crmRecordType.customer`, 'Customer')}</option>
-              <option value="partner">{t(`${pf}.crmRecordType.partner`, 'Partner')}</option>
-              <option value="referrer">{t(`${pf}.crmRecordType.referrer`, 'Referrer')}</option>
+              {recordTypeOptions.map((option) => (
+                <option key={option} value={option}>
+                  {t(`${pf}.crmRecordType.${option}`, option === 'customer' ? 'Customer' : option === 'partner' ? 'Partner' : 'Referrer')}
+                </option>
+              ))}
             </select>
             {error ? <div className="text-xs text-red-600">{error}</div> : null}
           </div>
@@ -2546,6 +2554,7 @@ export const createPersonEditGroups = (t: Translator): CrudFormGroup[] => [
       'status',
       'lifecycleStage',
       'source',
+      'crmRecordType',
     ],
     component: createDisplayNameSection(t),
   },
@@ -2676,6 +2685,8 @@ export type PersonOverview = {
     status?: string | null
     lifecycleStage?: string | null
     source?: string | null
+    crmRecordType?: string | null
+    referralCode?: string | null
     nextInteractionAt?: string | null
     nextInteractionName?: string | null
     nextInteractionRefId?: string | null
@@ -2752,6 +2763,9 @@ export function mapCompanyOverviewToFormValues(overview: CompanyOverview): Parti
 export function mapPersonOverviewToFormValues(overview: PersonOverview): Partial<PersonEditFormValues> {
   const rawPhone = overview.person.primaryPhone
   const phoneValue = rawPhone == null ? '' : String(rawPhone)
+  const crmRaw = overview.person.crmRecordType
+  const crmRecordType =
+    crmRaw === 'customer' || crmRaw === 'partner' || crmRaw === 'referrer' ? crmRaw : 'customer'
   return {
     id: overview.person.id,
     displayName: overview.person.displayName,
@@ -2764,6 +2778,8 @@ export function mapPersonOverviewToFormValues(overview: PersonOverview): Partial
     status: overview.person.status ?? '',
     lifecycleStage: overview.person.lifecycleStage ?? '',
     source: overview.person.source ?? '',
+    crmRecordType,
+    referralCode: overview.person.referralCode ?? '',
     description: overview.person.description ?? '',
     department: overview.profile?.department ?? '',
     linkedInUrl: overview.profile?.linkedInUrl ?? '',

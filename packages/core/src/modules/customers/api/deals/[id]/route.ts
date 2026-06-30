@@ -17,6 +17,12 @@ import type { RbacService } from '@open-mercato/core/modules/auth/services/rbacS
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { findWithDecryption, findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { decryptEntitiesWithFallbackScope } from '@open-mercato/shared/lib/encryption/subscriber'
+import {
+  normalizeCompanyAssociation,
+  normalizePersonAssociation,
+  resolveReferringPartnerAssociation,
+  type ReferringPartnerAssociation,
+} from '../../../lib/referringPartnerAssociation'
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -35,46 +41,6 @@ type DealAssociation = {
   label: string
   subtitle: string | null
   kind: 'person' | 'company'
-}
-
-function normalizePersonAssociation(entity: CustomerEntity): { label: string; subtitle: string | null } {
-  const displayName = typeof entity.displayName === 'string' ? entity.displayName.trim() : ''
-  const email =
-    typeof entity.primaryEmail === 'string' && entity.primaryEmail.trim().length
-      ? entity.primaryEmail.trim()
-      : null
-  const phone =
-    typeof entity.primaryPhone === 'string' && entity.primaryPhone.trim().length
-      ? entity.primaryPhone.trim()
-      : null
-  const jobTitle =
-    entity.personProfile &&
-    typeof (entity.personProfile as any)?.jobTitle === 'string' &&
-    (entity.personProfile as any).jobTitle.trim().length
-      ? ((entity.personProfile as any).jobTitle as string).trim()
-      : null
-  const subtitle = jobTitle ?? email ?? phone ?? null
-  const label = displayName.length ? displayName : email ?? phone ?? entity.id
-  return { label, subtitle }
-}
-
-function normalizeCompanyAssociation(entity: CustomerEntity): { label: string; subtitle: string | null } {
-  const displayName = typeof entity.displayName === 'string' ? entity.displayName.trim() : ''
-  const domain =
-    entity.companyProfile &&
-    typeof (entity.companyProfile as any)?.domain === 'string' &&
-    (entity.companyProfile as any).domain.trim().length
-      ? ((entity.companyProfile as any).domain as string).trim()
-      : null
-  const website =
-    entity.companyProfile &&
-    typeof (entity.companyProfile as any)?.websiteUrl === 'string' &&
-    (entity.companyProfile as any).websiteUrl.trim().length
-      ? ((entity.companyProfile as any).websiteUrl as string).trim()
-      : null
-  const subtitle = domain ?? website ?? null
-  const label = displayName.length ? displayName : domain ?? website ?? entity.id
-  return { label, subtitle }
 }
 
 export async function GET(request: Request, context: { params?: Record<string, unknown> }) {
@@ -186,6 +152,16 @@ export async function GET(request: Request, context: { params?: Record<string, u
     return acc
   }, [])
 
+  let referringPartner: ReferringPartnerAssociation | null = null
+  const referringPartnerId = deal.referringPartnerEntityId?.trim() ?? ''
+  if (referringPartnerId.length) {
+    referringPartner = await resolveReferringPartnerAssociation(em, {
+      entityId: referringPartnerId,
+      organizationId: deal.organizationId,
+      tenantId: deal.tenantId,
+    })
+  }
+
   const customFieldValues = await loadCustomFieldValues({
     em,
     entityId: E.customers.customer_deal,
@@ -230,6 +206,7 @@ export async function GET(request: Request, context: { params?: Record<string, u
     },
     people,
     companies,
+    referringPartner,
     customFields,
     viewer: {
       userId: viewerUserId,
@@ -275,6 +252,16 @@ const dealDetailResponseSchema = z.object({
       kind: z.literal('company'),
     }),
   ),
+  referringPartner: z
+    .object({
+      id: z.string().uuid(),
+      label: z.string(),
+      subtitle: z.string().nullable().optional(),
+      kind: z.enum(['person', 'company']),
+      referralCode: z.string().nullable().optional(),
+      crmRecordType: z.string().nullable().optional(),
+    })
+    .nullable(),
   customFields: z.record(z.string(), z.unknown()),
   viewer: z.object({
     userId: z.string().uuid().nullable(),

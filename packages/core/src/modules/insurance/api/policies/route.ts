@@ -13,6 +13,12 @@ import {
   defaultOkResponseSchema,
 } from '../openapi'
 import { mergeInsuranceCommandScope } from '../mergeScope'
+import { CustomerEntity } from '@open-mercato/core/modules/customers/data/entities'
+import {
+  mapCustomerEntityToReferringPartner,
+  type ReferringPartnerAssociation,
+} from '@open-mercato/core/modules/customers/lib/referringPartnerAssociation'
+import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 
 const routeMetadata = {
   GET: { requireAuth: true, requireFeatures: ['insurance.policies.view'] },
@@ -90,6 +96,7 @@ type PolicyRow = {
   insurerContactId: string | null
   caretakerUserId: string | null
   referringPartnerEntityId: string | null
+  referringPartner: ReferringPartnerAssociation | null
   catalogProductId: string | null
   resourceId: string | null
   insuredPersonEntityId: string | null
@@ -117,6 +124,7 @@ const toRow = (row: InsurancePolicy): PolicyRow => {
     insurerContactId,
     caretakerUserId: row.caretakerUserId ?? null,
     referringPartnerEntityId: row.referringPartnerEntityId ?? null,
+    referringPartner: null,
     catalogProductId: row.catalogProductId ?? null,
     resourceId: row.resourceId ?? null,
     insuredPersonEntityId: row.insuredPersonEntityId ?? null,
@@ -204,6 +212,40 @@ export async function GET(req: Request) {
   const start = (page - 1) * pageSize
   const paged = all.slice(start, start + pageSize)
   const items = paged.map(toRow)
+
+  const partnerIds = [
+    ...new Set(
+      items
+        .map((item) => item.referringPartnerEntityId?.trim() ?? '')
+        .filter((value) => value.length > 0),
+    ),
+  ]
+  if (partnerIds.length > 0 && auth.tenantId) {
+    const partnerRows = await findWithDecryption(
+      em,
+      CustomerEntity,
+      {
+        id: { $in: partnerIds },
+        tenantId: auth.tenantId,
+        deletedAt: null,
+        ...(auth.orgId ? { organizationId: auth.orgId } : {}),
+      },
+      { populate: ['personProfile', 'companyProfile'] },
+      { tenantId: auth.tenantId, organizationId: auth.orgId ?? null },
+    )
+    const partnerById = new Map(
+      partnerRows.map((entity) => [entity.id, mapCustomerEntityToReferringPartner(entity)]),
+    )
+    for (const item of items) {
+      const partnerId = item.referringPartnerEntityId?.trim() ?? ''
+      if (!partnerId.length) continue
+      const partner = partnerById.get(partnerId)
+      if (partner && partner.id === partnerId) {
+        item.referringPartner = partner
+      }
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   return NextResponse.json({ items, total, page, pageSize, totalPages })
@@ -220,6 +262,16 @@ const policyListItemSchema = z.object({
   insurerContactId: z.uuid().nullable(),
   caretakerUserId: z.uuid().nullable(),
   referringPartnerEntityId: z.uuid().nullable(),
+  referringPartner: z
+    .object({
+      id: z.uuid(),
+      label: z.string(),
+      subtitle: z.string().nullable().optional(),
+      kind: z.enum(['person', 'company']),
+      referralCode: z.string().nullable().optional(),
+      crmRecordType: z.string().nullable().optional(),
+    })
+    .nullable(),
   catalogProductId: z.uuid().nullable(),
   resourceId: z.uuid().nullable(),
   insuredPersonEntityId: z.uuid().nullable(),

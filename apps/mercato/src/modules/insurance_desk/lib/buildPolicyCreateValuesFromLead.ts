@@ -57,5 +57,7 @@ export function buildPolicyCreateInitialValuesFromLead(
     status: typeof payload.status === 'string' ? payload.status : '',
     insuranceSubject,
     sourceLeadId: lead.id,
+    crmContactEntityId:
+      typeof payload.crmContactEntityId === 'string' ? payload.crmContactEntityId.trim() : '',
   }
 }

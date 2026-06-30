@@ -3,6 +3,7 @@ import {
   type InsuranceSubjectFormValue,
 } from '../components/policies/PolicySubjectField'
 import type { PolicyListColorEvaluationRow } from '@open-mercato/core/modules/insurance/lib/policyListColorRules'
+import type { ReferringPartnerAssociation } from '@open-mercato/core/modules/customers/lib/referringPartnerAssociation'
 import { buildLeadFormValuesFromPayload } from './leadFormPrefill'
 
 export type PolicyApiRow = {
@@ -12,6 +13,7 @@ export type PolicyApiRow = {
   insurerContactId: string | null
   caretakerUserId: string | null
   referringPartnerEntityId: string | null
+  referringPartner?: ReferringPartnerAssociation | null
   catalogProductId: string | null
   resourceId: string | null
   insuredPersonEntityId?: string | null

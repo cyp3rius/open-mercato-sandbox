@@ -10,15 +10,14 @@ import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { parseScopedCommandInput } from '@open-mercato/shared/lib/api/scoped'
 import {
   dealCreateSchema,
-  personCreateSchema,
   commentCreateSchema,
   type DealCreateInput,
-  type PersonCreateInput,
   type CommentCreateInput,
 } from '@open-mercato/core/modules/customers/data/validators'
 import { CustomerDeal } from '@open-mercato/core/modules/customers/data/entities'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { resolveReferringPartnerEntityId } from '../../../../../../insurance_desk/lib/resolveReferringPartner'
+import { resolveOrCreateContactPerson } from '../../../../../../insurance_desk/lib/resolveContactPerson'
 import {
   buildDealDescription,
   buildDealPayloadForStorage,
@@ -147,21 +146,12 @@ export async function POST(req: Request) {
     let personEntityId: string | null = null
     const personFields = mapContactToPersonFields(mapped.payload.contact, source)
     if (personFields) {
-      const personInput = parseScopedCommandInput(
-        personCreateSchema,
-        {
-          organizationId: body.organizationId,
-          tenantId: body.tenantId,
-          ...personFields,
-        },
-        ctx,
-        translate,
-      ) as PersonCreateInput & { customFields?: Record<string, unknown> }
-      const { result: personResult } = await commandBus.execute<
-        typeof personInput,
-        { entityId: string; personId: string }
-      >('customers.people.create', { input: personInput, ctx })
-      personEntityId = personResult?.entityId ?? null
+      personEntityId = await resolveOrCreateContactPerson(ctx, translate, {
+        organizationId: body.organizationId,
+        tenantId: body.tenantId,
+        personFields,
+        preferEntityId: referringPartnerEntityId,
+      })
     }
 
     const dealTitle = deriveDealTitle(body.title, mapped.payload)

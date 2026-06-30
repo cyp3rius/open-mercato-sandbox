@@ -10,7 +10,6 @@ import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySear
 import {
   loadActiveInsurerSelectOptions,
   loadInsurerContactOptions,
-  searchPartnerEntityOptions,
 } from '../../lib/loadPolicyFormOptions'
 import { INSURANCE_DESK_BASE } from '../../backend/insurance-desk/paths'
 
@@ -26,7 +25,6 @@ type Props = {
   setForm: React.Dispatch<React.SetStateAction<Record<string, unknown> | null>>
   persistPolicy: (values: Record<string, unknown>) => Promise<void>
   insurerOptions: InlineSelectOption[]
-  partnerOptions: InlineSelectOption[]
   productOptions: InlineSelectOption[]
   caretakerOptions: InlineSelectOption[]
   statusOptions: InlineSelectOption[]
@@ -38,7 +36,6 @@ export function PolicyBasicsInlineSection({
   setForm,
   persistPolicy,
   insurerOptions,
-  partnerOptions,
   productOptions,
   caretakerOptions,
   statusOptions,
@@ -46,13 +43,6 @@ export function PolicyBasicsInlineSection({
 }: Props) {
   const t = useT()
   const scopeVersion = useOrganizationScopeVersion()
-  const partnerPrefixes = React.useMemo(
-    () => ({
-      personPrefix: t('insurance_desk.policies.form.partnerKind.person', 'Person'),
-      companyPrefix: t('insurance_desk.policies.form.partnerKind.company', 'Company'),
-    }),
-    [t],
-  )
   const emptyLabel = t('insurance_desk.detail.emptyField', '—')
   const noneLabel = t('insurance_desk.policies.form.none', '— none —')
   const pickInsurerFirst = t('insurance_desk.policies.form.insurerContact.pickInsurerFirst', 'Select an insurer first.')
@@ -182,33 +172,6 @@ export function PolicyBasicsInlineSection({
         }}
         variant="muted"
         activateOnClick
-      />
-
-      <InlineSelectEditor
-        label={t('insurance_desk.policies.form.referringPartyEntity', 'Referring party')}
-        value={typeof form.referringPartnerEntityId === 'string' ? form.referringPartnerEntityId : ''}
-        emptyLabel={emptyLabel}
-        options={partnerOptions}
-        onSave={async (next) => {
-          const v = (next ?? '').trim()
-          await mergeAndPersist({ referringPartnerEntityId: v })
-        }}
-        variant="muted"
-        activateOnClick
-        renderEditor={({ value: draft, onChange }) => (
-          <EntitySearchCombobox
-            value={draft}
-            onChange={onChange}
-            options={partnerOptions.map((o) => ({ ...o }))}
-            onRemoteSearch={(q) => searchPartnerEntityOptions(q, partnerPrefixes)}
-            placeholder={emptyLabel}
-            createInNewTabHref="/backend/customers/companies/create"
-            createInNewTabAriaLabel={t(
-              'insurance_desk.policies.form.addPartnerInNewTab',
-              'Add referring party in a new tab',
-            )}
-          />
-        )}
       />
 
       <InlineSelectEditor

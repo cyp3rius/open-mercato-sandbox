@@ -94,6 +94,7 @@ export default function InsurancePolicyCreatePage() {
       status: '',
       insuranceSubject: emptyInsuranceSubjectValue(),
       sourceLeadId: '',
+      crmContactEntityId: '',
       insuredPersonEntityId: '',
       insuredCompanyEntityId: '',
     }
@@ -554,6 +555,7 @@ export default function InsurancePolicyCreatePage() {
           referringPartnerEntityId: referringPartnerEntityId.length ? referringPartnerEntityId : '',
           sourceLeadId,
           errorMessage: errProvision,
+          existingPersonEntityId: trimStr(values.crmContactEntityId) || null,
         })
         insuredPersonEntityId = provisioned.personEntityId
         insuredCompanyEntityId = provisioned.companyEntityId

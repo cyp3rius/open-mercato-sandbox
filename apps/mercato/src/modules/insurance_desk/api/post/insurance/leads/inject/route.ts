@@ -16,6 +16,8 @@ import { InsuranceLead } from '@open-mercato/core/modules/insurance/data/entitie
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { mapStrapiPayloadToInsuranceLead, STRAPI_LEAD_SOURCE } from '../../../../../lib/strapiLeadMapper'
 import { resolveReferringPartnerEntityId } from '../../../../../lib/resolveReferringPartner'
+import { resolveOrCreateContactPerson } from '../../../../../lib/resolveContactPerson'
+import { mapContactToPersonFields } from '../../../../../../lead_intake/lib/strapiDealInject'
 import {
   collectLeadAttachmentInputs,
   importAttachmentsForLead,
@@ -64,6 +66,7 @@ const attachmentResponseSchema = z.object({
 const injectResponseSchema = z.object({
   id: z.string().uuid(),
   created: z.boolean(),
+  personEntityId: z.string().uuid().nullable(),
   referringPartnerEntityId: z.string().uuid().nullable(),
   attachments: z.array(attachmentResponseSchema),
   attachmentErrors: z.array(z.object({ sourceUrl: z.string(), error: z.string() })).optional(),
@@ -103,6 +106,7 @@ async function findExistingLead(
 function buildInjectResponse(params: {
   id: string
   created: boolean
+  personEntityId: string | null
   referringPartnerEntityId: string | null
   attachments: Array<{ id: string; fileName: string; url: string }>
   attachmentErrors?: Array<{ sourceUrl: string; error: string }>
@@ -111,6 +115,7 @@ function buildInjectResponse(params: {
     {
       id: params.id,
       created: params.created,
+      personEntityId: params.personEntityId,
       referringPartnerEntityId: params.referringPartnerEntityId,
       attachments: params.attachments,
       ...(params.attachmentErrors?.length ? { attachmentErrors: params.attachmentErrors } : {}),
@@ -135,12 +140,14 @@ export async function POST(req: Request) {
       return buildInjectResponse({
         id: existing.id,
         created: false,
+        personEntityId: null,
         referringPartnerEntityId: existing.referringPartnerEntityId ?? null,
         attachments: [],
       })
     }
 
     const mapped = mapStrapiPayloadToInsuranceLead(body.payload)
+    const source = body.source?.trim() || STRAPI_LEAD_SOURCE
     let referringPartnerEntityId: string | null = null
     if (mapped.referralCode) {
       referringPartnerEntityId = await resolveReferringPartnerEntityId(ctx, translate, {
@@ -148,9 +155,25 @@ export async function POST(req: Request) {
         tenantId: body.tenantId,
         referralCode: mapped.referralCode,
         ownerDisplayName: mapped.referralOwnerName ?? mapped.referralCode,
-        source: body.source?.trim() || STRAPI_LEAD_SOURCE,
+        source,
       })
     }
+
+    let personEntityId: string | null = null
+    const personFields = mapContactToPersonFields(mapped.payload.contact, source)
+    if (personFields) {
+      personEntityId = await resolveOrCreateContactPerson(ctx, translate, {
+        organizationId: body.organizationId,
+        tenantId: body.tenantId,
+        personFields,
+        preferEntityId: referringPartnerEntityId,
+      })
+    }
+
+    const payloadForStorage =
+      personEntityId && mapped.payload
+        ? { ...mapped.payload, crmContactEntityId: personEntityId }
+        : mapped.payload
 
     const leadInput = parseScopedCommandInput(
       insuranceLeadCreateSchema,
@@ -158,9 +181,9 @@ export async function POST(req: Request) {
         organizationId: body.organizationId,
         tenantId: body.tenantId,
         title: body.title,
-        source: body.source?.trim() || STRAPI_LEAD_SOURCE,
+        source,
         externalId: body.externalId,
-        payload: mapped.payload,
+        payload: payloadForStorage,
         referringPartnerEntityId,
         status: 'received',
       },
@@ -192,6 +215,7 @@ export async function POST(req: Request) {
     return buildInjectResponse({
       id: leadId,
       created: true,
+      personEntityId,
       referringPartnerEntityId,
       attachments: imported,
       attachmentErrors: errors,

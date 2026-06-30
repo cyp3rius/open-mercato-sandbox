@@ -123,6 +123,7 @@ export type ProvisionPolicyInsuredParams = {
   referringPartnerEntityId: string
   sourceLeadId: string
   errorMessage: string
+  existingPersonEntityId?: string | null
 }
 
 export type ProvisionPolicyInsuredResult = {
@@ -133,7 +134,8 @@ export type ProvisionPolicyInsuredResult = {
 export async function provisionPolicyInsuredEntities(
   params: ProvisionPolicyInsuredParams,
 ): Promise<ProvisionPolicyInsuredResult> {
-  const { contact, leadUsage, referringPartnerEntityId, sourceLeadId, errorMessage } = params
+  const { contact, leadUsage, referringPartnerEntityId, sourceLeadId, errorMessage, existingPersonEntityId } =
+    params
   const usage: LeadUsageFormValue = {
     ...emptyLeadUsageForm(),
     ...(leadUsage && typeof leadUsage === 'object' ? (leadUsage as Record<string, unknown>) : {}),
@@ -250,6 +252,11 @@ export async function provisionPolicyInsuredEntities(
   }
 
   const displayName = `${names.firstName} ${names.lastName}`.trim()
+  const existingPersonId = existingPersonEntityId?.trim() ?? ''
+  if (existingPersonId.length) {
+    return { personEntityId: existingPersonId, companyEntityId }
+  }
+
   let personRes: CrudResponse<{ id?: string }>
   try {
     personRes = await createCrud<{ id?: string }>(

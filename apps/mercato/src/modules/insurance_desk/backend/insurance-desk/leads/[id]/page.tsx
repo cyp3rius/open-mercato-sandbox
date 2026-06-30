@@ -19,11 +19,8 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useGuardedMutation } from '@open-mercato/ui/backend/injection/useGuardedMutation'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
-import {
-  mergePartnerEntityOptionIfMissing,
-  searchPartnerEntityOptions,
-} from '../../../../lib/loadPolicyFormOptions'
+import type { ReferringPartnerAssociation } from '@open-mercato/core/modules/customers/lib/referringPartnerAssociation'
+import { ReferringPartnerSidebarCard } from '../../../../components/ReferringPartnerSidebarCard'
 import { emptyPolicyCoveragesValue } from '../../../../components/policies/PolicyCoveragesField'
 import { PolicyCoverageOptionsField, emptyCoverageOptionsValue } from '../../../../components/policies/PolicyCoverageOptionsField'
 import { LeadCoverageCatalogField } from '../../../../components/leads/LeadCoverageCatalogField'
@@ -65,6 +62,7 @@ type LeadApiRow = {
   source: string | null
   payload: Record<string, unknown> | null
   referringPartnerEntityId: string | null
+  referringPartner: ReferringPartnerAssociation | null
   linkedPolicyId: string | null
 }
 
@@ -96,7 +94,7 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
   const [linkedPolicyId, setLinkedPolicyId] = React.useState<string | null>(null)
   const [canCreatePolicy, setCanCreatePolicy] = React.useState(false)
   const [recordTitle, setRecordTitle] = React.useState('')
-  const [partnerOptions, setPartnerOptions] = React.useState<InlineSelectOption[]>([])
+  const [referringPartner, setReferringPartner] = React.useState<ReferringPartnerAssociation | null>(null)
   const [editingSection, setEditingSection] = React.useState<VisualSection | null>(null)
   const [sectionSaving, setSectionSaving] = React.useState(false)
   const editingRef = React.useRef<VisualSection | null>(null)
@@ -118,28 +116,6 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
     contextId: mutationContextId,
     blockedMessage: t('ui.forms.flash.saveBlocked', 'Save blocked by validation'),
   })
-
-  const partnerPrefixes = React.useMemo(
-    () => ({
-      personPrefix: t('insurance_desk.policies.form.partnerKind.person', 'Person'),
-      companyPrefix: t('insurance_desk.policies.form.partnerKind.company', 'Company'),
-    }),
-    [t],
-  )
-
-  React.useEffect(() => {
-    if (!form) return
-    let cancelled = false
-    const entityId = typeof form.referringPartnerEntityId === 'string' ? form.referringPartnerEntityId : null
-    void (async () => {
-      let opts = await searchPartnerEntityOptions(undefined, partnerPrefixes)
-      opts = await mergePartnerEntityOptionIfMissing(opts, entityId, partnerPrefixes)
-      if (!cancelled) setPartnerOptions(opts)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [form?.referringPartnerEntityId, partnerPrefixes])
 
   React.useEffect(() => {
     let cancelled = false
@@ -214,6 +190,7 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
         loadedSourceRef.current = row.source
         setLinkedPolicyId(typeof row.linkedPolicyId === 'string' ? row.linkedPolicyId : null)
         setRecordTitle(row.title.trim().length ? row.title : t('insurance_desk.leads.detail.titleFallback', 'Inquiry'))
+        setReferringPartner(row.referringPartner ?? null)
         const formValues = buildLeadFormValuesFromPayload(row.referringPartnerEntityId, row.payload)
         setForm({ ...emptyInitial, ...formValues })
       } catch (e: unknown) {
@@ -302,6 +279,7 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
         setRecordTitle(
           refreshed.title.trim().length ? refreshed.title : t('insurance_desk.leads.detail.titleFallback', 'Inquiry'),
         )
+        setReferringPartner(refreshed.referringPartner ?? null)
         const formValues = buildLeadFormValuesFromPayload(refreshed.referringPartnerEntityId, refreshed.payload)
         setForm({ ...emptyInitial, ...formValues })
       }
@@ -434,36 +412,6 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
           flash(t('ui.forms.flash.saveSuccess', 'Saved successfully.'), 'success')
         },
       },
-      {
-        kind: 'select',
-        key: 'referringPartnerEntityId',
-        label: t('insurance_desk.policies.form.referringPartyEntity', 'Referring party'),
-        value: typeof form.referringPartnerEntityId === 'string' ? form.referringPartnerEntityId : '',
-        emptyLabel: empty,
-        options: partnerOptions,
-        activateOnClick: !locked,
-        showEditTrigger: !locked,
-        renderEditor: ({ value: draft, onChange }) => (
-          <EntitySearchCombobox
-            value={draft}
-            onChange={onChange}
-            options={partnerOptions.map((o) => ({ ...o }))}
-            onRemoteSearch={(q) => searchPartnerEntityOptions(q, partnerPrefixes)}
-            placeholder={empty}
-            createInNewTabHref="/backend/customers/companies/create"
-            createInNewTabAriaLabel={t(
-              'insurance_desk.policies.form.addPartnerInNewTab',
-              'Add referring party in a new tab',
-            )}
-          />
-        ),
-        onSave: async (next) => {
-          const id = (next ?? '').trim()
-          const merged = { ...(formRef.current ?? {}), referringPartnerEntityId: id }
-          setForm(merged)
-          await persistLead(merged)
-        },
-      },
     ]
   }, [
     form,
@@ -471,8 +419,6 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
     leadStatusEntries,
     leadId,
     linkedPolicyId,
-    partnerOptions,
-    partnerPrefixes,
     persistLead,
     retryLastMutation,
     runMutation,
@@ -684,6 +630,8 @@ export default function InsuranceLeadDetailPage({ params }: { params?: { id?: st
               }
               editContent={<LeadAttachmentsPanel leadId={leadId} canUpload={!readOnly} embedded />}
             />
+
+            <ReferringPartnerSidebarCard partner={referringPartner} />
           </div>
         </div>
       </PageBody>

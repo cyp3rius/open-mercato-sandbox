@@ -8,6 +8,7 @@ import { cookies } from 'next/headers'
 import Image from 'next/image'
 import Link from 'next/link'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
+import { redirect } from 'next/navigation'
 
 function FeatureBadge({ label }: { label: string }) {
   return (
@@ -27,7 +28,11 @@ export default async function Home() {
   // Check if user wants to see the start page
   const cookieStore = await cookies()
   const showStartPageCookie = cookieStore.get('show_start_page')
-  const showStartPage = showStartPageCookie?.value !== 'false'
+  const showStartPage = false; //showStartPageCookie?.value !== 'false'
+
+  if (!showStartPage) {
+    return redirect('/login');
+  }
 
   const onboardingAvailable =
     process.env.SELF_SERVICE_ONBOARDING_ENABLED === 'true' &&

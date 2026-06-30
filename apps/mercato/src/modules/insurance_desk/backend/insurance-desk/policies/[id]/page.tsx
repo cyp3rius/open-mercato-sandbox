@@ -11,13 +11,12 @@ import { useGuardedMutation } from '@open-mercato/ui/backend/injection/useGuarde
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { resolvePolicyListRowMatchingRule, type PolicyListColorRule } from '@open-mercato/core/modules/insurance/lib/policyListColorRules'
+import type { ReferringPartnerAssociation } from '@open-mercato/core/modules/customers/lib/referringPartnerAssociation'
 import {
   loadActiveInsurerSelectOptions,
   loadCaretakerUserOptions,
   loadCatalogProductOptions,
   mergeInsurerOptionIfMissing,
-  mergePartnerEntityOptionIfMissing,
-  searchPartnerEntityOptions,
   loadPolicyStatusDisplayEntries,
   loadPolicyStatusSelectOptions,
 } from '../../../../lib/loadPolicyFormOptions'
@@ -66,6 +65,7 @@ import { LinkedLeadPreviewCard } from '../../../../components/policies/LinkedLea
 import { PolicyDetailListRuleBanner } from '../../../../components/policies/PolicyDetailListRuleBanner'
 import { makePolicyDetailFieldProps } from '../../../../components/policies/policyDetailFieldProps'
 import { AttachmentItemsPreview } from '../../../../components/attachments/AttachmentItemsPreview'
+import { ReferringPartnerSidebarCard } from '../../../../components/ReferringPartnerSidebarCard'
 import {
   buildLeadPayloadExtras,
   leadContactFormToApi,
@@ -107,10 +107,10 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
   const [loading, setLoading] = React.useState(true)
   const [recordTitle, setRecordTitle] = React.useState('')
   const [insurerOptions, setInsurerOptions] = React.useState<InlineSelectOption[]>([])
-  const [partnerOptions, setPartnerOptions] = React.useState<InlineSelectOption[]>([])
   const [productOptions, setProductOptions] = React.useState<InlineSelectOption[]>([])
   const [caretakerOptions, setCaretakerOptions] = React.useState<InlineSelectOption[]>([])
   const [statusOptions, setStatusOptions] = React.useState<InlineSelectOption[]>([])
+  const [referringPartner, setReferringPartner] = React.useState<ReferringPartnerAssociation | null>(null)
   const [statusDisplayEntries, setStatusDisplayEntries] = React.useState<
     Array<{ value: string; label: string; icon?: string; color?: string }>
   >([])
@@ -132,14 +132,6 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
     contextId: mutationContextId,
     blockedMessage: t('ui.forms.flash.saveBlocked', 'Save blocked by validation'),
   })
-
-  const partnerPrefixes = React.useMemo(
-    () => ({
-      personPrefix: t('insurance_desk.policies.form.partnerKind.person', 'Person'),
-      companyPrefix: t('insurance_desk.policies.form.partnerKind.company', 'Company'),
-    }),
-    [t],
-  )
 
   const loadProductOptionsCb = React.useCallback(async () => {
     return loadCatalogProductOptions(t('insurance_desk.policies.form.none', '— none —'))
@@ -184,19 +176,6 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
       cancelled = true
     }
   }, [policySourceRow?.insurerId, scopeVersion])
-
-  React.useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      const current = policySourceRow?.referringPartnerEntityId?.trim()
-      let opts = await searchPartnerEntityOptions(undefined, partnerPrefixes)
-      opts = await mergePartnerEntityOptionIfMissing(opts, current ?? null, partnerPrefixes)
-      if (!cancelled) setPartnerOptions(opts)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [partnerPrefixes, policySourceRow?.referringPartnerEntityId, scopeVersion])
 
   React.useEffect(() => {
     let cancelled = false
@@ -249,6 +228,7 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
           return
         }
         setPolicySourceRow(row)
+        setReferringPartner(row.referringPartner ?? null)
         setRecordTitle(
           row.policyNumber.trim().length ? row.policyNumber.trim() : t('insurance_desk.policies.detail.titleFallback', 'Policy'),
         )
@@ -291,8 +271,11 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
   )
 
   const getPartnerLabel = React.useCallback(
-    (id: string) => partnerOptions.find((o) => o.value === id)?.label ?? shortId(id, 12),
-    [partnerOptions],
+    (id: string) => {
+      if (referringPartner?.id === id) return referringPartner.label
+      return shortId(id, 12)
+    },
+    [referringPartner],
   )
 
   const getProductLabel = React.useCallback(
@@ -447,6 +430,7 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
       const refreshed = refresh.result?.items?.[0]
       if (refreshed) {
         setPolicySourceRow(refreshed)
+        setReferringPartner(refreshed.referringPartner ?? null)
         setRecordTitle(
           refreshed.policyNumber.trim().length
             ? refreshed.policyNumber.trim()
@@ -570,7 +554,6 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
                 setForm={setForm}
                 persistPolicy={persistPolicy}
                 insurerOptions={insurerOptions}
-                partnerOptions={partnerOptions}
                 productOptions={productOptions}
                 caretakerOptions={caretakerOptions}
                 statusOptions={statusOptions}
@@ -701,6 +684,8 @@ export default function InsurancePolicyDetailPage({ params }: { params?: { id?: 
               preview={<AttachmentItemsPreview entityId={INSURANCE_POLICY_ATTACHMENT_ENTITY_ID} recordId={policyId} />}
               editContent={<PolicyAttachmentsPanel policyId={policyId} embedded />}
             />
+
+            <ReferringPartnerSidebarCard partner={referringPartner} />
           </div>
         </div>
       </PageBody>
