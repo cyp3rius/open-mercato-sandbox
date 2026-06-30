@@ -117,8 +117,8 @@ export async function GET(request: NextRequest) {
     const userIds = [
       ...new Set(
         tasks
-          .flatMap((t) => [t.assignedTo, t.claimedBy])
-          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+          .flatMap((task: UserTask) => [task.assignedTo, task.claimedBy])
+          .filter((id: string | null | undefined): id is string => typeof id === 'string' && id.length > 0),
       ),
     ]
     const users =
@@ -126,17 +126,17 @@ export async function GET(request: NextRequest) {
         ? await em.find(User, { id: { $in: userIds as any[] }, deletedAt: null })
         : []
     const displayById = new Map(
-      users.map((u) => {
-        const name = typeof u.name === 'string' && u.name.trim().length ? u.name.trim() : null
-        const label = name ?? u.email ?? u.id
-        return [u.id, label] as const
+      users.map((user: User) => {
+        const name = typeof user.name === 'string' && user.name.trim().length ? user.name.trim() : null
+        const label = name ?? user.email ?? user.id
+        return [user.id, label] as const
       }),
     )
 
-    const data = tasks.map((t) => ({
-      ...serializeUserTaskForApi(t),
-      assignedToDisplayName: t.assignedTo ? displayById.get(t.assignedTo) ?? null : null,
-      claimedByDisplayName: t.claimedBy ? displayById.get(t.claimedBy) ?? null : null,
+    const data = tasks.map((task: UserTask) => ({
+      ...serializeUserTaskForApi(task),
+      assignedToDisplayName: task.assignedTo ? displayById.get(task.assignedTo) ?? null : null,
+      claimedByDisplayName: task.claimedBy ? displayById.get(task.claimedBy) ?? null : null,
     }))
 
     return NextResponse.json({

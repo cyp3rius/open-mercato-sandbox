@@ -30,6 +30,7 @@ import {
   companyUpdateSchema,
   type CompanyCreateInput,
   type CompanyUpdateInput,
+  parseCustomerCrmRecordType,
 } from '../data/validators'
 import {
   ensureOrganizationScope,
@@ -673,7 +674,7 @@ const updateCompanyCommand: CommandHandler<CompanyUpdateInput, { entityId: strin
         organizationId: before.entity.organizationId,
         tenantId: before.entity.tenantId,
         kind: 'company',
-        crmRecordType: before.entity.crmRecordType ?? 'customer',
+        crmRecordType: parseCustomerCrmRecordType(before.entity.crmRecordType),
         referralCode: before.entity.referralCode ?? null,
         displayName: before.entity.displayName,
         description: before.entity.description,
@@ -692,7 +693,7 @@ const updateCompanyCommand: CommandHandler<CompanyUpdateInput, { entityId: strin
       })
       em.persist(entity)
     } else {
-      entity.crmRecordType = before.entity.crmRecordType ?? 'customer'
+      entity.crmRecordType = parseCustomerCrmRecordType(before.entity.crmRecordType)
       entity.referralCode = before.entity.referralCode ?? null
       entity.displayName = before.entity.displayName
       entity.description = before.entity.description
@@ -950,6 +951,8 @@ const deleteCompanyCommand: CommandHandler<{ body?: Record<string, unknown>; que
           organizationId: before.entity.organizationId,
           tenantId: before.entity.tenantId,
           kind: 'company',
+          crmRecordType: parseCustomerCrmRecordType(before.entity.crmRecordType),
+          referralCode: before.entity.referralCode ?? null,
           displayName: before.entity.displayName,
           description: before.entity.description,
           ownerUserId: before.entity.ownerUserId,

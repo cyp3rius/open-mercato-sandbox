@@ -141,6 +141,7 @@ export async function seedAnalyticsData(
       organizationId: scope.organizationId,
       tenantId: scope.tenantId,
       kind: 'company',
+      crmRecordType: 'customer',
       displayName: `${companyName} #${i + 1}`,
       primaryEmail: `contact${i + 1}@${companyName.toLowerCase().replace(/\s+/g, '')}.example.com`,
       status: 'active',

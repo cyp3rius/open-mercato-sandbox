@@ -55,7 +55,7 @@ export async function syncPrimaryInsurancePolicyForResource(
   nextPolicyId: string | null | undefined,
 ): Promise<void> {
   if (nextPolicyId === undefined) return
-  const scope = { tenantId: record.tenantId, organizationId: record.organizationId, deletedAt: null as const }
+  const scope = { tenantId: record.tenantId, organizationId: record.organizationId, deletedAt: null }
   const normalizedNext =
     nextPolicyId && String(nextPolicyId).trim().length > 0 ? String(nextPolicyId).trim() : null
 

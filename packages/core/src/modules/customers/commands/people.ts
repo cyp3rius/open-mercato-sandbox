@@ -29,6 +29,7 @@ import {
   personUpdateSchema,
   type PersonCreateInput,
   type PersonUpdateInput,
+  parseCustomerCrmRecordType,
 } from '../data/validators'
 import {
   ensureOrganizationScope,
@@ -879,7 +880,7 @@ const updatePersonCommand: CommandHandler<PersonUpdateInput, { entityId: string 
         organizationId: before.entity.organizationId,
         tenantId: before.entity.tenantId,
         kind: 'person',
-        crmRecordType: before.entity.crmRecordType ?? 'customer',
+        crmRecordType: parseCustomerCrmRecordType(before.entity.crmRecordType),
         referralCode: before.entity.referralCode ?? null,
         displayName: before.entity.displayName,
         description: before.entity.description,
@@ -930,7 +931,7 @@ const updatePersonCommand: CommandHandler<PersonUpdateInput, { entityId: string 
       await syncEntityTags(em, newEntity, before.tagIds)
       await em.flush()
     } else {
-      entity.crmRecordType = before.entity.crmRecordType ?? 'customer'
+      entity.crmRecordType = parseCustomerCrmRecordType(before.entity.crmRecordType)
       entity.referralCode = before.entity.referralCode ?? null
       entity.displayName = before.entity.displayName
       entity.description = before.entity.description
@@ -1129,7 +1130,7 @@ const deletePersonCommand: CommandHandler<{ body?: Record<string, unknown>; quer
           organizationId: before.entity.organizationId,
           tenantId: before.entity.tenantId,
           kind: 'person',
-          crmRecordType: before.entity.crmRecordType ?? 'customer',
+          crmRecordType: parseCustomerCrmRecordType(before.entity.crmRecordType),
           referralCode: before.entity.referralCode ?? null,
           displayName: before.entity.displayName,
           description: before.entity.description,
@@ -1149,7 +1150,7 @@ const deletePersonCommand: CommandHandler<{ body?: Record<string, unknown>; quer
         em.persist(entity)
       }
 
-      entity.crmRecordType = before.entity.crmRecordType ?? 'customer'
+      entity.crmRecordType = parseCustomerCrmRecordType(before.entity.crmRecordType)
       entity.referralCode = before.entity.referralCode ?? null
       entity.displayName = before.entity.displayName
       entity.description = before.entity.description

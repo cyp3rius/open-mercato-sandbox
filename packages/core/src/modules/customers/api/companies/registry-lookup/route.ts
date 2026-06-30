@@ -93,7 +93,10 @@ export const openApi: OpenApiRouteDoc = {
       summary: 'Fetch company data by NIP or REGON',
       description:
         'Calls the public Ministry of Finance VAT whitelist API (wl-api.mf.gov.pl). Rate limits apply.',
-      body: bodySchema,
+      requestBody: {
+        contentType: 'application/json',
+        schema: bodySchema,
+      },
       responses: [
         { status: 200, description: 'Lookup result (data null if not found)', schema: successSchema },
         { status: 400, description: 'Validation error', schema: errorSchema },

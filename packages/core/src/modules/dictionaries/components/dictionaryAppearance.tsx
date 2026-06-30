@@ -190,7 +190,7 @@ export function renderDictionaryIcon(icon: string | null | undefined, className 
   if (!icon) return null
   const slug = extractLucideSlug(icon)
   if (slug) {
-    return <DynamicIcon name={slug} className={className} aria-hidden />
+    return <DynamicIcon name={slug as (typeof iconNames)[number]} className={className} aria-hidden />
   }
   return <span className="text-base">{icon}</span>
 }
@@ -219,7 +219,7 @@ export function renderDictionarySourceIcon(icon: string | null | undefined, clas
     const rendered = renderDictionaryIcon(trimmed, className)
     if (rendered) return rendered
   }
-  const map = LucideIcons as Record<string, LucideIcon>
+  const map = LucideIcons as unknown as Record<string, LucideIcon>
   if (LEGACY_LUCIDE_PASCAL.test(trimmed) && map[trimmed]) {
     const Cmp = map[trimmed]!
     return <Cmp className={className} aria-hidden />

@@ -3,6 +3,12 @@ import { isValidPhoneNumber } from '@open-mercato/shared/lib/phone'
 import { isValidNip, normalizeNipDigits } from '../lib/nip'
 import { isValidPesel, normalizePeselDigits } from '../lib/pesel'
 import { isValidRegon, normalizeRegonDigits } from '../lib/regon'
+import type { CustomerCrmRecordType } from './entities'
+
+export function parseCustomerCrmRecordType(value: string | null | undefined): CustomerCrmRecordType {
+  if (value === 'partner' || value === 'referrer') return value
+  return 'customer'
+}
 
 const uuid = () => z.string().uuid()
 

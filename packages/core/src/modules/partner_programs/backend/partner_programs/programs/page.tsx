@@ -259,8 +259,7 @@ export default function PartnerProgramsListPage() {
           columns={columns}
           data={rows}
           isLoading={isLoading}
-          emptyText={labels.empty}
-          getRowId={(row) => row.id}
+          emptyState={labels.empty}
           pagination={{
             page,
             totalPages,
@@ -299,7 +298,7 @@ export default function PartnerProgramsListPage() {
               ]}
             />
           )}
-          onRowClick={(row) => {
+          onRowClick={(row: ProgramRow) => {
             router.push(`/backend/partner_programs/programs/${encodeURIComponent(row.id)}`)
           }}
         />

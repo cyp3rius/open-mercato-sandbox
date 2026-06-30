@@ -1421,7 +1421,7 @@ export const createPersonFormSchema = () =>
         .trim()
         .optional()
         .or(z.literal(''))
-        .transform((val) => (val === '' ? undefined : val.toUpperCase())),
+        .transform((val) => (val === '' || val === undefined ? undefined : val.toUpperCase())),
     })
     .passthrough()
     .superRefine((data, ctx) => {
