@@ -39,7 +39,7 @@ export class Migration20260424120000 extends Migration {
       END $$;
     `)
     this.addSql(
-      `alter table "procurement_process_line_items" drop constraint if exists "procurement_process_line_items_supplier_id_foreign";`,
+      `alter table if exists "procurement_process_line_items" drop constraint if exists "procurement_process_line_items_supplier_id_foreign";`,
     )
     this.addSql(`drop index if exists "procurement_process_line_items_supplier_idx";`)
     this.addSql(`alter table "procurement_process_line_items" drop column if exists "supplier_id";`)

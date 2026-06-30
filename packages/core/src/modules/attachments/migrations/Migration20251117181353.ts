@@ -54,7 +54,7 @@ export class Migration20251117181353 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`drop index "attachments_partition_code_idx";`)
+    this.addSql(`drop index if exists "attachments_partition_code_idx";`);
     this.addSql(
       `alter table "attachments" drop column "partition_code", drop column "storage_driver", drop column "storage_path", drop column "storage_metadata";`,
     )

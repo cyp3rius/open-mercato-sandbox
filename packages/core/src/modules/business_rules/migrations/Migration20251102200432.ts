@@ -14,12 +14,14 @@ export class Migration20251102200432 extends Migration {
     this.addSql(`create index "rule_set_members_set_idx" on "rule_set_members" ("rule_set_id", "sequence");`);
     this.addSql(`alter table "rule_set_members" add constraint "rule_set_members_rule_set_id_rule_id_unique" unique ("rule_set_id", "rule_id");`);
 
+    this.addSql(`alter table if exists "rule_set_members" drop constraint if exists "rule_set_members_rule_set_id_foreign";`);
     this.addSql(`alter table "rule_set_members" add constraint "rule_set_members_rule_set_id_foreign" foreign key ("rule_set_id") references "rule_sets" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "rule_set_members" drop constraint if exists "rule_set_members_rule_id_foreign";`);
     this.addSql(`alter table "rule_set_members" add constraint "rule_set_members_rule_id_foreign" foreign key ("rule_id") references "business_rules" ("id") on update cascade;`);
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "rule_set_members" drop constraint "rule_set_members_rule_set_id_foreign";`);
+    this.addSql(`alter table if exists "rule_set_members" drop constraint if exists "rule_set_members_rule_set_id_foreign";`);
 
     this.addSql(`drop table if exists "rule_sets" cascade;`);
 

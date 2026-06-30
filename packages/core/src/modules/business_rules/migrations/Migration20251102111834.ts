@@ -9,6 +9,7 @@ export class Migration20251102111834 extends Migration {
     this.addSql(`create index "rule_execution_logs_entity_idx" on "rule_execution_logs" ("entity_type", "entity_id");`);
     this.addSql(`create index "rule_execution_logs_rule_idx" on "rule_execution_logs" ("rule_id");`);
 
+    this.addSql(`alter table if exists "rule_execution_logs" drop constraint if exists "rule_execution_logs_rule_id_foreign";`);
     this.addSql(`alter table "rule_execution_logs" add constraint "rule_execution_logs_rule_id_foreign" foreign key ("rule_id") references "business_rules" ("id") on update cascade;`);
   }
 

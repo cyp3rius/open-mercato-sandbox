@@ -9,7 +9,7 @@ export class Migration20260503210001 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`drop index "cases_cases_insurance_policy_idx";`)
+    this.addSql(`drop index if exists "cases_cases_insurance_policy_idx";`);
     this.addSql(`alter table "cases_cases" drop column "insurance_policy_id";`)
   }
 }

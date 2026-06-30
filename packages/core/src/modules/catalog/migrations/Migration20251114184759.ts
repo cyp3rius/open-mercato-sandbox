@@ -7,9 +7,10 @@ export class Migration20251114184759 extends Migration {
     this.addSql(`create index "catalog_product_option_schemas_scope_idx" on "catalog_product_option_schemas" ("organization_id", "tenant_id");`);
     this.addSql(`alter table "catalog_product_option_schemas" add constraint "catalog_product_option_schemas_code_unique" unique ("organization_id", "tenant_id", "code");`);
 
-    this.addSql(`alter table "catalog_products" drop constraint "catalog_products_code_scope_unique";`);
+    this.addSql(`alter table if exists "catalog_products" drop constraint if exists "catalog_products_code_scope_unique";`);
 
     this.addSql(`alter table "catalog_products" add column "sku" text null, add column "handle" text null, add column "option_schema_id" uuid null;`);
+    this.addSql(`alter table if exists "catalog_products" drop constraint if exists "catalog_products_option_schema_id_foreign";`);
     this.addSql(`alter table "catalog_products" add constraint "catalog_products_option_schema_id_foreign" foreign key ("option_schema_id") references "catalog_product_option_schemas" ("id") on update cascade on delete set null;`);
     this.addSql(`alter table "catalog_products" rename column "name" to "title";`);
     this.addSql(`alter table "catalog_products" rename column "code" to "subtitle";`);
@@ -18,10 +19,10 @@ export class Migration20251114184759 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "catalog_products" drop constraint "catalog_products_option_schema_id_foreign";`);
+    this.addSql(`alter table if exists "catalog_products" drop constraint if exists "catalog_products_option_schema_id_foreign";`);
 
-    this.addSql(`alter table "catalog_products" drop constraint "catalog_products_handle_scope_unique";`);
-    this.addSql(`alter table "catalog_products" drop constraint "catalog_products_sku_scope_unique";`);
+    this.addSql(`alter table if exists "catalog_products" drop constraint if exists "catalog_products_handle_scope_unique";`);
+    this.addSql(`alter table if exists "catalog_products" drop constraint if exists "catalog_products_sku_scope_unique";`);
     this.addSql(`alter table "catalog_products" drop column "sku", drop column "handle", drop column "option_schema_id";`);
 
     this.addSql(`alter table "catalog_products" rename column "title" to "name";`);

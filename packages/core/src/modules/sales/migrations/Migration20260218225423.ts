@@ -21,16 +21,16 @@ export class Migration20260218225423 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`drop index "sales_quote_lines_normalized_idx";`);
+    this.addSql(`drop index if exists "sales_quote_lines_normalized_idx";`);
     this.addSql(`alter table "sales_quote_lines" drop column "normalized_quantity", drop column "normalized_unit", drop column "uom_snapshot";`);
 
-    this.addSql(`drop index "sales_order_lines_normalized_idx";`);
+    this.addSql(`drop index if exists "sales_order_lines_normalized_idx";`);
     this.addSql(`alter table "sales_order_lines" drop column "normalized_quantity", drop column "normalized_unit", drop column "uom_snapshot";`);
 
-    this.addSql(`drop index "sales_invoice_lines_normalized_idx";`);
+    this.addSql(`drop index if exists "sales_invoice_lines_normalized_idx";`);
     this.addSql(`alter table "sales_invoice_lines" drop column "normalized_quantity", drop column "normalized_unit", drop column "uom_snapshot";`);
 
-    this.addSql(`drop index "sales_credit_memo_lines_normalized_idx";`);
+    this.addSql(`drop index if exists "sales_credit_memo_lines_normalized_idx";`);
     this.addSql(`alter table "sales_credit_memo_lines" drop column "normalized_quantity", drop column "normalized_unit", drop column "uom_snapshot";`);
   }
 

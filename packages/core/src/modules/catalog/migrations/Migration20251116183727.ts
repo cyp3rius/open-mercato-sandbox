@@ -3,7 +3,7 @@ import { Migration } from '@mikro-orm/migrations';
 export class Migration20251116183727 extends Migration {
 
   override async up(): Promise<void> {
-    this.addSql(`alter table "catalog_products" drop constraint "catalog_products_attribute_schema_id_foreign";`);
+    this.addSql(`alter table if exists "catalog_products" drop constraint if exists "catalog_products_attribute_schema_id_foreign";`);
 
     this.addSql(`alter table "catalog_products" drop column "attribute_schema", drop column "attribute_schema_id", drop column "attribute_values";`);
 
@@ -25,6 +25,7 @@ export class Migration20251116183727 extends Migration {
     this.addSql(`alter table "catalog_products" drop column "custom_fieldset_code";`);
 
     this.addSql(`alter table "catalog_products" add column "attribute_schema" jsonb null, add column "attribute_schema_id" uuid null, add column "attribute_values" jsonb null;`);
+    this.addSql(`alter table if exists "catalog_products" drop constraint if exists "catalog_products_attribute_schema_id_foreign";`);
     this.addSql(`alter table "catalog_products" add constraint "catalog_products_attribute_schema_id_foreign" foreign key ("attribute_schema_id") references "catalog_product_attribute_schemas" ("id") on update cascade on delete set null;`);
 
     this.addSql(`alter table "catalog_product_variants" drop column "custom_fieldset_code";`);

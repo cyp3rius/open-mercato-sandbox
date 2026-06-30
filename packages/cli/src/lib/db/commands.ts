@@ -86,7 +86,55 @@ export function validateTableName(tableName: string): void {
 }
 
 export function makeConstraintDropsIdempotent(sql: string): string {
-  return sql.replace(/alter table\s+("[^"]+"|\S+)\s+drop constraint\s+("[^"]+"|\S+);/gi, 'alter table $1 drop constraint if exists $2;')
+  return sql.replace(
+    /alter table\s+(?:if exists\s+)?("[^"]+"|\S+)\s+drop constraint\s+(?:if exists\s+)?("[^"]+"|\S+);/gi,
+    'alter table if exists $1 drop constraint if exists $2;',
+  )
+}
+
+export function makeConstraintAddsIdempotent(sql: string): string {
+  return sql.replace(
+    /alter table\s+(?!if exists\s)(("[^"]+"|\S+))\s+add constraint\s+(("[^"]+"|\S+))\s+foreign key/gi,
+    'alter table if exists $1 drop constraint if exists $3;\nalter table $1 add constraint $3 foreign key',
+  )
+}
+
+export function makeIndexDropsIdempotent(sql: string): string {
+  return sql.replace(/drop index\s+(?!if exists\s)(("[^"]+"|\S+));/gi, 'drop index if exists $1;')
+}
+
+export function makeMigrationSqlIdempotent(sql: string): string {
+  return makeIndexDropsIdempotent(makeConstraintAddsIdempotent(makeConstraintDropsIdempotent(sql)))
+}
+
+export function makeMigrationFileIdempotent(content: string): string {
+  const lines = content.split('\n')
+  const result: string[] = []
+  for (const line of lines) {
+    const addMatch = line.match(
+      /this\.addSql\(`alter table (?!if exists )("[^"]+"|\S+) add constraint ("[^"]+"|\S+) foreign key/,
+    )
+    if (addMatch) {
+      const table = addMatch[1]
+      const constraint = addMatch[2]
+      const prev = result[result.length - 1] ?? ''
+      if (!prev.includes(`drop constraint if exists ${constraint}`)) {
+        const indent = line.match(/^(\s*)/)?.[1] ?? '    '
+        result.push(
+          `${indent}this.addSql(\`alter table if exists ${table} drop constraint if exists ${constraint};\`);`,
+        )
+      }
+    }
+    const indexDropMatch = line.match(/this\.addSql\(`drop index (?!if exists )("[^"]+"|\S+);/)
+    if (indexDropMatch) {
+      const indexName = indexDropMatch[1]
+      const indent = line.match(/^(\s*)/)?.[1] ?? '    '
+      result.push(`${indent}this.addSql(\`drop index if exists ${indexName};\`);`)
+      continue
+    }
+    result.push(line)
+  }
+  return result.join('\n')
 }
 
 let tsxLoaderRegistered = false
@@ -276,7 +324,7 @@ export async function dbGenerate(resolver: PackageResolver, options: DbOptions =
         const newBase = stem.endsWith(suffix) ? base : `${stem}${suffix}${ext}`
         const newPath = path.join(dir, newBase)
         let content = fs.readFileSync(orig, 'utf8')
-        content = makeConstraintDropsIdempotent(content)
+        content = makeMigrationFileIdempotent(makeMigrationSqlIdempotent(content))
         // Rename class to ensure uniqueness as well
         content = content.replace(
           /export class (Migration\d+)/,

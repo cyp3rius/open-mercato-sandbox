@@ -12,9 +12,12 @@ export class Migration20260309073310 extends Migration {
     this.addSql(`create index "sales_return_lines_order_line_idx" on "sales_return_lines" ("order_line_id", "organization_id", "tenant_id");`);
     this.addSql(`create index "sales_return_lines_return_idx" on "sales_return_lines" ("return_id", "organization_id", "tenant_id");`);
 
+    this.addSql(`alter table if exists "sales_returns" drop constraint if exists "sales_returns_order_id_foreign";`);
     this.addSql(`alter table "sales_returns" add constraint "sales_returns_order_id_foreign" foreign key ("order_id") references "sales_orders" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "sales_return_lines" drop constraint if exists "sales_return_lines_return_id_foreign";`);
     this.addSql(`alter table "sales_return_lines" add constraint "sales_return_lines_return_id_foreign" foreign key ("return_id") references "sales_returns" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "sales_return_lines" drop constraint if exists "sales_return_lines_order_line_id_foreign";`);
     this.addSql(`alter table "sales_return_lines" add constraint "sales_return_lines_order_line_id_foreign" foreign key ("order_line_id") references "sales_order_lines" ("id") on update cascade;`);
   }
 

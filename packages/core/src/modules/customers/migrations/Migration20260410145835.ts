@@ -3,70 +3,85 @@ import { Migration } from '@mikro-orm/migrations';
 export class Migration20260410145835 extends Migration {
 
   override async up(): Promise<void> {
-    this.addSql(`alter table "catalog_product_service_line_extensions" drop constraint if exists "catalog_pdt_svc_line_ext_product_fk";`);
+    this.addSql(`alter table if exists "catalog_product_service_line_extensions" drop constraint if exists "catalog_pdt_svc_line_ext_product_fk";`);
 
-    this.addSql(`alter table "catalog_product_service_line_extensions" drop constraint if exists "catalog_product_service_line_extensions_product_id_foreign";`);
+    this.addSql(`alter table if exists "catalog_product_service_line_extensions" drop constraint if exists "catalog_product_service_line_extensions_product_id_foreign";`);
 
-    this.addSql(`alter table "catalog_product_unit_conversions" drop constraint if exists "catalog_product_unit_conversions_product_id_foreign";`);
+    this.addSql(`alter table if exists "catalog_product_unit_conversions" drop constraint if exists "catalog_product_unit_conversions_product_id_foreign";`);
 
-    this.addSql(`alter table "catalog_product_variant_relations" drop constraint if exists "catalog_product_variant_relations_child_product_id_foreign";`);
+    this.addSql(`alter table if exists "catalog_product_variant_relations" drop constraint if exists "catalog_product_variant_relations_child_product_id_foreign";`);
 
-    this.addSql(`alter table "catalog_product_service_line_extensions" drop constraint if exists "catalog_pdt_svc_line_ext_line_fk";`);
+    this.addSql(`alter table if exists "catalog_product_service_line_extensions" drop constraint if exists "catalog_pdt_svc_line_ext_line_fk";`);
 
-    this.addSql(`alter table "catalog_product_service_line_extensions" drop constraint if exists "catalog_product_service_line_extensions_service_line_id_foreign";`);
+    this.addSql(`alter table if exists "catalog_product_service_line_extensions" drop constraint if exists "catalog_product_service_line_extensions_service_line_id_foreign";`);
 
-    this.addSql(`alter table "customer_role_acls" drop constraint if exists "customer_role_acls_role_id_foreign";`);
+    this.addSql(`alter table if exists "customer_role_acls" drop constraint if exists "customer_role_acls_role_id_foreign";`);
 
-    this.addSql(`alter table "customer_user_roles" drop constraint if exists "customer_user_roles_role_id_foreign";`);
+    this.addSql(`alter table if exists "customer_user_roles" drop constraint if exists "customer_user_roles_role_id_foreign";`);
 
-    this.addSql(`alter table "customer_user_acls" drop constraint if exists "customer_user_acls_user_id_foreign";`);
+    this.addSql(`alter table if exists "customer_user_acls" drop constraint if exists "customer_user_acls_user_id_foreign";`);
 
-    this.addSql(`alter table "customer_user_email_verifications" drop constraint if exists "customer_user_email_verifications_user_id_foreign";`);
+    this.addSql(`alter table if exists "customer_user_email_verifications" drop constraint if exists "customer_user_email_verifications_user_id_foreign";`);
 
-    this.addSql(`alter table "customer_user_password_resets" drop constraint if exists "customer_user_password_resets_user_id_foreign";`);
+    this.addSql(`alter table if exists "customer_user_password_resets" drop constraint if exists "customer_user_password_resets_user_id_foreign";`);
 
-    this.addSql(`alter table "customer_user_roles" drop constraint if exists "customer_user_roles_user_id_foreign";`);
+    this.addSql(`alter table if exists "customer_user_roles" drop constraint if exists "customer_user_roles_user_id_foreign";`);
 
-    this.addSql(`alter table "customer_user_sessions" drop constraint if exists "customer_user_sessions_user_id_foreign";`);
+    this.addSql(`alter table if exists "customer_user_sessions" drop constraint if exists "customer_user_sessions_user_id_foreign";`);
 
-    this.addSql(`alter table "insurance_policies" drop constraint if exists "insurance_policies_insurer_contact_fk";`);
+    this.addSql(`alter table if exists "insurance_policies" drop constraint if exists "insurance_policies_insurer_contact_fk";`);
 
-    this.addSql(`alter table "insurance_insurer_contacts" drop constraint if exists "insurance_insurer_contacts_insurer_fk";`);
+    this.addSql(`alter table if exists "insurance_insurer_contacts" drop constraint if exists "insurance_insurer_contacts_insurer_fk";`);
 
-    this.addSql(`alter table "insurance_policies" drop constraint if exists "insurance_policies_insurer_fk";`);
+    this.addSql(`alter table if exists "insurance_policies" drop constraint if exists "insurance_policies_insurer_fk";`);
 
-    this.addSql(`alter table "insurance_leads" drop constraint if exists "insurance_leads_linked_policy_id_foreign";`);
+    this.addSql(`alter table if exists "insurance_leads" drop constraint if exists "insurance_leads_linked_policy_id_foreign";`);
 
-    this.addSql(`alter table "sales_return_lines" drop constraint if exists "sales_return_lines_order_line_id_foreign";`);
+    this.addSql(`alter table if exists "sales_return_lines" drop constraint if exists "sales_return_lines_order_line_id_foreign";`);
 
-    this.addSql(`alter table "sales_returns" drop constraint if exists "sales_returns_order_id_foreign";`);
+    this.addSql(`alter table if exists "sales_returns" drop constraint if exists "sales_returns_order_id_foreign";`);
 
-    this.addSql(`alter table "sales_return_lines" drop constraint if exists "sales_return_lines_return_id_foreign";`);
+    this.addSql(`alter table if exists "sales_return_lines" drop constraint if exists "sales_return_lines_return_id_foreign";`);
 
-    this.addSql(`drop index "customer_entities_referral_code_scope_unique";`);
+    this.addSql(`drop index if exists "customer_entities_referral_code_scope_unique";`);
 
+    this.addSql(`alter table if exists "customer_deal_people" drop constraint if exists "customer_deal_people_deal_id_foreign";`);
     this.addSql(`alter table "customer_deal_people" add constraint "customer_deal_people_deal_id_foreign" foreign key ("deal_id") references "customer_deals" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "customer_deal_people" drop constraint if exists "customer_deal_people_person_entity_id_foreign";`);
     this.addSql(`alter table "customer_deal_people" add constraint "customer_deal_people_person_entity_id_foreign" foreign key ("person_entity_id") references "customer_entities" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "customer_deal_companies" drop constraint if exists "customer_deal_companies_deal_id_foreign";`);
     this.addSql(`alter table "customer_deal_companies" add constraint "customer_deal_companies_deal_id_foreign" foreign key ("deal_id") references "customer_deals" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "customer_deal_companies" drop constraint if exists "customer_deal_companies_company_entity_id_foreign";`);
     this.addSql(`alter table "customer_deal_companies" add constraint "customer_deal_companies_company_entity_id_foreign" foreign key ("company_entity_id") references "customer_entities" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "customer_companies" drop constraint if exists "customer_companies_entity_id_foreign";`);
     this.addSql(`alter table "customer_companies" add constraint "customer_companies_entity_id_foreign" foreign key ("entity_id") references "customer_entities" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "customer_comments" drop constraint if exists "customer_comments_entity_id_foreign";`);
     this.addSql(`alter table "customer_comments" add constraint "customer_comments_entity_id_foreign" foreign key ("entity_id") references "customer_entities" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "customer_comments" drop constraint if exists "customer_comments_deal_id_foreign";`);
     this.addSql(`alter table "customer_comments" add constraint "customer_comments_deal_id_foreign" foreign key ("deal_id") references "customer_deals" ("id") on update cascade on delete set null;`);
 
+    this.addSql(`alter table if exists "customer_addresses" drop constraint if exists "customer_addresses_entity_id_foreign";`);
     this.addSql(`alter table "customer_addresses" add constraint "customer_addresses_entity_id_foreign" foreign key ("entity_id") references "customer_entities" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "customer_activities" drop constraint if exists "customer_activities_entity_id_foreign";`);
     this.addSql(`alter table "customer_activities" add constraint "customer_activities_entity_id_foreign" foreign key ("entity_id") references "customer_entities" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "customer_activities" drop constraint if exists "customer_activities_deal_id_foreign";`);
     this.addSql(`alter table "customer_activities" add constraint "customer_activities_deal_id_foreign" foreign key ("deal_id") references "customer_deals" ("id") on update cascade on delete set null;`);
 
+    this.addSql(`alter table if exists "customer_people" drop constraint if exists "customer_people_entity_id_foreign";`);
     this.addSql(`alter table "customer_people" add constraint "customer_people_entity_id_foreign" foreign key ("entity_id") references "customer_entities" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "customer_people" drop constraint if exists "customer_people_company_entity_id_foreign";`);
     this.addSql(`alter table "customer_people" add constraint "customer_people_company_entity_id_foreign" foreign key ("company_entity_id") references "customer_entities" ("id") on update cascade on delete set null;`);
 
+    this.addSql(`alter table if exists "customer_tag_assignments" drop constraint if exists "customer_tag_assignments_tag_id_foreign";`);
     this.addSql(`alter table "customer_tag_assignments" add constraint "customer_tag_assignments_tag_id_foreign" foreign key ("tag_id") references "customer_tags" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "customer_tag_assignments" drop constraint if exists "customer_tag_assignments_entity_id_foreign";`);
     this.addSql(`alter table "customer_tag_assignments" add constraint "customer_tag_assignments_entity_id_foreign" foreign key ("entity_id") references "customer_entities" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "customer_todo_links" drop constraint if exists "customer_todo_links_entity_id_foreign";`);
     this.addSql(`alter table "customer_todo_links" add constraint "customer_todo_links_entity_id_foreign" foreign key ("entity_id") references "customer_entities" ("id") on update cascade;`);
   }
 
@@ -832,63 +847,83 @@ export class Migration20260410145835 extends Migration {
     this.addSql(`create index "workflow_instances_status_tenant_idx" on "workflow_instances" ("status", "tenant_id");`);
     this.addSql(`create index "workflow_instances_tenant_org_idx" on "workflow_instances" ("tenant_id", "organization_id");`);
 
+    this.addSql(`alter table if exists "catalog_product_service_line_extensions" drop constraint if exists "catalog_pdt_svc_line_ext_line_fk";`);
     this.addSql(`alter table "catalog_product_service_line_extensions" add constraint "catalog_pdt_svc_line_ext_line_fk" foreign key ("service_line_id") references "catalog_service_lines" ("id") on update cascade on delete restrict;`);
+    this.addSql(`alter table if exists "catalog_product_service_line_extensions" drop constraint if exists "catalog_pdt_svc_line_ext_product_fk";`);
     this.addSql(`alter table "catalog_product_service_line_extensions" add constraint "catalog_pdt_svc_line_ext_product_fk" foreign key ("product_id") references "catalog_products" ("id") on update cascade on delete cascade;`);
+    this.addSql(`alter table if exists "catalog_product_service_line_extensions" drop constraint if exists "catalog_product_service_line_extensions_product_id_foreign";`);
     this.addSql(`alter table "catalog_product_service_line_extensions" add constraint "catalog_product_service_line_extensions_product_id_foreign" foreign key ("product_id") references "catalog_products" ("id") on update cascade on delete cascade;`);
+    this.addSql(`alter table if exists "catalog_product_service_line_extensions" drop constraint if exists "catalog_product_service_line_extensions_service_line_id_foreign";`);
     this.addSql(`alter table "catalog_product_service_line_extensions" add constraint "catalog_product_service_line_extensions_service_line_id_foreign" foreign key ("service_line_id") references "catalog_service_lines" ("id") on update cascade on delete restrict;`);
 
+    this.addSql(`alter table if exists "catalog_product_unit_conversions" drop constraint if exists "catalog_product_unit_conversions_product_id_foreign";`);
     this.addSql(`alter table "catalog_product_unit_conversions" add constraint "catalog_product_unit_conversions_product_id_foreign" foreign key ("product_id") references "catalog_products" ("id") on update cascade on delete cascade;`);
 
+    this.addSql(`alter table if exists "catalog_product_variant_relations" drop constraint if exists "catalog_product_variant_relations_child_product_id_foreign";`);
     this.addSql(`alter table "catalog_product_variant_relations" add constraint "catalog_product_variant_relations_child_product_id_foreign" foreign key ("child_product_id") references "catalog_products" ("id") on update cascade on delete cascade;`);
 
+    this.addSql(`alter table if exists "customer_role_acls" drop constraint if exists "customer_role_acls_role_id_foreign";`);
     this.addSql(`alter table "customer_role_acls" add constraint "customer_role_acls_role_id_foreign" foreign key ("role_id") references "customer_roles" ("id") on update cascade on delete no action;`);
 
+    this.addSql(`alter table if exists "customer_user_acls" drop constraint if exists "customer_user_acls_user_id_foreign";`);
     this.addSql(`alter table "customer_user_acls" add constraint "customer_user_acls_user_id_foreign" foreign key ("user_id") references "customer_users" ("id") on update cascade on delete no action;`);
 
+    this.addSql(`alter table if exists "customer_user_email_verifications" drop constraint if exists "customer_user_email_verifications_user_id_foreign";`);
     this.addSql(`alter table "customer_user_email_verifications" add constraint "customer_user_email_verifications_user_id_foreign" foreign key ("user_id") references "customer_users" ("id") on update cascade on delete no action;`);
 
+    this.addSql(`alter table if exists "customer_user_password_resets" drop constraint if exists "customer_user_password_resets_user_id_foreign";`);
     this.addSql(`alter table "customer_user_password_resets" add constraint "customer_user_password_resets_user_id_foreign" foreign key ("user_id") references "customer_users" ("id") on update cascade on delete no action;`);
 
+    this.addSql(`alter table if exists "customer_user_roles" drop constraint if exists "customer_user_roles_role_id_foreign";`);
     this.addSql(`alter table "customer_user_roles" add constraint "customer_user_roles_role_id_foreign" foreign key ("role_id") references "customer_roles" ("id") on update cascade on delete no action;`);
+    this.addSql(`alter table if exists "customer_user_roles" drop constraint if exists "customer_user_roles_user_id_foreign";`);
     this.addSql(`alter table "customer_user_roles" add constraint "customer_user_roles_user_id_foreign" foreign key ("user_id") references "customer_users" ("id") on update cascade on delete no action;`);
 
+    this.addSql(`alter table if exists "customer_user_sessions" drop constraint if exists "customer_user_sessions_user_id_foreign";`);
     this.addSql(`alter table "customer_user_sessions" add constraint "customer_user_sessions_user_id_foreign" foreign key ("user_id") references "customer_users" ("id") on update cascade on delete no action;`);
 
+    this.addSql(`alter table if exists "insurance_insurer_contacts" drop constraint if exists "insurance_insurer_contacts_insurer_fk";`);
     this.addSql(`alter table "insurance_insurer_contacts" add constraint "insurance_insurer_contacts_insurer_fk" foreign key ("insurer_id") references "insurance_insurers" ("id") on update cascade on delete cascade;`);
 
+    this.addSql(`alter table if exists "insurance_leads" drop constraint if exists "insurance_leads_linked_policy_id_foreign";`);
     this.addSql(`alter table "insurance_leads" add constraint "insurance_leads_linked_policy_id_foreign" foreign key ("linked_policy_id") references "insurance_policies" ("id") on update cascade on delete set null;`);
 
+    this.addSql(`alter table if exists "insurance_policies" drop constraint if exists "insurance_policies_insurer_contact_fk";`);
     this.addSql(`alter table "insurance_policies" add constraint "insurance_policies_insurer_contact_fk" foreign key ("insurer_contact_id") references "insurance_insurer_contacts" ("id") on update cascade on delete set null;`);
+    this.addSql(`alter table if exists "insurance_policies" drop constraint if exists "insurance_policies_insurer_fk";`);
     this.addSql(`alter table "insurance_policies" add constraint "insurance_policies_insurer_fk" foreign key ("insurer_id") references "insurance_insurers" ("id") on update cascade on delete restrict;`);
 
+    this.addSql(`alter table if exists "sales_return_lines" drop constraint if exists "sales_return_lines_order_line_id_foreign";`);
     this.addSql(`alter table "sales_return_lines" add constraint "sales_return_lines_order_line_id_foreign" foreign key ("order_line_id") references "sales_order_lines" ("id") on update cascade on delete no action;`);
+    this.addSql(`alter table if exists "sales_return_lines" drop constraint if exists "sales_return_lines_return_id_foreign";`);
     this.addSql(`alter table "sales_return_lines" add constraint "sales_return_lines_return_id_foreign" foreign key ("return_id") references "sales_returns" ("id") on update cascade on delete no action;`);
 
+    this.addSql(`alter table if exists "sales_returns" drop constraint if exists "sales_returns_order_id_foreign";`);
     this.addSql(`alter table "sales_returns" add constraint "sales_returns_order_id_foreign" foreign key ("order_id") references "sales_orders" ("id") on update cascade on delete no action;`);
 
-    this.addSql(`alter table "customer_activities" drop constraint if exists "customer_activities_entity_id_foreign";`);
-    this.addSql(`alter table "customer_activities" drop constraint if exists "customer_activities_deal_id_foreign";`);
+    this.addSql(`alter table if exists "customer_activities" drop constraint if exists "customer_activities_entity_id_foreign";`);
+    this.addSql(`alter table if exists "customer_activities" drop constraint if exists "customer_activities_deal_id_foreign";`);
 
-    this.addSql(`alter table "customer_addresses" drop constraint if exists "customer_addresses_entity_id_foreign";`);
+    this.addSql(`alter table if exists "customer_addresses" drop constraint if exists "customer_addresses_entity_id_foreign";`);
 
-    this.addSql(`alter table "customer_comments" drop constraint if exists "customer_comments_entity_id_foreign";`);
-    this.addSql(`alter table "customer_comments" drop constraint if exists "customer_comments_deal_id_foreign";`);
+    this.addSql(`alter table if exists "customer_comments" drop constraint if exists "customer_comments_entity_id_foreign";`);
+    this.addSql(`alter table if exists "customer_comments" drop constraint if exists "customer_comments_deal_id_foreign";`);
 
-    this.addSql(`alter table "customer_companies" drop constraint if exists "customer_companies_entity_id_foreign";`);
+    this.addSql(`alter table if exists "customer_companies" drop constraint if exists "customer_companies_entity_id_foreign";`);
 
-    this.addSql(`alter table "customer_deal_companies" drop constraint if exists "customer_deal_companies_deal_id_foreign";`);
-    this.addSql(`alter table "customer_deal_companies" drop constraint if exists "customer_deal_companies_company_entity_id_foreign";`);
+    this.addSql(`alter table if exists "customer_deal_companies" drop constraint if exists "customer_deal_companies_deal_id_foreign";`);
+    this.addSql(`alter table if exists "customer_deal_companies" drop constraint if exists "customer_deal_companies_company_entity_id_foreign";`);
 
-    this.addSql(`alter table "customer_deal_people" drop constraint if exists "customer_deal_people_deal_id_foreign";`);
-    this.addSql(`alter table "customer_deal_people" drop constraint if exists "customer_deal_people_person_entity_id_foreign";`);
+    this.addSql(`alter table if exists "customer_deal_people" drop constraint if exists "customer_deal_people_deal_id_foreign";`);
+    this.addSql(`alter table if exists "customer_deal_people" drop constraint if exists "customer_deal_people_person_entity_id_foreign";`);
 
-    this.addSql(`alter table "customer_people" drop constraint if exists "customer_people_entity_id_foreign";`);
-    this.addSql(`alter table "customer_people" drop constraint if exists "customer_people_company_entity_id_foreign";`);
+    this.addSql(`alter table if exists "customer_people" drop constraint if exists "customer_people_entity_id_foreign";`);
+    this.addSql(`alter table if exists "customer_people" drop constraint if exists "customer_people_company_entity_id_foreign";`);
 
-    this.addSql(`alter table "customer_tag_assignments" drop constraint if exists "customer_tag_assignments_tag_id_foreign";`);
-    this.addSql(`alter table "customer_tag_assignments" drop constraint if exists "customer_tag_assignments_entity_id_foreign";`);
+    this.addSql(`alter table if exists "customer_tag_assignments" drop constraint if exists "customer_tag_assignments_tag_id_foreign";`);
+    this.addSql(`alter table if exists "customer_tag_assignments" drop constraint if exists "customer_tag_assignments_entity_id_foreign";`);
 
-    this.addSql(`alter table "customer_todo_links" drop constraint if exists "customer_todo_links_entity_id_foreign";`);
+    this.addSql(`alter table if exists "customer_todo_links" drop constraint if exists "customer_todo_links_entity_id_foreign";`);
 
     this.addSql(`alter table "customer_entities" add constraint "customer_entities_referral_code_scope_unique" unique ("organization_id", "tenant_id", "referral_code");`);
   }

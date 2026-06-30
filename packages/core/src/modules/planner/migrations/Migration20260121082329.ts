@@ -13,9 +13,9 @@ export class Migration20260121082329 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`drop index "planner_availability_rule_sets_tenant_org_idx";`);
-    this.addSql(`drop index "planner_availability_rules_tenant_org_idx";`);
-    this.addSql(`drop index "planner_availability_rules_subject_idx";`);
+    this.addSql(`drop index if exists "planner_availability_rule_sets_tenant_org_idx";`);
+    this.addSql(`drop index if exists "planner_availability_rules_tenant_org_idx";`);
+    this.addSql(`drop index if exists "planner_availability_rules_subject_idx";`);
     this.addSql(`drop table "planner_availability_rule_sets";`);
     this.addSql(`drop table "planner_availability_rules";`);
   }

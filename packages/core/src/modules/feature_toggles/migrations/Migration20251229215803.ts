@@ -19,15 +19,17 @@ export class Migration20251229215803 extends Migration {
     this.addSql(`create index "feature_toggle_overrides_org_idx" on "feature_toggle_overrides" ("organization_id");`);
     this.addSql(`alter table "feature_toggle_overrides" add constraint "feature_toggle_overrides_toggle_org_unique" unique ("toggle_id", "organization_id");`);
 
+    this.addSql(`alter table if exists "feature_toggle_audit_logs" drop constraint if exists "feature_toggle_audit_logs_toggle_id_foreign";`);
     this.addSql(`alter table "feature_toggle_audit_logs" add constraint "feature_toggle_audit_logs_toggle_id_foreign" foreign key ("toggle_id") references "feature_toggles" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "feature_toggle_overrides" drop constraint if exists "feature_toggle_overrides_toggle_id_foreign";`);
     this.addSql(`alter table "feature_toggle_overrides" add constraint "feature_toggle_overrides_toggle_id_foreign" foreign key ("toggle_id") references "feature_toggles" ("id") on update cascade;`);
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "feature_toggle_audit_logs" drop constraint "feature_toggle_audit_logs_toggle_id_foreign";`);
+    this.addSql(`alter table if exists "feature_toggle_audit_logs" drop constraint if exists "feature_toggle_audit_logs_toggle_id_foreign";`);
 
-    this.addSql(`alter table "feature_toggle_overrides" drop constraint "feature_toggle_overrides_toggle_id_foreign";`);
+    this.addSql(`alter table if exists "feature_toggle_overrides" drop constraint if exists "feature_toggle_overrides_toggle_id_foreign";`);
   }
 
 }

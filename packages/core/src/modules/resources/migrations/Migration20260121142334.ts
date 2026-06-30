@@ -12,8 +12,10 @@ export class Migration20260121142334 extends Migration {
     this.addSql(`create index "resources_resource_comments_tenant_org_idx" on "resources_resource_comments" ("tenant_id", "organization_id");`);
     this.addSql(`create index "resources_resource_comments_resource_idx" on "resources_resource_comments" ("resource_id");`);
 
+    this.addSql(`alter table if exists "resources_resource_activities" drop constraint if exists "resources_resource_activities_resource_id_foreign";`);
     this.addSql(`alter table "resources_resource_activities" add constraint "resources_resource_activities_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "resources_resource_comments" drop constraint if exists "resources_resource_comments_resource_id_foreign";`);
     this.addSql(`alter table "resources_resource_comments" add constraint "resources_resource_comments_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade;`);
   }
 

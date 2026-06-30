@@ -11,13 +11,16 @@ export class Migration20251126080655 extends Migration {
     this.addSql(`create index "sales_document_tag_assignments_scope_idx" on "sales_document_tag_assignments" ("organization_id", "tenant_id");`);
     this.addSql(`alter table "sales_document_tag_assignments" add constraint "sales_document_tag_assignments_unique" unique ("tag_id", "document_id", "document_kind");`);
 
+    this.addSql(`alter table if exists "sales_document_tag_assignments" drop constraint if exists "sales_document_tag_assignments_tag_id_foreign";`);
     this.addSql(`alter table "sales_document_tag_assignments" add constraint "sales_document_tag_assignments_tag_id_foreign" foreign key ("tag_id") references "sales_document_tags" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "sales_document_tag_assignments" drop constraint if exists "sales_document_tag_assignments_order_id_foreign";`);
     this.addSql(`alter table "sales_document_tag_assignments" add constraint "sales_document_tag_assignments_order_id_foreign" foreign key ("order_id") references "sales_orders" ("id") on update cascade on delete set null;`);
+    this.addSql(`alter table if exists "sales_document_tag_assignments" drop constraint if exists "sales_document_tag_assignments_quote_id_foreign";`);
     this.addSql(`alter table "sales_document_tag_assignments" add constraint "sales_document_tag_assignments_quote_id_foreign" foreign key ("quote_id") references "sales_quotes" ("id") on update cascade on delete set null;`);
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "sales_document_tag_assignments" drop constraint "sales_document_tag_assignments_tag_id_foreign";`);
+    this.addSql(`alter table if exists "sales_document_tag_assignments" drop constraint if exists "sales_document_tag_assignments_tag_id_foreign";`);
   }
 
 }

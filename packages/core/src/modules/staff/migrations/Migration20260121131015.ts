@@ -16,10 +16,13 @@ export class Migration20260121131015 extends Migration {
     this.addSql(`create index "staff_team_member_comments_tenant_org_idx" on "staff_team_member_comments" ("tenant_id", "organization_id");`);
     this.addSql(`create index "staff_team_member_comments_member_idx" on "staff_team_member_comments" ("member_id");`);
 
+    this.addSql(`alter table if exists "staff_team_member_activities" drop constraint if exists "staff_team_member_activities_member_id_foreign";`);
     this.addSql(`alter table "staff_team_member_activities" add constraint "staff_team_member_activities_member_id_foreign" foreign key ("member_id") references "staff_team_members" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "staff_team_member_addresses" drop constraint if exists "staff_team_member_addresses_member_id_foreign";`);
     this.addSql(`alter table "staff_team_member_addresses" add constraint "staff_team_member_addresses_member_id_foreign" foreign key ("member_id") references "staff_team_members" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "staff_team_member_comments" drop constraint if exists "staff_team_member_comments_member_id_foreign";`);
     this.addSql(`alter table "staff_team_member_comments" add constraint "staff_team_member_comments_member_id_foreign" foreign key ("member_id") references "staff_team_members" ("id") on update cascade;`);
   }
 

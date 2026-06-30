@@ -2,6 +2,7 @@ import {
   sanitizeModuleId,
   validateTableName,
   makeConstraintDropsIdempotent,
+  makeMigrationFileIdempotent,
   dbGreenfield,
 } from '../commands'
 
@@ -89,16 +90,24 @@ describe('db commands security', () => {
 })
 
 describe('makeConstraintDropsIdempotent', () => {
-  it('adds IF EXISTS to standard drop constraint statements', () => {
+  it('adds IF EXISTS to table and constraint for standard drop constraint statements', () => {
     const sql = 'alter table "users" drop constraint "fk_user_org";'
 
     const result = makeConstraintDropsIdempotent(sql)
 
-    expect(result).toBe('alter table "users" drop constraint if exists "fk_user_org";')
+    expect(result).toBe('alter table if exists "users" drop constraint if exists "fk_user_org";')
   })
 
-  it('keeps already idempotent statements unchanged', () => {
+  it('adds IF EXISTS to table when constraint already uses IF EXISTS', () => {
     const sql = 'alter table "users" drop constraint if exists "fk_user_org";'
+
+    const result = makeConstraintDropsIdempotent(sql)
+
+    expect(result).toBe('alter table if exists "users" drop constraint if exists "fk_user_org";')
+  })
+
+  it('keeps fully idempotent statements unchanged', () => {
+    const sql = 'alter table if exists "users" drop constraint if exists "fk_user_org";'
 
     const result = makeConstraintDropsIdempotent(sql)
 
@@ -116,9 +125,9 @@ describe('makeConstraintDropsIdempotent', () => {
     const result = makeConstraintDropsIdempotent(sql)
 
     expect(result).toBe([
-      'alter table "users" drop constraint if exists "fk_user_org";',
-      'alter table orders drop constraint if exists fk_order_user;',
-      'alter table public_logs drop constraint if exists "ck_log_created";',
+      'alter table if exists "users" drop constraint if exists "fk_user_org";',
+      'alter table if exists orders drop constraint if exists fk_order_user;',
+      'alter table if exists public_logs drop constraint if exists "ck_log_created";',
     ].join('\n'))
   })
 
@@ -128,6 +137,27 @@ describe('makeConstraintDropsIdempotent', () => {
     const result = makeConstraintDropsIdempotent(sql)
 
     expect(result).toBe(sql)
+  })
+})
+
+describe('makeMigrationFileIdempotent', () => {
+  it('inserts drop constraint before add constraint in addSql lines', () => {
+    const content = [
+      '    this.addSql(`alter table "customer_deal_people" add constraint "customer_deal_people_deal_id_foreign" foreign key ("deal_id") references "customer_deals" ("id") on update cascade;`);',
+    ].join('\n')
+
+    const result = makeMigrationFileIdempotent(content)
+
+    expect(result).toContain('drop constraint if exists "customer_deal_people_deal_id_foreign"')
+    expect(result).toContain('add constraint "customer_deal_people_deal_id_foreign" foreign key')
+  })
+
+  it('makes drop index idempotent', () => {
+    const content = '    this.addSql(`drop index "customer_entities_referral_code_scope_unique";`);'
+
+    const result = makeMigrationFileIdempotent(content)
+
+    expect(result).toBe('    this.addSql(`drop index if exists "customer_entities_referral_code_scope_unique";`);')
   })
 })
 

@@ -9,8 +9,8 @@ export class Migration20260220164228 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`drop index "record_locks_active_scope_tenant_unique";`);
-    this.addSql(`drop index "record_locks_active_scope_org_unique";`);
+    this.addSql(`drop index if exists "record_locks_active_scope_tenant_unique";`);
+    this.addSql(`drop index if exists "record_locks_active_scope_org_unique";`);
     this.addSql(`alter table "record_locks" drop column "locked_by_ip";`);
   }
 

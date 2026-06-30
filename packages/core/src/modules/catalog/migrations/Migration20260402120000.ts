@@ -62,7 +62,7 @@ export class Migration20260402120000 extends Migration {
         );
     `)
     this.addSql(
-      `alter table "catalog_products" drop constraint if exists "catalog_products_service_line_id_foreign";`,
+      `alter table if exists "catalog_products" drop constraint if exists "catalog_products_service_line_id_foreign";`,
     )
     this.addSql(`alter table "catalog_products" drop column if exists "service_line_id";`)
   }

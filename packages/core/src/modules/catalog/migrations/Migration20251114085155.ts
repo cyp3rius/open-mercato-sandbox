@@ -8,11 +8,12 @@ export class Migration20251114085155 extends Migration {
     this.addSql(`alter table "catalog_product_attribute_schemas" add constraint "catalog_product_attribute_schemas_code_unique" unique ("organization_id", "tenant_id", "code");`);
 
     this.addSql(`alter table "catalog_products" add column "attribute_schema_id" uuid null;`);
+    this.addSql(`alter table if exists "catalog_products" drop constraint if exists "catalog_products_attribute_schema_id_foreign";`);
     this.addSql(`alter table "catalog_products" add constraint "catalog_products_attribute_schema_id_foreign" foreign key ("attribute_schema_id") references "catalog_product_attribute_schemas" ("id") on update cascade on delete set null;`);
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "catalog_products" drop constraint "catalog_products_attribute_schema_id_foreign";`);
+    this.addSql(`alter table if exists "catalog_products" drop constraint if exists "catalog_products_attribute_schema_id_foreign";`);
 
     this.addSql(`alter table "catalog_products" drop column "attribute_schema_id";`);
   }

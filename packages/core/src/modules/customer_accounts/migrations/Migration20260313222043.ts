@@ -34,17 +34,24 @@ export class Migration20260313222043 extends Migration {
     this.addSql(`create table "customer_user_sessions" ("id" uuid not null default gen_random_uuid(), "user_id" uuid not null, "token_hash" text not null, "ip_address" text null, "user_agent" text null, "expires_at" timestamptz not null, "last_used_at" timestamptz null, "created_at" timestamptz not null, "deleted_at" timestamptz null, constraint "customer_user_sessions_pkey" primary key ("id"));`);
     this.addSql(`create index "customer_user_sessions_token_hash_idx" on "customer_user_sessions" ("token_hash");`);
 
+    this.addSql(`alter table if exists "customer_role_acls" drop constraint if exists "customer_role_acls_role_id_foreign";`);
     this.addSql(`alter table "customer_role_acls" add constraint "customer_role_acls_role_id_foreign" foreign key ("role_id") references "customer_roles" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "customer_user_acls" drop constraint if exists "customer_user_acls_user_id_foreign";`);
     this.addSql(`alter table "customer_user_acls" add constraint "customer_user_acls_user_id_foreign" foreign key ("user_id") references "customer_users" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "customer_user_email_verifications" drop constraint if exists "customer_user_email_verifications_user_id_foreign";`);
     this.addSql(`alter table "customer_user_email_verifications" add constraint "customer_user_email_verifications_user_id_foreign" foreign key ("user_id") references "customer_users" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "customer_user_password_resets" drop constraint if exists "customer_user_password_resets_user_id_foreign";`);
     this.addSql(`alter table "customer_user_password_resets" add constraint "customer_user_password_resets_user_id_foreign" foreign key ("user_id") references "customer_users" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "customer_user_roles" drop constraint if exists "customer_user_roles_user_id_foreign";`);
     this.addSql(`alter table "customer_user_roles" add constraint "customer_user_roles_user_id_foreign" foreign key ("user_id") references "customer_users" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "customer_user_roles" drop constraint if exists "customer_user_roles_role_id_foreign";`);
     this.addSql(`alter table "customer_user_roles" add constraint "customer_user_roles_role_id_foreign" foreign key ("role_id") references "customer_roles" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "customer_user_sessions" drop constraint if exists "customer_user_sessions_user_id_foreign";`);
     this.addSql(`alter table "customer_user_sessions" add constraint "customer_user_sessions_user_id_foreign" foreign key ("user_id") references "customer_users" ("id") on update cascade;`);
   }
 

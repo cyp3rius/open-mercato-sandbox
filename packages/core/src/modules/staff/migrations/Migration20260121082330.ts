@@ -14,9 +14,9 @@ export class Migration20260121082330 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`drop index "staff_team_roles_tenant_org_idx";`);
-    this.addSql(`drop index "staff_team_members_tenant_org_idx";`);
-    this.addSql(`drop index "staff_teams_tenant_org_idx";`);
+    this.addSql(`drop index if exists "staff_team_roles_tenant_org_idx";`);
+    this.addSql(`drop index if exists "staff_team_members_tenant_org_idx";`);
+    this.addSql(`drop index if exists "staff_teams_tenant_org_idx";`);
     this.addSql(`drop table "staff_team_roles";`);
     this.addSql(`drop table "staff_team_members";`);
     this.addSql(`drop table "staff_teams";`);

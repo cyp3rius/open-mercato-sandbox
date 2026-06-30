@@ -7,7 +7,7 @@ export class Migration20260303173020 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`drop index "inbox_discrepancies_organization_id_tenant_id_index";`);
+    this.addSql(`drop index if exists "inbox_discrepancies_organization_id_tenant_id_index";`);
   }
 
 }

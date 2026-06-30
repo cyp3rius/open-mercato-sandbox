@@ -8,7 +8,7 @@ export class Migration20260224000000_sso_external_id extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "sso_identities" drop constraint if exists "sso_identities_config_external_id_unique";`);
+    this.addSql(`alter table if exists "sso_identities" drop constraint if exists "sso_identities_config_external_id_unique";`);
     this.addSql(`alter table "sso_identities" drop column if exists "external_id";`);
   }
 

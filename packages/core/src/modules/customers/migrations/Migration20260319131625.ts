@@ -8,6 +8,7 @@ export class Migration20260319131625 extends Migration {
     this.addSql(`create index "customer_interactions_org_tenant_status_idx" on "customer_interactions" ("organization_id", "tenant_id", "status", "scheduled_at");`);
     this.addSql(`create index "customer_interactions_entity_status_scheduled_idx" on "customer_interactions" ("entity_id", "status", "scheduled_at", "created_at");`);
 
+    this.addSql(`alter table if exists "customer_interactions" drop constraint if exists "customer_interactions_entity_id_foreign";`);
     this.addSql(`alter table "customer_interactions" add constraint "customer_interactions_entity_id_foreign" foreign key ("entity_id") references "customer_entities" ("id") on update cascade;`);
   }
 

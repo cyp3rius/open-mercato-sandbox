@@ -8,6 +8,7 @@ export class Migration20260121174749 extends Migration {
     this.addSql(`create index "staff_leave_requests_member_idx" on "staff_leave_requests" ("member_id");`);
     this.addSql(`create index "staff_leave_requests_tenant_org_idx" on "staff_leave_requests" ("tenant_id", "organization_id");`);
 
+    this.addSql(`alter table if exists "staff_leave_requests" drop constraint if exists "staff_leave_requests_member_id_foreign";`);
     this.addSql(`alter table "staff_leave_requests" add constraint "staff_leave_requests_member_id_foreign" foreign key ("member_id") references "staff_team_members" ("id") on update cascade;`);
   }
 

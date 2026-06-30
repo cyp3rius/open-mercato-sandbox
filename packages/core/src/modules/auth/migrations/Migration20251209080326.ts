@@ -8,7 +8,7 @@ export class Migration20251209080326 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`drop index "users_email_hash_idx";`);
+    this.addSql(`drop index if exists "users_email_hash_idx";`);
     this.addSql(`alter table "users" drop column "email_hash";`);
   }
 

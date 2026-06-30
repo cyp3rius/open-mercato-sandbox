@@ -11,14 +11,15 @@ export class Migration20251115204549 extends Migration {
 
     this.addSql(`alter table "catalog_product_prices" alter column "kind" set default 'regular';`);
     this.addSql(`alter table "catalog_product_prices" alter column "price_kind_id" set not null;`);
-    this.addSql(`alter table "catalog_product_prices" drop constraint if exists "catalog_product_prices_unique";`);
+    this.addSql(`alter table if exists "catalog_product_prices" drop constraint if exists "catalog_product_prices_unique";`);
+    this.addSql(`alter table if exists "catalog_product_prices" drop constraint if exists "catalog_product_prices_price_kind_id_foreign";`);
     this.addSql(`alter table "catalog_product_prices" add constraint "catalog_product_prices_price_kind_id_foreign" foreign key ("price_kind_id") references "catalog_price_kinds" ("id") on update cascade;`);
     this.addSql(`alter table "catalog_product_prices" add constraint "catalog_product_prices_unique" unique ("variant_id", "organization_id", "tenant_id", "currency_code", "price_kind_id", "min_quantity");`);
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "catalog_product_prices" drop constraint if exists "catalog_product_prices_unique";`);
-    this.addSql(`alter table "catalog_product_prices" drop constraint if exists "catalog_product_prices_price_kind_id_foreign";`);
+    this.addSql(`alter table if exists "catalog_product_prices" drop constraint if exists "catalog_product_prices_unique";`);
+    this.addSql(`alter table if exists "catalog_product_prices" drop constraint if exists "catalog_product_prices_price_kind_id_foreign";`);
     this.addSql(`alter table "catalog_product_prices" alter column "kind" set default 'list';`);
 
     this.addSql(`alter table "catalog_product_prices" drop column "price_kind_id";`);

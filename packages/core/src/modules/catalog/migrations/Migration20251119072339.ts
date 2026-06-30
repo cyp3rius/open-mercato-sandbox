@@ -11,7 +11,9 @@ export class Migration20251119072339 extends Migration {
     this.addSql(`create index "catalog_product_tag_assignments_scope_idx" on "catalog_product_tag_assignments" ("organization_id", "tenant_id");`);
     this.addSql(`alter table "catalog_product_tag_assignments" add constraint "catalog_product_tag_assignments_unique" unique ("product_id", "tag_id");`);
 
+    this.addSql(`alter table if exists "catalog_product_tag_assignments" drop constraint if exists "catalog_product_tag_assignments_product_id_foreign";`);
     this.addSql(`alter table "catalog_product_tag_assignments" add constraint "catalog_product_tag_assignments_product_id_foreign" foreign key ("product_id") references "catalog_products" ("id") on update cascade on delete cascade;`);
+    this.addSql(`alter table if exists "catalog_product_tag_assignments" drop constraint if exists "catalog_product_tag_assignments_tag_id_foreign";`);
     this.addSql(`alter table "catalog_product_tag_assignments" add constraint "catalog_product_tag_assignments_tag_id_foreign" foreign key ("tag_id") references "catalog_product_tags" ("id") on update cascade on delete cascade;`);
 
     this.addSql(`
@@ -27,7 +29,7 @@ export class Migration20251119072339 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "catalog_product_tag_assignments" drop constraint "catalog_product_tag_assignments_tag_id_foreign";`);
+    this.addSql(`alter table if exists "catalog_product_tag_assignments" drop constraint if exists "catalog_product_tag_assignments_tag_id_foreign";`);
   }
 
 }

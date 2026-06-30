@@ -10,11 +10,12 @@ export class Migration20251030150038 extends Migration {
     this.addSql(`create index "dictionary_entries_scope_idx" on "dictionary_entries" ("dictionary_id", "organization_id", "tenant_id");`);
     this.addSql(`alter table "dictionary_entries" add constraint "dictionary_entries_unique" unique ("dictionary_id", "organization_id", "tenant_id", "normalized_value");`);
 
+    this.addSql(`alter table if exists "dictionary_entries" drop constraint if exists "dictionary_entries_dictionary_id_foreign";`);
     this.addSql(`alter table "dictionary_entries" add constraint "dictionary_entries_dictionary_id_foreign" foreign key ("dictionary_id") references "dictionaries" ("id") on update cascade;`);
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "dictionary_entries" drop constraint "dictionary_entries_dictionary_id_foreign";`);
+    this.addSql(`alter table if exists "dictionary_entries" drop constraint if exists "dictionary_entries_dictionary_id_foreign";`);
 
     this.addSql(`drop table if exists "dictionaries" cascade;`);
 

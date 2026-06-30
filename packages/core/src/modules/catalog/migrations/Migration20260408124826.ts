@@ -60,7 +60,7 @@ export class Migration20260408124826 extends Migration {
           where conname = 'catalog_products_service_line_id_foreign'
             and conrelid = 'catalog_products'::regclass
         ) then
-          alter table "catalog_products" drop constraint "catalog_products_service_line_id_foreign";
+          alter table if exists "catalog_products" drop constraint if exists "catalog_products_service_line_id_foreign";
         end if;
       end
       $$;

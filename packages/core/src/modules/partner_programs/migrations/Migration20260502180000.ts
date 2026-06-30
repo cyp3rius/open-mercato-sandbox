@@ -73,7 +73,7 @@ DO $migration$ BEGIN
   IF EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'partner_programs_memberships_program_id_foreign'
   ) THEN
-    ALTER TABLE "partner_programs_memberships" DROP CONSTRAINT "partner_programs_memberships_program_id_foreign";
+    alter table if exists "partner_programs_memberships" drop constraint if exists "partner_programs_memberships_program_id_foreign";
   END IF;
 END $migration$;
 `)

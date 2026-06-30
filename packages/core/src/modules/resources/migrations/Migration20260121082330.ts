@@ -17,17 +17,19 @@ export class Migration20260121082330 extends Migration {
     this.addSql(`create table "resources_resource_types" ("id" uuid not null default gen_random_uuid(), "tenant_id" uuid not null, "organization_id" uuid not null, "name" text not null, "description" text null, "appearance_icon" text null, "appearance_color" text null, "created_at" timestamptz not null, "updated_at" timestamptz not null, "deleted_at" timestamptz null, constraint "resources_resource_types_pkey" primary key ("id"));`);
     this.addSql(`create index "resources_resource_types_tenant_org_idx" on "resources_resource_types" ("tenant_id", "organization_id");`);
 
+    this.addSql(`alter table if exists "resources_resource_tag_assignments" drop constraint if exists "resources_resource_tag_assignments_tag_id_foreign";`);
     this.addSql(`alter table "resources_resource_tag_assignments" add constraint "resources_resource_tag_assignments_tag_id_foreign" foreign key ("tag_id") references "resources_resource_tags" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "resources_resource_tag_assignments" drop constraint if exists "resources_resource_tag_assignments_resource_id_foreign";`);
     this.addSql(`alter table "resources_resource_tag_assignments" add constraint "resources_resource_tag_assignments_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade;`);
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "resources_resource_tag_assignments" drop constraint "resources_resource_tag_assignments_resource_id_foreign";`);
-    this.addSql(`alter table "resources_resource_tag_assignments" drop constraint "resources_resource_tag_assignments_tag_id_foreign";`);
-    this.addSql(`drop index "resources_resource_tag_assignments_scope_idx";`);
-    this.addSql(`drop index "resources_resource_tags_scope_idx";`);
-    this.addSql(`drop index "resources_resources_tenant_org_idx";`);
-    this.addSql(`drop index "resources_resource_types_tenant_org_idx";`);
+    this.addSql(`alter table if exists "resources_resource_tag_assignments" drop constraint if exists "resources_resource_tag_assignments_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_tag_assignments" drop constraint if exists "resources_resource_tag_assignments_tag_id_foreign";`);
+    this.addSql(`drop index if exists "resources_resource_tag_assignments_scope_idx";`);
+    this.addSql(`drop index if exists "resources_resource_tags_scope_idx";`);
+    this.addSql(`drop index if exists "resources_resources_tenant_org_idx";`);
+    this.addSql(`drop index if exists "resources_resource_types_tenant_org_idx";`);
     this.addSql(`drop table "resources_resource_tag_assignments";`);
     this.addSql(`drop table "resources_resource_tags";`);
     this.addSql(`drop table "resources_resources";`);

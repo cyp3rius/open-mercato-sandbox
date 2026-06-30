@@ -7,6 +7,7 @@ export class Migration20260218225422 extends Migration {
     this.addSql(`create index "catalog_product_unit_conversions_scope_idx" on "catalog_product_unit_conversions" ("organization_id", "tenant_id", "product_id");`);
     this.addSql(`alter table "catalog_product_unit_conversions" add constraint "catalog_product_unit_conversions_unique" unique ("product_id", "unit_code");`);
 
+    this.addSql(`alter table if exists "catalog_product_unit_conversions" drop constraint if exists "catalog_product_unit_conversions_product_id_foreign";`);
     this.addSql(`alter table "catalog_product_unit_conversions" add constraint "catalog_product_unit_conversions_product_id_foreign" foreign key ("product_id") references "catalog_products" ("id") on update cascade on delete cascade;`);
 
     this.addSql(`alter table "catalog_products" add column "default_sales_unit" text null, add column "default_sales_unit_quantity" numeric(18,6) not null default '1', add column "uom_rounding_scale" smallint not null default 4, add column "uom_rounding_mode" text not null default 'half_up', add column "unit_price_enabled" boolean not null default false, add column "unit_price_reference_unit" text null, add column "unit_price_base_quantity" numeric(18,6) null;`);

@@ -3,18 +3,19 @@ import { Migration } from '@mikro-orm/migrations';
 export class Migration20260504075647 extends Migration {
 
   override async up(): Promise<void> {
-    this.addSql(`alter table "partner_programs_memberships" drop constraint "partner_programs_memberships_program_id_foreign";`);
+    this.addSql(`alter table if exists "partner_programs_memberships" drop constraint if exists "partner_programs_memberships_program_id_foreign";`);
 
-    this.addSql(`alter table "procurement_processes" drop constraint "procurement_processes_refinancing_line_item_id_foreign";`);
+    this.addSql(`alter table if exists "procurement_processes" drop constraint if exists "procurement_processes_refinancing_line_item_id_foreign";`);
 
-    this.addSql(`alter table "resources_resource_financing_profiles" drop constraint "resources_resource_financing_profiles_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_financing_profiles" drop constraint if exists "resources_resource_financing_profiles_resource_id_foreign";`);
 
-    this.addSql(`alter table "resources_resource_gallery_items" drop constraint "resources_resource_gallery_items_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_gallery_items" drop constraint if exists "resources_resource_gallery_items_resource_id_foreign";`);
 
-    this.addSql(`alter table "cases_timeline_events" drop constraint "cases_timeline_events_case_id_foreign";`);
+    this.addSql(`alter table if exists "cases_timeline_events" drop constraint if exists "cases_timeline_events_case_id_foreign";`);
 
-    this.addSql(`drop index "cases_cases_insurance_policy_idx";`);
+    this.addSql(`drop index if exists "cases_cases_insurance_policy_idx";`);
 
+    this.addSql(`alter table if exists "cases_timeline_events" drop constraint if exists "cases_timeline_events_case_id_foreign";`);
     this.addSql(`alter table "cases_timeline_events" add constraint "cases_timeline_events_case_id_foreign" foreign key ("case_id") references "cases_cases" ("id") on update cascade;`);
   }
 
@@ -939,18 +940,23 @@ export class Migration20260504075647 extends Migration {
     this.addSql(`create index "workflow_instances_status_tenant_idx" on "workflow_instances" ("status", "tenant_id");`);
     this.addSql(`create index "workflow_instances_tenant_org_idx" on "workflow_instances" ("tenant_id", "organization_id");`);
 
+    this.addSql(`alter table if exists "partner_programs_memberships" drop constraint if exists "partner_programs_memberships_program_id_foreign";`);
     this.addSql(`alter table "partner_programs_memberships" add constraint "partner_programs_memberships_program_id_foreign" foreign key ("program_id") references "partner_programs" ("id") on update cascade on delete cascade;`);
 
+    this.addSql(`alter table if exists "procurement_processes" drop constraint if exists "procurement_processes_refinancing_line_item_id_foreign";`);
     this.addSql(`alter table "procurement_processes" add constraint "procurement_processes_refinancing_line_item_id_foreign" foreign key ("refinancing_line_item_id") references "procurement_process_line_items" ("id") on update cascade on delete set null;`);
 
+    this.addSql(`alter table if exists "resources_resource_financing_profiles" drop constraint if exists "resources_resource_financing_profiles_resource_id_foreign";`);
     this.addSql(`alter table "resources_resource_financing_profiles" add constraint "resources_resource_financing_profiles_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade on delete cascade;`);
 
+    this.addSql(`alter table if exists "resources_resource_gallery_items" drop constraint if exists "resources_resource_gallery_items_resource_id_foreign";`);
     this.addSql(`alter table "resources_resource_gallery_items" add constraint "resources_resource_gallery_items_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade on delete cascade;`);
 
-    this.addSql(`alter table "cases_timeline_events" drop constraint "cases_timeline_events_case_id_foreign";`);
+    this.addSql(`alter table if exists "cases_timeline_events" drop constraint if exists "cases_timeline_events_case_id_foreign";`);
 
     this.addSql(`create index "cases_cases_insurance_policy_idx" on "cases_cases" ("insurance_policy_id");`);
 
+    this.addSql(`alter table if exists "cases_timeline_events" drop constraint if exists "cases_timeline_events_case_id_foreign";`);
     this.addSql(`alter table "cases_timeline_events" add constraint "cases_timeline_events_case_id_foreign" foreign key ("case_id") references "cases_cases" ("id") on update cascade on delete cascade;`);
   }
 

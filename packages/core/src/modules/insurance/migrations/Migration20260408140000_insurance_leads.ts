@@ -35,7 +35,7 @@ export class Migration20260408140000_insurance_leads extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "insurance_leads" drop constraint if exists "insurance_leads_linked_policy_id_foreign";`)
+    this.addSql(`alter table if exists "insurance_leads" drop constraint if exists "insurance_leads_linked_policy_id_foreign";`)
     this.addSql(`drop index if exists "insurance_leads_external_scope_unique";`)
     this.addSql(`drop index if exists "insurance_leads_scope_idx";`)
     this.addSql(`drop table if exists "insurance_leads" cascade;`)

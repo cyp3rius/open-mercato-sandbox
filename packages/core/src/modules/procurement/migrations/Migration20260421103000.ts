@@ -15,7 +15,7 @@ export class Migration20260421103000 extends Migration {
 
   override async down(): Promise<void> {
     this.addSql(
-      `alter table "procurement_process_suppliers" drop constraint if exists "procurement_process_suppliers_vendor_customer_entity_id_foreign";`,
+      `alter table if exists "procurement_process_suppliers" drop constraint if exists "procurement_process_suppliers_vendor_customer_entity_id_foreign";`,
     )
     this.addSql(`drop index if exists "procurement_process_suppliers_vendor_customer_entity_idx";`)
     this.addSql(

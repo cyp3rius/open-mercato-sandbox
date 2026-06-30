@@ -9,8 +9,8 @@ export class Migration20260207101938 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`drop index "action_logs_parent_resource_idx";`);
-    this.addSql(`drop index "action_logs_resource_idx";`);
+    this.addSql(`drop index if exists "action_logs_parent_resource_idx";`);
+    this.addSql(`drop index if exists "action_logs_resource_idx";`);
     this.addSql(`alter table "action_logs" drop column "parent_resource_kind", drop column "parent_resource_id";`);
   }
 

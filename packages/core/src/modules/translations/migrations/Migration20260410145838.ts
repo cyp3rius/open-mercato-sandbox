@@ -4,7 +4,7 @@ export class Migration20260410145838 extends Migration {
 
   override async up(): Promise<void> {
 
-    this.addSql(`drop index "entity_translations_scope_uq";`);
+    this.addSql(`drop index if exists "entity_translations_scope_uq";`);
 
     this.addSql(`alter table "entity_translations" alter column "translations" drop default;`);
     this.addSql(`alter table "entity_translations" alter column "translations" type jsonb using ("translations"::jsonb);`);

@@ -27,38 +27,46 @@ export class Migration20251030150038 extends Migration {
     this.addSql(`create table "user_sidebar_preferences" ("id" uuid not null default gen_random_uuid(), "user_id" uuid not null, "tenant_id" uuid null, "organization_id" uuid null, "locale" text not null, "settings_json" jsonb null, "created_at" timestamptz not null, "updated_at" timestamptz null, "deleted_at" timestamptz null, constraint "user_sidebar_preferences_pkey" primary key ("id"));`);
     this.addSql(`alter table "user_sidebar_preferences" add constraint "user_sidebar_preferences_user_id_tenant_id_organi_f3f2f_unique" unique ("user_id", "tenant_id", "organization_id", "locale");`);
 
+    this.addSql(`alter table if exists "role_acls" drop constraint if exists "role_acls_role_id_foreign";`);
     this.addSql(`alter table "role_acls" add constraint "role_acls_role_id_foreign" foreign key ("role_id") references "roles" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "role_sidebar_preferences" drop constraint if exists "role_sidebar_preferences_role_id_foreign";`);
     this.addSql(`alter table "role_sidebar_preferences" add constraint "role_sidebar_preferences_role_id_foreign" foreign key ("role_id") references "roles" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "sessions" drop constraint if exists "sessions_user_id_foreign";`);
     this.addSql(`alter table "sessions" add constraint "sessions_user_id_foreign" foreign key ("user_id") references "users" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "password_resets" drop constraint if exists "password_resets_user_id_foreign";`);
     this.addSql(`alter table "password_resets" add constraint "password_resets_user_id_foreign" foreign key ("user_id") references "users" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "user_acls" drop constraint if exists "user_acls_user_id_foreign";`);
     this.addSql(`alter table "user_acls" add constraint "user_acls_user_id_foreign" foreign key ("user_id") references "users" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "user_roles" drop constraint if exists "user_roles_user_id_foreign";`);
     this.addSql(`alter table "user_roles" add constraint "user_roles_user_id_foreign" foreign key ("user_id") references "users" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "user_roles" drop constraint if exists "user_roles_role_id_foreign";`);
     this.addSql(`alter table "user_roles" add constraint "user_roles_role_id_foreign" foreign key ("role_id") references "roles" ("id") on update cascade;`);
 
+    this.addSql(`alter table if exists "user_sidebar_preferences" drop constraint if exists "user_sidebar_preferences_user_id_foreign";`);
     this.addSql(`alter table "user_sidebar_preferences" add constraint "user_sidebar_preferences_user_id_foreign" foreign key ("user_id") references "users" ("id") on update cascade;`);
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "role_acls" drop constraint "role_acls_role_id_foreign";`);
+    this.addSql(`alter table if exists "role_acls" drop constraint if exists "role_acls_role_id_foreign";`);
 
-    this.addSql(`alter table "role_sidebar_preferences" drop constraint "role_sidebar_preferences_role_id_foreign";`);
+    this.addSql(`alter table if exists "role_sidebar_preferences" drop constraint if exists "role_sidebar_preferences_role_id_foreign";`);
 
-    this.addSql(`alter table "user_roles" drop constraint "user_roles_role_id_foreign";`);
+    this.addSql(`alter table if exists "user_roles" drop constraint if exists "user_roles_role_id_foreign";`);
 
-    this.addSql(`alter table "sessions" drop constraint "sessions_user_id_foreign";`);
+    this.addSql(`alter table if exists "sessions" drop constraint if exists "sessions_user_id_foreign";`);
 
-    this.addSql(`alter table "password_resets" drop constraint "password_resets_user_id_foreign";`);
+    this.addSql(`alter table if exists "password_resets" drop constraint if exists "password_resets_user_id_foreign";`);
 
-    this.addSql(`alter table "user_acls" drop constraint "user_acls_user_id_foreign";`);
+    this.addSql(`alter table if exists "user_acls" drop constraint if exists "user_acls_user_id_foreign";`);
 
-    this.addSql(`alter table "user_roles" drop constraint "user_roles_user_id_foreign";`);
+    this.addSql(`alter table if exists "user_roles" drop constraint if exists "user_roles_user_id_foreign";`);
 
-    this.addSql(`alter table "user_sidebar_preferences" drop constraint "user_sidebar_preferences_user_id_foreign";`);
+    this.addSql(`alter table if exists "user_sidebar_preferences" drop constraint if exists "user_sidebar_preferences_user_id_foreign";`);
 
     this.addSql(`drop table if exists "roles" cascade;`);
 

@@ -11,13 +11,15 @@ export class Migration20251118110216 extends Migration {
     this.addSql(`create index "catalog_product_category_assignments_scope_idx" on "catalog_product_category_assignments" ("organization_id", "tenant_id");`);
     this.addSql(`alter table "catalog_product_category_assignments" add constraint "catalog_product_category_assignments_unique" unique ("product_id", "category_id");`);
 
+    this.addSql(`alter table if exists "catalog_product_category_assignments" drop constraint if exists "catalog_product_category_assignments_product_id_foreign";`);
     this.addSql(`alter table "catalog_product_category_assignments" add constraint "catalog_product_category_assignments_product_id_foreign" foreign key ("product_id") references "catalog_products" ("id") on update cascade on delete cascade;`);
+    this.addSql(`alter table if exists "catalog_product_category_assignments" drop constraint if exists "catalog_product_category_assignments_category_id_foreign";`);
     this.addSql(`alter table "catalog_product_category_assignments" add constraint "catalog_product_category_assignments_category_id_foreign" foreign key ("category_id") references "catalog_product_categories" ("id") on update cascade on delete cascade;`);
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "catalog_product_category_assignments" drop constraint "catalog_product_category_assignments_product_id_foreign";`);
-    this.addSql(`alter table "catalog_product_category_assignments" drop constraint "catalog_product_category_assignments_category_id_foreign";`);
+    this.addSql(`alter table if exists "catalog_product_category_assignments" drop constraint if exists "catalog_product_category_assignments_product_id_foreign";`);
+    this.addSql(`alter table if exists "catalog_product_category_assignments" drop constraint if exists "catalog_product_category_assignments_category_id_foreign";`);
 
     this.addSql(`drop table if exists "catalog_product_category_assignments";`);
     this.addSql(`drop table if exists "catalog_product_categories";`);

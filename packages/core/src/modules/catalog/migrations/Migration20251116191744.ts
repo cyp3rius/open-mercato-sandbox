@@ -16,7 +16,7 @@ export class Migration20251116191744 extends Migration {
           where conrelid = 'catalog_product_variant_relations'::regclass
             and conname = 'catalog_product_variant_relations_unique'
         ) then
-          alter table "catalog_product_variant_relations" drop constraint "catalog_product_variant_relations_unique";
+          alter table if exists "catalog_product_variant_relations" drop constraint if exists "catalog_product_variant_relations_unique";
         end if;
 
         if not exists (
@@ -80,7 +80,7 @@ export class Migration20251116191744 extends Migration {
           where conrelid = 'catalog_product_variant_relations'::regclass
             and conname = 'catalog_product_variant_relations_child_product_id_foreign'
         ) then
-          alter table "catalog_product_variant_relations" drop constraint "catalog_product_variant_relations_child_product_id_foreign";
+          alter table if exists "catalog_product_variant_relations" drop constraint if exists "catalog_product_variant_relations_child_product_id_foreign";
         end if;
 
         drop index if exists "catalog_product_variant_relations_child_product_idx";

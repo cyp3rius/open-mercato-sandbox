@@ -3,8 +3,8 @@ import { Migration } from '@mikro-orm/migrations';
 export class Migration20251230151605 extends Migration {
 
   override async up(): Promise<void> {
-    this.addSql(`alter table "exchange_rates" drop constraint "exchange_rates_pair_date_unique";`);
-    this.addSql(`drop index "exchange_rates_pair_idx";`);
+    this.addSql(`alter table if exists "exchange_rates" drop constraint if exists "exchange_rates_pair_date_unique";`);
+    this.addSql(`drop index if exists "exchange_rates_pair_idx";`);
     this.addSql(`alter table "exchange_rates" drop column "expires_at";`);
 
     // Rename effective_date to date
@@ -27,8 +27,8 @@ export class Migration20251230151605 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "exchange_rates" drop constraint "exchange_rates_pair_datetime_source_unique";`);
-    this.addSql(`drop index "exchange_rates_pair_idx";`);
+    this.addSql(`alter table if exists "exchange_rates" drop constraint if exists "exchange_rates_pair_datetime_source_unique";`);
+    this.addSql(`drop index if exists "exchange_rates_pair_idx";`);
 
     this.addSql(`alter table "exchange_rates" add column "expires_at" timestamptz null;`);
     this.addSql(`alter table "exchange_rates" alter column "source" drop not null;`);
