@@ -96,13 +96,7 @@ export default async function Home() {
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <Link className="underline hover:text-primary transition-colors" href="/login">{t('app.page.quickLinks.login', 'Login')}</Link>
           <span className="text-muted-foreground">·</span>
-          <Link className="underline hover:text-primary transition-colors" href="/example">{t('app.page.quickLinks.examplePage', 'Example Page')}</Link>
-          <span className="text-muted-foreground">·</span>
-          <Link className="underline hover:text-primary transition-colors" href="/backend/example">{t('app.page.quickLinks.exampleAdmin', 'Example Admin')}</Link>
-          <span className="text-muted-foreground">·</span>
-          <Link className="underline hover:text-primary transition-colors" href="/backend/todos">{t('app.page.quickLinks.exampleTodos', 'Example Todos with Custom Fields')}</Link>
-          <span className="text-muted-foreground">·</span>
-          <Link className="underline hover:text-primary transition-colors" href="/blog/123">{t('app.page.quickLinks.exampleBlog', 'Example Blog Post')}</Link>
+          <Link className="underline hover:text-primary transition-colors" href="/backend">{t('app.page.quickLinks.backend', 'Backend')}</Link>
         </div>
       </section>
 
