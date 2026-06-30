@@ -55,6 +55,7 @@ module.exports = {
       env: {
         ...fileEnv,
         NODE_ENV: 'production',
+        HOST: fileEnv.HOST || '127.0.0.1',
         PORT: fileEnv.PORT || '3000',
       },
       error_file: path.join(logsDir, 'rsmoto-crm-error.log'),

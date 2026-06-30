@@ -1305,8 +1305,11 @@ export async function run(argv = process.argv) {
           const nextBin = resolveInstalledBinary(nodeModulesBases, 'next/dist/bin/next')
           const mercatoBin = resolveInstalledBinary(nodeModulesBases, '@open-mercato/cli/bin/mercato')
 
+          const listenHost = process.env.HOST?.trim() || '127.0.0.1'
+          const listenPort = process.env.PORT?.trim() || '3000'
+
           // Start Next.js production server
-          const nextProcess = spawn('node', [nextBin, 'start'], {
+          const nextProcess = spawn('node', [nextBin, 'start', '-H', listenHost, '-p', listenPort], {
             stdio: 'inherit',
             env: process.env,
             cwd: appDir,
