@@ -53,19 +53,45 @@ export type NotificationDeliveryStrategy = {
 
 type RegisteredStrategy = NotificationDeliveryStrategy & { priority: number }
 
-const registry: RegisteredStrategy[] = []
+const GLOBAL_KEY = '__openMercatoNotificationDeliveryStrategies__'
+
+function readRegistry(): RegisteredStrategy[] {
+  try {
+    const existing = (globalThis as Record<string, unknown>)[GLOBAL_KEY]
+    if (Array.isArray(existing)) {
+      return existing as RegisteredStrategy[]
+    }
+  } catch {
+    // ignore restricted globalThis environments
+  }
+
+  const registry: RegisteredStrategy[] = []
+  try {
+    ;(globalThis as Record<string, unknown>)[GLOBAL_KEY] = registry
+  } catch {
+    // ignore assignment failures
+  }
+  return registry
+}
 
 export function registerNotificationDeliveryStrategy(
   strategy: NotificationDeliveryStrategy,
   options?: { priority?: number }
 ): void {
   const priority = options?.priority ?? 0
-  registry.push({ ...strategy, priority })
+  const registry = readRegistry()
+  const next: RegisteredStrategy = { ...strategy, priority }
+  const existingIndex = registry.findIndex((entry) => entry.id === strategy.id)
+  if (existingIndex >= 0) {
+    registry[existingIndex] = next
+  } else {
+    registry.push(next)
+  }
   registry.sort((a, b) => b.priority - a.priority)
 }
 
 export function getNotificationDeliveryStrategies(): NotificationDeliveryStrategy[] {
-  return registry
+  return readRegistry()
 }
 
 export type NotificationDeliveryStrategyDescriptor = {
@@ -75,5 +101,5 @@ export type NotificationDeliveryStrategyDescriptor = {
 }
 
 export function listNotificationDeliveryStrategyDescriptors(): NotificationDeliveryStrategyDescriptor[] {
-  return registry.map(({ id, label, defaultEnabled }) => ({ id, label, defaultEnabled }))
+  return readRegistry().map(({ id, label, defaultEnabled }) => ({ id, label, defaultEnabled }))
 }

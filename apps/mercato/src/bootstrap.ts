@@ -56,8 +56,10 @@ import { registerMessageObjectTypes } from '@open-mercato/core/modules/messages/
 import { runBootstrapRegistrations } from '@/.mercato/generated/bootstrap-registrations.generated'
 import { getNotificationTypes } from '@/.mercato/generated/notifications.generated'
 import { registerNotificationTypes } from '@open-mercato/core/modules/notifications/lib/notification-types-registry'
+import { registerNodemailerNotificationDeliveryStrategy } from './modules/mail_delivery/lib/nodemailerNotificationDelivery'
 
-// Register event configs globally (similar to search)
+// Register app-owned delivery strategies before bootstrap (survives duplicate module instances in production bundles).
+registerNodemailerNotificationDeliveryStrategy()
 registerEventModuleConfigs(eventModuleConfigs)
 registerMessageTypes(messageTypes, { replace: true })
 registerMessageObjectTypes(messageObjectTypes, { replace: true })

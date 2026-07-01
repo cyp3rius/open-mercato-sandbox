@@ -4,7 +4,17 @@ import {
 import { resolveFirstEnabledEmailDeliveryStrategy } from '../transactionalEmailDelivery'
 import { DEFAULT_NOTIFICATION_DELIVERY_CONFIG } from '../deliveryConfig'
 
+const REGISTRY_GLOBAL_KEY = '__openMercatoNotificationDeliveryStrategies__'
+
 describe('resolveFirstEnabledEmailDeliveryStrategy', () => {
+  beforeEach(() => {
+    try {
+      delete (globalThis as Record<string, unknown>)[REGISTRY_GLOBAL_KEY]
+    } catch {
+      // ignore
+    }
+  })
+
   it('prefers the first enabled custom strategy by priority', () => {
     registerNotificationDeliveryStrategy(
       {

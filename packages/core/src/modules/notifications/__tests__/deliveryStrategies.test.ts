@@ -1,6 +1,16 @@
 import { type NotificationDeliveryStrategy } from '../lib/deliveryStrategies'
 
+const REGISTRY_GLOBAL_KEY = '__openMercatoNotificationDeliveryStrategies__'
+
 describe('notification delivery strategies', () => {
+  beforeEach(() => {
+    try {
+      delete (globalThis as Record<string, unknown>)[REGISTRY_GLOBAL_KEY]
+    } catch {
+      // ignore
+    }
+  })
+
   it('orders strategies by priority', async () => {
     jest.resetModules()
     const { registerNotificationDeliveryStrategy, getNotificationDeliveryStrategies } = await import('../lib/deliveryStrategies')
