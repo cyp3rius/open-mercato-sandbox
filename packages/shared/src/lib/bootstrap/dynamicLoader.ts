@@ -31,22 +31,31 @@ async function compileAndImport(tsPath: string): Promise<Record<string, unknown>
     // The app root is 2 levels up from .mercato/generated/
     const appRoot = path.dirname(path.dirname(path.dirname(tsPath)))
 
-    // Plugin to resolve @/ alias to app root (works for @app modules)
+    // Plugin to resolve @/ alias to app src (Next.js convention: @/ → src/)
     const aliasPlugin: import('esbuild').Plugin = {
       name: 'alias-resolver',
       setup(build) {
-        // Resolve @/ alias to app root
         build.onResolve({ filter: /^@\// }, (args) => {
-          const resolved = path.join(appRoot, args.path.slice(2))
-          // Try with .ts extension if base path doesn't exist
-          if (!fs.existsSync(resolved) && fs.existsSync(resolved + '.ts')) {
-            return { path: resolved + '.ts' }
+          const relativePath = args.path.slice(2)
+          const candidates = [
+            path.join(appRoot, 'src', relativePath),
+            path.join(appRoot, relativePath),
+          ]
+          for (const base of candidates) {
+            if (fs.existsSync(base + '.ts')) {
+              return { path: base + '.ts' }
+            }
+            if (fs.existsSync(base + '.tsx')) {
+              return { path: base + '.tsx' }
+            }
+            if (fs.existsSync(base) && fs.statSync(base).isDirectory() && fs.existsSync(path.join(base, 'index.ts'))) {
+              return { path: path.join(base, 'index.ts') }
+            }
+            if (fs.existsSync(base)) {
+              return { path: base }
+            }
           }
-          // Also check for /index.ts if it's a directory
-          if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory() && fs.existsSync(path.join(resolved, 'index.ts'))) {
-            return { path: path.join(resolved, 'index.ts') }
-          }
-          return { path: resolved }
+          return { path: path.join(appRoot, 'src', relativePath) }
         })
       },
     }

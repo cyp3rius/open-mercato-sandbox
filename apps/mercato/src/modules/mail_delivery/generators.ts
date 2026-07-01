@@ -13,7 +13,7 @@ ${entriesLiteral ? `  ${entriesLiteral}\n` : ''}]
   bootstrapRegistration: {
     entriesExportName: 'mailDeliveryBootstrapEntries',
     registrationImports: [
-      `import { registerNodemailerNotificationDeliveryStrategy } from '@/modules/mail_delivery/lib/nodemailerNotificationDelivery'`,
+      `import { registerNodemailerNotificationDeliveryStrategy } from '../../src/modules/mail_delivery/lib/nodemailerNotificationDelivery'`,
     ],
     buildCall: () => 'registerNodemailerNotificationDeliveryStrategy()',
   },
