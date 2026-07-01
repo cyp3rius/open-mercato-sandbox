@@ -108,7 +108,7 @@ export default async function handle(payload: NotificationCreatedPayload, ctx: R
   debug('deliver notification event', payload)
   const deliveryConfig = await resolveNotificationDeliveryConfig(ctx, { defaultValue: DEFAULT_NOTIFICATION_DELIVERY_CONFIG })
   if (!deliveryConfig.strategies.email.enabled) {
-    debug('email delivery disabled')
+    debug('resend email channel disabled in notification settings')
   }
 
   const em = ctx.resolve('em') as EntityManager
@@ -201,6 +201,7 @@ export default async function handle(payload: NotificationCreatedPayload, ctx: R
 
   const strategyConfigs = deliveryConfig.strategies.custom ?? {}
   const strategies = getNotificationDeliveryStrategies()
+  debug('custom delivery strategies available', strategies.map((strategy) => strategy.id))
   let customDelivered = false
   for (const strategy of strategies) {
     const strategyConfig = strategyConfigs[strategy.id]
@@ -209,6 +210,7 @@ export default async function handle(payload: NotificationCreatedPayload, ctx: R
       debug('custom delivery disabled', strategy.id)
       continue
     }
+    debug('delivering via custom strategy', strategy.id, { to: recipient.email, panelLink: Boolean(panelLink) })
     try {
       await strategy.deliver({
         notification,

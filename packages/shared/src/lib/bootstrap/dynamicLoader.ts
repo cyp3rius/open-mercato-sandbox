@@ -174,11 +174,34 @@ export async function loadBootstrapData(appRoot?: string): Promise<BootstrapData
  */
 export async function bootstrapFromAppRoot(appRoot?: string): Promise<BootstrapData> {
   const { createBootstrap, waitForAsyncRegistration } = await import('./factory.js')
+  const resolved: AppRoot | null = appRoot
+    ? {
+        generatedDir: path.join(appRoot, '.mercato', 'generated'),
+        appDir: appRoot,
+        mercatoDir: path.join(appRoot, '.mercato'),
+      }
+    : findAppRoot()
   const data = await loadBootstrapData(appRoot)
   const bootstrap = createBootstrap(data)
   bootstrap()
-  // In CLI context, wait for async registrations (UI widgets, search configs, etc.)
   await waitForAsyncRegistration()
+
+  if (resolved) {
+    try {
+      const regsModule = await compileAndImport(
+        path.join(resolved.generatedDir, 'bootstrap-registrations.generated.ts'),
+      )
+      const run = regsModule.runBootstrapRegistrations
+      if (typeof run === 'function') {
+        run()
+      }
+    } catch (error) {
+      console.warn(
+        '[bootstrap] bootstrap registrations failed:',
+        error instanceof Error ? error.message : error,
+      )
+    }
+  }
 
   return data
 }
