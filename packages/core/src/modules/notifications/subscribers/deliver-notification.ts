@@ -26,6 +26,14 @@ function debug(...args: unknown[]): void {
   }
 }
 
+function warnDeliverySkip(reason: string, details?: Record<string, unknown>): void {
+  if (DEBUG) {
+    debug('delivery skip', reason, details)
+    return
+  }
+  console.warn('[notifications] email delivery skipped:', reason, details ?? '')
+}
+
 type NotificationCreatedPayload = {
   notificationId: string
   recipientUserId: string
@@ -123,12 +131,15 @@ export default async function handle(payload: NotificationCreatedPayload, ctx: R
 
   const recipient = (await resolveRecipient(em, notification, encryptionService)) ?? { email: null, name: null }
   if (!recipient?.email) {
-    debug('recipient has no email', notification.recipientUserId)
+    warnDeliverySkip('recipient has no email', {
+      recipientUserId: notification.recipientUserId,
+      organizationId: notification.organizationId ?? null,
+    })
   }
   const { title, body, t } = await resolveNotificationCopy(notification)
   const panelUrl = resolveNotificationPanelUrl(deliveryConfig)
   if (!panelUrl) {
-    debug('missing panelUrl; check appUrl/panelPath settings')
+    warnDeliverySkip('missing panelUrl; set appUrl in notification settings or APP_URL')
   }
 
   const panelLink = panelUrl ? buildPanelLink(panelUrl, notification.id) : null
@@ -149,6 +160,7 @@ export default async function handle(payload: NotificationCreatedPayload, ctx: R
     })
     .filter((action): action is NonNullable<typeof action> => action !== null)
 
+  let resendDelivered = false
   if (deliveryConfig.strategies.email.enabled && recipient?.email && panelLink) {
     const subjectPrefix = deliveryConfig.strategies.email.subjectPrefix?.trim()
     const subject = subjectPrefix ? `${subjectPrefix} ${title}` : title
@@ -176,13 +188,20 @@ export default async function handle(payload: NotificationCreatedPayload, ctx: R
           copy,
         }),
       })
+      resendDelivered = true
     } catch (error) {
       console.error('[notifications] email delivery failed', error)
     }
+  } else if (deliveryConfig.strategies.email.enabled) {
+    warnDeliverySkip('resend channel prerequisites missing', {
+      hasRecipientEmail: Boolean(recipient?.email),
+      hasPanelLink: Boolean(panelLink),
+    })
   }
 
   const strategyConfigs = deliveryConfig.strategies.custom ?? {}
   const strategies = getNotificationDeliveryStrategies()
+  let customDelivered = false
   for (const strategy of strategies) {
     const strategyConfig = strategyConfigs[strategy.id]
     const enabled = strategyConfig?.enabled ?? strategy.defaultEnabled ?? false
@@ -204,8 +223,23 @@ export default async function handle(payload: NotificationCreatedPayload, ctx: R
         resolve: ctx.resolve,
         t,
       })
+      customDelivered = true
     } catch (error) {
       console.error(`[notifications] delivery strategy failed (${strategy.id})`, error)
+    }
+  }
+
+  if (!resendDelivered && !customDelivered && strategies.length === 0) {
+    warnDeliverySkip('no custom delivery strategies registered (check mail_delivery bootstrap on workers)')
+  } else if (!resendDelivered && !customDelivered) {
+    const enabledCustomStrategyIds = strategies
+      .filter((strategy) => {
+        const strategyConfig = strategyConfigs[strategy.id]
+        return strategyConfig?.enabled ?? strategy.defaultEnabled ?? false
+      })
+      .map((strategy) => strategy.id)
+    if (!deliveryConfig.strategies.email.enabled && enabledCustomStrategyIds.length === 0) {
+      warnDeliverySkip('no email delivery channel enabled in notification settings')
     }
   }
 

@@ -51,13 +51,30 @@ function buildPlainText(
   return lines.join('\n')
 }
 
+function warnNodemailerSkip(reason: string, details?: Record<string, unknown>): void {
+  if (process.env.NOTIFICATIONS_DEBUG === 'true') {
+    console.log('[notifications][nodemailer] skip', reason, details)
+    return
+  }
+  console.warn('[notifications][nodemailer] delivery skipped:', reason, details ?? '')
+}
+
 export async function deliverNotificationViaNodemailer(ctx: NotificationDeliveryContext): Promise<void> {
   const emailDisabled =
     parseBooleanWithDefault(process.env.OM_DISABLE_EMAIL_DELIVERY, false) ||
     parseBooleanWithDefault(process.env.OM_TEST_MODE, false)
-  if (emailDisabled) return
+  if (emailDisabled) {
+    warnNodemailerSkip('email delivery disabled by OM_DISABLE_EMAIL_DELIVERY or OM_TEST_MODE')
+    return
+  }
 
-  if (!ctx.recipient.email || !ctx.panelLink) return
+  if (!ctx.recipient.email || !ctx.panelLink) {
+    warnNodemailerSkip('missing recipient email or panel link', {
+      hasRecipientEmail: Boolean(ctx.recipient.email),
+      hasPanelLink: Boolean(ctx.panelLink),
+    })
+    return
+  }
 
   const runtimeConfig = resolveNodemailerStrategyConfig(ctx.config.config)
   const transport = getNodemailerTransport(runtimeConfig)
