@@ -16,6 +16,7 @@ import { BACKEND_TOPBAR_PROFILE_MENU_INJECTION_SPOT_ID } from './injection/spotI
 export type ProfileDropdownProps = {
   email?: string
   displayName?: string
+  profileHref?: string
   changePasswordHref?: string
   notificationsHref?: string
 }
@@ -30,6 +31,7 @@ const localeLabels: Record<Locale, string> = {
 export function ProfileDropdown({
   email,
   displayName,
+  profileHref = '/backend/profile',
   changePasswordHref = '/backend/profile/change-password',
   notificationsHref,
 }: ProfileDropdownProps) {
@@ -114,7 +116,10 @@ export function ProfileDropdown({
 
   const builtInMenuItems = React.useMemo(
     () => {
-      const items: Array<{ id: string; separator?: boolean }> = [{ id: 'change-password' }]
+      const items: Array<{ id: string; separator?: boolean }> = [
+        { id: 'profile' },
+        { id: 'change-password' },
+      ]
       if (notificationsHref) items.push({ id: 'notifications' })
       items.push({ id: 'theme-toggle', separator: true }, { id: 'language' }, { id: 'sign-out', separator: true })
       return items
@@ -178,6 +183,21 @@ export function ProfileDropdown({
 
   const renderBuiltInItem = React.useCallback(
     (id: string) => {
+      if (id === 'profile') {
+        return (
+          <Link
+            key={id}
+            href={profileHref}
+            className={menuItemClass}
+            role="menuitem"
+            onClick={() => setOpen(false)}
+          >
+            <User className="size-4" />
+            <span>{t('ui.profileMenu.profile', 'Profile')}</span>
+          </Link>
+        )
+      }
+
       if (id === 'change-password') {
         return (
           <Link
@@ -299,6 +319,7 @@ export function ProfileDropdown({
       menuItemClass,
       mounted,
       notificationsHref,
+      profileHref,
       t,
     ],
   )

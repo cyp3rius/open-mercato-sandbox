@@ -836,5 +836,17 @@
   "vector.api.errors.purgeFailed": "Error al purgar el índice vectorial",
   "vector.api.errors.reindexFailed": "Reindexación vectorial fallida",
   "vector.api.errors.searchFailed": "Búsqueda vectorial fallida",
-  "vector.api.errors.updateFailed": "No se pudieron actualizar la configuración vectorial."
+  "vector.api.errors.updateFailed": "No se pudieron actualizar la configuración vectorial.",
+  "record_locks.notifications.preferences.conflict_detected": "Conflicto de edición detectado",
+  "record_locks.notifications.preferences.conflict_resolved": "Conflicto resuelto",
+  "record_locks.notifications.preferences.incoming_changes_available": "Cambios entrantes disponibles",
+  "record_locks.notifications.preferences.lock_contended": "Registro abierto por otro usuario",
+  "record_locks.notifications.preferences.lock_force_released": "Bloqueo liberado por la fuerza",
+  "record_locks.notifications.preferences.participant_joined": "Participante se unió al registro",
+  "record_locks.notifications.preferences.participant_left": "Participante abandonó el registro",
+  "record_locks.notifications.preferences.record_deleted": "Registro abierto eliminado",
+  "security.notifications.preferences.mfa_enforcement_deadline": "Registro MFA obligatorio",
+  "security.notifications.preferences.mfa_enrolled": "Método MFA activado",
+  "security.notifications.preferences.mfa_reset": "Métodos MFA restablecidos",
+  "security.notifications.preferences.password_changed": "Contraseña cambiada"
 }

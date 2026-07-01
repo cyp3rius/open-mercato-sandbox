@@ -211,6 +211,7 @@ export default async function handle(
         sender,
         objects,
         attachments,
+        resolve: ctx,
       })
       await emitEmailDeliveryEvent(ctx, 'messages.message.email_sent', {
         messageId: message.id,
@@ -290,6 +291,7 @@ export default async function handle(
       sender,
       objects,
       attachments,
+      resolve: ctx,
     })
     await emitEmailDeliveryEvent(ctx, 'messages.message.email_sent', {
       messageId: message.id,

@@ -95,6 +95,7 @@
   "catalog.nav.group": "Catalog",
   "catalog.notifications.product.lowStock.body": "{productName}{sku, select, other { ({sku})}} is running low on stock ({currentStock} remaining, threshold: {threshold})",
   "catalog.notifications.product.lowStock.title": "Low Stock Alert",
+  "catalog.notifications.preferences.product_low_stock": "Low stock alert",
   "catalog.options.list.title": "Options",
   "catalog.priceKinds.actions.add": "Add price kind",
   "catalog.priceKinds.actions.cancel": "Cancel",

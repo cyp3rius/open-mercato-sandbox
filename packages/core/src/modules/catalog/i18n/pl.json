@@ -95,6 +95,7 @@
   "catalog.nav.group": "Katalog",
   "catalog.notifications.product.lowStock.body": "{productName}{sku, select, other { ({sku})}} ma niski stan magazynowy (pozostało {currentStock}, próg: {threshold})",
   "catalog.notifications.product.lowStock.title": "Alert niskiego stanu magazynowego",
+  "catalog.notifications.preferences.product_low_stock": "Alert niskiego stanu magazynowego",
   "catalog.options.list.title": "Opcje",
   "catalog.priceKinds.actions.add": "Dodaj rodzaj ceny",
   "catalog.priceKinds.actions.cancel": "Anuluj",

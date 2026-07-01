@@ -34,6 +34,18 @@ const events = [
   { id: 'insurance.lead.created', label: 'Lead created', entity: 'lead', category: 'crud' },
   { id: 'insurance.lead.updated', label: 'Lead updated', entity: 'lead', category: 'crud' },
   { id: 'insurance.lead.deleted', label: 'Lead deleted', entity: 'lead', category: 'crud' },
+  {
+    id: 'insurance.policy.created_from_lead',
+    label: 'Policy created from lead',
+    entity: 'policy',
+    category: 'lifecycle',
+  },
+  {
+    id: 'insurance.policy.expiring',
+    label: 'Policy expiring soon',
+    entity: 'policy',
+    category: 'lifecycle',
+  },
 ] as const
 
 export const eventsConfig = createModuleEvents({

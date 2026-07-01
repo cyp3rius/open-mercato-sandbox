@@ -1,4 +1,4 @@
-import { Entity, PrimaryKey, Property, Index, OptionalProps } from '@mikro-orm/core'
+import { Entity, PrimaryKey, Property, Index, OptionalProps, Unique } from '@mikro-orm/core'
 import type { NotificationActionData } from '@open-mercato/shared/modules/notifications/types'
 
 export type NotificationStatus = 'unread' | 'read' | 'actioned' | 'dismissed'
@@ -96,4 +96,31 @@ export class Notification {
 
   @Property({ name: 'organization_id', type: 'uuid', nullable: true })
   organizationId?: string | null
+}
+
+@Entity({ tableName: 'user_notification_preferences' })
+@Unique({ properties: ['userId', 'tenantId', 'notificationType'] })
+export class UserNotificationPreference {
+  [OptionalProps]?: 'enabled' | 'createdAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'user_id', type: 'uuid' })
+  userId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'notification_type', type: 'text' })
+  notificationType!: string
+
+  @Property({ name: 'enabled', type: 'boolean', default: true })
+  enabled: boolean = true
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date(), nullable: true })
+  updatedAt?: Date | null
 }

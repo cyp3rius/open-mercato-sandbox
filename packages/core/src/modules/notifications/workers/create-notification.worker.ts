@@ -4,6 +4,11 @@ import { Notification } from '../data/entities'
 import type { CreateNotificationInput, CreateRoleNotificationInput, CreateFeatureNotificationInput } from '../data/validators'
 import { buildNotificationEntity, emitNotificationCreated, emitNotificationCreatedBatch } from '../lib/notificationFactory'
 import { getRecipientUserIdsForFeature, getRecipientUserIdsForRole } from '../lib/notificationRecipients'
+import {
+  filterRecipientsByNotificationPreferences,
+  resolveRecipientsForNotificationType,
+  shouldDeliverNotification,
+} from '../lib/notificationPreferenceService'
 
 function getKnex(em: EntityManager): Knex {
   return (em.getConnection() as unknown as { getKnex: () => Knex }).getKnex()
@@ -59,6 +64,12 @@ export default async function handle(
     const eventBus = ctx.resolve('eventBus') as { emit: (event: string, payload: unknown) => Promise<void> }
     const { input, tenantId, organizationId } = payload
     const { recipientUserId, ...content } = input
+
+    const canDeliver = await shouldDeliverNotification(em, recipientUserId, tenantId, content.type)
+    if (!canDeliver) {
+      return
+    }
+
     const notification = buildNotificationEntity(em, content, recipientUserId, { tenantId, organizationId })
 
     await em.persistAndFlush(notification)
@@ -71,13 +82,19 @@ export default async function handle(
 
     const knex = getKnex(em)
     const recipientUserIds = await getRecipientUserIdsForRole(knex, tenantId, input.roleId)
-    if (recipientUserIds.length === 0) {
+    const filteredRecipientUserIds = await filterRecipientsByNotificationPreferences(
+      em,
+      tenantId,
+      input.type,
+      recipientUserIds,
+    )
+    if (filteredRecipientUserIds.length === 0) {
       return
     }
 
     const { roleId: _roleId, ...content } = input
     const notifications: Notification[] = []
-    for (const recipientUserId of recipientUserIds) {
+    for (const recipientUserId of filteredRecipientUserIds) {
       const notification = buildNotificationEntity(em, content, recipientUserId, { tenantId, organizationId })
       notifications.push(notification)
     }
@@ -92,14 +109,20 @@ export default async function handle(
 
     const knex = getKnex(em)
     const recipientUserIds = await getRecipientUserIdsForFeature(knex, tenantId, input.requiredFeature)
+    const filteredRecipientUserIds = await filterRecipientsByNotificationPreferences(
+      em,
+      tenantId,
+      input.type,
+      recipientUserIds,
+    )
 
-    if (recipientUserIds.length === 0) {
+    if (filteredRecipientUserIds.length === 0) {
       return
     }
 
     const notifications: Notification[] = []
     const { requiredFeature: _requiredFeature, ...content } = input
-    for (const recipientUserId of recipientUserIds) {
+    for (const recipientUserId of filteredRecipientUserIds) {
       const notification = buildNotificationEntity(em, content, recipientUserId, { tenantId, organizationId })
       notifications.push(notification)
     }

@@ -836,5 +836,17 @@
   "vector.api.errors.purgeFailed": "Vektor-Index-Bereinigung fehlgeschlagen",
   "vector.api.errors.reindexFailed": "Vektor-Neuindizierung fehlgeschlagen",
   "vector.api.errors.searchFailed": "Vektorsuche fehlgeschlagen",
-  "vector.api.errors.updateFailed": "Vektor-Einstellungen konnten nicht aktualisiert werden."
+  "vector.api.errors.updateFailed": "Vektor-Einstellungen konnten nicht aktualisiert werden.",
+  "record_locks.notifications.preferences.conflict_detected": "Bearbeitungskonflikt erkannt",
+  "record_locks.notifications.preferences.conflict_resolved": "Konflikt gelöst",
+  "record_locks.notifications.preferences.incoming_changes_available": "Eingehende Änderungen verfügbar",
+  "record_locks.notifications.preferences.lock_contended": "Datensatz von anderem Benutzer geöffnet",
+  "record_locks.notifications.preferences.lock_force_released": "Sperre zwangsweise aufgehoben",
+  "record_locks.notifications.preferences.participant_joined": "Teilnehmer ist dem Datensatz beigetreten",
+  "record_locks.notifications.preferences.participant_left": "Teilnehmer hat den Datensatz verlassen",
+  "record_locks.notifications.preferences.record_deleted": "Geöffneter Datensatz gelöscht",
+  "security.notifications.preferences.mfa_enforcement_deadline": "MFA-Registrierung erforderlich",
+  "security.notifications.preferences.mfa_enrolled": "MFA-Methode aktiviert",
+  "security.notifications.preferences.mfa_reset": "MFA-Methoden zurückgesetzt",
+  "security.notifications.preferences.password_changed": "Passwort geändert"
 }

@@ -2,6 +2,11 @@ export const features = [
   { id: 'cases.settings.manage', title: 'Manage cases settings', module: 'cases' },
   { id: 'cases.view', title: 'View cases', module: 'cases' },
   { id: 'cases.create', title: 'Create cases', module: 'cases' },
+  {
+    id: 'cases.cases.create.notify',
+    title: 'Receive notifications when a case is created',
+    module: 'cases',
+  },
   { id: 'cases.edit', title: 'Edit cases', module: 'cases' },
   { id: 'cases.close', title: 'Close cases', module: 'cases' },
   {

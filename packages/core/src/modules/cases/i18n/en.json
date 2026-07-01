@@ -1,6 +1,12 @@
 {
   "cases.list.title": "Cases",
   "cases.nav.group": "CRM",
+  "cases.notifications.case.closed.body": "Case \"{title}\" has been closed.",
+  "cases.notifications.case.closed.title": "Case closed",
+  "cases.notifications.case.created.body": "A new case \"{title}\" was created.",
+  "cases.notifications.case.created.title": "New case: {title}",
+  "cases.notifications.preferences.case_created": "New case created",
+  "cases.notifications.preferences.case_closed": "Case closed",
   "cases.list.refresh": "Refresh",
   "cases.list.filters.status": "Status value",
   "cases.list.filters.statusPlaceholder": "e.g. open",
@@ -247,5 +253,16 @@
   "cases.timeline.system.procedure_task_scheduled": "A task was scheduled for this procedure step.",
   "cases.timeline.invokeProcedureMissing": "no active version",
   "cases.config.procedureHint": "On a case’s detail page you run a single procedure and step through it — including verification conditions.",
-  "cases.config.procedureOpenCases": "Go to cases"
+  "cases.config.procedureOpenCases": "Go to cases",
+  "cases.messages.procedureNotify.owner": "Procedure notification",
+  "cases.messages.procedureNotify.customer": "Customer procedure message",
+  "cases.email.procedureNotify.owner.preview": "Procedure notification",
+  "cases.email.procedureNotify.owner.heading": "Procedure notification",
+  "cases.email.procedureNotify.owner.caseLabel": "Case",
+  "cases.email.procedureNotify.owner.stepLabel": "Step",
+  "cases.email.procedureNotify.owner.viewCta": "View message",
+  "cases.email.procedureNotify.owner.footer": "Open Mercato",
+  "cases.email.procedureNotify.customer.preview": "Message from us",
+  "cases.email.procedureNotify.customer.heading": "You have a new message",
+  "cases.email.procedureNotify.customer.footer": "Thank you"
 }

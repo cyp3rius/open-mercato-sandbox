@@ -13,6 +13,11 @@ import {
 } from './notificationFactory'
 import { toNotificationDto } from './notificationMapper'
 import { getRecipientUserIdsForFeature, getRecipientUserIdsForRole } from './notificationRecipients'
+import {
+  filterRecipientsByNotificationPreferences,
+  resolveRecipientsForNotificationType,
+  shouldDeliverNotification,
+} from './notificationPreferenceService'
 import { assertSafeNotificationHref, sanitizeNotificationActions } from './safeHref'
 
 const DEBUG = process.env.NOTIFICATIONS_DEBUG === 'true'
@@ -145,6 +150,10 @@ export interface NotificationService {
   createBatch(input: CreateBatchNotificationInput, ctx: NotificationServiceContext): Promise<Notification[]>
   createForRole(input: CreateRoleNotificationInput, ctx: NotificationServiceContext): Promise<Notification[]>
   createForFeature(input: CreateFeatureNotificationInput, ctx: NotificationServiceContext): Promise<Notification[]>
+  createForNotificationType(
+    input: NotificationContentInput,
+    ctx: NotificationServiceContext,
+  ): Promise<Notification[]>
   markAsRead(notificationId: string, ctx: NotificationServiceContext): Promise<Notification>
   markAllAsRead(ctx: NotificationServiceContext): Promise<number>
   dismiss(notificationId: string, ctx: NotificationServiceContext): Promise<Notification>
@@ -187,6 +196,13 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
     async create(input, ctx) {
       const { recipientUserId, ...content } = input
       const writeEm = rootEm.fork()
+
+      const canDeliver = await shouldDeliverNotification(writeEm, recipientUserId, ctx.tenantId, content.type)
+      if (!canDeliver) {
+        debug('Skipping notification for user preference:', content.type, recipientUserId)
+        return null as unknown as Notification
+      }
+
       const notification = await writeEm.transactional(async (tx) => {
         const entity = await createOrRefreshNotification(tx, content, recipientUserId, ctx)
         await tx.flush()
@@ -205,13 +221,23 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
     },
 
     async createBatch(input, ctx) {
+      const writeEm = rootEm.fork()
       const recipientUserIds = Array.from(new Set(input.recipientUserIds))
+      const filteredRecipientUserIds = await filterRecipientsByNotificationPreferences(
+        writeEm,
+        ctx.tenantId,
+        input.type,
+        recipientUserIds,
+      )
+      if (filteredRecipientUserIds.length === 0) {
+        return []
+      }
+
       const { recipientUserIds: _recipientUserIds, ...content } = input
       const notifications: Notification[] = []
-      const writeEm = rootEm.fork()
 
       await writeEm.transactional(async (tx) => {
-        for (const recipientUserId of recipientUserIds) {
+        for (const recipientUserId of filteredRecipientUserIds) {
           const notification = await createOrRefreshNotification(tx, content, recipientUserId, ctx)
           notifications.push(notification)
         }
@@ -219,7 +245,7 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
       })
 
       await emitNotificationCreatedBatch(eventBus, notifications, ctx)
-      await emitNotificationSseEvents(eventBus, notifications, ctx, recipientUserIds)
+      await emitNotificationSseEvents(eventBus, notifications, ctx, filteredRecipientUserIds)
 
       return notifications
     },
@@ -229,13 +255,19 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
 
       const knex = getKnex(em)
       const recipientUserIds = await getRecipientUserIdsForRole(knex, ctx.tenantId, input.roleId)
-      if (recipientUserIds.length === 0) {
+      const filteredRecipientUserIds = await filterRecipientsByNotificationPreferences(
+        em,
+        ctx.tenantId,
+        input.type,
+        recipientUserIds,
+      )
+      if (filteredRecipientUserIds.length === 0) {
         return []
       }
 
       const { roleId: _roleId, ...content } = input
       const notifications: Notification[] = []
-      const uniqueRecipientUserIds = Array.from(new Set(recipientUserIds))
+      const uniqueRecipientUserIds = Array.from(new Set(filteredRecipientUserIds))
       const writeEm = rootEm.fork()
 
       await writeEm.transactional(async (tx) => {
@@ -256,15 +288,48 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
       const em = rootEm.fork()
       const knex = getKnex(em)
       const recipientUserIds = await getRecipientUserIdsForFeature(knex, ctx.tenantId, input.requiredFeature)
+      const filteredRecipientUserIds = await filterRecipientsByNotificationPreferences(
+        em,
+        ctx.tenantId,
+        input.type,
+        recipientUserIds,
+      )
 
-      if (recipientUserIds.length === 0) {
+      if (filteredRecipientUserIds.length === 0) {
         debug('No users found with feature:', input.requiredFeature, 'in tenant:', ctx.tenantId)
         return []
       }
 
-      debug('Creating notifications for', recipientUserIds.length, 'user(s) with feature:', input.requiredFeature)
+      debug('Creating notifications for', filteredRecipientUserIds.length, 'user(s) with feature:', input.requiredFeature)
 
       const { requiredFeature: _requiredFeature, ...content } = input
+      const notifications: Notification[] = []
+      const uniqueRecipientUserIds = Array.from(new Set(filteredRecipientUserIds))
+      const writeEm = rootEm.fork()
+
+      await writeEm.transactional(async (tx) => {
+        for (const recipientUserId of uniqueRecipientUserIds) {
+          const notification = await createOrRefreshNotification(tx, content, recipientUserId, ctx)
+          notifications.push(notification)
+        }
+        await tx.flush()
+      })
+
+      await emitNotificationCreatedBatch(eventBus, notifications, ctx)
+      await emitNotificationSseEvents(eventBus, notifications, ctx, uniqueRecipientUserIds)
+
+      return notifications
+    },
+
+    async createForNotificationType(input, ctx) {
+      const em = rootEm.fork()
+      const recipientUserIds = await resolveRecipientsForNotificationType(em, ctx.tenantId, input.type)
+      if (recipientUserIds.length === 0) {
+        debug('No recipients resolved for notification type:', input.type, 'in tenant:', ctx.tenantId)
+        return []
+      }
+
+      const content = input
       const notifications: Notification[] = []
       const uniqueRecipientUserIds = Array.from(new Set(recipientUserIds))
       const writeEm = rootEm.fork()

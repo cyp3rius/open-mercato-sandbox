@@ -22,6 +22,11 @@ import {
   collectLeadAttachmentInputs,
   importAttachmentsForLead,
 } from '../../../../../lib/importLeadAttachments'
+import { notifyInjectFeatureUsers } from '../../../../../../lead_intake/lib/notifyInjectFeatureUsers'
+import {
+  INSURANCE_DESK_LEAD_INJECT_NOTIFY_FEATURE,
+  notificationTypes as insuranceDeskNotificationTypes,
+} from '../../../../../notifications'
 
 export const metadata = {
   path: '/insurance/leads/inject',
@@ -210,6 +215,23 @@ export async function POST(req: Request) {
       tenantId: body.tenantId,
       leadId,
       attachments: attachmentInputs,
+    })
+
+    await notifyInjectFeatureUsers(ctx.container, {
+      notificationTypes: insuranceDeskNotificationTypes,
+      notificationType: 'insurance_desk.lead.injected',
+      requiredFeature: INSURANCE_DESK_LEAD_INJECT_NOTIFY_FEATURE,
+      tenantId: body.tenantId,
+      organizationId: body.organizationId,
+      titleVariables: { title: body.title },
+      bodyVariables: {
+        source,
+        externalId: body.externalId,
+      },
+      sourceEntityType: 'insurance:lead',
+      sourceEntityId: leadId,
+      linkHref: `/backend/insurance-desk/leads/${leadId}`,
+      logLabel: 'insurance/leads/inject',
     })
 
     return buildInjectResponse({

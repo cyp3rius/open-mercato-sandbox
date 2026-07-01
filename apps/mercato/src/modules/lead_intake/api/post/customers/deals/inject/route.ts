@@ -27,6 +27,11 @@ import {
   STRAPI_DEAL_SOURCE,
 } from '../../../../../lib/strapiDealInject'
 import { resolveWebsitePipelineForDeal } from '../../../../../lib/resolveWebsitePipeline'
+import { notifyInjectFeatureUsers } from '../../../../../lib/notifyInjectFeatureUsers'
+import {
+  LEAD_INTAKE_DEAL_INJECT_NOTIFY_FEATURE,
+  notificationTypes as leadIntakeNotificationTypes,
+} from '../../../../../notifications'
 
 export const metadata = {
   path: '/customers/deals/inject',
@@ -211,6 +216,23 @@ export async function POST(req: Request) {
       )
       commentId = commentResult?.commentId ?? null
     }
+
+    await notifyInjectFeatureUsers(ctx.container, {
+      notificationTypes: leadIntakeNotificationTypes,
+      notificationType: 'lead_intake.deal.injected',
+      requiredFeature: LEAD_INTAKE_DEAL_INJECT_NOTIFY_FEATURE,
+      tenantId: body.tenantId,
+      organizationId: body.organizationId,
+      titleVariables: { title: dealTitle },
+      bodyVariables: {
+        source,
+        externalId: body.externalId,
+      },
+      sourceEntityType: 'customers:deal',
+      sourceEntityId: dealId,
+      linkHref: `/backend/customers/deals/${dealId}`,
+      logLabel: 'customers/deals/inject',
+    })
 
     return buildInjectResponse({
       id: dealId,

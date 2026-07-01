@@ -43,6 +43,13 @@ async function emitMessageSentEvent(_container: ContainerWithResolve, payload: M
   await emitMessagesEvent('messages.message.sent', payload, { persistent: true })
 }
 
+function resolveSendViaEmail(input: { visibility?: string | null; sendViaEmail?: boolean }): boolean {
+  if (typeof input.sendViaEmail === 'boolean') {
+    return input.sendViaEmail
+  }
+  return input.visibility === 'public'
+}
+
 async function emitMessageDeletedEvent(_container: ContainerWithResolve, payload: {
   messageId: string
   actorUserId: string
@@ -162,8 +169,7 @@ const composeMessageCommand: CommandHandler<unknown, { id: string; threadId: str
         )?.threadId ?? input.parentMessageId
         : undefined
 
-      const isPublicVisibility = input.visibility === 'public'
-      const sendViaEmail = isPublicVisibility ? true : input.sendViaEmail
+      const sendViaEmail = resolveSendViaEmail(input)
       const message = trx.create(Message, {
         type: input.type,
         caseId: input.caseId ?? undefined,
@@ -249,7 +255,7 @@ const composeMessageCommand: CommandHandler<unknown, { id: string; threadId: str
         messageId,
         senderUserId: input.userId,
         recipientUserIds: input.recipients.map((recipient) => recipient.userId),
-        sendViaEmail: input.visibility === 'public' ? true : input.sendViaEmail,
+        sendViaEmail: resolveSendViaEmail(input),
         externalEmail: responseExternalEmail,
         tenantId: input.tenantId,
         organizationId: input.organizationId,

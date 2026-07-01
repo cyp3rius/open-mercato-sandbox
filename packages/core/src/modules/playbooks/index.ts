@@ -12,3 +12,5 @@ export const metadata: ModuleInfo = {
 }
 
 export { features } from './acl'
+export { eventsConfig } from './events'
+export { notificationTypes } from './notifications'

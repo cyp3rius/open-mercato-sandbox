@@ -618,6 +618,8 @@
   "customers.notifications.deal.lost.title": "Transakcja przegrana",
   "customers.notifications.deal.won.body": "{dealTitle} została oznaczona jako wygrana{dealValue, select, other { ({dealValue})}}",
   "customers.notifications.deal.won.title": "Transakcja wygrana",
+  "customers.notifications.preferences.deal_lost": "Transakcja przegrana",
+  "customers.notifications.preferences.deal_won": "Transakcja wygrana",
   "customers.people.create.title": "Utwórz osobę",
   "customers.people.detail.actions.addDeal": "Dodaj szansę",
   "customers.people.detail.actions.backToList": "Powrót do listy osób",

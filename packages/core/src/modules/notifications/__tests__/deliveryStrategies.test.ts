@@ -16,4 +16,23 @@ describe('notification delivery strategies', () => {
     const ids = getNotificationDeliveryStrategies().map((strategy) => strategy.id)
     expect(ids).toEqual(['second', 'third', 'first'])
   })
+
+  it('lists strategy descriptors without deliver handlers', async () => {
+    jest.resetModules()
+    const {
+      registerNotificationDeliveryStrategy,
+      listNotificationDeliveryStrategyDescriptors,
+    } = await import('../lib/deliveryStrategies')
+
+    registerNotificationDeliveryStrategy({
+      id: 'nodemailer',
+      label: 'Email (Nodemailer)',
+      defaultEnabled: true,
+      deliver: jest.fn(),
+    })
+
+    expect(listNotificationDeliveryStrategyDescriptors()).toEqual([
+      { id: 'nodemailer', label: 'Email (Nodemailer)', defaultEnabled: true },
+    ])
+  })
 })

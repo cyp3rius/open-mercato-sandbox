@@ -55,6 +55,14 @@ export type NotificationRendererProps = {
   actions: NotificationTypeAction[]
 }
 
+export type NotificationUserPreferenceDefinition = {
+  labelKey: string
+  scopeFeature: string
+  lockFeature?: string
+  lockedWhenRoleGrants?: boolean
+  defaultEnabled?: boolean
+}
+
 export type NotificationTypeDefinition = {
   type: string
   module: string
@@ -67,6 +75,7 @@ export type NotificationTypeDefinition = {
   linkHref?: string
   Renderer?: ComponentType<NotificationRendererProps>
   expiresAfterHours?: number
+  userPreference?: NotificationUserPreferenceDefinition
 }
 
 export type NotificationDto = {

@@ -1,6 +1,7 @@
 {
   "businessRules.notifications.rule.executionFailed.body": "Reguła \"{ruleName}\" nie powiodła się{entityType, select, other { na {entityType}}: {errorMessage}",
   "businessRules.notifications.rule.executionFailed.title": "Reguła Biznesowa Nie Powiodła Się",
+  "business_rules.notifications.preferences.rule_execution_failed": "Nieudane wykonanie reguły biznesowej",
   "business_rules.actions.create": "Utwórz Regułę",
   "business_rules.actions.toggleEnabled": "Kliknij, aby przełączyć włączone/wyłączone",
   "business_rules.analytics.avgExecutionTime": "Średni Czas Wykonania",

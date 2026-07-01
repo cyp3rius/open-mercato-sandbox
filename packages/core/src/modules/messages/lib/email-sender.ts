@@ -2,15 +2,22 @@ import * as React from 'react'
 import crypto from 'node:crypto'
 import { promises as fs } from 'fs'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { sendEmail } from '@open-mercato/shared/lib/email/send'
-import { resolveDefaultEmailFromAddress } from '@open-mercato/shared/lib/email/config'
 import { loadDictionary } from '@open-mercato/shared/lib/i18n/server'
 import { defaultLocale } from '@open-mercato/shared/lib/i18n/config'
 import { createFallbackTranslator } from '@open-mercato/shared/lib/i18n/translate'
+import ProcedureNotifyCustomerEmail from '../../cases/emails/ProcedureNotifyCustomerEmail'
+import ProcedureNotifyOwnerEmail from '../../cases/emails/ProcedureNotifyOwnerEmail'
+import { htmlToPlainText } from '../../cases/lib/htmlToPlainText'
+import {
+  isProcedureNotifyCustomerMessageType,
+  isProcedureNotifyMessageType,
+  isProcedureNotifyOwnerMessageType,
+} from '../../cases/lib/procedureNotifyMessageTypes'
 import type { Message, MessageObject } from '../data/entities'
 import { MessageAccessToken } from '../data/entities'
 import MessageEmail from '../emails/MessageEmail'
 import { resolveAttachmentAbsolutePath } from '../../attachments/lib/storage'
+import { sendTransactionalEmailWithResolver } from '../../notifications/lib/transactionalEmailDelivery'
 import type { MessageEmailAttachment } from './attachments'
 
 const ACCESS_TOKEN_EXPIRY_HOURS = 24 * 7
@@ -21,6 +28,10 @@ const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024
 export type SenderIdentity = {
   name: string | null
   email: string | null
+}
+
+type Resolver = {
+  resolve: <T = unknown>(name: string) => T
 }
 
 function logDebug(message: string, details?: Record<string, unknown>) {
@@ -54,7 +65,7 @@ function resolveObjectLabels(objects: MessageObject[]): string[] {
   return objects.map((item) => `${item.entityModule}.${item.entityType} (${item.entityId})`)
 }
 
-type ResendAttachment = {
+type EmailAttachment = {
   filename: string
   content: string
   contentType?: string
@@ -63,8 +74,8 @@ type ResendAttachment = {
 async function mapAttachmentsForEmail(
   messageId: string,
   attachments: MessageEmailAttachment[],
-): Promise<ResendAttachment[]> {
-  const resendAttachments: ResendAttachment[] = []
+): Promise<EmailAttachment[]> {
+  const emailAttachments: EmailAttachment[] = []
   let totalBytes = 0
 
   for (const attachment of attachments.slice(0, MAX_EMAIL_ATTACHMENTS)) {
@@ -96,14 +107,14 @@ async function mapAttachmentsForEmail(
     }
 
     totalBytes += buffer.length
-    resendAttachments.push({
+    emailAttachments.push({
       filename: attachment.fileName,
       content: buffer.toString('base64'),
       contentType: attachment.mimeType || undefined,
     })
   }
 
-  return resendAttachments
+  return emailAttachments
 }
 
 async function renderMarkdownEmailBody(body: string) {
@@ -123,12 +134,15 @@ async function renderMarkdownEmailBody(body: string) {
 }
 
 async function buildEmailBodyHtml(message: Message): Promise<string | undefined> {
+  if (isProcedureNotifyMessageType(message.type)) {
+    return message.body
+  }
   if (message.bodyFormat !== 'markdown') return undefined
   if (!message.body) return undefined
   return renderMarkdownEmailBody(message.body)
 }
 
-async function buildEmailCopy(sentAt: Date) {
+async function buildMessageEmailCopy(sentAt: Date) {
   const dict = await loadDictionary(defaultLocale)
   const t = createFallbackTranslator(dict)
   return {
@@ -142,6 +156,80 @@ async function buildEmailCopy(sentAt: Date) {
     objectsLabel: t('messages.email.objects', 'Related records'),
     footer: t('messages.email.footer', 'Open Mercato messages'),
   }
+}
+
+async function buildProcedureOwnerEmailCopy() {
+  const dict = await loadDictionary(defaultLocale)
+  const t = createFallbackTranslator(dict)
+  return {
+    preview: t('cases.email.procedureNotify.owner.preview', 'Procedure notification'),
+    heading: t('cases.email.procedureNotify.owner.heading', 'Procedure notification'),
+    caseLabel: t('cases.email.procedureNotify.owner.caseLabel', 'Case'),
+    stepLabel: t('cases.email.procedureNotify.owner.stepLabel', 'Step'),
+    viewCta: t('cases.email.procedureNotify.owner.viewCta', 'View message'),
+    footer: t('cases.email.procedureNotify.owner.footer', 'Open Mercato'),
+  }
+}
+
+async function buildProcedureCustomerEmailCopy() {
+  const dict = await loadDictionary(defaultLocale)
+  const t = createFallbackTranslator(dict)
+  return {
+    preview: t('cases.email.procedureNotify.customer.preview', 'Message from us'),
+    heading: t('cases.email.procedureNotify.customer.heading', 'You have a new message'),
+    footer: t('cases.email.procedureNotify.customer.footer', 'Thank you'),
+  }
+}
+
+function parseProcedureNotifySubjectParts(subject: string): { caseTitle: string; stepLabel: string | null } {
+  const separator = ' — '
+  const index = subject.indexOf(separator)
+  if (index === -1) {
+    return { caseTitle: subject, stepLabel: null }
+  }
+  return {
+    caseTitle: subject.slice(0, index).trim(),
+    stepLabel: subject.slice(index + separator.length).trim() || null,
+  }
+}
+
+async function buildProcedureNotifyEmailElement(params: {
+  message: Message
+  viewUrl?: string | null
+}) {
+  const { message, viewUrl } = params
+  const bodyHtml = message.body
+  const plainText = htmlToPlainText(bodyHtml)
+
+  if (isProcedureNotifyOwnerMessageType(message.type)) {
+    const { caseTitle, stepLabel } = parseProcedureNotifySubjectParts(message.subject)
+    const copy = await buildProcedureOwnerEmailCopy()
+    return {
+      react: ProcedureNotifyOwnerEmail({
+        subject: message.subject,
+        caseTitle,
+        stepLabel,
+        bodyHtml,
+        viewUrl: viewUrl ?? null,
+        copy,
+      }),
+      text: plainText,
+    }
+  }
+
+  if (isProcedureNotifyCustomerMessageType(message.type)) {
+    const copy = await buildProcedureCustomerEmailCopy()
+    return {
+      react: ProcedureNotifyCustomerEmail({
+        subject: message.subject,
+        bodyHtml,
+        copy,
+      }),
+      text: plainText,
+    }
+  }
+
+  throw new Error(`Unsupported procedure notify message type: ${message.type}`)
 }
 
 export async function createMessageAccessToken(
@@ -175,28 +263,46 @@ export async function sendMessageEmailToRecipient(params: {
   sender: SenderIdentity
   objects: MessageObject[]
   attachments: MessageEmailAttachment[]
+  resolve: Resolver
 }): Promise<void> {
-  const { em, message, recipientUserId, recipientEmail, sender, objects, attachments } = params
+  const { em, message, recipientUserId, recipientEmail, sender, objects, attachments, resolve } = params
   const token = await createMessageAccessToken(em, message.id, recipientUserId)
   const appUrl = resolveAppUrl()
   const viewUrl = appUrl ? `${appUrl}/messages/view/${token}` : null
   if (!appUrl) {
     logDebug('APP_URL missing - email link omitted', { messageId: message.id })
   }
-  const copy = await buildEmailCopy(message.sentAt ?? new Date())
+  const emailAttachments = await mapAttachmentsForEmail(message.id, attachments)
+
+  if (isProcedureNotifyMessageType(message.type)) {
+    const { react, text } = await buildProcedureNotifyEmailElement({ message, viewUrl })
+    logDebug('Sending procedure notify email to recipient', {
+      messageId: message.id,
+      recipientUserId,
+      recipientEmail,
+      messageType: message.type,
+    })
+    await sendTransactionalEmailWithResolver(resolve, {
+      to: recipientEmail,
+      subject: message.subject,
+      react,
+      text,
+      attachments: emailAttachments,
+    })
+    return
+  }
+
+  const copy = await buildMessageEmailCopy(message.sentAt ?? new Date())
   const bodyHtml = await buildEmailBodyHtml(message)
-  const resendAttachments = await mapAttachmentsForEmail(message.id, attachments)
-  logDebug('Sending recipient email via Resend', {
+  logDebug('Sending recipient email', {
     messageId: message.id,
     recipientUserId,
     recipientEmail,
     hasViewUrl: Boolean(viewUrl),
-    attachmentsCount: resendAttachments.length,
-    hasApiKey: Boolean(process.env.RESEND_API_KEY),
-    from: resolveDefaultEmailFromAddress() ?? null,
+    attachmentsCount: emailAttachments.length,
   })
 
-  await sendEmail({
+  await sendTransactionalEmailWithResolver(resolve, {
     to: recipientEmail,
     subject: message.subject,
     react: MessageEmail({
@@ -210,7 +316,7 @@ export async function sendMessageEmailToRecipient(params: {
       attachmentNames: attachments.map((item) => item.fileName),
       objectLabels: resolveObjectLabels(objects),
     }),
-    attachments: resendAttachments,
+    attachments: emailAttachments,
   })
 }
 
@@ -220,20 +326,37 @@ export async function sendMessageEmailToExternal(params: {
   sender: SenderIdentity
   objects: MessageObject[]
   attachments: MessageEmailAttachment[]
+  resolve: Resolver
 }): Promise<void> {
-  const { message, email, sender, objects, attachments } = params
-  const copy = await buildEmailCopy(message.sentAt ?? new Date())
+  const { message, email, sender, objects, attachments, resolve } = params
+  const emailAttachments = await mapAttachmentsForEmail(message.id, attachments)
+
+  if (isProcedureNotifyMessageType(message.type)) {
+    const { react, text } = await buildProcedureNotifyEmailElement({ message, viewUrl: null })
+    logDebug('Sending procedure notify email to external recipient', {
+      messageId: message.id,
+      email,
+      messageType: message.type,
+    })
+    await sendTransactionalEmailWithResolver(resolve, {
+      to: email,
+      subject: message.subject,
+      react,
+      text,
+      attachments: emailAttachments,
+    })
+    return
+  }
+
+  const copy = await buildMessageEmailCopy(message.sentAt ?? new Date())
   const bodyHtml = await buildEmailBodyHtml(message)
-  const resendAttachments = await mapAttachmentsForEmail(message.id, attachments)
-  logDebug('Sending external email via Resend', {
+  logDebug('Sending external email', {
     messageId: message.id,
     email,
-    attachmentsCount: resendAttachments.length,
-    hasApiKey: Boolean(process.env.RESEND_API_KEY),
-    from: resolveDefaultEmailFromAddress() ?? null,
+    attachmentsCount: emailAttachments.length,
   })
 
-  await sendEmail({
+  await sendTransactionalEmailWithResolver(resolve, {
     to: email,
     subject: message.subject,
     react: MessageEmail({
@@ -247,9 +370,9 @@ export async function sendMessageEmailToExternal(params: {
       attachmentNames: attachments.map((item) => item.fileName),
       objectLabels: resolveObjectLabels(objects),
     }),
-    attachments: resendAttachments,
+    attachments: emailAttachments,
   })
-  logDebug('External email sent via Resend', {
+  logDebug('External email sent', {
     messageId: message.id,
     email,
   })

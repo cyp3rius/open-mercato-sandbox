@@ -166,6 +166,7 @@
   "messages.nav.inbox": "Messages",
   "messages.notifications.new.body": "You have received a new message from {from}: {title}",
   "messages.notifications.new.title": "New message",
+  "messages.notifications.preferences.new_message": "New message",
   "messages.objectPreview.fallback.subtitle": "{type} • {id}",
   "messages.objectPreview.fallback.title": "Linked object",
   "messages.objects.actions.approve": "Approve",

@@ -10,6 +10,15 @@ import { Label } from '@open-mercato/ui/primitives/label'
 import { Switch } from '@open-mercato/ui/primitives/switch'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@open-mercato/ui/primitives/card'
+import {
+  getNotificationDeliveryStrategySettingsComponent,
+} from '../lib/deliveryStrategySettingsRegistry'
+
+type NotificationDeliveryStrategyDescriptor = {
+  id: string
+  label?: string
+  defaultEnabled?: boolean
+}
 
 type NotificationDeliveryConfig = {
   appUrl?: string
@@ -23,6 +32,7 @@ type NotificationDeliveryConfig = {
 
 type SettingsResponse = {
   settings?: NotificationDeliveryConfig
+  customStrategies?: NotificationDeliveryStrategyDescriptor[]
   error?: string
 }
 
@@ -38,6 +48,7 @@ const emptySettings: NotificationDeliveryConfig = {
 export function NotificationSettingsPageClient() {
   const t = useT()
   const [settings, setSettings] = React.useState<NotificationDeliveryConfig | null>(null)
+  const [customStrategies, setCustomStrategies] = React.useState<NotificationDeliveryStrategyDescriptor[]>([])
   const [loading, setLoading] = React.useState(true)
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -56,6 +67,7 @@ export function NotificationSettingsPageClient() {
       } else {
         setSettings(emptySettings)
       }
+      setCustomStrategies(body?.customStrategies ?? [])
     } catch (err) {
       const message = err instanceof Error ? err.message : t('notifications.settings.loadError', 'Failed to load notification settings')
       setError(message)
@@ -108,6 +120,7 @@ export function NotificationSettingsPageClient() {
       if (response.result?.settings) {
         setSettings(response.result.settings)
       }
+      setCustomStrategies(response.result?.customStrategies ?? [])
       flash(t('notifications.settings.saveSuccess', 'Notification settings saved'), 'success')
     } catch (err) {
       const message = err instanceof Error ? err.message : t('notifications.settings.saveError', 'Failed to save notification settings')
@@ -115,6 +128,62 @@ export function NotificationSettingsPageClient() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const updateCustomStrategy = (
+    strategyId: string,
+    patch: { enabled?: boolean; config?: Record<string, unknown> },
+  ) => {
+    setSettings((prev) => {
+      if (!prev) return prev
+      const existing = prev.strategies.custom?.[strategyId] ?? {}
+      const { config: configPatch, ...rest } = patch
+      const nextEntry: { enabled?: boolean; config?: unknown } = { ...existing, ...rest }
+      if (configPatch) {
+        const existingConfig = existing.config && typeof existing.config === 'object' && !Array.isArray(existing.config)
+          ? existing.config as Record<string, unknown>
+          : {}
+        nextEntry.config = { ...existingConfig, ...configPatch }
+      }
+      return {
+        ...prev,
+        strategies: {
+          ...prev.strategies,
+          custom: {
+            ...prev.strategies.custom,
+            [strategyId]: nextEntry,
+          },
+        },
+      }
+    })
+  }
+
+  const updateCustomStrategyConfig = (strategyId: string, configPatch: Record<string, unknown>) => {
+    updateCustomStrategy(strategyId, { config: configPatch })
+  }
+
+  const readCustomStrategyConfig = (strategyId: string): Record<string, unknown> => {
+    const raw = settings?.strategies.custom?.[strategyId]?.config
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      return raw as Record<string, unknown>
+    }
+    return {}
+  }
+
+  const isCustomStrategyEnabled = (
+    strategyId: string,
+    defaultEnabled?: boolean,
+  ): boolean => {
+    const stored = settings?.strategies.custom?.[strategyId]?.enabled
+    if (typeof stored === 'boolean') return stored
+    return defaultEnabled ?? false
+  }
+
+  const resolveCustomStrategyLabel = (strategy: NotificationDeliveryStrategyDescriptor): string => {
+    return t(
+      `notifications.settings.custom.strategy.${strategy.id}`,
+      strategy.label ?? strategy.id,
+    )
   }
 
   if (loading || !settings) {
@@ -219,6 +288,65 @@ export function NotificationSettingsPageClient() {
           </div>
         </CardContent>
       </Card>
+
+      {customStrategies.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('notifications.settings.custom.title', 'Custom delivery strategies')}</CardTitle>
+            <CardDescription>
+              {t(
+                'notifications.settings.custom.description',
+                'Enable module-provided delivery channels registered at runtime (for example SMTP via Nodemailer).',
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            {customStrategies.map((strategy) => {
+              const enabled = isCustomStrategyEnabled(strategy.id, strategy.defaultEnabled)
+              const usesEnvDefault = settings.strategies.custom?.[strategy.id]?.enabled === undefined
+              const SettingsComponent = getNotificationDeliveryStrategySettingsComponent(strategy.id)
+              return (
+                <div
+                  key={strategy.id}
+                  className="rounded-lg border p-3"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium">{resolveCustomStrategyLabel(strategy)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {t('notifications.settings.custom.strategyId', 'Strategy ID')}: {strategy.id}
+                      </p>
+                      {usesEnvDefault ? (
+                        <p className="text-xs text-muted-foreground">
+                          {strategy.defaultEnabled
+                            ? t(
+                                'notifications.settings.custom.envDefaultOnHint',
+                                'Enabled by default from environment until you change this toggle.',
+                              )
+                            : t(
+                                'notifications.settings.custom.envDefaultOffHint',
+                                'Disabled by default from environment until you change this toggle.',
+                              )}
+                        </p>
+                      ) : null}
+                    </div>
+                    <Switch
+                      checked={enabled}
+                      onCheckedChange={(checked) => updateCustomStrategy(strategy.id, { enabled: checked })}
+                    />
+                  </div>
+                  {enabled && SettingsComponent ? (
+                    <SettingsComponent
+                      config={readCustomStrategyConfig(strategy.id)}
+                      onConfigChange={(patch) => updateCustomStrategyConfig(strategy.id, patch)}
+                    />
+                  ) : null}
+                </div>
+              )
+            })}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="flex items-center gap-3">
         <Button type="button" onClick={handleSave} disabled={saving}>

@@ -1,6 +1,12 @@
 {
   "cases.list.title": "Sprawy",
   "cases.nav.group": "CRM",
+  "cases.notifications.case.closed.body": "Sprawa „{title}” została zamknięta.",
+  "cases.notifications.case.closed.title": "Sprawa zamknięta",
+  "cases.notifications.case.created.body": "Utworzono nową sprawę „{title}”.",
+  "cases.notifications.case.created.title": "Nowa sprawa: {title}",
+  "cases.notifications.preferences.case_created": "Utworzenie nowej sprawy",
+  "cases.notifications.preferences.case_closed": "Zamknięcie sprawy",
   "cases.list.refresh": "Odśwież",
   "cases.list.filters.status": "Wartość statusu",
   "cases.list.filters.statusPlaceholder": "np. open",
@@ -247,5 +253,16 @@
   "cases.timeline.system.procedure_task_scheduled": "Zaplanowano zadanie dla tego kroku procedury.",
   "cases.timeline.invokeProcedureMissing": "brak aktywnej wersji",
   "cases.config.procedureHint": "Na karcie sprawy (szczegóły) uruchamiasz jedną procedurę i przechodzisz przez kolejne kroki — w tym weryfikację warunków.",
-  "cases.config.procedureOpenCases": "Przejdź do spraw"
+  "cases.config.procedureOpenCases": "Przejdź do spraw",
+  "cases.messages.procedureNotify.owner": "Powiadomienie z procedury",
+  "cases.messages.procedureNotify.customer": "Wiadomość do klienta z procedury",
+  "cases.email.procedureNotify.owner.preview": "Powiadomienie z procedury",
+  "cases.email.procedureNotify.owner.heading": "Powiadomienie z procedury",
+  "cases.email.procedureNotify.owner.caseLabel": "Sprawa",
+  "cases.email.procedureNotify.owner.stepLabel": "Krok",
+  "cases.email.procedureNotify.owner.viewCta": "Zobacz wiadomość",
+  "cases.email.procedureNotify.owner.footer": "Open Mercato",
+  "cases.email.procedureNotify.customer.preview": "Wiadomość od nas",
+  "cases.email.procedureNotify.customer.heading": "Masz nową wiadomość",
+  "cases.email.procedureNotify.customer.footer": "Dziękujemy"
 }

@@ -54,11 +54,14 @@ import { messageObjectTypes } from '@/.mercato/generated/message-objects.generat
 import { registerMessageTypes } from '@open-mercato/core/modules/messages/lib/message-types-registry'
 import { registerMessageObjectTypes } from '@open-mercato/core/modules/messages/lib/message-objects-registry'
 import { runBootstrapRegistrations } from '@/.mercato/generated/bootstrap-registrations.generated'
+import { getNotificationTypes } from '@/.mercato/generated/notifications.generated'
+import { registerNotificationTypes } from '@open-mercato/core/modules/notifications/lib/notification-types-registry'
 
 // Register event configs globally (similar to search)
 registerEventModuleConfigs(eventModuleConfigs)
 registerMessageTypes(messageTypes, { replace: true })
 registerMessageObjectTypes(messageObjectTypes, { replace: true })
+registerNotificationTypes(getNotificationTypes(), { replace: true })
 runBootstrapRegistrations()
 
 // Bootstrap factory from shared package

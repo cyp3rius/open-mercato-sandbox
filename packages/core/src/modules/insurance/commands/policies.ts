@@ -290,6 +290,22 @@ const createPolicyCommand: CommandHandler<InsurancePolicyCreateInput, { policyId
       },
       events: policyCrudEvents,
     })
+    if (sourceLeadId) {
+      try {
+        const eventBus = ctx.container.resolve('eventBus') as {
+          emitEvent: (event: string, data: unknown) => Promise<void>
+        }
+        await eventBus.emitEvent('insurance.policy.created_from_lead', {
+          policyId: record.id,
+          policyNumber: record.policyNumber,
+          sourceLeadId,
+          tenantId: record.tenantId,
+          organizationId: record.organizationId,
+        })
+      } catch {
+        // non-blocking
+      }
+    }
     return { policyId: record.id }
   },
   captureAfter: async (_input, result, ctx) => {

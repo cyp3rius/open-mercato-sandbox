@@ -6,6 +6,7 @@ export const setup: ModuleSetupConfig = {
     employee: [
       'cases.view',
       'cases.create',
+      'cases.cases.create.notify',
       'cases.edit',
       'cases.close',
       'messages.view',

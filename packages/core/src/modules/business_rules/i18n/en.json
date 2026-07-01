@@ -1,6 +1,7 @@
 {
   "businessRules.notifications.rule.executionFailed.body": "Rule \"{ruleName}\" failed to execute{entityType, select, other { on {entityType}}}: {errorMessage}",
   "businessRules.notifications.rule.executionFailed.title": "Business Rule Failed",
+  "business_rules.notifications.preferences.rule_execution_failed": "Business rule execution failed",
   "business_rules.actions.create": "Create Rule",
   "business_rules.actions.toggleEnabled": "Click to toggle enabled/disabled",
   "business_rules.analytics.avgExecutionTime": "Avg Execution Time",

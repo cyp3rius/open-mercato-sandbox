@@ -5,6 +5,11 @@ export const features = [
     title: 'Inject CRM deals from external channels (Strapi)',
     module: 'lead_intake',
   },
+  {
+    id: 'lead_intake.deals.inject.notify',
+    title: 'Receive notifications for injected CRM deals',
+    module: 'lead_intake',
+  },
 ]
 
 export default features

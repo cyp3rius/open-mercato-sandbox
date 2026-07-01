@@ -202,6 +202,8 @@
   "customer_accounts.notifications.user.locked.title": "Customer account locked",
   "customer_accounts.notifications.user.signup.body": "A new customer account was created.",
   "customer_accounts.notifications.user.signup.title": "New customer signup",
+  "customer_accounts.notifications.preferences.user_locked": "Customer account locked",
+  "customer_accounts.notifications.preferences.user_signup": "New customer portal signup",
   "customer_accounts.search.badge.customerRole": "Customer role",
   "customer_accounts.search.badge.customerUser": "Customer user",
   "customer_accounts.settings.back": "Users",

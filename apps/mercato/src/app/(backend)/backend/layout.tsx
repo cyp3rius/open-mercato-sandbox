@@ -430,7 +430,10 @@ export default async function BackendLayout({ children, params }: { children: Re
       </div>
       {showIntegrationsButton ? <IntegrationsButton /> : null}
       <SettingsButton />
-      <ProfileDropdown email={auth?.email} />
+      <ProfileDropdown
+        email={auth?.email}
+        notificationsHref="/backend/profile/notifications"
+      />
       <NotificationBellWrapper />
       <MessagesIcon />
     </>

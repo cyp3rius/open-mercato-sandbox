@@ -58,6 +58,7 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'portal', from: '@open-mercato/core' },
   { id: 'insurance_desk', from: '@app' },
   { id: 'lead_intake', from: '@app' },
+  { id: 'mail_delivery', from: '@app' },
 ]
 
 const enterpriseModulesEnabled = parseBooleanWithDefault(process.env.OM_ENABLE_ENTERPRISE_MODULES, false)

@@ -1,6 +1,7 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { ModuleSetupConfig } from '@open-mercato/shared/modules/setup'
 import { CustomerTag } from '../customers/data/entities'
+import { registerPolicyExpirySchedule } from './lib/registerPolicyExpirySchedule'
 
 async function ensureCustomerTag(
   em: EntityManager,
@@ -32,8 +33,7 @@ export const setup: ModuleSetupConfig = {
       'insurance.leads.view',
     ],
   },
-  async seedDefaults({ em, tenantId, organizationId }) {
-    // Tags for partner / customer classification (CRM entities as referring partners).
+  async seedDefaults({ em, container, tenantId, organizationId }) {
     await ensureCustomerTag(em, {
       organizationId,
       tenantId,
@@ -47,6 +47,7 @@ export const setup: ModuleSetupConfig = {
       label: 'Customer',
     })
     await em.flush()
+    await registerPolicyExpirySchedule(container, { tenantId, organizationId })
   },
 }
 

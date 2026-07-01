@@ -3640,21 +3640,7 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {
-        "cases_timeline_events_case_id_foreign": {
-          "columnNames": [
-            "case_id"
-          ],
-          "constraintName": "cases_timeline_events_case_id_foreign",
-          "localTableName": "public.cases_timeline_events",
-          "referencedTableName": "public.cases_cases",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "no action"
-        }
-      },
+      "foreignKeys": {},
       "nativeEnums": {},
       "comment": null
     },
@@ -12637,7 +12623,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_activities_deal_id_foreign": {
+          "columnNames": [
+            "deal_id"
+          ],
+          "constraintName": "customer_activities_deal_id_foreign",
+          "localTableName": "public.customer_activities",
+          "referencedTableName": "public.customer_deals",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "customer_activities_entity_id_foreign": {
+          "columnNames": [
+            "entity_id"
+          ],
+          "constraintName": "customer_activities_entity_id_foreign",
+          "localTableName": "public.customer_activities",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -12989,7 +13002,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_addresses_entity_id_foreign": {
+          "columnNames": [
+            "entity_id"
+          ],
+          "constraintName": "customer_addresses_entity_id_foreign",
+          "localTableName": "public.customer_addresses",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -13224,7 +13251,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_comments_deal_id_foreign": {
+          "columnNames": [
+            "deal_id"
+          ],
+          "constraintName": "customer_comments_deal_id_foreign",
+          "localTableName": "public.customer_comments",
+          "referencedTableName": "public.customer_deals",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "customer_comments_entity_id_foreign": {
+          "columnNames": [
+            "entity_id"
+          ],
+          "constraintName": "customer_comments_entity_id_foreign",
+          "localTableName": "public.customer_comments",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -13517,7 +13571,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_companies_entity_id_foreign": {
+          "columnNames": [
+            "entity_id"
+          ],
+          "constraintName": "customer_companies_entity_id_foreign",
+          "localTableName": "public.customer_companies",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -13634,7 +13702,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_deal_companies_company_entity_id_foreign": {
+          "columnNames": [
+            "company_entity_id"
+          ],
+          "constraintName": "customer_deal_companies_company_entity_id_foreign",
+          "localTableName": "public.customer_deal_companies",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "customer_deal_companies_deal_id_foreign": {
+          "columnNames": [
+            "deal_id"
+          ],
+          "constraintName": "customer_deal_companies_deal_id_foreign",
+          "localTableName": "public.customer_deal_companies",
+          "referencedTableName": "public.customer_deals",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -13767,7 +13862,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_deal_people_deal_id_foreign": {
+          "columnNames": [
+            "deal_id"
+          ],
+          "constraintName": "customer_deal_people_deal_id_foreign",
+          "localTableName": "public.customer_deal_people",
+          "referencedTableName": "public.customer_deals",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "customer_deal_people_person_entity_id_foreign": {
+          "columnNames": [
+            "person_entity_id"
+          ],
+          "constraintName": "customer_deal_people_person_entity_id_foreign",
+          "localTableName": "public.customer_deal_people",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -15244,7 +15366,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_interactions_entity_id_foreign": {
+          "columnNames": [
+            "entity_id"
+          ],
+          "constraintName": "customer_interactions_entity_id_foreign",
+          "localTableName": "public.customer_interactions",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -15633,7 +15769,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_people_company_entity_id_foreign": {
+          "columnNames": [
+            "company_entity_id"
+          ],
+          "constraintName": "customer_people_company_entity_id_foreign",
+          "localTableName": "public.customer_people",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "customer_people_entity_id_foreign": {
+          "columnNames": [
+            "entity_id"
+          ],
+          "constraintName": "customer_people_entity_id_foreign",
+          "localTableName": "public.customer_people",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -16825,7 +16988,34 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_tag_assignments_entity_id_foreign": {
+          "columnNames": [
+            "entity_id"
+          ],
+          "constraintName": "customer_tag_assignments_entity_id_foreign",
+          "localTableName": "public.customer_tag_assignments",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        },
+        "customer_tag_assignments_tag_id_foreign": {
+          "columnNames": [
+            "tag_id"
+          ],
+          "constraintName": "customer_tag_assignments_tag_id_foreign",
+          "localTableName": "public.customer_tag_assignments",
+          "referencedTableName": "public.customer_tags",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },
@@ -17197,7 +17387,21 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "customer_todo_links_entity_id_foreign": {
+          "columnNames": [
+            "entity_id"
+          ],
+          "constraintName": "customer_todo_links_entity_id_foreign",
+          "localTableName": "public.customer_todo_links",
+          "referencedTableName": "public.customer_entities",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "no action"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     },

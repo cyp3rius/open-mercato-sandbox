@@ -13,6 +13,7 @@ import {
   resolveNotificationDeliveryConfig,
   saveNotificationDeliveryConfig,
 } from '../../lib/deliveryConfig'
+import { listNotificationDeliveryStrategyDescriptors } from '../../lib/deliveryStrategies'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['notifications.manage'] },
@@ -33,7 +34,8 @@ export async function GET(req: Request) {
     const settings = await resolveNotificationDeliveryConfig(container, {
       defaultValue: DEFAULT_NOTIFICATION_DELIVERY_CONFIG,
     })
-    return NextResponse.json({ settings })
+    const customStrategies = listNotificationDeliveryStrategyDescriptors()
+    return NextResponse.json({ settings, customStrategies })
   } finally {
     const disposable = container as unknown as { dispose?: () => Promise<void> }
     if (typeof disposable.dispose === 'function') {
@@ -71,7 +73,8 @@ export async function POST(req: Request) {
     const settings = await resolveNotificationDeliveryConfig(container, {
       defaultValue: DEFAULT_NOTIFICATION_DELIVERY_CONFIG,
     })
-    return NextResponse.json({ ok: true, settings })
+    const customStrategies = listNotificationDeliveryStrategyDescriptors()
+    return NextResponse.json({ ok: true, settings, customStrategies })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : t('api.errors.internal', 'Internal error') },

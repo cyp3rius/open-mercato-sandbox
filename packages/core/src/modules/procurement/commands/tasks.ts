@@ -24,6 +24,7 @@ import {
   procurementTaskCrudIndexer,
 } from '../lib/crud'
 import { emitProcurementTaskAssignedEvent } from '../lib/emitProcurementTaskAssignedEvent'
+import { emitProcurementTaskCompletedEvent } from '../lib/emitProcurementTaskCompletedEvent'
 import {
   syncProcurementTaskWorkItemCreate,
   syncProcurementTaskWorkItemDelete,
@@ -228,6 +229,7 @@ const updateTaskCommand: CommandHandler<ProcurementTaskUpdateInput, { taskId: st
 
     const processId = record.contextId
     const previousAssignee = record.assignedUserId ?? null
+    const previousTaskStatus = record.taskStatus
 
     if (parsed.supplierId !== undefined) {
       const next = parsed.supplierId ?? null
@@ -296,6 +298,16 @@ const updateTaskCommand: CommandHandler<ProcurementTaskUpdateInput, { taskId: st
         title: record.title,
         assignedUserId: nextAssignee,
         dueAt: record.dueAt ? record.dueAt.toISOString() : null,
+        tenantId: record.tenantId,
+        organizationId: record.organizationId,
+      })
+    }
+    if (previousTaskStatus !== 'done' && record.taskStatus === 'done') {
+      await emitProcurementTaskCompletedEvent(ctx as CommandRuntimeContext, {
+        taskId: record.id,
+        processId,
+        title: record.title,
+        completedByUserId: resolveProcurementCommandActorUserId(ctx),
         tenantId: record.tenantId,
         organizationId: record.organizationId,
       })

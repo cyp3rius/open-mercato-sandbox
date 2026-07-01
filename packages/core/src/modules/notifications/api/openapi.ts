@@ -58,13 +58,21 @@ export const actionResultResponseSchema = z.object({
   href: z.string().optional(),
 })
 
+export const notificationDeliveryStrategyDescriptorSchema = z.object({
+  id: z.string(),
+  label: z.string().optional(),
+  defaultEnabled: z.boolean().optional(),
+})
+
 export const notificationSettingsResponseSchema = z.object({
   settings: notificationDeliveryConfigSchema,
+  customStrategies: z.array(notificationDeliveryStrategyDescriptorSchema).optional(),
 })
 
 export const notificationSettingsUpdateResponseSchema = z.object({
   ok: z.boolean(),
   settings: notificationDeliveryConfigSchema,
+  customStrategies: z.array(notificationDeliveryStrategyDescriptorSchema).optional(),
 })
 
 export {

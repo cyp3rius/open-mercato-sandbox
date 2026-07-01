@@ -174,6 +174,21 @@ const updatePlaybookCommand: CommandHandler<PlaybookUpdateInput, { ok: true; pla
       events: playbookCrudEvents,
       indexer: playbookIndexer,
     })
+    try {
+      const eventBus = ctx.container.resolve('eventBus') as {
+        emitEvent: (event: string, data: unknown) => Promise<void>
+      }
+      await eventBus.emitEvent('playbooks.playbook.version_published', {
+        playbookId: newRow.id,
+        slug: newRow.slug,
+        title: newRow.title,
+        version: newRow.version,
+        tenantId: newRow.tenantId,
+        organizationId: newRow.organizationId,
+      })
+    } catch {
+      // non-blocking
+    }
     return { ok: true as const, playbookId: newRow.id }
   },
 }

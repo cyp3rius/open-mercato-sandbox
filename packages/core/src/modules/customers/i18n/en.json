@@ -619,6 +619,8 @@
   "customers.notifications.deal.lost.title": "Deal Lost",
   "customers.notifications.deal.won.body": "{dealTitle} has been marked as won{dealValue, select, other { ({dealValue})}}",
   "customers.notifications.deal.won.title": "Deal Won",
+  "customers.notifications.preferences.deal_lost": "Deal lost",
+  "customers.notifications.preferences.deal_won": "Deal won",
   "customers.people.create.title": "Create Person",
   "customers.people.detail.actions.addDeal": "Add deal",
   "customers.people.detail.actions.backToList": "Back to people",

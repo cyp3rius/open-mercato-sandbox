@@ -17,6 +17,8 @@ import '@/.mercato/generated/translations-fields.generated'
 import '@/.mercato/generated/messages.client.generated'
 // Side-effect: registers provider-owned payment renderer widgets on the client.
 import '@/.mercato/generated/payments.client.generated'
+// Side-effect: registers mail delivery strategy settings UI (Nodemailer).
+import '@/modules/mail_delivery/frontend/registerStrategySettings'
 
 let _clientBootstrapped = false
 

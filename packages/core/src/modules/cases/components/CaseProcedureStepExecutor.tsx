@@ -29,7 +29,7 @@ import { Label } from '@open-mercato/ui/primitives/label'
 import { HtmlRichTextEditor } from '@open-mercato/ui/backend/richtext/HtmlRichTextEditor'
 import type { CaseProcedureBlockJson } from '../lib/procedureBlockJson'
 import { formatProcedurePlaybookLabel } from '../lib/formatProcedurePlaybookLabel'
-import { defaultHtmlFromNotifyBody, htmlToPlainText } from '../lib/htmlToPlainText'
+import { defaultHtmlFromNotifyBody } from '../lib/htmlToPlainText'
 import { resolveUserDisplayLabel } from '../../procurement/lib/procurementEntitySearch'
 
 type Kind = CaseProcedureBlockJson['kind']
@@ -96,7 +96,7 @@ export type CaseProcedureStepExecutorProps = {
   procedureTaskSummary?: ProcedureTaskSummaryHead | null
   canScheduleProcedureTask?: boolean
   onNext?: (options?: { closingNote?: string }) => void
-  onSendNotify?: (plainBody: string) => void
+  onSendNotify?: (bodyHtml: string) => void
   onAnswer?: (branch: 'yes' | 'no') => void
   onLaunchInvokeProcedure?: (slug: string) => void
   onScheduleProcedureTask?: (payload: {
@@ -374,7 +374,7 @@ export function CaseProcedureStepExecutor({
                 variant="default"
                 className="gap-2 bg-foreground text-background hover:bg-foreground/90"
                 disabled={disabled}
-                onClick={() => onSendNotify(htmlToPlainText(notifyHtml))}
+                onClick={() => onSendNotify(notifyHtml)}
               >
                 <Send className="size-4 shrink-0" aria-hidden />
                 {t('cases.detail.procedure.sendMessage', 'Send')}

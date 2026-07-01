@@ -64,6 +64,12 @@ const events = [
     entity: 'process_task',
     category: 'crud',
   },
+  {
+    id: 'procurement.process_task.completed',
+    label: 'Procurement task completed',
+    entity: 'process_task',
+    category: 'lifecycle',
+  },
 ] as const
 
 export const eventsConfig = createModuleEvents({

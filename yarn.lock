@@ -5646,6 +5646,7 @@ __metadata:
     "@radix-ui/react-label": "npm:^2.1.8"
     "@radix-ui/react-slot": "npm:^1.2.4"
     "@react-email/components": "npm:^1.0.1"
+    "@react-email/render": "npm:^2.0.9"
     "@stripe/react-stripe-js": "npm:^3.9.0"
     "@stripe/stripe-js": "npm:^7.8.0"
     "@tailwindcss/postcss": "npm:^4.1.17"
@@ -5656,6 +5657,7 @@ __metadata:
     "@testing-library/react": "npm:^16.2.0"
     "@types/jest": "npm:^30.0.0"
     "@types/node": "npm:^24.10.1"
+    "@types/nodemailer": "npm:^8.0.1"
     "@types/react": "npm:^19.2.7"
     "@types/react-dom": "npm:^19.2.3"
     "@uiw/react-markdown-preview": "npm:^5.1.5"
@@ -5675,6 +5677,7 @@ __metadata:
     lucide-react: "npm:^1.8.0"
     newrelic: "npm:^13.16.0"
     next: "npm:16.1.7"
+    nodemailer: "npm:^9.0.3"
     pdf2pic: "npm:^3.2.0"
     pg: "npm:8.20.0"
     react: "npm:19.2.1"
@@ -7324,6 +7327,19 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@react-email/render@npm:^2.0.9":
+  version: 2.0.9
+  resolution: "@react-email/render@npm:2.0.9"
+  dependencies:
+    html-to-text: "npm:^9.0.5"
+    prettier: "npm:^3.5.3"
+  peerDependencies:
+    react: ^18.0 || ^19.0 || ^19.0.0-rc
+    react-dom: ^18.0 || ^19.0 || ^19.0.0-rc
+  checksum: 10/8f7b019c57f6173fa24ac30daa82acf4ff15759d9b9248beca24416c6060bc8f6526c7dd89e624a041dbb9b4b0f7e21d3df5e82f214eca12436db8b0aff1d002
+  languageName: node
+  linkType: hard
+
 "@react-email/row@npm:0.0.13":
   version: 0.0.13
   resolution: "@react-email/row@npm:0.0.13"
@@ -8949,6 +8965,15 @@ __metadata:
   dependencies:
     undici-types: "npm:~7.16.0"
   checksum: 10/c831395567689bdd59d0f3826332ff15c3f3f8e6acf160d7f75ce45e5476427c10ac484031c5c8d3480ae8d1729d95f3354ef4cc359364107e22da5a22e3797c
+  languageName: node
+  linkType: hard
+
+"@types/nodemailer@npm:^8.0.1":
+  version: 8.0.1
+  resolution: "@types/nodemailer@npm:8.0.1"
+  dependencies:
+    "@types/node": "npm:*"
+  checksum: 10/ec2d9783387a0b24de0cfa76a8da6beab7342e97329fe1e2cf7a26d05e57b241f8dd45276385f1ee5bd089000f35b60beb8f31a9e2e7deaec5486ff1c640e641
   languageName: node
   linkType: hard
 
@@ -20242,6 +20267,13 @@ __metadata:
   version: 2.0.27
   resolution: "node-releases@npm:2.0.27"
   checksum: 10/f6c78ddb392ae500719644afcbe68a9ea533242c02312eb6a34e8478506eb7482a3fb709c70235b01c32fe65625b68dfa9665113f816d87f163bc3819b62b106
+  languageName: node
+  linkType: hard
+
+"nodemailer@npm:^9.0.3":
+  version: 9.0.3
+  resolution: "nodemailer@npm:9.0.3"
+  checksum: 10/0118b6fc1e2f459b2b953c4827167a8c8422e1df2fb5055df3af307f4eff4fc71e7c19eb5aff923a6dcc26242e9c1008d63595117b4519a2698591dac64ee82c
   languageName: node
   linkType: hard
 

@@ -4,7 +4,11 @@ import { seedProcurementDictionaries } from './lib/seeds'
 export const setup: ModuleSetupConfig = {
   defaultRoleFeatures: {
     admin: ['procurement.*'],
-    employee: ['procurement.processes.view', 'procurement.processes.manage'],
+    employee: [
+      'procurement.processes.view',
+      'procurement.processes.manage',
+      'procurement.process_tasks.complete.notify',
+    ],
   },
   async seedDefaults({ em, tenantId, organizationId }) {
     await seedProcurementDictionaries(em, { tenantId, organizationId })

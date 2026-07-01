@@ -7,6 +7,11 @@ export const features = [
   },
   { id: 'procurement.processes.manage', title: 'Manage procurement processes', module: 'procurement' },
   {
+    id: 'procurement.process_tasks.complete.notify',
+    title: 'Receive notifications when a procurement task is completed',
+    module: 'procurement',
+  },
+  {
     id: 'procurement.settings.manage',
     title: 'Manage procurement module settings (status pipeline, etc.)',
     module: 'procurement',

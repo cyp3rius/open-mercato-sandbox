@@ -22,6 +22,11 @@ import {
   nextGlobal,
 } from '../lib/caseProcedureEngine'
 import { syncCaseServiceProcedureTaskWorkItemCreate } from '../lib/caseProcedureTaskUserTaskSync'
+import { htmlToPlainText } from '../lib/htmlToPlainText'
+import {
+  CASES_PROCEDURE_NOTIFY_CUSTOMER_MESSAGE_TYPE,
+  CASES_PROCEDURE_NOTIFY_OWNER_MESSAGE_TYPE,
+} from '../lib/procedureNotifyMessageTypes'
 import { caseCrudEvents } from '../lib/crud'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
 
@@ -577,7 +582,8 @@ const sendNotifyPlaybookStepCommand: CommandHandler<
     const stepLabel =
       typeof block.label === 'string' && block.label.trim().length ? block.label.trim() : ''
     const subjectBase = caseRow.title?.trim()?.length ? caseRow.title.trim() : ''
-    const bodyTrim = parsed.body.trim()
+    const bodyHtml = parsed.body.trim()
+    const bodyPlain = htmlToPlainText(bodyHtml)
     const subject =
       subjectBase.length && stepLabel.length
         ? `${subjectBase} — ${stepLabel}`
@@ -585,21 +591,22 @@ const sendNotifyPlaybookStepCommand: CommandHandler<
           ? subjectBase
           : stepLabel.length
             ? stepLabel
-            : bodyTrim.slice(0, 120)
+            : bodyPlain.slice(0, 120)
 
     const commandBus = ctx.container.resolve('commandBus') as CommandBus
     const target = block.notifyTarget ?? 'owner'
+    const sendViaEmail = block.notifyChannel === 'email'
 
     if (target === 'owner') {
       const ownerId = caseRow.ownerUserId?.trim()
       if (!ownerId) {
         throw new CrudHttpError(400, { error: 'cases.procedure.caseOwnerRequired' })
       }
-      let sendViaEmail = block.notifyChannel === 'email'
-      if (sendViaEmail) {
+      let ownerSendViaEmail = sendViaEmail
+      if (ownerSendViaEmail) {
         const ownerUser = await em.findOne(User, { id: ownerId, deletedAt: null })
         if (!ownerUser?.email?.trim()) {
-          sendViaEmail = false
+          ownerSendViaEmail = false
         }
       }
       await commandBus.execute('messages.messages.compose', {
@@ -607,16 +614,16 @@ const sendNotifyPlaybookStepCommand: CommandHandler<
           tenantId: parsed.tenantId,
           organizationId: parsed.organizationId,
           userId: actorId,
-          type: 'default',
+          type: CASES_PROCEDURE_NOTIFY_OWNER_MESSAGE_TYPE,
           caseId: caseRow.id,
           visibility: 'internal',
           recipients: [{ userId: ownerId, type: 'to' }],
           subject,
-          body: parsed.body,
+          body: bodyHtml,
           bodyFormat: 'text',
           priority: 'normal',
           isDraft: false,
-          sendViaEmail,
+          sendViaEmail: ownerSendViaEmail,
         },
         ctx,
       })
@@ -642,18 +649,18 @@ const sendNotifyPlaybookStepCommand: CommandHandler<
           tenantId: parsed.tenantId,
           organizationId: parsed.organizationId,
           userId: actorId,
-          type: 'default',
+          type: CASES_PROCEDURE_NOTIFY_CUSTOMER_MESSAGE_TYPE,
           caseId: caseRow.id,
           visibility: 'public',
           externalEmail: email,
           externalName,
           recipients: [],
           subject,
-          body: parsed.body,
+          body: bodyHtml,
           bodyFormat: 'text',
           priority: 'normal',
           isDraft: false,
-          sendViaEmail: true,
+          sendViaEmail,
         },
         ctx,
       })

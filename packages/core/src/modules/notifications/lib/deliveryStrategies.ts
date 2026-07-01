@@ -1,3 +1,4 @@
+import type React from 'react'
 import type { Notification } from '../data/entities'
 import type { NotificationDeliveryConfig } from './deliveryConfig'
 
@@ -25,11 +26,29 @@ export type NotificationDeliveryContext = {
   t: (key: string, fallback?: string, variables?: Record<string, string>) => string
 }
 
+export type TransactionalEmailAttachment = {
+  filename: string
+  content: string
+  contentType?: string
+}
+
+export type TransactionalEmailSendContext = {
+  to: string
+  subject: string
+  react: React.ReactElement
+  text?: string
+  attachments?: TransactionalEmailAttachment[]
+  deliveryConfig: NotificationDeliveryConfig
+  config: NotificationDeliveryStrategyConfig
+  resolve?: <T = unknown>(name: string) => T
+}
+
 export type NotificationDeliveryStrategy = {
   id: string
   label?: string
   defaultEnabled?: boolean
   deliver: (ctx: NotificationDeliveryContext) => Promise<void> | void
+  sendTransactionalEmail?: (ctx: TransactionalEmailSendContext) => Promise<void> | void
 }
 
 type RegisteredStrategy = NotificationDeliveryStrategy & { priority: number }
@@ -47,4 +66,14 @@ export function registerNotificationDeliveryStrategy(
 
 export function getNotificationDeliveryStrategies(): NotificationDeliveryStrategy[] {
   return registry
+}
+
+export type NotificationDeliveryStrategyDescriptor = {
+  id: string
+  label?: string
+  defaultEnabled?: boolean
+}
+
+export function listNotificationDeliveryStrategyDescriptors(): NotificationDeliveryStrategyDescriptor[] {
+  return registry.map(({ id, label, defaultEnabled }) => ({ id, label, defaultEnabled }))
 }
