@@ -5,10 +5,11 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { AuthService } from '@open-mercato/core/modules/auth/services/authService'
 import { sendEmail } from '@open-mercato/shared/lib/email/send'
 import ResetPasswordEmail from '@open-mercato/core/modules/auth/emails/ResetPasswordEmail'
-import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
+import { resolveTranslationsForLocale } from '@open-mercato/shared/lib/i18n/server'
 import { buildNotificationFromType } from '@open-mercato/core/modules/notifications/lib/notificationBuilder'
 import { resolveNotificationService } from '@open-mercato/core/modules/notifications/lib/notificationService'
 import notificationTypes from '@open-mercato/core/modules/auth/notifications'
+import { resolveLocaleForEmail } from '@open-mercato/core/modules/auth/lib/userLocale'
 import { z } from 'zod'
 import { rateLimitErrorSchema } from '@open-mercato/shared/lib/ratelimit/helpers'
 import { readEndpointRateLimitConfig } from '@open-mercato/shared/lib/ratelimit/config'
@@ -45,7 +46,8 @@ export async function POST(req: Request) {
   const base = process.env.APP_URL || `${url.protocol}//${url.host}`
   const resetUrl = `${base}/reset/${token}`
 
-  const { translate } = await resolveTranslations()
+  const locale = resolveLocaleForEmail(user.preferredLocale)
+  const { translate } = await resolveTranslationsForLocale(locale)
   const subject = translate('auth.email.resetPassword.subject', 'Reset your password')
   const copy = {
     preview: translate('auth.email.resetPassword.preview', 'Reset your password'),

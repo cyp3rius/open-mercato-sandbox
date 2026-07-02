@@ -7,9 +7,10 @@ import { sendEmail } from '@open-mercato/shared/lib/email/send'
 import NotificationEmail from '../emails/NotificationEmail'
 import { loadDictionary } from '@open-mercato/shared/lib/i18n/server'
 import { createFallbackTranslator } from '@open-mercato/shared/lib/i18n/translate'
-import { defaultLocale } from '@open-mercato/shared/lib/i18n/config'
+import type { Locale } from '@open-mercato/shared/lib/i18n/config'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { User } from '../../auth/data/entities'
+import { resolveLocaleForEmail } from '../../auth/lib/userLocale'
 import type { TenantDataEncryptionService } from '@open-mercato/shared/lib/encryption/tenantDataEncryptionService'
 
 export const metadata = {
@@ -24,14 +25,6 @@ function debug(...args: unknown[]): void {
   if (DEBUG) {
     console.log('[notifications]', ...args)
   }
-}
-
-function warnDeliverySkip(reason: string, details?: Record<string, unknown>): void {
-  if (DEBUG) {
-    debug('delivery skip', reason, details)
-    return
-  }
-  console.warn('[notifications] email delivery skipped:', reason, details ?? '')
 }
 
 type NotificationCreatedPayload = {
@@ -56,9 +49,10 @@ const buildPanelLink = (panelUrl: string, notificationId: string) => {
 }
 
 const resolveNotificationCopy = async (
-  notification: Notification
+  notification: Notification,
+  locale: Locale,
 ) => {
-  const dict = await loadDictionary(defaultLocale)
+  const dict = await loadDictionary(locale)
   const t = createFallbackTranslator(dict)
 
   const title = notification.titleKey
@@ -100,6 +94,7 @@ const resolveRecipient = async (
   return {
     email: typeof record.email === 'string' ? record.email : null,
     name: typeof record.name === 'string' ? record.name : null,
+    locale: resolveLocaleForEmail(record.preferredLocale),
   }
 }
 
@@ -108,7 +103,7 @@ export default async function handle(payload: NotificationCreatedPayload, ctx: R
   debug('deliver notification event', payload)
   const deliveryConfig = await resolveNotificationDeliveryConfig(ctx, { defaultValue: DEFAULT_NOTIFICATION_DELIVERY_CONFIG })
   if (!deliveryConfig.strategies.email.enabled) {
-    debug('resend email channel disabled in notification settings')
+    debug('email delivery disabled')
   }
 
   const em = ctx.resolve('em') as EntityManager
@@ -129,17 +124,14 @@ export default async function handle(payload: NotificationCreatedPayload, ctx: R
     encryptionService = null
   }
 
-  const recipient = (await resolveRecipient(em, notification, encryptionService)) ?? { email: null, name: null }
+  const recipient = (await resolveRecipient(em, notification, encryptionService)) ?? { email: null, name: null, locale: resolveLocaleForEmail(null) }
   if (!recipient?.email) {
-    warnDeliverySkip('recipient has no email', {
-      recipientUserId: notification.recipientUserId,
-      organizationId: notification.organizationId ?? null,
-    })
+    debug('recipient has no email', notification.recipientUserId)
   }
-  const { title, body, t } = await resolveNotificationCopy(notification)
+  const { title, body, t } = await resolveNotificationCopy(notification, recipient.locale)
   const panelUrl = resolveNotificationPanelUrl(deliveryConfig)
   if (!panelUrl) {
-    warnDeliverySkip('missing panelUrl; set appUrl in notification settings or APP_URL')
+    debug('missing panelUrl; check appUrl/panelPath settings')
   }
 
   const panelLink = panelUrl ? buildPanelLink(panelUrl, notification.id) : null
@@ -160,7 +152,6 @@ export default async function handle(payload: NotificationCreatedPayload, ctx: R
     })
     .filter((action): action is NonNullable<typeof action> => action !== null)
 
-  let resendDelivered = false
   if (deliveryConfig.strategies.email.enabled && recipient?.email && panelLink) {
     const subjectPrefix = deliveryConfig.strategies.email.subjectPrefix?.trim()
     const subject = subjectPrefix ? `${subjectPrefix} ${title}` : title
@@ -188,21 +179,13 @@ export default async function handle(payload: NotificationCreatedPayload, ctx: R
           copy,
         }),
       })
-      resendDelivered = true
     } catch (error) {
       console.error('[notifications] email delivery failed', error)
     }
-  } else if (deliveryConfig.strategies.email.enabled) {
-    warnDeliverySkip('resend channel prerequisites missing', {
-      hasRecipientEmail: Boolean(recipient?.email),
-      hasPanelLink: Boolean(panelLink),
-    })
   }
 
   const strategyConfigs = deliveryConfig.strategies.custom ?? {}
   const strategies = getNotificationDeliveryStrategies()
-  debug('custom delivery strategies available', strategies.map((strategy) => strategy.id))
-  let customDelivered = false
   for (const strategy of strategies) {
     const strategyConfig = strategyConfigs[strategy.id]
     const enabled = strategyConfig?.enabled ?? strategy.defaultEnabled ?? false
@@ -210,7 +193,6 @@ export default async function handle(payload: NotificationCreatedPayload, ctx: R
       debug('custom delivery disabled', strategy.id)
       continue
     }
-    debug('delivering via custom strategy', strategy.id, { to: recipient.email, panelLink: Boolean(panelLink) })
     try {
       await strategy.deliver({
         notification,
@@ -225,23 +207,8 @@ export default async function handle(payload: NotificationCreatedPayload, ctx: R
         resolve: ctx.resolve,
         t,
       })
-      customDelivered = true
     } catch (error) {
       console.error(`[notifications] delivery strategy failed (${strategy.id})`, error)
-    }
-  }
-
-  if (!resendDelivered && !customDelivered && strategies.length === 0) {
-    warnDeliverySkip('no custom delivery strategies registered (check mail_delivery bootstrap on workers)')
-  } else if (!resendDelivered && !customDelivered) {
-    const enabledCustomStrategyIds = strategies
-      .filter((strategy) => {
-        const strategyConfig = strategyConfigs[strategy.id]
-        return strategyConfig?.enabled ?? strategy.defaultEnabled ?? false
-      })
-      .map((strategy) => strategy.id)
-    if (!deliveryConfig.strategies.email.enabled && enabledCustomStrategyIds.length === 0) {
-      warnDeliverySkip('no email delivery channel enabled in notification settings')
     }
   }
 

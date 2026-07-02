@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { CommandBus, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
-import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
+import { resolveTranslations, resolveTranslationsForLocale } from '@open-mercato/shared/lib/i18n/server'
+import { resolveUserLocaleByEmail } from '@open-mercato/core/modules/auth/lib/userLocale'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import type { EntityManager } from '@mikro-orm/postgresql'
@@ -75,23 +76,25 @@ export async function POST(req: Request) {
     const adminEmail = process.env.ADMIN_EMAIL || ''
     if (adminEmail) {
       try {
+        const adminLocale = await resolveUserLocaleByEmail(em, adminEmail, { tenantId: quote.tenantId })
+        const { translate: adminTranslate } = await resolveTranslationsForLocale(adminLocale)
         const appUrl = process.env.APP_URL || ''
         const orderUrl = appUrl ? `${appUrl.replace(/\/$/, '')}/backend/sales/orders/${orderId}` : `/backend/sales/orders/${orderId}`
 
         const copy = {
-          preview: translate('sales.quotes.accept.adminEmail.preview', 'Quote {quoteNumber} accepted', { quoteNumber: quote.quoteNumber }),
-          heading: translate('sales.quotes.accept.adminEmail.heading', 'Quote {quoteNumber} accepted', { quoteNumber: quote.quoteNumber }),
-          body: translate('sales.quotes.accept.adminEmail.body', 'The customer accepted quote {quoteNumber}. An order has been created: {orderNumber}.', {
+          preview: adminTranslate('sales.quotes.accept.adminEmail.preview', 'Quote {quoteNumber} accepted', { quoteNumber: quote.quoteNumber }),
+          heading: adminTranslate('sales.quotes.accept.adminEmail.heading', 'Quote {quoteNumber} accepted', { quoteNumber: quote.quoteNumber }),
+          body: adminTranslate('sales.quotes.accept.adminEmail.body', 'The customer accepted quote {quoteNumber}. An order has been created: {orderNumber}.', {
             quoteNumber: quote.quoteNumber,
             orderNumber,
           }),
-          cta: translate('sales.quotes.accept.adminEmail.cta', 'View order'),
-          footer: translate('sales.quotes.accept.adminEmail.footer', 'Open Mercato'),
+          cta: adminTranslate('sales.quotes.accept.adminEmail.cta', 'View order'),
+          footer: adminTranslate('sales.quotes.accept.adminEmail.footer', 'Open Mercato'),
         }
 
         await sendEmail({
           to: adminEmail,
-          subject: translate('sales.quotes.accept.adminSubject', 'Quote {quoteNumber} accepted → Order {orderNumber}', {
+          subject: adminTranslate('sales.quotes.accept.adminSubject', 'Quote {quoteNumber} accepted → Order {orderNumber}', {
             quoteNumber: quote.quoteNumber,
             orderNumber,
           }),

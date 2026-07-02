@@ -15,13 +15,16 @@ export const MERCATO_SIDEBAR_DEDUPE_HREFS: readonly string[] = [
   '/backend/tasks',
   '/backend/customers/companies',
   '/backend/customers/people',
+  '/backend/customers/deals',
   '/backend/resources/resources',
+  '/backend/resources/resource-types',
   '/backend/partner_programs/programs',
   '/backend/procurement',
   '/backend/cases',
   '/backend/playbooks',
   '/backend/insurance-desk/leads',
   '/backend/insurance-desk/policies',
+  '/backend/insurance-desk/insurers',
   '/backend/accounting',
 ]
 
@@ -93,9 +96,15 @@ export function buildMercatoDailyWorkStructuredGroup(
     [
       '/backend/customers/companies',
       '/backend/customers/people',
-      '/backend/resources/resources',
+      '/backend/customers/deals',
       '/backend/partner_programs/programs',
     ] as const
+  )
+    .map(pick)
+    .filter((x): x is SidebarNavItem => x !== null)
+
+  const resourcesChildren = (
+    ['/backend/resources/resources', '/backend/resources/resource-types'] as const
   )
     .map(pick)
     .filter((x): x is SidebarNavItem => x !== null)
@@ -107,7 +116,11 @@ export function buildMercatoDailyWorkStructuredGroup(
     .filter((x): x is SidebarNavItem => x !== null)
 
   const insuranceChildren = (
-    ['/backend/insurance-desk/leads', '/backend/insurance-desk/policies'] as const
+    [
+      '/backend/insurance-desk/leads',
+      '/backend/insurance-desk/policies',
+      '/backend/insurance-desk/insurers',
+    ] as const
   )
     .map(pick)
     .filter((x): x is SidebarNavItem => x !== null)
@@ -118,14 +131,27 @@ export function buildMercatoDailyWorkStructuredGroup(
 
   if (clientsChildren.length) {
     items.push({
-      id: 'mercato-section-clients-resources',
+      id: 'mercato-section-clients',
       variant: 'section',
       href: '',
-      title: translate('backend.nav.section.clientsAndResources', 'Clients & resources'),
-      defaultTitle: 'Clients & resources',
+      title: translate('backend.nav.section.clients', 'Clients'),
+      defaultTitle: 'Clients',
       enabled: true,
       pageContext: 'main',
       children: clientsChildren,
+    })
+  }
+
+  if (resourcesChildren.length) {
+    items.push({
+      id: 'mercato-section-resources',
+      variant: 'section',
+      href: '',
+      title: translate('backend.nav.section.resources', 'Resources'),
+      defaultTitle: 'Resources',
+      enabled: true,
+      pageContext: 'main',
+      children: resourcesChildren,
     })
   }
 

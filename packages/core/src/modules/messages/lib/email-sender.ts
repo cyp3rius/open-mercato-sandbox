@@ -3,8 +3,9 @@ import crypto from 'node:crypto'
 import { promises as fs } from 'fs'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { loadDictionary } from '@open-mercato/shared/lib/i18n/server'
-import { defaultLocale } from '@open-mercato/shared/lib/i18n/config'
+import { emailDefaultLocale, type Locale } from '@open-mercato/shared/lib/i18n/config'
 import { createFallbackTranslator } from '@open-mercato/shared/lib/i18n/translate'
+import { resolveUserLocale } from '../../auth/lib/userLocale'
 import ProcedureNotifyCustomerEmail from '../../cases/emails/ProcedureNotifyCustomerEmail'
 import ProcedureNotifyOwnerEmail from '../../cases/emails/ProcedureNotifyOwnerEmail'
 import { htmlToPlainText } from '../../cases/lib/htmlToPlainText'
@@ -142,8 +143,8 @@ async function buildEmailBodyHtml(message: Message): Promise<string | undefined>
   return renderMarkdownEmailBody(message.body)
 }
 
-async function buildMessageEmailCopy(sentAt: Date) {
-  const dict = await loadDictionary(defaultLocale)
+async function buildMessageEmailCopy(sentAt: Date, locale: Locale) {
+  const dict = await loadDictionary(locale)
   const t = createFallbackTranslator(dict)
   return {
     preview: t('messages.email.preview', 'You received a message in Open Mercato'),
@@ -158,8 +159,8 @@ async function buildMessageEmailCopy(sentAt: Date) {
   }
 }
 
-async function buildProcedureOwnerEmailCopy() {
-  const dict = await loadDictionary(defaultLocale)
+async function buildProcedureOwnerEmailCopy(locale: Locale) {
+  const dict = await loadDictionary(locale)
   const t = createFallbackTranslator(dict)
   return {
     preview: t('cases.email.procedureNotify.owner.preview', 'Procedure notification'),
@@ -171,8 +172,8 @@ async function buildProcedureOwnerEmailCopy() {
   }
 }
 
-async function buildProcedureCustomerEmailCopy() {
-  const dict = await loadDictionary(defaultLocale)
+async function buildProcedureCustomerEmailCopy(locale: Locale) {
+  const dict = await loadDictionary(locale)
   const t = createFallbackTranslator(dict)
   return {
     preview: t('cases.email.procedureNotify.customer.preview', 'Message from us'),
@@ -196,14 +197,15 @@ function parseProcedureNotifySubjectParts(subject: string): { caseTitle: string;
 async function buildProcedureNotifyEmailElement(params: {
   message: Message
   viewUrl?: string | null
+  locale: Locale
 }) {
-  const { message, viewUrl } = params
+  const { message, viewUrl, locale } = params
   const bodyHtml = message.body
   const plainText = htmlToPlainText(bodyHtml)
 
   if (isProcedureNotifyOwnerMessageType(message.type)) {
     const { caseTitle, stepLabel } = parseProcedureNotifySubjectParts(message.subject)
-    const copy = await buildProcedureOwnerEmailCopy()
+    const copy = await buildProcedureOwnerEmailCopy(locale)
     return {
       react: ProcedureNotifyOwnerEmail({
         subject: message.subject,
@@ -218,7 +220,7 @@ async function buildProcedureNotifyEmailElement(params: {
   }
 
   if (isProcedureNotifyCustomerMessageType(message.type)) {
-    const copy = await buildProcedureCustomerEmailCopy()
+    const copy = await buildProcedureCustomerEmailCopy(locale)
     return {
       react: ProcedureNotifyCustomerEmail({
         subject: message.subject,
@@ -266,6 +268,11 @@ export async function sendMessageEmailToRecipient(params: {
   resolve: Resolver
 }): Promise<void> {
   const { em, message, recipientUserId, recipientEmail, sender, objects, attachments, resolve } = params
+  const recipientLocale = await resolveUserLocale(em, {
+    userId: recipientUserId,
+    tenantId: message.tenantId,
+    organizationId: message.organizationId,
+  })
   const token = await createMessageAccessToken(em, message.id, recipientUserId)
   const appUrl = resolveAppUrl()
   const viewUrl = appUrl ? `${appUrl}/messages/view/${token}` : null
@@ -275,7 +282,7 @@ export async function sendMessageEmailToRecipient(params: {
   const emailAttachments = await mapAttachmentsForEmail(message.id, attachments)
 
   if (isProcedureNotifyMessageType(message.type)) {
-    const { react, text } = await buildProcedureNotifyEmailElement({ message, viewUrl })
+    const { react, text } = await buildProcedureNotifyEmailElement({ message, viewUrl, locale: recipientLocale })
     logDebug('Sending procedure notify email to recipient', {
       messageId: message.id,
       recipientUserId,
@@ -292,7 +299,7 @@ export async function sendMessageEmailToRecipient(params: {
     return
   }
 
-  const copy = await buildMessageEmailCopy(message.sentAt ?? new Date())
+  const copy = await buildMessageEmailCopy(message.sentAt ?? new Date(), recipientLocale)
   const bodyHtml = await buildEmailBodyHtml(message)
   logDebug('Sending recipient email', {
     messageId: message.id,
@@ -329,10 +336,11 @@ export async function sendMessageEmailToExternal(params: {
   resolve: Resolver
 }): Promise<void> {
   const { message, email, sender, objects, attachments, resolve } = params
+  const externalLocale = emailDefaultLocale
   const emailAttachments = await mapAttachmentsForEmail(message.id, attachments)
 
   if (isProcedureNotifyMessageType(message.type)) {
-    const { react, text } = await buildProcedureNotifyEmailElement({ message, viewUrl: null })
+    const { react, text } = await buildProcedureNotifyEmailElement({ message, viewUrl: null, locale: externalLocale })
     logDebug('Sending procedure notify email to external recipient', {
       messageId: message.id,
       email,
@@ -348,7 +356,7 @@ export async function sendMessageEmailToExternal(params: {
     return
   }
 
-  const copy = await buildMessageEmailCopy(message.sentAt ?? new Date())
+  const copy = await buildMessageEmailCopy(message.sentAt ?? new Date(), externalLocale)
   const bodyHtml = await buildEmailBodyHtml(message)
   logDebug('Sending external email', {
     messageId: message.id,

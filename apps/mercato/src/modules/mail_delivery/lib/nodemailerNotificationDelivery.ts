@@ -51,30 +51,13 @@ function buildPlainText(
   return lines.join('\n')
 }
 
-function warnNodemailerSkip(reason: string, details?: Record<string, unknown>): void {
-  if (process.env.NOTIFICATIONS_DEBUG === 'true') {
-    console.log('[notifications][nodemailer] skip', reason, details)
-    return
-  }
-  console.warn('[notifications][nodemailer] delivery skipped:', reason, details ?? '')
-}
-
 export async function deliverNotificationViaNodemailer(ctx: NotificationDeliveryContext): Promise<void> {
   const emailDisabled =
     parseBooleanWithDefault(process.env.OM_DISABLE_EMAIL_DELIVERY, false) ||
     parseBooleanWithDefault(process.env.OM_TEST_MODE, false)
-  if (emailDisabled) {
-    warnNodemailerSkip('email delivery disabled by OM_DISABLE_EMAIL_DELIVERY or OM_TEST_MODE')
-    return
-  }
+  if (emailDisabled) return
 
-  if (!ctx.recipient.email || !ctx.panelLink) {
-    warnNodemailerSkip('missing recipient email or panel link', {
-      hasRecipientEmail: Boolean(ctx.recipient.email),
-      hasPanelLink: Boolean(ctx.panelLink),
-    })
-    return
-  }
+  if (!ctx.recipient.email || !ctx.panelLink) return
 
   const runtimeConfig = resolveNodemailerStrategyConfig(ctx.config.config)
 
@@ -103,7 +86,7 @@ export async function deliverNotificationViaNodemailer(ctx: NotificationDelivery
     }),
   )
 
-  const result = await sendNodemailerMail(runtimeConfig, {
+  await sendNodemailerMail(runtimeConfig, {
     from: runtimeConfig.from,
     to: ctx.recipient.email,
     subject,
@@ -111,16 +94,6 @@ export async function deliverNotificationViaNodemailer(ctx: NotificationDelivery
     text: buildPlainText(ctx.title, ctx.body, ctx.panelLink, ctx.actionLinks, copy),
     ...(runtimeConfig.replyTo ? { replyTo: runtimeConfig.replyTo } : {}),
   })
-
-  if (process.env.NOTIFICATIONS_DEBUG === 'true') {
-    console.log('[notifications][nodemailer] sent', {
-      transport: runtimeConfig.transport,
-      to: ctx.recipient.email,
-      from: runtimeConfig.from,
-      messageId: result.messageId,
-      response: result.response,
-    })
-  }
 }
 
 export function registerNodemailerNotificationDeliveryStrategy(): void {

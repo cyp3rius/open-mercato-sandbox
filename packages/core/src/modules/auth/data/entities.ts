@@ -30,6 +30,9 @@ export class User {
   @Property({ name: 'last_login_at', type: Date, nullable: true })
   lastLoginAt?: Date
 
+  @Property({ name: 'preferred_locale', type: 'text', nullable: true })
+  preferredLocale?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 

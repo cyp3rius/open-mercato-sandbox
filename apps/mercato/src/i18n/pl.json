@@ -96,6 +96,8 @@
   "backend.nav.dailyWork": "Praca codzienna",
   "backend.nav.dailyWorkHome": "Pulpit",
   "backend.nav.shortcuts": "Moje skróty",
+  "backend.nav.section.clients": "Klienci",
+  "backend.nav.section.resources": "Zasoby",
   "backend.nav.section.clientsAndResources": "Klienci i zasoby",
   "backend.nav.section.support": "Obsługa",
   "backend.nav.section.insurance": "Ubezpieczenia",

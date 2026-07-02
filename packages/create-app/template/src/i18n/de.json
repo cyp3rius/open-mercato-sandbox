@@ -84,6 +84,8 @@
   "backend.nav.dailyWork": "Tägliche Arbeit",
   "backend.nav.dailyWorkHome": "Dashboard",
   "backend.nav.shortcuts": "Meine Shortcuts",
+  "backend.nav.section.clients": "Kunden",
+  "backend.nav.section.resources": "Ressourcen",
   "backend.nav.section.clientsAndResources": "Kunden & Ressourcen",
   "backend.nav.section.support": "Betrieb",
   "backend.nav.section.insurance": "Versicherungen",

@@ -1,0 +1,11 @@
+{
+  "cases.email.procedureNotify.owner.preview": "Notificación de procedimiento",
+  "cases.email.procedureNotify.owner.heading": "Notificación de procedimiento",
+  "cases.email.procedureNotify.owner.caseLabel": "Caso",
+  "cases.email.procedureNotify.owner.stepLabel": "Paso",
+  "cases.email.procedureNotify.owner.viewCta": "Ver mensaje",
+  "cases.email.procedureNotify.owner.footer": "Open Mercato",
+  "cases.email.procedureNotify.customer.preview": "Mensaje de nuestra parte",
+  "cases.email.procedureNotify.customer.heading": "Tiene un nuevo mensaje",
+  "cases.email.procedureNotify.customer.footer": "Gracias"
+}

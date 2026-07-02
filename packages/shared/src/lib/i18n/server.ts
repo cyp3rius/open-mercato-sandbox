@@ -59,12 +59,16 @@ export async function loadDictionary(locale: Locale): Promise<Dict> {
   return merged
 }
 
-export async function resolveTranslations() {
-  const locale = await detectLocale()
+export async function resolveTranslationsForLocale(locale: Locale) {
   const dict = await loadDictionary(locale)
   const t = createTranslator(dict)
   const translate = createFallbackTranslator(dict)
   return { locale, dict, t, translate }
+}
+
+export async function resolveTranslations() {
+  const locale = await detectLocale()
+  return resolveTranslationsForLocale(locale)
 }
 // Hint Next.js to keep this server-only; ignore if unavailable when running scripts outside Next.
 try {

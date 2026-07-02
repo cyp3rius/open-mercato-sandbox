@@ -10,6 +10,7 @@ export type NotificationDeliveryStrategyConfig = {
 export type NotificationDeliveryRecipient = {
   email?: string | null
   name?: string | null
+  locale?: string
 }
 
 export type NotificationDeliveryContext = {

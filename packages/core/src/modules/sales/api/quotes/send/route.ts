@@ -4,7 +4,8 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
-import { resolveTranslations, detectLocale } from '@open-mercato/shared/lib/i18n/server'
+import { resolveTranslations, resolveTranslationsForLocale } from '@open-mercato/shared/lib/i18n/server'
+import { emailDefaultLocale } from '@open-mercato/shared/lib/i18n/config'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import {
@@ -180,7 +181,8 @@ export async function POST(req: Request) {
     const appUrl = process.env.APP_URL || ''
     const url = appUrl ? `${appUrl.replace(/\/$/, '')}/quote/${quote.acceptanceToken}` : `/quote/${quote.acceptanceToken}`
 
-    const locale = await detectLocale()
+    const locale = emailDefaultLocale
+    const { translate: emailTranslate } = await resolveTranslationsForLocale(locale)
     const validUntilFormatted = validUntil.toLocaleDateString(locale, {
       year: 'numeric',
       month: 'long',
@@ -188,20 +190,20 @@ export async function POST(req: Request) {
     })
 
     const copy = {
-      preview: translate('sales.quotes.email.preview', 'Quote {quoteNumber} is ready for review', { quoteNumber: quote.quoteNumber }),
-      heading: translate('sales.quotes.email.heading', 'Quote {quoteNumber}', { quoteNumber: quote.quoteNumber }),
-      total: translate('sales.quotes.email.total', 'Total: {amount} {currency}', {
+      preview: emailTranslate('sales.quotes.email.preview', 'Quote {quoteNumber} is ready for review', { quoteNumber: quote.quoteNumber }),
+      heading: emailTranslate('sales.quotes.email.heading', 'Quote {quoteNumber}', { quoteNumber: quote.quoteNumber }),
+      total: emailTranslate('sales.quotes.email.total', 'Total: {amount} {currency}', {
         amount: quote.grandTotalGrossAmount ?? quote.grandTotalNetAmount ?? '0',
         currency: quote.currencyCode,
       }),
-      validUntil: translate('sales.quotes.email.validUntil', 'Valid until: {date}', { date: validUntilFormatted }),
-      cta: translate('sales.quotes.email.cta', 'View quote'),
-      footer: translate('sales.quotes.email.footer', 'Open Mercato'),
+      validUntil: emailTranslate('sales.quotes.email.validUntil', 'Valid until: {date}', { date: validUntilFormatted }),
+      cta: emailTranslate('sales.quotes.email.cta', 'View quote'),
+      footer: emailTranslate('sales.quotes.email.footer', 'Open Mercato'),
     }
 
     await sendEmail({
       to: email,
-      subject: translate('sales.quotes.email.subject', 'Quote {quoteNumber}', { quoteNumber: quote.quoteNumber }),
+      subject: emailTranslate('sales.quotes.email.subject', 'Quote {quoteNumber}', { quoteNumber: quote.quoteNumber }),
       react: QuoteSentEmail({ url, copy }),
     })
 
