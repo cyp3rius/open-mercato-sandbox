@@ -2,9 +2,9 @@ import { render } from '@react-email/render'
 import { parseBooleanWithDefault } from '@open-mercato/shared/lib/boolean'
 import type { TransactionalEmailSendContext } from '@open-mercato/core/modules/notifications/lib/deliveryStrategies'
 import {
-  getNodemailerTransport,
   resolveNodemailerStrategyConfig,
 } from './nodemailerConfig'
+import { sendNodemailerMail } from './nodemailerSendMail'
 
 export async function sendTransactionalViaNodemailer(ctx: TransactionalEmailSendContext): Promise<void> {
   const emailDisabled =
@@ -15,7 +15,6 @@ export async function sendTransactionalViaNodemailer(ctx: TransactionalEmailSend
   }
 
   const runtimeConfig = resolveNodemailerStrategyConfig(ctx.config.config)
-  const transport = getNodemailerTransport(runtimeConfig)
 
   if (!runtimeConfig.from) {
     throw new Error('EMAIL_FROM_NOT_CONFIGURED: set NOTIFICATIONS_EMAIL_FROM, EMAIL_FROM, or ADMIN_EMAIL')
@@ -30,7 +29,7 @@ export async function sendTransactionalViaNodemailer(ctx: TransactionalEmailSend
     contentType: item.contentType,
   }))
 
-  await transport.sendMail({
+  await sendNodemailerMail(runtimeConfig, {
     from: runtimeConfig.from,
     to: ctx.to,
     subject,

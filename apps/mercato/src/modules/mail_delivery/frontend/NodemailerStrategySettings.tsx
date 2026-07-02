@@ -144,6 +144,15 @@ export function NodemailerStrategySettings({
         />
       </div>
 
+      {transport === 'direct' ? (
+        <p className="text-xs text-muted-foreground md:col-span-2">
+          {t(
+            'notifications.settings.custom.nodemailer.directHint',
+            'Direct SMTP (MX lookup, port 25) — same model as Strapi sendmail provider. Bypasses local Postfix. Requires outbound port 25 and a valid From domain.',
+          )}
+        </p>
+      ) : null}
+
       {transport === 'sendmail' ? (
         <>
           <div className="space-y-2">

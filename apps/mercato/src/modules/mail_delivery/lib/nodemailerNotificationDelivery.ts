@@ -4,10 +4,10 @@ import { registerNotificationDeliveryStrategy } from '@open-mercato/core/modules
 import type { NotificationDeliveryContext } from '@open-mercato/core/modules/notifications/lib/deliveryStrategies'
 import NotificationEmail from '@open-mercato/core/modules/notifications/emails/NotificationEmail'
 import {
-  getNodemailerTransport,
   isNodemailerDeliveryEnabledByDefault,
   resolveNodemailerStrategyConfig,
 } from './nodemailerConfig'
+import { sendNodemailerMail } from './nodemailerSendMail'
 import { sendTransactionalViaNodemailer } from './nodemailerTransactionalEmail'
 import { NODEMAILER_NOTIFICATION_STRATEGY_ID } from './constants'
 
@@ -77,7 +77,6 @@ export async function deliverNotificationViaNodemailer(ctx: NotificationDelivery
   }
 
   const runtimeConfig = resolveNodemailerStrategyConfig(ctx.config.config)
-  const transport = getNodemailerTransport(runtimeConfig)
 
   if (!runtimeConfig.from) {
     throw new Error('EMAIL_FROM_NOT_CONFIGURED: set NOTIFICATIONS_EMAIL_FROM, EMAIL_FROM, or ADMIN_EMAIL')
@@ -104,7 +103,7 @@ export async function deliverNotificationViaNodemailer(ctx: NotificationDelivery
     }),
   )
 
-  await transport.sendMail({
+  const result = await sendNodemailerMail(runtimeConfig, {
     from: runtimeConfig.from,
     to: ctx.recipient.email,
     subject,
@@ -112,6 +111,16 @@ export async function deliverNotificationViaNodemailer(ctx: NotificationDelivery
     text: buildPlainText(ctx.title, ctx.body, ctx.panelLink, ctx.actionLinks, copy),
     ...(runtimeConfig.replyTo ? { replyTo: runtimeConfig.replyTo } : {}),
   })
+
+  if (process.env.NOTIFICATIONS_DEBUG === 'true') {
+    console.log('[notifications][nodemailer] sent', {
+      transport: runtimeConfig.transport,
+      to: ctx.recipient.email,
+      from: runtimeConfig.from,
+      messageId: result.messageId,
+      response: result.response,
+    })
+  }
 }
 
 export function registerNodemailerNotificationDeliveryStrategy(): void {

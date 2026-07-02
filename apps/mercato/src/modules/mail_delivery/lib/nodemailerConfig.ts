@@ -19,6 +19,9 @@ export type NodemailerStrategyRuntimeConfig = {
   sendmailPath?: string
   sendmailArgs?: string[]
   sesRegion?: string
+  directSmtpPort?: number
+  directDevHost?: string
+  directDevPort?: number
   transportOptions?: Record<string, unknown>
 }
 
@@ -151,6 +154,13 @@ export function resolveNodemailerStrategyConfig(
     process.env.NOTIFICATIONS_EMAIL_SUBJECT_PREFIX,
   )
   const transportOptions = readTransportOptions(overrides)
+  const directSmtpPort = typeof overrides.directSmtpPort === 'number' && overrides.directSmtpPort > 0
+    ? overrides.directSmtpPort
+    : parsePort(process.env.NODEMAILER_DIRECT_SMTP_PORT) ?? (transport === 'direct' ? 25 : undefined)
+  const directDevHost = readStringOverride(overrides, 'directDevHost', process.env.NODEMAILER_DIRECT_DEV_HOST)
+  const directDevPort = typeof overrides.directDevPort === 'number' && overrides.directDevPort > 0
+    ? overrides.directDevPort
+    : parsePort(process.env.NODEMAILER_DIRECT_DEV_PORT)
 
   return {
     transport,
@@ -167,6 +177,9 @@ export function resolveNodemailerStrategyConfig(
     from,
     replyTo,
     subjectPrefix,
+    directSmtpPort,
+    directDevHost,
+    directDevPort,
     transportOptions,
   }
 }

@@ -1,6 +1,7 @@
 export const NODEMAILER_NOTIFICATION_STRATEGY_ID = 'nodemailer'
 
 export const NODEMAILER_TRANSPORT_KINDS = [
+  'direct',
   'sendmail',
   'smtp',
   'service',
