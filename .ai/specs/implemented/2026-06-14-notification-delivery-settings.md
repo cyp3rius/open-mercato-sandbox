@@ -168,12 +168,16 @@ Env defaults applied when DB config absent (`DEFAULT_NOTIFICATION_DELIVERY_CONFI
 On `notifications.notification.created`:
 
 1. Load `deliveryConfig`
-2. If `strategies.email.enabled` && recipient has email && `panelLink` → send via Resend (`sendEmail` + `NotificationEmail`)
-3. For each registered custom strategy:
+2. Resolve recipient **email** and **locale** (`users.preferred_locale` → fallback `emailDefaultLocale` = `pl`)
+3. Translate notification copy with `loadDictionary(locale)` (`titleKey`, `bodyKey`, action labels, email shell keys)
+4. If `strategies.email.enabled` && recipient has email && `panelLink` → send via Resend (`sendEmail` + `NotificationEmail`)
+5. For each registered custom strategy:
    - `enabled = strategyConfig.enabled ?? strategy.defaultEnabled ?? false`
-   - If enabled → `strategy.deliver(ctx)`
+   - If enabled → `strategy.deliver(ctx)` (ctx includes locale-aware `t`)
 
-**panelLink** requires `appUrl` + `panelPath`. Without `appUrl`, email strategies skip sending (debug log).
+**panelLink** requires `appUrl` + `panelPath`. Without `appUrl`, email strategies skip sending (debug log when `NOTIFICATIONS_DEBUG=true`).
+
+> Full sequence diagram and locale rules: [2026-06-14 — Notification Lifecycle & Email i18n](./2026-06-14-notification-lifecycle-and-email-i18n.md).
 
 ### Extending with a custom strategy
 
@@ -369,7 +373,14 @@ Visibility per user depends on enabled modules and ACL features.
 
 - `notifications.preferences.*` — UI chrome
 - Per-type `labelKey` in catalog / module `notifications.ts`
-- App inject labels: `insurance_desk.notifications.preferences.lead_injected`, `lead_intake.notifications.preferences.deal_injected` in `apps/mercato/src/i18n/{en,pl}.json`
+- App inject labels: `insurance_desk.notifications.preferences.*`, `lead_intake.notifications.preferences.*` in `apps/mercato/src/i18n/{en,pl,es,de}.json`
+
+### Email delivery locale
+
+- Recipient: `users.preferred_locale` (set via `/api/auth/locale` when logged in)
+- Fallback: `emailDefaultLocale` = **`pl`** (`packages/shared/src/lib/i18n/config.ts`)
+- Notification shell: `notifications.delivery.email.*` (core i18n, 4 locales)
+- See [lifecycle spec](./2026-06-14-notification-lifecycle-and-email-i18n.md) for all transactional templates
 
 ### Profile
 
@@ -484,9 +495,14 @@ Visibility per user depends on enabled modules and ACL features.
 
 - [SPEC-003 — Notifications Module](./SPEC-003-2026-01-23-notifications-module.md) — foundation
 - [2026-06-14 — Nodemailer Notification Delivery Strategy](./2026-06-14-nodemailer-notification-delivery-strategy.md) — custom email channel
+- [2026-06-14 — Notification Lifecycle & Email i18n](./2026-06-14-notification-lifecycle-and-email-i18n.md) — creation → delivery → localized email
 - [SPEC-007 — Sidebar Reorganization](./SPEC-007-2026-01-26-sidebar-reorganization.md) — profile sections plan
 
 ## Changelog
+
+### 2026-06-14 (b)
+- Documented **recipient locale** in delivery runtime (`preferred_locale`, fallback `pl`).
+- Expanded i18n section: app inject keys in **es/de**; link to lifecycle spec for transactional emails.
 
 ### 2026-06-14
 - Initial specification documenting tenant delivery settings, custom strategy admin UI, and user notification preferences (profile panel + service filtering).

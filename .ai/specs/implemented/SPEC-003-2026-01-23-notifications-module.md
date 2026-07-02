@@ -2446,9 +2446,15 @@ Enable the strategy in module config (stored under `notifications.delivery_strat
 
 External channels (email) link to a dedicated backend route (`/backend/notifications`) that renders the notification panel in isolation.
 
+**RS Moto / self-hosted (2026-06-14):** See [Notification Lifecycle & Email i18n](./2026-06-14-notification-lifecycle-and-email-i18n.md) for the full pipeline including Nodemailer `direct` transport, worker bootstrap, user `preferred_locale`, and Polish-default email copy.
+
 ---
 
 ## Changelog
+
+### 2026-06-14
+- Cross-reference: [lifecycle & email i18n spec](./2026-06-14-notification-lifecycle-and-email-i18n.md) documents end-to-end delivery after preference filtering, Nodemailer, and recipient locale.
+- Delivery settings and Nodemailer specs updated with worker bootstrap, `direct` transport, and `users.preferred_locale`.
 
 ### 2026-01-27
 - Added auth module notifications for password reset and role assignment changes
@@ -2566,8 +2572,8 @@ External channels (email) link to a dedicated backend route (`/backend/notificat
 - **Next steps (future enhancements)**
   - Add comprehensive test suite
   - Create more example notification types in other modules
-  - Add notification preferences/settings page
+  - ~~Add notification preferences/settings page~~ ✅ (see `2026-06-14-notification-delivery-settings.md`)
   - Implement push notifications via WebSockets or SSE
   - Add notification grouping/threading
   - Email digest options
-  - Add API endpoint to resolve i18n keys at display time
+  - ~~Add API endpoint to resolve i18n keys at display time~~ (resolved at delivery for email; UI uses client i18n)

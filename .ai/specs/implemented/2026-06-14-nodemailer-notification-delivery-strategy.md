@@ -206,6 +206,7 @@ type NotificationDeliveryStrategy = {
 | `transport` | Nodemailer target | Required config |
 |-------------|-------------------|-----------------|
 | `sendmail` (default) | `{ sendmail: true }` or `{ sendmail: { path, args } }` | Optional `sendmailPath`, `sendmailArgs` |
+| `direct` | Custom MX delivery via `nodemailerDirectSmtp.ts` (port 25, per-recipient domain) | `NODEMAILER_TRANSPORT=direct`; **recommended for RS Moto VPS** instead of loopback Postfix |
 | `smtp` | `{ host, port, secure, auth? }` | `host` (or `SMTP_HOST` env) |
 | `service` | `{ service, auth? }` | `service` / `SMTP_SERVICE` |
 | `url` | connection URL string | `url` / `NODEMAILER_URL` |
@@ -226,7 +227,7 @@ Transport instance is cached per resolved config key (`getNodemailerTransport`).
 
 Keys under `notifications.settings.custom.nodemailer.*` in `packages/core/src/modules/notifications/i18n/{en,pl,de,es}.json`:
 
-- `transport`, `transport.sendmail`, `transport.smtp`, …
+- `transport`, `transport.sendmail`, `transport.direct`, `transport.smtp`, …
 - `transportHint`, `sendmailPath`, `sendmailArgs`, `sendmailArgsHint`
 - `smtpHost`, `smtpPort`, `smtpSecure`, `smtpUser`, `smtpPass`
 - `service`, `url`, `sesRegion`, `sesHint`
@@ -260,7 +261,7 @@ Imported from `apps/mercato/src/components/ClientBootstrap.tsx`.
 |----------|---------|---------|
 | `NOTIFICATIONS_NODEMAILER_ENABLED` | Strategy `defaultEnabled` | `false` |
 | `NOTIFICATIONS_SMTP_ENABLED` | Alias for above | `false` |
-| `NODEMAILER_TRANSPORT` | Transport kind | inferred |
+| `NODEMAILER_TRANSPORT` | Transport kind | inferred (`direct` recommended for MX; `sendmail` = local pipe) |
 | `SENDMAIL_PATH` | Sendmail binary | OS default |
 | `SENDMAIL_ARGS` | Comma-separated args | — |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | SMTP | port `587`, secure `false` |
@@ -320,6 +321,9 @@ Module declares `requires: ['notifications']`.
 | File | Purpose |
 |------|---------|
 | `lib/__tests__/nodemailerNotificationDelivery.test.ts` | Delivery + transport unit tests |
+| `lib/nodemailerDirectSmtp.ts` | Direct MX transport (production RS Moto) |
+| `lib/nodemailerTransactionalEmail.ts` | `sendTransactionalEmail` for messages module |
+| `generators.ts` | Worker/CLI bootstrap registration |
 | `apps/mercato/.env.example` | Operator documentation |
 
 ### Testing Strategy
@@ -397,7 +401,18 @@ Module declares `requires: ['notifications']`.
 
 **Fully compliant** — implemented and deployed in RS Moto Concierge app module.
 
+## Related Specs
+
+- [2026-06-14 — Notification Lifecycle & Email i18n](./2026-06-14-notification-lifecycle-and-email-i18n.md) — end-to-end pipeline
+- [2026-06-14 — Notification Delivery & Preferences Settings](./2026-06-14-notification-delivery-settings.md)
+
 ## Changelog
+
+### 2026-06-14 (b)
+- Added **`direct`** transport (MX/port 25) for VPS deployments where local Postfix is loopback-only.
+- Documented **worker bootstrap** via `generators.ts` + `runBootstrapRegistrations()`.
+- Added **`sendTransactionalEmail`** hook (`nodemailerTransactionalEmail.ts`) for messages/cases emails.
+- Delivery subscriber resolves **recipient locale** before translating notification keys (see lifecycle spec).
 
 ### 2026-06-14
 - Initial specification documenting implemented Nodemailer notification delivery strategy (`mail_delivery` module).
