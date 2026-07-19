@@ -60,6 +60,8 @@ export type SalesLineSnapshot = {
   metadata?: Record<string, unknown> | null
   customFieldSetId?: string | null
   customFields?: Record<string, unknown> | null
+  subscriptionStartsAt?: Date | null
+  subscriptionEndsAt?: Date | null
 }
 
 export type SalesAdjustmentDraft = {

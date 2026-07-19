@@ -46,6 +46,22 @@ export default function CaseCreatePage() {
               const v = s.trim()
               return v.length ? v : null
             }
+            if (
+              values.recurrenceEnabled &&
+              (values.recurrenceIntervalAmount == null || !values.recurrenceIntervalUnit)
+            ) {
+              flash(t('cases.recurrence.intervalRequired', 'Set the recurrence interval and unit.'), 'error')
+              return
+            }
+            const recurrenceCreateLeadTime =
+              values.recurrenceEnabled &&
+              values.recurrenceCreateLeadTimeAmount != null &&
+              values.recurrenceCreateLeadTimeUnit
+                ? {
+                    amount: values.recurrenceCreateLeadTimeAmount,
+                    unit: values.recurrenceCreateLeadTimeUnit,
+                  }
+                : null
             const call = await createCrud<{ id?: string }>(
               'cases',
               {
@@ -55,6 +71,17 @@ export default function CaseCreatePage() {
                 resourceId: toNullIfEmpty(values.resourceId ?? ''),
                 procurementProcessId: toNullIfEmpty(values.procurementProcessId ?? ''),
                 insurancePolicyId: toNullIfEmpty(values.insurancePolicyId ?? ''),
+                ownerUserId: values.ownerUserId.trim(),
+                recurrenceEnabled: values.recurrenceEnabled,
+                recurrenceIntervalAmount: values.recurrenceEnabled
+                  ? values.recurrenceIntervalAmount
+                  : null,
+                recurrenceIntervalUnit: values.recurrenceEnabled
+                  ? values.recurrenceIntervalUnit || null
+                  : null,
+                recurrenceCreateLeadTime,
+                recurrenceSeriesId: null,
+                recurrenceNextOccurrenceAt: null,
                 tenantId,
                 organizationId,
               },

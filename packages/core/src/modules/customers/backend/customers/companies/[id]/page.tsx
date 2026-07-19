@@ -22,6 +22,7 @@ import {
 import {
   NotesSection,
   type CommentSummary,
+  InlineSelectEditor,
   type SectionAction,
 } from '@open-mercato/ui/backend/detail'
 import {
@@ -57,6 +58,12 @@ import { normalizeAddressRowsForBillingSync } from '@open-mercato/core/modules/c
 import { syncBillingAddressFromMfRegistry } from '@open-mercato/core/modules/customers/lib/syncBillingAddressFromMfRegistry'
 import { isValidNip, normalizeNipDigits } from '../../../../lib/nip'
 import { isValidRegon, normalizeRegonDigits } from '../../../../lib/regon'
+import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
+import {
+  mergeEntitySearchOption,
+  remoteSearchAuthUsers,
+  resolveUserDisplayLabel,
+} from '../../../../../procurement/lib/procurementEntitySearch'
 
 type CompanyOverview = {
   company: {
@@ -127,7 +134,30 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
   const [activeTab, setActiveTab] = React.useState<SectionKey>(initialTab)
   const [sectionAction, setSectionAction] = React.useState<SectionAction | null>(null)
   const [isDeleting, setIsDeleting] = React.useState(false)
+  const [ownerLabel, setOwnerLabel] = React.useState<string | null>(null)
   const currentCompanyId = data?.company?.id ?? null
+  const ownerUserId = data?.company?.ownerUserId?.trim() ?? ''
+  React.useEffect(() => {
+    if (!ownerUserId) {
+      setOwnerLabel(null)
+      return
+    }
+    let cancelled = false
+    resolveUserDisplayLabel(ownerUserId)
+      .then((label) => {
+        if (!cancelled) setOwnerLabel(label)
+      })
+      .catch(() => {
+        if (!cancelled) setOwnerLabel(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [ownerUserId])
+  const ownerOptions = React.useMemo(
+    () => mergeEntitySearchOption([], ownerUserId, ownerLabel ?? ownerUserId),
+    [ownerLabel, ownerUserId],
+  )
   const companyName =
     data?.company?.displayName && data.company.displayName.trim().length
       ? data.company.displayName
@@ -386,6 +416,24 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
       )
     },
     [saveCompany],
+  )
+
+  const updateOwnerUser = React.useCallback(
+    async (next: string | null) => {
+      const normalized = typeof next === 'string' ? next.trim() : ''
+      if (!normalized) throw new Error(t('customers.form.ownerRequired', 'Guardian is required.'))
+      await saveCompany(
+        { ownerUserId: normalized },
+        (prev) => ({
+          ...prev,
+          company: {
+            ...prev.company,
+            ownerUserId: normalized,
+          },
+        }),
+      )
+    },
+    [saveCompany, t],
   )
 
   const updateCompanyField = React.useCallback(
@@ -770,6 +818,50 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
       placeholder: t('customers.companies.detail.fields.legalNamePlaceholder', 'Add legal name'),
       emptyLabel: t('customers.companies.detail.noValue', 'Not provided'),
       onSave: (value) => updateProfileField('legalName', value),
+    },
+    {
+      key: 'ownerUserId',
+      kind: 'custom',
+      label: t('customers.form.owner', 'Guardian'),
+      emptyLabel: t('customers.companies.detail.noValue', 'Not provided'),
+      render: () => (
+        <InlineSelectEditor
+          label={t('customers.form.owner', 'Guardian')}
+          value={ownerUserId}
+          emptyLabel={t('customers.companies.detail.noValue', 'Not provided')}
+          options={ownerOptions.map(({ value, label, description }) => ({
+            value,
+            label,
+            description: description ?? undefined,
+          }))}
+          onSave={updateOwnerUser}
+          variant="muted"
+          activateOnClick
+          renderEditor={({ value: draft, onChange }) => (
+            <EntitySearchCombobox
+              value={draft}
+              onChange={onChange}
+              options={mergeEntitySearchOption(
+                ownerOptions,
+                draft,
+                draft === ownerUserId ? ownerLabel ?? draft : draft,
+              )}
+              onRemoteSearch={async (query) => {
+                const rows = await remoteSearchAuthUsers(query)
+                return mergeEntitySearchOption(
+                  rows,
+                  draft,
+                  draft === ownerUserId ? ownerLabel ?? draft : draft,
+                )
+              }}
+              placeholder={t('customers.form.ownerPlaceholder', 'Choose a guardian…')}
+              searchPlaceholder={t('customers.form.ownerSearch', 'Search users…')}
+              createInNewTabHref="/backend/users/create"
+              createInNewTabAriaLabel={t('customers.form.ownerAddUser', 'Create user in a new tab')}
+            />
+          )}
+        />
+      ),
     },
     {
       key: 'brandName',

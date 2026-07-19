@@ -332,17 +332,17 @@ function AiAssistantSettingsContent() {
             {settings?.mcpKeyConfigured ? (
               <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs">
                 <CheckCircle2 className="h-3 w-3" />
-                MCP_SERVER_API_KEY configured
+                OPEN_MERCATO_MCP_API_KEY configured
               </span>
             ) : (
               <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 text-xs">
                 <XCircle className="h-3 w-3" />
-                MCP_SERVER_API_KEY not set
+                OPEN_MERCATO_MCP_API_KEY not set
               </span>
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-1 ml-6">
-            Required for AI to access platform tools via MCP server.
+            CRM API key (`omk_…`) required for AI / Cursor agents to use the MCP server.
           </p>
         </div>
 

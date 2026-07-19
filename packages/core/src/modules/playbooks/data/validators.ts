@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { procedureBlocksArraySchema } from '../lib/procedureBlocks'
+import { procedureDurationSchema } from '../lib/duration'
 
 const uuid = z.string().uuid()
 
@@ -10,6 +11,8 @@ export const playbookCreateSchema = z.object({
   title: z.string().min(1).max(500),
   body: z.string().max(100000),
   contextTags: z.array(z.string().min(1).max(80)).optional().default([]),
+  recommendedOwnerUserIds: z.array(uuid).optional().default([]),
+  defaultSlaDuration: procedureDurationSchema.optional().nullable(),
   procedureDefinition: procedureBlocksArraySchema.optional().default([]),
   audience: z.enum(['internal', 'customer_facing', 'both']).optional().default('internal'),
   version: z.number().int().min(0).optional().default(0),
@@ -23,6 +26,8 @@ export const playbookUpdateSchema = z.object({
   title: z.string().min(1).max(500).optional(),
   body: z.string().max(100000).optional(),
   contextTags: z.array(z.string().min(1).max(80)).optional(),
+  recommendedOwnerUserIds: z.array(uuid).optional(),
+  defaultSlaDuration: procedureDurationSchema.optional().nullable(),
   procedureDefinition: procedureBlocksArraySchema.optional(),
   audience: z.enum(['internal', 'customer_facing', 'both']).optional(),
   version: z.number().int().min(0).optional(),

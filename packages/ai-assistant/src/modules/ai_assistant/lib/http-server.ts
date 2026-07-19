@@ -13,6 +13,7 @@ import type { McpServerConfig, McpToolContext } from './types'
 import type { SearchService } from '@open-mercato/search/service'
 import type { RbacService } from '@open-mercato/core/modules/auth/services/rbacService'
 import type { ApiKey } from '@open-mercato/core/modules/api_keys/data/entities'
+import { resolveMcpHost } from './mcpEnv'
 import { findApiKeyBySecret, findSessionApiKeyWithSecret } from '@open-mercato/core/modules/api_keys/services/apiKeyService'
 
 /**
@@ -591,19 +592,39 @@ export async function runMcpHttpServer(options: McpHttpServerOptions): Promise<v
   })
 
   const toolCount = getToolRegistry().listToolNames().length
+  const host = resolveMcpHost()
+  const displayHost = host === '0.0.0.0' || host === '::' ? 'localhost' : host
+  const appUrl =
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    'http://localhost:3000'
+  const looksLocal = /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(appUrl)
+  const bindsRemotely = host === '0.0.0.0' || host === '::' || host === '[::]'
+  if (bindsRemotely && looksLocal) {
+    console.error(
+      `[MCP HTTP] Warning: MCP binds on ${host} but APP_URL/NEXT_PUBLIC_APP_URL is "${appUrl}". ` +
+        'Code Mode execute() calls that base URL from this process — set it to the CRM origin reachable from the MCP host.',
+    )
+  }
 
   console.error(`[MCP HTTP] Starting ${config.name} v${config.version}`)
-  console.error(`[MCP HTTP] Endpoint: http://localhost:${port}/mcp`)
-  console.error(`[MCP HTTP] Health: http://localhost:${port}/health`)
+  console.error(`[MCP HTTP] Bind: ${host}:${port}`)
+  console.error(`[MCP HTTP] Endpoint: http://${displayHost}:${port}/mcp`)
+  console.error(`[MCP HTTP] Health: http://${displayHost}:${port}/health`)
+  console.error(`[MCP HTTP] App base URL (execute): ${appUrl}`)
   console.error(`[MCP HTTP] Tools registered: ${toolCount}`)
   console.error(`[MCP HTTP] Mode: Stateless (new server per request)`)
   console.error(`[MCP HTTP] Server Auth: API key validated against database (x-api-key header)`)
   console.error(`[MCP HTTP] User Auth: Session token (_sessionToken) preferred, falls back to API key roles`)
+  console.error(
+    `[MCP HTTP] Remote agents: point Cursor/Claude HTTP MCP at http(s)://<this-host>:${port}/mcp with x-api-key`,
+  )
 
   // Return a Promise that keeps the process alive until shutdown
   return new Promise<void>((resolve) => {
-    httpServer.listen(port, () => {
-      console.error(`[MCP HTTP] Server listening on port ${port}`)
+    httpServer.listen(port, host, () => {
+      console.error(`[MCP HTTP] Server listening on ${host}:${port}`)
     })
 
     const shutdown = async () => {

@@ -1,4 +1,5 @@
 import { Entity, Index, PrimaryKey, Property } from '@mikro-orm/core'
+import type { ProcedureDuration } from '../lib/duration'
 import type { ProcedureBlock } from '../lib/procedureBlocks'
 
 @Entity({ tableName: 'playbooks_playbooks' })
@@ -25,6 +26,12 @@ export class Playbook {
 
   @Property({ name: 'context_tags', type: 'json' })
   contextTags: string[] = []
+
+  @Property({ name: 'recommended_owner_user_ids', type: 'json' })
+  recommendedOwnerUserIds: string[] = []
+
+  @Property({ name: 'default_sla_duration', type: 'json', nullable: true })
+  defaultSlaDuration?: ProcedureDuration | null
 
   @Property({ name: 'procedure_definition', type: 'json', nullable: true })
   procedureDefinition?: ProcedureBlock[] | null

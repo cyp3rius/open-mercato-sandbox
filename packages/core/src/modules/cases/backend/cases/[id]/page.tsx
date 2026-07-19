@@ -236,6 +236,7 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
   >(null)
   const [canClose, setCanClose] = React.useState(false)
   const [canCloseInterruptProcedure, setCanCloseInterruptProcedure] = React.useState(false)
+  const [canAssignProcedureOwner, setCanAssignProcedureOwner] = React.useState(false)
   const [currentUserId, setCurrentUserId] = React.useState<string | null>(null)
   const [resourceRelLabel, setResourceRelLabel] = React.useState('')
   const [processRelLabel, setProcessRelLabel] = React.useState('')
@@ -257,7 +258,13 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          features: ['cases.edit', 'playbooks.view', 'cases.close', 'cases.close.interruptProcedure'],
+          features: [
+            'cases.edit',
+            'playbooks.view',
+            'cases.close',
+            'cases.close.interruptProcedure',
+            'cases.owner.assign',
+          ],
         }),
       })
       if (cancelled) return
@@ -266,6 +273,7 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
       setCanPlaybooks(granted.includes('playbooks.view'))
       setCanClose(granted.includes('cases.close'))
       setCanCloseInterruptProcedure(granted.includes('cases.close.interruptProcedure'))
+      setCanAssignProcedureOwner(granted.includes('cases.owner.assign'))
       const uid = typeof call.result?.userId === 'string' && call.result.userId.trim().length
         ? call.result.userId.trim()
         : null
@@ -1277,6 +1285,7 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
                       canAnswerYesNo={procedure.canAnswerYesNo}
                       invokeProcedureOptions={procedure.invokeProcedureOptions ?? []}
                       canLaunchInvokeProcedure={Boolean(procedure.canLaunchInvokeProcedure && canMutate)}
+                      canAssignProcedureOwner={canAssignProcedureOwner}
                       procedureTaskSummary={procedure.procedureTaskSummary ?? null}
                       canScheduleProcedureTask={Boolean(procedure.canScheduleProcedureTask && canMutate)}
                       onNext={(opts) =>
@@ -1287,8 +1296,12 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
                       }
                       onSendNotify={(plain) => void runProcedurePost({ action: 'sendNotify', body: plain })}
                       onAnswer={(branch) => void runProcedurePost({ action: 'answer', branch })}
-                      onLaunchInvokeProcedure={(slug) =>
-                        void runProcedurePost({ action: 'launchInvokeProcedure', slug })
+                      onLaunchInvokeProcedure={(slug, ownerUserId) =>
+                        void runProcedurePost({
+                          action: 'launchInvokeProcedure',
+                          slug,
+                          ...(ownerUserId ? { ownerUserId } : {}),
+                        })
                       }
                       onScheduleProcedureTask={(payload) =>
                         runProcedurePost({

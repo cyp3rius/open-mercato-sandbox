@@ -49,7 +49,7 @@ The MCP server authenticates requests using an Open Mercato API key:
 
 ```bash
 # .env
-MCP_SERVER_API_KEY=omk_your_api_key_here
+OPEN_MERCATO_MCP_API_KEY=omk_your_api_key_here
 ```
 
 ### Step 3: Create .mcp.json for Claude Code Integration (Optional)
@@ -117,10 +117,15 @@ curl http://localhost:4096/mcp
 | `GOOGLE_GENERATIVE_AI_API_KEY` | If using Google | - | Google Generative AI API key |
 | `OPENCODE_PROVIDER` | Yes | - | LLM provider: `anthropic`, `openai`, or `google` |
 | `OPENCODE_MODEL` | No | See table below | Override the model for selected provider |
-| `MCP_SERVER_API_KEY` | For production | - | Open Mercato API key (`omk_...`) for MCP server auth |
-| `MCP_DEV_PORT` | No | `3001` | Port for development MCP server |
-| `MCP_DEBUG` | No | `false` | Enable debug logging |
+| `OPEN_MERCATO_MCP_API_KEY` | Yes (for MCP) | - | CRM API key (`omk_…`) for MCP auth / Cursor `x-api-key` |
+| `OPEN_MERCATO_MCP_PORT` | No | `3001` | MCP HTTP listen port |
+| `OPEN_MERCATO_MCP_HOST` | No | `0.0.0.0` | Listen address (`127.0.0.1` for localhost-only) |
+| `OPEN_MERCATO_MCP_URL` | No | derived | Base URL for in-app OpenCode → MCP |
+| `OPEN_MERCATO_MCP_DEBUG` | No | `false` | Enable debug logging |
+| `APP_URL` / `NEXT_PUBLIC_APP_URL` | No | `http://localhost:3000` | Base URL used by Code Mode `execute` → `api.request()` |
 | `OPENCODE_URL` | No | `http://localhost:4096` | OpenCode server URL |
+
+Deprecated aliases still work: `MCP_SERVER_API_KEY`, `MCP_DEV_PORT`, `MCP_HOST`, `OPEN_MERCATO_API_KEY`, `MCP_API_KEY`, `MCP_URL`, `MCP_DEBUG`.
 
 ### Models by Provider
 
@@ -134,7 +139,7 @@ If `OPENCODE_MODEL` is not set, these models are used:
 
 ### .mcp.json Configuration
 
-For Claude Code integration, create `.mcp.json` in the project root:
+For Cursor / Claude Code / Claude Desktop, create `.mcp.json` (or Claude Desktop MCP config). Local:
 
 ```json
 {
@@ -149,6 +154,8 @@ For Claude Code integration, create `.mcp.json` in the project root:
   }
 }
 ```
+
+Remote CRM: set `url` to `https://<remote-host>:3001/mcp` (see `.mcp.json.example` and `.ai/skills/remote-crm-mcp`).
 
 The `x-api-key` value must be a valid Open Mercato API key:
 1. Log into Open Mercato backend
@@ -195,7 +202,7 @@ For local development and Claude Code integration:
 - Authenticates **once at startup** using API key from `.mcp.json`
 - No session tokens required per request
 - Tools filtered by API key permissions at startup
-- **Default port: 3001** (configurable via `MCP_DEV_PORT` env var)
+- **Default port: 3001** (configurable via `OPEN_MERCATO_MCP_PORT` env var)
 - No port argument needed
 
 ```bash
@@ -203,7 +210,7 @@ For local development and Claude Code integration:
 yarn mcp:dev
 
 # Or override port via environment variable
-MCP_DEV_PORT=3002 yarn mcp:dev
+OPEN_MERCATO_MCP_PORT=3002 yarn mcp:dev
 ```
 
 #### Production Server (`yarn mcp:serve`)
@@ -228,7 +235,7 @@ yarn mcp:serve -- --port 3001 --debug
 
 | Feature | Dev (`mcp:dev`) | Production (`mcp:serve`) |
 |---------|-----------------|-------------------------|
-| Port | Default 3001 (`MCP_DEV_PORT`) | **Required** (`--port`) |
+| Port | Default 3001 (`OPEN_MERCATO_MCP_PORT`) | **Required** (`--port`) |
 | Auth source | `.mcp.json` file | `x-api-key` header per request |
 | Permission check | Once at startup | Per request |
 | Session tokens | Not required | Optional (for user-level auth) |
@@ -536,7 +543,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}            # Set if using openai
       GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}  # Set if using google
       OPENCODE_MCP_URL: ${OPENCODE_MCP_URL:-http://host.docker.internal:3001/mcp}
-      MCP_SERVER_API_KEY: ${MCP_SERVER_API_KEY}      # Required
+      OPEN_MERCATO_MCP_API_KEY: ${OPEN_MERCATO_MCP_API_KEY}      # Required (alias: MCP_SERVER_API_KEY)
     ports:
       - "4096:4096"
 ```

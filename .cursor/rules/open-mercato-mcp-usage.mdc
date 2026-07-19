@@ -1,0 +1,18 @@
+---
+description: Open Mercato MCP — use only when the user explicitly asks to manage OM from chat
+alwaysApply: true
+---
+
+# Open Mercato MCP — usage policy
+
+Server: `user-open-mercato-local` / `open-mercato` (`context_whoami`, `search`, `execute`, `playbooks_*`).
+
+## Rule
+
+**Do not** call Open Mercato MCP tools unless the user **explicitly** asks to manage Open Mercato (CRM/data/operations) from the chat.
+
+- Coding, specs, reviews, debugging code, and local repo work → use files, shell, and docs — **not** MCP.
+- Connectivity checks, `context_whoami`, `search`/`execute`, playbooks via MCP → **only** after an explicit request (e.g. “przez MCP”, “z poziomu chatu”, “w CRM”, “wywołaj Open Mercato MCP”).
+- Do **not** invent MCP usage from proximity (open `.env`, CRM mention, or default “proactive MCP” habits).
+
+When in doubt: ask once, or proceed without MCP.

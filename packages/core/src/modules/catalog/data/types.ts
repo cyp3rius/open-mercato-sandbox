@@ -9,6 +9,25 @@ export const CATALOG_PRODUCT_TYPES = [
 
 export type CatalogProductType = (typeof CATALOG_PRODUCT_TYPES)[number]
 
+export const CATALOG_OFFERING_KINDS = [
+  'resource',
+  'internal_service',
+  'external_service',
+  'subscription',
+] as const
+
+export type CatalogOfferingKind = (typeof CATALOG_OFFERING_KINDS)[number]
+
+export type CatalogProductCaseTemplate = {
+  id: string
+  title: string
+  playbookId?: string | null
+  recurrenceEnabled?: boolean
+  recurrenceIntervalAmount?: number | null
+  recurrenceIntervalUnit?: 'hours' | 'days' | 'weeks' | 'months' | null
+  recurrenceCreateLeadTime?: { amount: number; unit: 'hours' | 'days' | 'weeks' | 'months' } | null
+}
+
 export const CATALOG_CONFIGURABLE_PRODUCT_TYPES = ['configurable', 'virtual', 'downloadable'] as const
 
 export const CATALOG_SUBPRODUCT_PRODUCT_TYPES = ['bundle', 'grouped'] as const

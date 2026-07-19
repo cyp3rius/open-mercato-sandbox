@@ -387,6 +387,8 @@ type OrderLineSnapshot = {
   metadata: Record<string, unknown> | null;
   customFieldSetId: string | null;
   customFields: Record<string, unknown> | null;
+  subscriptionStartsAt: string | null;
+  subscriptionEndsAt: string | null;
 };
 
 type OrderAdjustmentSnapshot = {
@@ -1666,6 +1668,12 @@ async function loadOrderSnapshot(
       customFields: lineCustomFields[line.id]
         ? cloneJson(lineCustomFields[line.id])
         : null,
+      subscriptionStartsAt: line.subscriptionStartsAt
+        ? line.subscriptionStartsAt.toISOString()
+        : null,
+      subscriptionEndsAt: line.subscriptionEndsAt
+        ? line.subscriptionEndsAt.toISOString()
+        : null,
     })),
     adjustments: adjustments.map((adj) => ({
       id: adj.id,
@@ -2458,6 +2466,8 @@ function mapOrderLineEntityToSnapshot(line: SalesOrderLine): SalesLineSnapshot {
     promotionCode: line.promotionCode ?? null,
     metadata: line.metadata ? cloneJson(line.metadata) : null,
     customFieldSetId: line.customFieldSetId ?? null,
+    subscriptionStartsAt: line.subscriptionStartsAt ?? null,
+    subscriptionEndsAt: line.subscriptionEndsAt ?? null,
   };
 }
 
@@ -2595,7 +2605,55 @@ function createLineSnapshotFromInput(
       "customFields" in line && line.customFields
         ? cloneJson((line as any).customFields)
         : null,
+    subscriptionStartsAt:
+      "subscriptionStartsAt" in line
+        ? ((line as any).subscriptionStartsAt ?? null)
+        : null,
+    subscriptionEndsAt:
+      "subscriptionEndsAt" in line
+        ? ((line as any).subscriptionEndsAt ?? null)
+        : null,
   };
+}
+
+async function validateOrderLineSubscriptionDates(
+  em: EntityManager,
+  line: {
+    productId?: string | null;
+    subscriptionStartsAt?: Date | null;
+    subscriptionEndsAt?: Date | null;
+  },
+  organizationId: string,
+  tenantId: string,
+  translate: (key: string, fallback: string) => string,
+): Promise<void> {
+  const productId = line.productId ?? null;
+  if (!productId) return;
+  const product = await em.findOne(CatalogProduct, {
+    id: productId,
+    organizationId,
+    tenantId,
+    deletedAt: null,
+  });
+  if (!product || product.offeringKind !== "subscription") return;
+  const startsAt = line.subscriptionStartsAt ?? null;
+  const endsAt = line.subscriptionEndsAt ?? null;
+  if (!startsAt || !endsAt) {
+    throw new CrudHttpError(400, {
+      error: translate(
+        "sales.orders.lines.subscriptionDatesRequired",
+        "Subscription start and end dates are required for subscription products.",
+      ),
+    });
+  }
+  if (startsAt.getTime() > endsAt.getTime()) {
+    throw new CrudHttpError(400, {
+      error: translate(
+        "sales.orders.lines.subscriptionDatesInvalid",
+        "Subscription start date must be on or before the end date.",
+      ),
+    });
+  }
 }
 
 function createAdjustmentDraftFromInput(
@@ -2679,6 +2737,8 @@ function convertLineCalculationToEntityInput(
       : null,
     metadata: line.metadata ? cloneJson(line.metadata) : null,
     customFieldSetId: sourceLine.customFieldSetId ?? null,
+    subscriptionStartsAt: sourceLine.subscriptionStartsAt ?? null,
+    subscriptionEndsAt: sourceLine.subscriptionEndsAt ?? null,
     organizationId: document.organizationId,
     tenantId: document.tenantId,
   };
@@ -2723,6 +2783,16 @@ async function applyOrderLineResults(params: {
   existingLines: SalesOrderLine[];
 }): Promise<void> {
   const { em, order, calculation, sourceLines, existingLines } = params;
+  const { translate } = await resolveTranslations();
+  for (const sourceLine of sourceLines) {
+    await validateOrderLineSubscriptionDates(
+      em,
+      sourceLine,
+      order.organizationId,
+      order.tenantId,
+      translate,
+    );
+  }
   const existingMap = new Map(existingLines.map((line) => [line.id, line]));
   const persisted = new Set<string>();
   const statusCache = new Map<string, string | null>();
@@ -2993,6 +3063,16 @@ async function replaceOrderLines(
   calculation: SalesDocumentCalculationResult,
   lineInputs: OrderLineCreateInput[],
 ): Promise<void> {
+  const { translate } = await resolveTranslations();
+  for (const line of lineInputs) {
+    await validateOrderLineSubscriptionDates(
+      em,
+      line,
+      order.organizationId,
+      order.tenantId,
+      translate,
+    );
+  }
   await em.nativeDelete(SalesOrderLine, { order: order.id });
   const statusCache = new Map<string, string | null>();
   const resolveStatus = async (entryId?: string | null) => {
@@ -3977,6 +4057,12 @@ async function restoreOrderGraph(
       customFieldSetId: line.customFieldSetId ?? null,
       createdAt: new Date(),
       updatedAt: new Date(),
+      subscriptionStartsAt: line.subscriptionStartsAt
+        ? new Date(line.subscriptionStartsAt)
+        : null,
+      subscriptionEndsAt: line.subscriptionEndsAt
+        ? new Date(line.subscriptionEndsAt)
+        : null,
     });
     em.persist(lineEntity);
   });
@@ -5757,6 +5843,12 @@ const convertQuoteToOrderCommand: CommandHandler<
           : null,
         metadata: line.metadata ? cloneJson(line.metadata) : null,
         customFieldSetId: line.customFieldSetId ?? null,
+        subscriptionStartsAt: (line as any).subscriptionStartsAt
+          ? new Date((line as any).subscriptionStartsAt)
+          : null,
+        subscriptionEndsAt: (line as any).subscriptionEndsAt
+          ? new Date((line as any).subscriptionEndsAt)
+          : null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -6174,6 +6266,14 @@ const orderLineUpsertCommand: CommandHandler<
         parsed.customFields && typeof parsed.customFields === "object"
           ? cloneJson(parsed.customFields)
           : ((existingSnapshot as any)?.customFields ?? null),
+      subscriptionStartsAt:
+        parsed.subscriptionStartsAt !== undefined
+          ? parsed.subscriptionStartsAt
+          : ((existingSnapshot as any)?.subscriptionStartsAt ?? null),
+      subscriptionEndsAt:
+        parsed.subscriptionEndsAt !== undefined
+          ? parsed.subscriptionEndsAt
+          : ((existingSnapshot as any)?.subscriptionEndsAt ?? null),
     };
     (updatedSnapshot as any).statusEntryId = statusEntryId;
     (updatedSnapshot as any).catalogSnapshot =
@@ -6199,6 +6299,8 @@ const orderLineUpsertCommand: CommandHandler<
       statusEntryId: (line as any).statusEntryId ?? null,
       catalogSnapshot: (line as any).catalogSnapshot ?? null,
       promotionSnapshot: (line as any).promotionSnapshot ?? null,
+      subscriptionStartsAt: (line as any).subscriptionStartsAt ?? null,
+      subscriptionEndsAt: (line as any).subscriptionEndsAt ?? null,
       organizationId: order.organizationId,
       tenantId: order.tenantId,
       orderId: order.id,

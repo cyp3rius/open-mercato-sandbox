@@ -19,6 +19,7 @@ import {
 import {
   NotesSection,
   type CommentSummary,
+  InlineSelectEditor,
   type SectionAction,
 } from '@open-mercato/ui/backend/detail'
 import {
@@ -50,12 +51,19 @@ import { InjectionSpot, useInjectionWidgets } from '@open-mercato/ui/backend/inj
 import { DetailTabsLayout } from '../../../../components/detail/DetailTabsLayout'
 import { useGuardedMutation } from '@open-mercato/ui/backend/injection/useGuardedMutation'
 import { SendObjectMessageDialog } from '@open-mercato/ui/backend/messages'
+import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
+import {
+  mergeEntitySearchOption,
+  remoteSearchAuthUsers,
+  resolveUserDisplayLabel,
+} from '../../../../../procurement/lib/procurementEntitySearch'
 
 type PersonOverview = {
   person: {
     id: string
     displayName: string
     description?: string | null
+    ownerUserId?: string | null
     primaryEmail?: string | null
     primaryPhone?: string | null
     status?: string | null
@@ -135,6 +143,7 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
   const [activeTab, setActiveTab] = React.useState<SectionKey>(initialTab)
   const [sectionAction, setSectionAction] = React.useState<SectionAction | null>(null)
   const [isDeleting, setIsDeleting] = React.useState(false)
+  const [ownerLabel, setOwnerLabel] = React.useState<string | null>(null)
 
   const handleSectionActionChange = React.useCallback((action: SectionAction | null) => {
     setSectionAction(action)
@@ -192,6 +201,28 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
   }), [t])
 
   const personId = data?.person?.id ?? null
+  const ownerUserId = data?.person?.ownerUserId?.trim() ?? ''
+  React.useEffect(() => {
+    if (!ownerUserId) {
+      setOwnerLabel(null)
+      return
+    }
+    let cancelled = false
+    resolveUserDisplayLabel(ownerUserId)
+      .then((label) => {
+        if (!cancelled) setOwnerLabel(label)
+      })
+      .catch(() => {
+        if (!cancelled) setOwnerLabel(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [ownerUserId])
+  const ownerOptions = React.useMemo(
+    () => mergeEntitySearchOption([], ownerUserId, ownerLabel ?? ownerUserId),
+    [ownerLabel, ownerUserId],
+  )
   const mutationContextId = React.useMemo(
     () => (personId ? `customer-person:${personId}` : `customer-person:${id ?? 'pending'}`),
     [id, personId],
@@ -374,6 +405,24 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
     [savePerson]
   )
 
+  const updateOwnerUser = React.useCallback(
+    async (next: string | null) => {
+      const normalized = typeof next === 'string' ? next.trim() : ''
+      if (!normalized) throw new Error(t('customers.form.ownerRequired', 'Guardian is required.'))
+      await savePerson(
+        { ownerUserId: normalized },
+        (prev) => ({
+          ...prev,
+          person: {
+            ...prev.person,
+            ownerUserId: normalized,
+          },
+        }),
+      )
+    },
+    [savePerson, t],
+  )
+
   const updateProfileField = React.useCallback(
     async (field: ProfileEditableField, next: string | null) => {
       const send = typeof next === 'string' ? next : ''
@@ -538,6 +587,50 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
         placeholder: t('customers.people.form.firstName'),
         emptyLabel: t('customers.people.detail.noValue'),
         onSave: (next) => updateProfileField('firstName', next),
+      },
+      {
+        key: 'ownerUserId',
+        kind: 'custom',
+        label: t('customers.form.owner', 'Guardian'),
+        emptyLabel: t('customers.people.detail.noValue'),
+        render: () => (
+          <InlineSelectEditor
+            label={t('customers.form.owner', 'Guardian')}
+            value={ownerUserId}
+            emptyLabel={t('customers.people.detail.noValue')}
+            options={ownerOptions.map(({ value, label, description }) => ({
+              value,
+              label,
+              description: description ?? undefined,
+            }))}
+            onSave={updateOwnerUser}
+            variant="muted"
+            activateOnClick
+            renderEditor={({ value: draft, onChange }) => (
+              <EntitySearchCombobox
+                value={draft}
+                onChange={onChange}
+                options={mergeEntitySearchOption(
+                  ownerOptions,
+                  draft,
+                  draft === ownerUserId ? ownerLabel ?? draft : draft,
+                )}
+                onRemoteSearch={async (query) => {
+                  const rows = await remoteSearchAuthUsers(query)
+                  return mergeEntitySearchOption(
+                    rows,
+                    draft,
+                    draft === ownerUserId ? ownerLabel ?? draft : draft,
+                  )
+                }}
+                placeholder={t('customers.form.ownerPlaceholder', 'Choose a guardian…')}
+                searchPlaceholder={t('customers.form.ownerSearch', 'Search users…')}
+                createInNewTabHref="/backend/users/create"
+                createInNewTabAriaLabel={t('customers.form.ownerAddUser', 'Create user in a new tab')}
+              />
+            )}
+          />
+        ),
       },
       {
         key: 'lastName',

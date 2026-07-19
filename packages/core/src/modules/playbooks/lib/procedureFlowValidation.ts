@@ -142,34 +142,90 @@ function validateTerminalClosesList(arr: ProcedureBlock[]): { ok: true } | { ok:
   return { ok: true }
 }
 
-function dfsAllPathsTerminate(
+function collectReachableStepIds(
   blocks: ProcedureBlock[],
-  stepId: string,
+  entryId: string,
   idSet: Set<string>,
-  visiting: Set<string>,
-): { ok: true } | { ok: false; code: string } {
-  const loc = findWithPath(blocks, stepId)
-  if (!loc) return { ok: false, code: 'playbooks.procedure.validation.flowDoesNotTerminate' }
-  const b = loc.block
-  if (isFlowTerminal(b)) return { ok: true }
-  if (visiting.has(stepId)) return { ok: false, code: 'playbooks.procedure.validation.flowCycle' }
-  const outs = outgoingStepIds(blocks, stepId, idSet)
-  if (outs.length === 0) return { ok: false, code: 'playbooks.procedure.validation.flowDoesNotTerminate' }
-  visiting.add(stepId)
-  for (const nextId of outs) {
-    const result = dfsAllPathsTerminate(blocks, nextId, idSet, visiting)
-    if (!result.ok) {
-      visiting.delete(stepId)
-      return result
+): Set<string> {
+  const reachable = new Set<string>()
+  const queue = [entryId]
+  while (queue.length > 0) {
+    const stepId = queue.shift()
+    if (!stepId || reachable.has(stepId) || !idSet.has(stepId)) continue
+    reachable.add(stepId)
+    const loc = findWithPath(blocks, stepId)
+    if (!loc || isFlowTerminal(loc.block)) continue
+    for (const nextId of outgoingStepIds(blocks, stepId, idSet)) {
+      if (!reachable.has(nextId)) queue.push(nextId)
     }
   }
-  visiting.delete(stepId)
+  return reachable
+}
+
+function buildReverseAdjacency(
+  blocks: ProcedureBlock[],
+  idSet: Set<string>,
+): Map<string, string[]> {
+  const reverse = new Map<string, string[]>()
+  for (const stepId of idSet) {
+    for (const nextId of outgoingStepIds(blocks, stepId, idSet)) {
+      const preds = reverse.get(nextId)
+      if (preds) preds.push(stepId)
+      else reverse.set(nextId, [stepId])
+    }
+  }
+  return reverse
+}
+
+/** Nodes that have a (possibly cyclic) path to `end` or `invoke_procedure`. */
+function nodesThatCanReachTerminal(blocks: ProcedureBlock[], idSet: Set<string>): Set<string> {
+  const able = new Set<string>()
+  const queue: string[] = []
+  for (const stepId of idSet) {
+    const loc = findWithPath(blocks, stepId)
+    if (loc && isFlowTerminal(loc.block)) {
+      able.add(stepId)
+      queue.push(stepId)
+    }
+  }
+  const reverse = buildReverseAdjacency(blocks, idSet)
+  while (queue.length > 0) {
+    const cur = queue.shift()
+    if (!cur) continue
+    for (const pred of reverse.get(cur) ?? []) {
+      if (able.has(pred)) continue
+      able.add(pred)
+      queue.push(pred)
+    }
+  }
+  return able
+}
+
+/**
+ * Every Start-reachable step must be able to reach `end` or `invoke_procedure`.
+ * Cycles (e.g. goto back) are allowed when an exit path exists.
+ */
+function validateTerminalReachability(
+  blocks: ProcedureBlock[],
+  entryId: string,
+  idSet: Set<string>,
+): { ok: true } | { ok: false; code: string } {
+  const reachable = collectReachableStepIds(blocks, entryId, idSet)
+  if (reachable.size === 0) {
+    return { ok: false, code: 'playbooks.procedure.validation.flowDoesNotTerminate' }
+  }
+  const canExit = nodesThatCanReachTerminal(blocks, idSet)
+  for (const stepId of reachable) {
+    if (!canExit.has(stepId)) {
+      return { ok: false, code: 'playbooks.procedure.validation.flowDoesNotTerminate' }
+    }
+  }
   return { ok: true }
 }
 
 /**
- * Non-empty procedures must begin with Start; every execution path must reach `end` or `invoke_procedure`
- * (aligned with next/goto/condition semantics). Empty definition is valid.
+ * Non-empty procedures must begin with Start; every Start-reachable step must be able to reach
+ * `end` or `invoke_procedure`. Cycles are allowed when an exit exists. Empty definition is valid.
  */
 export function validateProcedureExecutionFlow(
   blocks: ProcedureBlock[],
@@ -191,5 +247,5 @@ export function validateProcedureExecutionFlow(
     return { ok: false, code: 'playbooks.procedure.validation.noStepsAfterStart' }
   }
 
-  return dfsAllPathsTerminate(blocks, entry, idSet, new Set())
+  return validateTerminalReachability(blocks, entry, idSet)
 }

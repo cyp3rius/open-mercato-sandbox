@@ -2,10 +2,28 @@
   "mcpServers": {
     "open-mercato": {
       "type": "http",
+      "url": "https://<remote-crm-host>:3001/mcp",
+      "headers": {
+        "x-api-key": "omk_..."
+      }
+    },
+    "open-mercato-local": {
+      "type": "http",
       "url": "http://localhost:3001/mcp",
       "headers": {
         "x-api-key": "omk_..."
       }
+    },
+    "open-mercato-remote-playbooks": {
+      "command": "yarn",
+      "args": ["run", "mercato", "playbooks", "mcp:remote"],
+      "cwd": "/absolute/path/to/open-mercato-sandbox",
+      "env": {
+        "OPEN_MERCATO_BASE_URL": "https://your-remote-crm.example.com",
+        "OPEN_MERCATO_API_KEY": "omk_...",
+        "OPEN_MERCATO_ORGANIZATION_ID": "optional-org-uuid"
+      }
     }
-  }
+  },
+  "_comment": "Local: set OPEN_MERCATO_MCP_API_KEY=omk_… in apps/mercato/.env (same key as x-api-key here). yarn dev starts MCP on :3001 automatically when that key is set."
 }

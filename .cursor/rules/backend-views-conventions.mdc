@@ -30,7 +30,7 @@ alwaysApply: true
 
 When you touch a file in **`**/backend/**`**, do not “only patch the one thing” — re-check the row in §1 that applies:
 
-- **List:** re-read `backend-module-list-datatable.mdc` (header: `refreshButton`, action order, optional import popover, filters + perspective + search, `rowActions`, `onRowClick` → detail, not `/edit`).
+- **List:** re-read `backend-module-list-datatable.mdc` (header: `refreshButton`, action order, Import/Export IconButton group vs FilterBar `bulkActions`, filters + perspective + search, `rowActions`, `onRowClick` → detail, not `/edit`).
 - **Form / detail:** `form-ui-consistency.mdc` and, for 7fr/3fr, `detail-two-column-layout.mdc`.
 - **New entity picker:** `entity-search-combobox.mdc` instead of raw UUID fields.
 

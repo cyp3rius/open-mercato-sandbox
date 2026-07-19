@@ -1184,6 +1184,8 @@
   "sales.orders.form.payments": "Payments",
   "sales.orders.form.shipments": "Shipments",
   "sales.orders.lines.delete": "Delete order line",
+  "sales.orders.lines.subscriptionDatesInvalid": "Subscription start date must be on or before the end date.",
+  "sales.orders.lines.subscriptionDatesRequired": "Subscription start and end dates are required for subscription products.",
   "sales.orders.lines.upsert": "Update order line",
   "sales.orders.list.title": "Orders",
   "sales.orders.status_change.actor_api_key": "API key {name}",

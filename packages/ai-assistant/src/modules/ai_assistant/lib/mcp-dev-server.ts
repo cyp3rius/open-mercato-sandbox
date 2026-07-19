@@ -10,6 +10,12 @@ import { jsonSchemaToZod } from './schema-utils'
 import type { McpToolContext } from './types'
 import type { SearchService } from '@open-mercato/search/service'
 import type { RbacService } from '@open-mercato/core/modules/auth/services/rbacService'
+import {
+  resolveMcpApiKeyFromEnv,
+  resolveMcpDebug,
+  resolveMcpHost,
+  resolveMcpPort,
+} from './mcpEnv'
 
 const DEFAULT_PORT = 3001
 
@@ -17,7 +23,14 @@ const log = (message: string, ...args: unknown[]) => {
   console.error(`[MCP Dev] ${message}`, ...args)
 }
 
+function getApiKeyFromEnv(): string | undefined {
+  return resolveMcpApiKeyFromEnv()
+}
+
 async function getApiKeyFromMcpJson(): Promise<string | undefined> {
+  const fromEnv = getApiKeyFromEnv()
+  if (fromEnv) return fromEnv
+
   const { readFile, access } = await import('node:fs/promises')
   const { resolve, dirname } = await import('node:path')
 
@@ -44,12 +57,40 @@ async function getApiKeyFromMcpJson(): Promise<string | undefined> {
     }
 
     const content = await readFile(mcpJsonPath, 'utf-8')
-    const config = JSON.parse(content)
-    const serverConfig = config?.mcpServers?.['open-mercato']
-
-    return serverConfig?.headers?.['x-api-key']
+    const config = JSON.parse(content) as {
+      mcpServers?: Record<string, { headers?: Record<string, string> }>
+    }
+    const servers = config?.mcpServers ?? {}
+    const preferred =
+      servers['open-mercato-local'] ??
+      servers['open-mercato'] ??
+      Object.values(servers).find((entry) => typeof entry?.headers?.['x-api-key'] === 'string')
+    const key = preferred?.headers?.['x-api-key']?.trim()
+    return key && key.length > 0 ? key : undefined
   } catch {
     return undefined
+  }
+}
+
+function resolveAppBaseUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    'http://localhost:3000'
+  )
+}
+
+function warnIfAppUrlLooksLocal(host: string): void {
+  const appUrl = resolveAppBaseUrl()
+  const looksLocal =
+    /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(appUrl) || appUrl.startsWith('http://localhost')
+  const bindsRemotely = host === '0.0.0.0' || host === '::' || host === '[::]'
+  if (bindsRemotely && looksLocal) {
+    log(
+      `Warning: MCP binds on ${host} but APP_URL/NEXT_PUBLIC_APP_URL is "${appUrl}". ` +
+        'Code Mode execute() calls that base URL from this process — set it to the CRM origin reachable from the MCP host.',
+    )
   }
 }
 
@@ -200,21 +241,16 @@ function createDevMcpServer(
  */
 export async function runMcpDevServer(): Promise<void> {
   const apiKey = await getApiKeyFromMcpJson()
-  const port = parseInt(process.env.MCP_DEV_PORT ?? '', 10) || DEFAULT_PORT
-  const debug = process.env.MCP_DEBUG === 'true'
+  const port = resolveMcpPort(DEFAULT_PORT)
+  const debug = resolveMcpDebug()
 
   if (!apiKey) {
-    log('Error: API key not found in .mcp.json')
+    log('Error: API key not found')
     log('')
-    log('To get an API key:')
-    log('  1. Log into Open Mercato as an admin')
-    log('  2. Go to Settings > API Keys')
-    log('  3. Create a new key with the required permissions')
-    log('')
-    log('Then configure in .mcp.json:')
+    log('Set OPEN_MERCATO_MCP_API_KEY in apps/mercato/.env (or the environment), or configure .mcp.json:')
     log('  {')
     log('    "mcpServers": {')
-    log('      "open-mercato": {')
+    log('      "open-mercato-local": {')
     log('        "type": "http",')
     log('        "url": "http://localhost:3001/mcp",')
     log('        "headers": {')
@@ -223,6 +259,9 @@ export async function runMcpDevServer(): Promise<void> {
     log('      }')
     log('    }')
     log('  }')
+    log('')
+    log('To create a key: Settings > API Keys (admin), with features matching the agent tasks.')
+    log('(Deprecated aliases still work: OPEN_MERCATO_API_KEY, MCP_API_KEY, MCP_SERVER_API_KEY)')
     process.exit(1)
   }
 
@@ -424,16 +463,23 @@ export async function runMcpDevServer(): Promise<void> {
   })
 
   const toolCount = getToolRegistry().listToolNames().length
+  const host = resolveMcpHost()
+  const displayHost = host === '0.0.0.0' || host === '::' ? 'localhost' : host
+
+  warnIfAppUrlLooksLocal(host)
 
   log(`Tools registered: ${toolCount}`)
-  log(`Endpoint: http://localhost:${port}/mcp`)
-  log(`Health: http://localhost:${port}/health`)
+  log(`Bind: ${host}:${port}`)
+  log(`Endpoint: http://${displayHost}:${port}/mcp`)
+  log(`Health: http://${displayHost}:${port}/health`)
+  log(`App base URL (execute): ${resolveAppBaseUrl()}`)
   log(`Mode: Development (API key auth, no session tokens)`)
+  log('Remote agents: point Cursor/Claude HTTP MCP at http(s)://<this-host>:<port>/mcp with x-api-key')
 
   return new Promise<void>((resolve) => {
-    httpServer.listen(port, () => {
-      log(`Server listening on port ${port}`)
-      log('Ready for Claude Code connections')
+    httpServer.listen(port, host, () => {
+      log(`Server listening on ${host}:${port}`)
+      log('Ready for Cursor / Claude Code / Claude Desktop connections')
     })
 
     const shutdown = async () => {

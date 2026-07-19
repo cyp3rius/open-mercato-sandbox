@@ -14,6 +14,8 @@ import type {
   CatalogProductOptionSchema,
   CatalogProductRelationType,
   CatalogProductType,
+  CatalogOfferingKind,
+  CatalogProductCaseTemplate,
 } from './types'
 import type { ReferenceUnitCode } from '@open-mercato/shared/lib/units/unitCodes'
 
@@ -158,6 +160,12 @@ export class CatalogProduct {
 
   @Property({ name: 'product_type', type: 'text', default: 'simple' })
   productType: CatalogProductType = 'simple'
+
+  @Property({ name: 'offering_kind', type: 'text', default: 'internal_service' })
+  offeringKind: CatalogOfferingKind = 'internal_service'
+
+  @Property({ name: 'case_templates', type: 'jsonb', nullable: true })
+  caseTemplates?: CatalogProductCaseTemplate[] | null
 
   @Property({ name: 'status_entry_id', type: 'uuid', nullable: true })
   statusEntryId?: string | null
@@ -857,4 +865,143 @@ export class CatalogProductPrice {
 
   @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
   updatedAt: Date = new Date()
+}
+
+@Entity({ tableName: 'catalog_product_relations' })
+@Index({
+  name: 'catalog_product_relations_parent_idx',
+  properties: ['parentProduct', 'organizationId', 'tenantId'],
+})
+@Index({
+  name: 'catalog_product_relations_child_idx',
+  properties: ['childProduct', 'organizationId', 'tenantId'],
+})
+@Unique({
+  name: 'catalog_product_relations_unique',
+  properties: ['parentProduct', 'childProduct', 'relationType'],
+})
+export class CatalogProductRelation {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'isRequired' | 'position' | 'relationType'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @ManyToOne(() => CatalogProduct, {
+    fieldName: 'parent_product_id',
+    deleteRule: 'cascade',
+  })
+  parentProduct!: CatalogProduct
+
+  @ManyToOne(() => CatalogProduct, {
+    fieldName: 'child_product_id',
+    deleteRule: 'cascade',
+  })
+  childProduct!: CatalogProduct
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'relation_type', type: 'text', default: 'grouped' })
+  relationType: CatalogProductRelationType = 'grouped'
+
+  @Property({ name: 'is_required', type: 'boolean', default: false })
+  isRequired: boolean = false
+
+  @Property({ name: 'min_quantity', type: 'integer', nullable: true })
+  minQuantity?: number | null
+
+  @Property({ name: 'max_quantity', type: 'integer', nullable: true })
+  maxQuantity?: number | null
+
+  @Property({ type: 'integer', default: 0 })
+  position: number = 0
+
+  @Property({ name: 'metadata', type: 'jsonb', nullable: true })
+  metadata?: Record<string, unknown> | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+@Entity({ tableName: 'catalog_customer_offerings' })
+@Index({
+  name: 'catalog_customer_offerings_scope_idx',
+  properties: ['organizationId', 'tenantId'],
+})
+@Index({
+  name: 'catalog_customer_offerings_customer_idx',
+  properties: ['customerEntityId'],
+})
+@Index({
+  name: 'catalog_customer_offerings_status_starts_idx',
+  properties: ['status', 'startsAt'],
+})
+@Index({
+  name: 'catalog_customer_offerings_parent_idx',
+  properties: ['parentOfferingId'],
+})
+@Unique({
+  name: 'catalog_customer_offerings_line_product_unique',
+  properties: ['salesOrderLineId', 'productId'],
+})
+export class CatalogCustomerOffering {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'customer_entity_id', type: 'uuid' })
+  customerEntityId!: string
+
+  @Property({ name: 'product_id', type: 'uuid' })
+  productId!: string
+
+  @Property({ name: 'sales_order_id', type: 'uuid' })
+  salesOrderId!: string
+
+  @Property({ name: 'sales_order_line_id', type: 'uuid' })
+  salesOrderLineId!: string
+
+  @Property({ name: 'parent_offering_id', type: 'uuid', nullable: true })
+  parentOfferingId?: string | null
+
+  @Property({ name: 'offering_kind', type: 'text' })
+  offeringKind: CatalogOfferingKind = 'internal_service'
+
+  @Property({ type: 'text', default: 'pending' })
+  status: string = 'pending'
+
+  @Property({ name: 'starts_at', type: Date, nullable: true })
+  startsAt?: Date | null
+
+  @Property({ name: 'ends_at', type: Date, nullable: true })
+  endsAt?: Date | null
+
+  @Property({ name: 'activated_at', type: Date, nullable: true })
+  activatedAt?: Date | null
+
+  @Property({ name: 'case_templates_snapshot', type: 'jsonb', nullable: true })
+  caseTemplatesSnapshot?: CatalogProductCaseTemplate[] | null
+
+  @Property({ name: 'spawned_case_ids', type: 'jsonb', nullable: true })
+  spawnedCaseIds?: Record<string, string> | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
 }

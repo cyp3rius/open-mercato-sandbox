@@ -1,26 +1,34 @@
 import { z } from 'zod'
+import { procedureDurationSchema, type ProcedureDuration } from './duration'
 import { validateProcedureExecutionFlow } from './procedureFlowValidation'
 
 export type ProcedureActionVariant = 'notify' | 'task' | 'other'
 export type ProcedureConditionMode = 'manual' | 'verification'
-export type ProcedureNotifyChannel = 'email' | 'whatsapp' | 'message'
+/** Notify delivery channel. Legacy `whatsapp` is normalized to `message` on parse. */
+export type ProcedureNotifyChannel = 'email' | 'message' | 'in_app'
 export type ProcedureNotifyTarget = 'customer' | 'owner'
 
+/** Optional kebab-case id from Markdown authoring; ignored by runtime flow. */
+type ProcedureBlockSourceMeta = {
+  sourceStepId?: string | null
+}
+
 export type ProcedureBlock =
-  | { id: string; kind: 'start'; label?: string | null }
-  | { id: string; kind: 'end'; label?: string | null }
-  | {
+  | ({ id: string; kind: 'start'; label?: string | null } & ProcedureBlockSourceMeta)
+  | ({ id: string; kind: 'end'; label?: string | null } & ProcedureBlockSourceMeta)
+  | ({
       id: string
       kind: 'action'
       label?: string | null
       actionVariant: ProcedureActionVariant
+      actionCode?: string | null
       notifyChannel?: ProcedureNotifyChannel | null
       notifyTarget?: ProcedureNotifyTarget | null
       notifyBody?: string | null
       taskTitle?: string | null
       otherInstructions?: string | null
-    }
-  | {
+    } & ProcedureBlockSourceMeta)
+  | ({
       id: string
       kind: 'condition'
       label?: string | null
@@ -28,10 +36,19 @@ export type ProcedureBlock =
       verificationUserId?: string | null
       yes: ProcedureBlock[]
       no: ProcedureBlock[]
-    }
-  | { id: string; kind: 'goto'; label?: string | null; targetStepId: string }
+    } & ProcedureBlockSourceMeta)
+  | ({ id: string; kind: 'goto'; label?: string | null; targetStepId: string } & ProcedureBlockSourceMeta)
   /** References other playbooks by slug; runtime resolves latest active version per slug. */
-  | { id: string; kind: 'invoke_procedure'; label?: string | null; playbookSlugs: string[] }
+  | ({
+      id: string
+      kind: 'invoke_procedure'
+      label?: string | null
+      playbookSlugs: string[]
+      slaDuration?: ProcedureDuration | null
+    } & ProcedureBlockSourceMeta)
+
+const sourceStepIdField = z.string().trim().min(1).max(120).nullish()
+
 
 export function newProcedureBlockId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -54,11 +71,12 @@ export function createProcedureBlock(
         id,
         kind: 'action',
         label: '',
-        actionVariant: 'notify',
-        notifyChannel: 'email',
-        notifyTarget: 'owner',
-        notifyBody: '',
-        taskTitle: '',
+        actionVariant: 'other',
+        actionCode: 'other',
+        notifyChannel: null,
+        notifyTarget: null,
+        notifyBody: null,
+        taskTitle: null,
         otherInstructions: '',
       }
     case 'condition':
@@ -74,7 +92,7 @@ export function createProcedureBlock(
     case 'goto':
       return { id, kind: 'goto', label: '', targetStepId: '' }
     case 'invoke_procedure':
-      return { id, kind: 'invoke_procedure', label: '', playbookSlugs: [] }
+      return { id, kind: 'invoke_procedure', label: '', playbookSlugs: [], slaDuration: null }
   }
 }
 
@@ -84,22 +102,29 @@ const procedureBlockSchema: z.ZodType<ProcedureBlock> = z.lazy(() =>
       id: z.string().uuid(),
       kind: z.literal('start'),
       label: z.string().max(400).nullish(),
+      sourceStepId: sourceStepIdField,
     }),
     z.object({
       id: z.string().uuid(),
       kind: z.literal('end'),
       label: z.string().max(400).nullish(),
+      sourceStepId: sourceStepIdField,
     }),
     z.object({
       id: z.string().uuid(),
       kind: z.literal('action'),
       label: z.string().max(400).nullish(),
       actionVariant: z.enum(['notify', 'task', 'other']),
-      notifyChannel: z.enum(['email', 'whatsapp', 'message']).nullish(),
+      actionCode: z.string().min(1).max(160).nullish(),
+      notifyChannel: z.preprocess(
+        (value) => (value === 'whatsapp' ? 'message' : value),
+        z.enum(['email', 'message', 'in_app']).nullish(),
+      ),
       notifyTarget: z.enum(['customer', 'owner']).nullish(),
       notifyBody: z.string().max(100000).nullish(),
       taskTitle: z.string().max(500).nullish(),
       otherInstructions: z.string().max(100000).nullish(),
+      sourceStepId: sourceStepIdField,
     }),
     z.object({
       id: z.string().uuid(),
@@ -109,18 +134,22 @@ const procedureBlockSchema: z.ZodType<ProcedureBlock> = z.lazy(() =>
       verificationUserId: z.union([z.string().uuid(), z.literal('')]).nullish(),
       yes: z.array(procedureBlockSchema),
       no: z.array(procedureBlockSchema),
+      sourceStepId: sourceStepIdField,
     }),
     z.object({
       id: z.string().uuid(),
       kind: z.literal('goto'),
       label: z.string().max(400).nullish(),
       targetStepId: z.union([z.string().uuid(), z.literal('')]),
+      sourceStepId: sourceStepIdField,
     }),
     z.object({
       id: z.string().uuid(),
       kind: z.literal('invoke_procedure'),
       label: z.string().max(400).nullish(),
       playbookSlugs: z.array(z.string().min(1).max(160)).max(20),
+      slaDuration: procedureDurationSchema.nullish(),
+      sourceStepId: sourceStepIdField,
     }),
   ]),
 )
@@ -190,6 +219,13 @@ function normalizeProcedureInvokeSlugs(blocks: ProcedureBlock[]): ProcedureBlock
         yes: normalizeProcedureInvokeSlugs(b.yes),
         no: normalizeProcedureInvokeSlugs(b.no),
       }
+    }
+    if (b.kind === 'action') {
+      const code =
+        typeof b.actionCode === 'string' && b.actionCode.trim().length
+          ? b.actionCode.trim()
+          : b.actionVariant
+      return { ...b, actionCode: code }
     }
     return b
   })

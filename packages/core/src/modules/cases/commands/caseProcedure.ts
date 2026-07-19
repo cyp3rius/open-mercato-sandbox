@@ -10,6 +10,7 @@ import { User } from '../../auth/data/entities'
 import { CustomerEntity } from '../../customers/data/entities'
 import { Playbook } from '../../playbooks/data/entities'
 import { parseProcedureBlocksJson, type ProcedureBlock } from '../../playbooks/lib/procedureBlocks'
+import { addDurationToDate } from '../../playbooks/lib/duration'
 import { resolveLatestActivePlaybooksBySlugs } from '../../playbooks/lib/resolveLatestActivePlaybooksBySlugs'
 import { CaseTimelineEvent, ServiceCase } from '../data/entities'
 import { OperationsTask } from '../../procurement/data/entities'
@@ -28,6 +29,12 @@ import {
   CASES_PROCEDURE_NOTIFY_OWNER_MESSAGE_TYPE,
 } from '../lib/procedureNotifyMessageTypes'
 import { caseCrudEvents } from '../lib/crud'
+import { resolveInvokeProcedureOwner } from '../lib/resolveProcedureOwner'
+import { scheduleNextRecurrenceOnClose } from '../lib/scheduleNextRecurrenceOnClose'
+import { resolveProcedureActionEntry } from '../../playbooks/lib/resolveProcedureActionEntry'
+import { resolveNotificationService } from '../../notifications/lib/notificationService'
+import { buildNotificationFromType } from '../../notifications/lib/notificationBuilder'
+import { notificationTypes } from '../notifications'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
 
 const caseProcedureIndexer = { entityType: E.cases.service_case }
@@ -70,6 +77,7 @@ export const casePlaybookLaunchInvokeSchema = z.object({
   organizationId: uuid,
   caseId: uuid,
   slug: z.string().min(1).max(200),
+  ownerUserId: uuid.optional(),
 })
 
 export const casePlaybookScheduleProcedureTaskSchema = z.object({
@@ -131,6 +139,48 @@ async function appendSystemTimeline(
   })
 }
 
+async function maybeNotifyActionInApp(
+  ctx: CommandRuntimeContext,
+  em: EntityManager,
+  caseRow: ServiceCase,
+  run: CasePlaybookRunMetadata,
+  block: ProcedureBlock,
+  options?: { force?: boolean },
+) {
+  if (block.kind !== 'action') return
+  if (!options?.force) {
+    const actionCode = (typeof block.actionCode === 'string' && block.actionCode.trim()) || block.actionVariant
+    const entry = await resolveProcedureActionEntry(
+      em,
+      { tenantId: caseRow.tenantId, organizationId: caseRow.organizationId },
+      actionCode,
+    )
+    if (!entry?.enabled || !entry.notifyInApp) return
+  }
+  const recipientUserId = run.procedureOwnerUserId?.trim() || caseRow.ownerUserId?.trim() || ''
+  if (!recipientUserId.length) return
+  const typeDef = notificationTypes.find((type) => type.type === 'cases.procedure.action_notify')
+  if (!typeDef) return
+  try {
+    const notificationService = resolveNotificationService(ctx)
+    const linkHref = `/backend/cases/${encodeURIComponent(caseRow.id)}`
+    const notificationInput = buildNotificationFromType(typeDef, {
+      recipientUserId,
+      titleVariables: { title: caseRow.title },
+      bodyVariables: { title: caseRow.title },
+      sourceEntityType: 'cases:case',
+      sourceEntityId: caseRow.id,
+      linkHref,
+    })
+    await notificationService.create(notificationInput, {
+      tenantId: caseRow.tenantId,
+      organizationId: caseRow.organizationId,
+    })
+  } catch (err) {
+    console.error('[cases.procedure.action_notify] Failed to create notification:', err)
+  }
+}
+
 async function appendClosingNoteTimeline(
   em: EntityManager,
   caseRow: ServiceCase,
@@ -171,6 +221,7 @@ async function closeCaseWhenProcedureFinishes(
   row.closedAt = now
   row.statusValue = 'closed'
   row.updatedAt = now
+  scheduleNextRecurrenceOnClose(row, now)
   await em.flush()
 
   const dataEngine = ctx.container.resolve('dataEngine') as DataEngine
@@ -271,12 +322,40 @@ async function resolveCase(em: EntityManager, ctx: CommandRuntimeContext, caseId
   return row
 }
 
-function assertOwner(caseRow: ServiceCase, ctx: CommandRuntimeContext) {
+function assertProcedureActor(caseRow: ServiceCase, run: CasePlaybookRunMetadata | null, ctx: CommandRuntimeContext) {
   const uid = typeof ctx.auth?.sub === 'string' ? ctx.auth.sub.trim() : ''
-  const oid = caseRow.ownerUserId?.trim() ?? ''
+  const oid = run?.procedureOwnerUserId?.trim() || caseRow.ownerUserId?.trim() || ''
   if (!uid.length || uid !== oid) {
     throw new CrudHttpError(403, { error: 'cases.procedure.ownerOnly' })
   }
+}
+
+async function finishOrResumeProcedure(
+  em: EntityManager,
+  caseRow: ServiceCase,
+  run: CasePlaybookRunMetadata,
+  tenantId: string,
+  organizationId: string,
+): Promise<{ run: CasePlaybookRunMetadata | null; caseClosed: boolean }> {
+  const stack = [...(run.stack ?? [])]
+  const parent = stack.pop()
+  if (!parent) return { run: { ...run, currentBlockId: null, stack: undefined }, caseClosed: true }
+  const parentPlaybook = await ensurePlaybook(em, parent.playbookId, tenantId, organizationId)
+  const nextId = nextGlobal(loadDefinition(parentPlaybook), parent.invokeBlockId)
+  const restored: CasePlaybookRunMetadata = {
+    playbookId: parent.playbookId,
+    currentBlockId: nextId,
+    ...(parent.startedAt ? { startedAt: parent.startedAt } : {}),
+    ...(parent.procedureOwnerUserId ? { procedureOwnerUserId: parent.procedureOwnerUserId } : {}),
+    ...(parent.procedureDueAt ? { procedureDueAt: parent.procedureDueAt } : {}),
+    ...(parent.procedureOverdueNotifiedAt ? { procedureOverdueNotifiedAt: parent.procedureOverdueNotifiedAt } : {}),
+    ...(parent.verificationTaskByConditionId ? { verificationTaskByConditionId: parent.verificationTaskByConditionId } : {}),
+    ...(parent.actionTaskByActionBlockId ? { actionTaskByActionBlockId: parent.actionTaskByActionBlockId } : {}),
+    ...(stack.length ? { stack } : {}),
+  }
+  return nextId
+    ? { run: restored, caseClosed: false }
+    : finishOrResumeProcedure(em, caseRow, restored, tenantId, organizationId)
 }
 
 const selectPlaybookCommand: CommandHandler<z.infer<typeof casePlaybookSelectSchema>, { ok: true }> = {
@@ -320,6 +399,10 @@ const startPlaybookCommand: CommandHandler<z.infer<typeof casePlaybookStartSchem
     if (run.startedAt) {
       throw new CrudHttpError(400, { error: 'cases.procedure.alreadyStarted' })
     }
+    const ownerUserId = caseRow.ownerUserId?.trim()
+    if (!ownerUserId) {
+      throw new CrudHttpError(400, { error: 'cases.procedure.ownerRequired' })
+    }
     const pb = await ensurePlaybook(em, run.playbookId, parsed.tenantId, parsed.organizationId)
     const def = loadDefinition(pb)
     const first = firstExecutableBlockId(def)
@@ -329,6 +412,13 @@ const startPlaybookCommand: CommandHandler<z.infer<typeof casePlaybookStartSchem
       playbookId: run.playbookId,
       startedAt,
       currentBlockId: first,
+      procedureOwnerUserId: ownerUserId,
+      ...(pb.defaultSlaDuration
+        ? { procedureDueAt: addDurationToDate(new Date(startedAt), pb.defaultSlaDuration).toISOString() }
+        : {}),
+    }
+    if (!caseRow.dueAt && pb.defaultSlaDuration) {
+      caseRow.dueAt = addDurationToDate(new Date(startedAt), pb.defaultSlaDuration)
     }
     caseRow.metadata = writeCasePlaybookRun(meta, nextRun)
     caseRow.updatedAt = new Date()
@@ -359,7 +449,6 @@ const nextPlaybookStepCommand: CommandHandler<
     ensureOrganizationScope(ctx, parsed.organizationId)
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const caseRow = await resolveCase(em, ctx, parsed.caseId)
-    assertOwner(caseRow, ctx)
     const meta = getMetaObject(caseRow)
     const run = readCasePlaybookRun(meta)
     if (!run?.startedAt || !run.playbookId) {
@@ -368,6 +457,7 @@ const nextPlaybookStepCommand: CommandHandler<
     if (!run.currentBlockId) {
       throw new CrudHttpError(400, { error: 'cases.procedure.noCurrentStep' })
     }
+    assertProcedureActor(caseRow, run, ctx)
     const pb = await ensurePlaybook(em, run.playbookId, parsed.tenantId, parsed.organizationId)
     const def = loadDefinition(pb)
     const cur = findWithPath(def, run.currentBlockId)
@@ -375,11 +465,12 @@ const nextPlaybookStepCommand: CommandHandler<
     const { block } = cur
     const uid = typeof ctx.auth?.sub === 'string' ? ctx.auth.sub.trim() : null
     if (block.kind === 'end') {
-      const nextRun: CasePlaybookRunMetadata = { ...run, currentBlockId: null }
-      caseRow.metadata = writeCasePlaybookRun(meta, nextRun)
+      const completion = await finishOrResumeProcedure(em, caseRow, run, parsed.tenantId, parsed.organizationId)
+      caseRow.metadata = writeCasePlaybookRun(meta, completion.run)
       caseRow.updatedAt = new Date()
       await appendSystemTimeline(em, caseRow, 'cases.timeline.system.playbook_finished', uid)
       await em.flush()
+      if (!completion.caseClosed) return { ok: true as const }
       const noteRaw = typeof parsed.closingNote === 'string' ? parsed.closingNote.trim() : ''
       const closed = await closeCaseWhenProcedureFinishes(em, caseRow, ctx, {
         actorUserId: uid,
@@ -434,6 +525,9 @@ const nextPlaybookStepCommand: CommandHandler<
         throw new CrudHttpError(400, { error: 'cases.procedure.taskMustBeDoneBeforeNext' })
       }
     }
+    if (block.kind === 'action') {
+      await maybeNotifyActionInApp(ctx, em, caseRow, run, block)
+    }
     const nextId = nextGlobal(def, run.currentBlockId)
     let nextRun: CasePlaybookRunMetadata = { ...run, currentBlockId: nextId }
     if (block.kind === 'action' && block.actionVariant === 'task' && nextRun.actionTaskByActionBlockId) {
@@ -451,7 +545,10 @@ const nextPlaybookStepCommand: CommandHandler<
         nextRun = await tryCreateVerificationTask(em, caseRow, loc.block, nextRun)
       }
     }
-    caseRow.metadata = writeCasePlaybookRun(meta, nextRun)
+    const completion = nextId
+      ? null
+      : await finishOrResumeProcedure(em, caseRow, nextRun, parsed.tenantId, parsed.organizationId)
+    caseRow.metadata = writeCasePlaybookRun(meta, completion?.run ?? nextRun)
     caseRow.updatedAt = new Date()
     await em.flush()
     if (nextId) {
@@ -460,7 +557,7 @@ const nextPlaybookStepCommand: CommandHandler<
       await appendSystemTimeline(em, caseRow, 'cases.timeline.system.playbook_finished', uid)
     }
     await em.flush()
-    if (!nextId) {
+    if (!nextId && completion?.caseClosed) {
       const closed = await closeCaseWhenProcedureFinishes(em, caseRow, ctx, { actorUserId: uid, closingNote: null })
       return closed ? { ok: true as const, caseClosed: true as const } : { ok: true as const }
     }
@@ -494,7 +591,7 @@ const answerConditionCommand: CommandHandler<
     const mode = cond.conditionMode === 'verification' ? 'verification' : 'manual'
     const uid = typeof ctx.auth?.sub === 'string' ? ctx.auth.sub.trim() : ''
     if (mode === 'manual') {
-      assertOwner(caseRow, ctx)
+      assertProcedureActor(caseRow, run, ctx)
     } else {
       const verifier = typeof cond.verificationUserId === 'string' ? cond.verificationUserId.trim() : ''
       if (!verifier.length || verifier !== uid) {
@@ -517,6 +614,13 @@ const answerConditionCommand: CommandHandler<
         nextRun = await tryCreateVerificationTask(em, caseRow, loc.block, nextRun)
       }
     }
+
+    let completion: { run: CasePlaybookRunMetadata | null; caseClosed: boolean } | null = null
+    if (!nextId) {
+      completion = await finishOrResumeProcedure(em, caseRow, nextRun, parsed.tenantId, parsed.organizationId)
+      nextRun = completion.run ?? nextRun
+    }
+
     caseRow.metadata = writeCasePlaybookRun(meta, nextRun)
     caseRow.updatedAt = new Date()
     await em.flush()
@@ -538,7 +642,7 @@ const answerConditionCommand: CommandHandler<
       )
     }
     await em.flush()
-    if (!nextId) {
+    if (!nextId && completion?.caseClosed) {
       const closed = await closeCaseWhenProcedureFinishes(em, caseRow, ctx, {
         actorUserId: uid.length ? uid : null,
         closingNote: null,
@@ -560,12 +664,12 @@ const sendNotifyPlaybookStepCommand: CommandHandler<
     ensureOrganizationScope(ctx, parsed.organizationId)
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const caseRow = await resolveCase(em, ctx, parsed.caseId)
-    assertOwner(caseRow, ctx)
     const meta = getMetaObject(caseRow)
     const run = readCasePlaybookRun(meta)
     if (!run?.startedAt || !run.playbookId || !run.currentBlockId) {
       throw new CrudHttpError(400, { error: 'cases.procedure.notRunning' })
     }
+    assertProcedureActor(caseRow, run, ctx)
     const pb = await ensurePlaybook(em, run.playbookId, parsed.tenantId, parsed.organizationId)
     const def = loadDefinition(pb)
     const cur = findWithPath(def, run.currentBlockId)
@@ -595,9 +699,13 @@ const sendNotifyPlaybookStepCommand: CommandHandler<
 
     const commandBus = ctx.container.resolve('commandBus') as CommandBus
     const target = block.notifyTarget ?? 'owner'
-    const sendViaEmail = block.notifyChannel === 'email'
+    const rawChannel = typeof block.notifyChannel === 'string' ? block.notifyChannel : ''
+    const channel = rawChannel === 'whatsapp' ? 'message' : rawChannel
+    const sendViaEmail = channel === 'email'
 
-    if (target === 'owner') {
+    if (channel === 'in_app') {
+      await maybeNotifyActionInApp(ctx, em, caseRow, run, block, { force: true })
+    } else if (target === 'owner') {
       const ownerId = caseRow.ownerUserId?.trim()
       if (!ownerId) {
         throw new CrudHttpError(400, { error: 'cases.procedure.caseOwnerRequired' })
@@ -627,6 +735,7 @@ const sendNotifyPlaybookStepCommand: CommandHandler<
         },
         ctx,
       })
+      await maybeNotifyActionInApp(ctx, em, caseRow, run, block)
     } else {
       const cid = caseRow.customerEntityId?.trim()
       if (!cid) {
@@ -664,6 +773,7 @@ const sendNotifyPlaybookStepCommand: CommandHandler<
         },
         ctx,
       })
+      await maybeNotifyActionInApp(ctx, em, caseRow, run, block)
     }
 
     const nextId = nextGlobal(def, run.currentBlockId)
@@ -674,7 +784,10 @@ const sendNotifyPlaybookStepCommand: CommandHandler<
         nextRun = await tryCreateVerificationTask(em, caseRow, loc.block, nextRun)
       }
     }
-    caseRow.metadata = writeCasePlaybookRun(meta, nextRun)
+    const completion = nextId
+      ? null
+      : await finishOrResumeProcedure(em, caseRow, nextRun, parsed.tenantId, parsed.organizationId)
+    caseRow.metadata = writeCasePlaybookRun(meta, completion?.run ?? nextRun)
     caseRow.updatedAt = new Date()
     await em.flush()
     await appendSystemTimeline(em, caseRow, 'cases.timeline.system.notify_sent', uid)
@@ -682,7 +795,7 @@ const sendNotifyPlaybookStepCommand: CommandHandler<
       await appendSystemTimeline(em, caseRow, 'cases.timeline.system.playbook_finished', uid)
     }
     await em.flush()
-    if (!nextId) {
+    if (!nextId && completion?.caseClosed) {
       const closed = await closeCaseWhenProcedureFinishes(em, caseRow, ctx, { actorUserId: uid, closingNote: null })
       return closed ? { ok: true as const, caseClosed: true as const } : { ok: true as const }
     }
@@ -701,7 +814,6 @@ const scheduleProcedureTaskCommand: CommandHandler<
     ensureOrganizationScope(ctx, parsed.organizationId)
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const caseRow = await resolveCase(em, ctx, parsed.caseId)
-    assertOwner(caseRow, ctx)
     const uid = typeof ctx.auth?.sub === 'string' ? ctx.auth.sub.trim() : ''
     if (!uid.length) {
       throw new CrudHttpError(401, { error: 'cases.procedure.actorRequired' })
@@ -711,6 +823,7 @@ const scheduleProcedureTaskCommand: CommandHandler<
     if (!run?.startedAt || !run.playbookId || !run.currentBlockId) {
       throw new CrudHttpError(400, { error: 'cases.procedure.notRunning' })
     }
+    assertProcedureActor(caseRow, run, ctx)
     const pb = await ensurePlaybook(em, run.playbookId, parsed.tenantId, parsed.organizationId)
     const def = loadDefinition(pb)
     const cur = findWithPath(def, run.currentBlockId)
@@ -789,12 +902,12 @@ const launchInvokeProcedureCommand: CommandHandler<
     ensureOrganizationScope(ctx, parsed.organizationId)
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const caseRow = await resolveCase(em, ctx, parsed.caseId)
-    assertOwner(caseRow, ctx)
     const meta = getMetaObject(caseRow)
     const run = readCasePlaybookRun(meta)
     if (!run?.startedAt || !run.playbookId || !run.currentBlockId) {
       throw new CrudHttpError(400, { error: 'cases.procedure.notRunning' })
     }
+    assertProcedureActor(caseRow, run, ctx)
     const previousPb = await ensurePlaybook(em, run.playbookId, parsed.tenantId, parsed.organizationId)
     const def = loadDefinition(previousPb)
     const cur = findWithPath(def, run.currentBlockId)
@@ -827,10 +940,58 @@ const launchInvokeProcedureCommand: CommandHandler<
     const newDef = loadDefinition(newPb)
     const first = firstExecutableBlockId(newDef)
     const startedAt = new Date().toISOString()
+    const actorUserId = typeof ctx.auth?.sub === 'string' ? ctx.auth.sub.trim() : ''
+    const rbacService = ctx.container.resolve('rbacService') as {
+      userHasAllFeatures: (
+        userId: string,
+        features: string[],
+        scope: { tenantId: string | null; organizationId: string | null },
+      ) => Promise<boolean>
+    }
+    const mayAssign = actorUserId.length
+      ? await rbacService.userHasAllFeatures(actorUserId, ['cases.owner.assign'], {
+          tenantId: parsed.tenantId,
+          organizationId: parsed.organizationId,
+        })
+      : false
+    if (parsed.ownerUserId && !mayAssign) {
+      throw new CrudHttpError(403, { error: 'cases.procedure.ownerAssignForbidden' })
+    }
+    const parentOwner = run.procedureOwnerUserId?.trim() || caseRow.ownerUserId?.trim() || ''
+    const procedureOwnerUserId = resolveInvokeProcedureOwner({
+      mayAssign,
+      requestedOwnerUserId: parsed.ownerUserId,
+      recommendedOwnerUserIds: newPb.recommendedOwnerUserIds,
+      parentOwnerUserId: parentOwner,
+    })
+    if (!procedureOwnerUserId) {
+      throw new CrudHttpError(400, { error: 'cases.procedure.ownerRequired' })
+    }
+    const stack = [
+      ...(run.stack ?? []),
+      {
+        playbookId: run.playbookId,
+        startedAt: run.startedAt,
+        currentBlockId: run.currentBlockId,
+        invokeBlockId: invokeBlock.id,
+        ...(run.procedureOwnerUserId ? { procedureOwnerUserId: run.procedureOwnerUserId } : {}),
+        ...(run.procedureDueAt ? { procedureDueAt: run.procedureDueAt } : {}),
+        ...(run.procedureOverdueNotifiedAt ? { procedureOverdueNotifiedAt: run.procedureOverdueNotifiedAt } : {}),
+        ...(run.verificationTaskByConditionId ? { verificationTaskByConditionId: run.verificationTaskByConditionId } : {}),
+        ...(run.actionTaskByActionBlockId ? { actionTaskByActionBlockId: run.actionTaskByActionBlockId } : {}),
+      },
+    ]
     let nextRun: CasePlaybookRunMetadata = {
       playbookId: newPb.id,
       startedAt,
       currentBlockId: first,
+      procedureOwnerUserId,
+      ...(invokeBlock.slaDuration
+        ? { procedureDueAt: addDurationToDate(new Date(startedAt), invokeBlock.slaDuration).toISOString() }
+        : newPb.defaultSlaDuration
+          ? { procedureDueAt: addDurationToDate(new Date(startedAt), newPb.defaultSlaDuration).toISOString() }
+          : {}),
+      stack,
     }
     if (first) {
       const loc = findWithPath(newDef, first)
@@ -850,8 +1011,19 @@ const launchInvokeProcedureCommand: CommandHandler<
       version:
         typeof newPb.version === 'number' && Number.isFinite(newPb.version) ? Math.trunc(newPb.version) : null,
       previousPlaybookId: previousPb.id,
+      procedureOwnerUserId,
     })
     await em.flush()
+    const eventBus = ctx.container.resolve('eventBus') as {
+      emitEvent: (e: string, p: unknown, o?: unknown) => Promise<void>
+    }
+    await eventBus.emitEvent('cases.case.stage_owner_assigned', {
+      caseId: caseRow.id,
+      ownerUserId: procedureOwnerUserId,
+      tenantId: parsed.tenantId,
+      organizationId: parsed.organizationId,
+      playbookId: newPb.id,
+    })
     return { ok: true as const }
   },
 }

@@ -70,9 +70,13 @@ import {
   updateDimensionValue,
   updateWeightValue,
   isConfigurableProductType,
+  normalizeProductCaseTemplates,
+  sanitizeProductCaseTemplates,
 } from "@open-mercato/core/modules/catalog/components/products/productForm";
+import { ProductOfferingFields } from "@open-mercato/core/modules/catalog/components/products/ProductOfferingFields";
 import {
   CATALOG_PRODUCT_TYPES,
+  type CatalogOfferingKind,
   type CatalogProductOptionSchema,
   type CatalogProductType,
 } from "@open-mercato/core/modules/catalog/data/types";
@@ -574,6 +578,16 @@ export default function EditCatalogProductPage({
             : typeof record.serviceLineId === "string"
               ? record.serviceLineId
               : null;
+        const offeringKind = (
+          typeof record.offering_kind === "string"
+            ? record.offering_kind
+            : typeof record.offeringKind === "string"
+              ? record.offeringKind
+              : "internal_service"
+        ) as CatalogOfferingKind;
+        const caseTemplates = normalizeProductCaseTemplates(
+          record.case_templates ?? record.caseTemplates,
+        );
         const optionSchemaTemplate = optionSchemaId
           ? await fetchOptionSchemaTemplate(optionSchemaId)
           : null;
@@ -682,6 +696,8 @@ export default function EditCatalogProductPage({
           channelIds,
           tags: tagValues,
           serviceLineId,
+          offeringKind,
+          caseTemplates,
         };
         if (!cancelled) {
           setInitialValues({ ...initial, ...customValues });
@@ -986,6 +1002,43 @@ export default function EditCatalogProductPage({
         tags: parsed.data.tags ?? [],
         optionSchemaId: parsed.data.optionSchemaId ?? null,
         serviceLineId: parsed.data.serviceLineId ?? null,
+        offeringKind: (parsed.data.offeringKind ??
+          "internal_service") as CatalogOfferingKind,
+        caseTemplates: Array.isArray(parsed.data.caseTemplates)
+          ? parsed.data.caseTemplates.map((entry) => ({
+              id: typeof entry.id === "string" ? entry.id : createLocalId(),
+              title: typeof entry.title === "string" ? entry.title : "",
+              playbookId:
+                typeof entry.playbookId === "string" && entry.playbookId.length
+                  ? entry.playbookId
+                  : null,
+              recurrenceEnabled: entry.recurrenceEnabled === true,
+              recurrenceIntervalAmount:
+                entry.recurrenceIntervalAmount === null ||
+                entry.recurrenceIntervalAmount === undefined
+                  ? ""
+                  : String(entry.recurrenceIntervalAmount),
+              recurrenceIntervalUnit:
+                entry.recurrenceIntervalUnit === "hours" ||
+                entry.recurrenceIntervalUnit === "days" ||
+                entry.recurrenceIntervalUnit === "weeks" ||
+                entry.recurrenceIntervalUnit === "months"
+                  ? entry.recurrenceIntervalUnit
+                  : null,
+              recurrenceLeadTimeAmount:
+                entry.recurrenceLeadTimeAmount === null ||
+                entry.recurrenceLeadTimeAmount === undefined
+                  ? ""
+                  : String(entry.recurrenceLeadTimeAmount),
+              recurrenceLeadTimeUnit:
+                entry.recurrenceLeadTimeUnit === "hours" ||
+                entry.recurrenceLeadTimeUnit === "days" ||
+                entry.recurrenceLeadTimeUnit === "weeks" ||
+                entry.recurrenceLeadTimeUnit === "months"
+                  ? entry.recurrenceLeadTimeUnit
+                  : null,
+            }))
+          : [],
       };
       const title = values.title?.trim();
       if (!title) {
@@ -1122,6 +1175,8 @@ export default function EditCatalogProductPage({
         taxRateId: values.taxRateId ?? null,
         taxRate: productTaxRateValue ?? null,
         serviceLineId: values.serviceLineId ?? null,
+        offeringKind: values.offeringKind ?? "internal_service",
+        caseTemplates: sanitizeProductCaseTemplates(values.caseTemplates),
         isConfigurable: isConfigurableProductType(
           values.productType || "simple",
         ),
@@ -2559,6 +2614,12 @@ function ProductMetaSection({
           <p className="text-xs text-red-600">{errors.serviceLineId}</p>
         ) : null}
       </div>
+
+      <ProductOfferingFields
+        values={values}
+        setValue={setValue}
+        errors={errors}
+      />
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">

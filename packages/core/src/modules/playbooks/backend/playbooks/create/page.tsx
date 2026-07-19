@@ -57,6 +57,8 @@ export default function PlaybookCreatePage() {
                   title,
                   body: values.body.trim(),
                   contextTags: tags,
+                  recommendedOwnerUserIds: values.recommendedOwnerUserIds,
+                  defaultSlaDuration: values.defaultSlaDuration,
                   procedureDefinition: Array.isArray(values.procedureDefinition) ? values.procedureDefinition : [],
                   audience: values.audience,
                   version: values.version,

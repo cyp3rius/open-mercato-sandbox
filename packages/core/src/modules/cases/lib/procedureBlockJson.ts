@@ -17,11 +17,12 @@ export type CaseProcedureBlockJson =
       kind: 'action'
       label: string | null
       actionVariant: 'notify' | 'task' | 'other'
-      notifyChannel: 'email' | 'whatsapp' | 'message' | null
+      notifyChannel: 'email' | 'message' | 'in_app' | null
       notifyTarget: 'customer' | 'owner' | null
       notifyBody: string | null
       taskTitle: string | null
       otherInstructions: string | null
+      actionCode?: string | null
     }
   | {
       id: string
@@ -55,6 +56,7 @@ export function procedureBlockToCaseJson(block: ProcedureBlock): CaseProcedureBl
         kind: 'action',
         label: block.label?.trim() ? block.label.trim() : null,
         actionVariant: block.actionVariant,
+        actionCode: block.actionCode ?? block.actionVariant,
         notifyChannel: block.notifyChannel ?? null,
         notifyTarget: block.notifyTarget ?? null,
         notifyBody: block.notifyBody?.trim() ? block.notifyBody : null,

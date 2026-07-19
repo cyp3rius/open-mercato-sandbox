@@ -29,17 +29,29 @@ W `FilterBar` kolejność w jednym rzędzie to: **przycisk Filtry** (gdy `filter
 - **`searchPlaceholder`**, **`searchValue`**, **`onSearchChange`**: debounce w `FilterBar` jest po stronie komponentu; strona resetuje stronę na 1 przy zmianie.
 - **`filters`** / **`filterValues`** / **`onFiltersApply`** / **`onFiltersClear`**: gdy moduł ma filtry słownikowe lub polowe (wzór: status + typ w procurement).
 - **`columns`**: link w kolumnie identyfikatora; statusy/słowniki przez `DictionaryValue` / `Badge` tam gdzie pasuje.
-- **`rowActions`**: `RowActions` z **View details** (i opcjonalnie **Open in new tab** jak w procurement), potem **Delete** za `canManage`.
+- **`rowActions`**: `RowActions` z **View details** (i opcjonalnie **Open in new tab** jak w procurement), domenowy **Export** gdy lista ma Import/Export round-trip, potem **Delete** za `canManage`.
 - **`onRowClick`**: ten sam URL co „View details”, nie `/edit`.
 - **`pagination`**, **`isLoading`**, **`perspective`**: `{ tableId: '…' }` dla zapisanych widoków / rozszerzeń.
 
 ## Akcje w nagłówku tabeli (od prawej: grupa przy tytule w DataTable)
 
 1. **Ustawienia modułu (opcjonalne):** tylko gdy rola uprawnia — **`IconButton`** + **`Link`**, **sama ikona**; `title` + `aria-label`. Cel: `/backend/config/<module>` (lub udokumentowany URL). Bez widocznego tekstu „Settings”.
-2. **Import (opcjonalny, tylko w tym module):** jeśli moduł **ma** własne ścieżki importu — **popover** wyzwolony przez **`IconButton`** (ten sam rozmiar co ustawienia: **nie** `Button size="icon"`), ikona np. Lucide `Import`, pozycje menu to linki do routów **tego** modułu. **Nie** dokładaj importu faktur / innych domen tylko „dla spójności” na listach, które importu nie obsługują.
+2. **Import / Export plików (opcjonalne, tylko gdy moduł ma round-trip):** **`IconButton` group** w `actions` — Import (`Upload`) + Export (`Download`), wspólny `role="group"`, styki `rounded-r-none border-r-0` / `rounded-l-none`. Ta sama rodzina ikon (kierunek transferu), bez mieszania np. `Import` + `Download`. **Nie** umieszczaj Import/Export jako przycisków w `bulkActions` / FilterBar. Export zazwyczaj działa na **zaznaczeniu wierszy** (`enableRowSelection` + `onSelectedRowsChange`). Import: popover z linkami **albo** file picker — tylko ścieżki **tego** modułu. **Nie** dokładaj importu innych domen „dla spójności”.
 3. **Główne tworzenie:** **`Button`** `size="sm"` + **`Link`**, **ikona + etykieta** (np. `Plus` + „New …” / „Issue …”), `className="inline-flex items-center gap-2"` — ten sam pattern na listach modułowych (baseline jak accounting hub / procurement).
 
 Zanim pokażesz delete / ustawienia / create: **`/api/auth/feature-check`** (lub wzorce guardów z aplikacji) → `canManage` / `canSettings`.
+
+## Bulk actions (zaznaczenie wierszy) — gdzie umieszczać
+
+| Rodzaj akcji | Miejsce | Mechanizm |
+|--------------|---------|-----------|
+| **Mutacje na zaznaczeniu** (usuń wiele, zmień status, przypisz, …) | Pasek **FilterBar** (obok filtrów / perspektywy / szukania) | `DataTable` **`bulkActions`** (prop) i/lub injection `data-table:<tableId>:bulk-actions` |
+| **Import / Export plików** (MD, JSON, CSV domenowy round-trip) | Nagłówek **`actions`** przy tytule | **`IconButton` group** (Import + Export); zaznaczenie przez **`enableRowSelection`**, bez osobnego przycisku Export w FilterBar |
+| **Eksport tabeli generyczny** (CSV/JSON całej listy / widoku) | Toolbar eksportu DataTable | `exporter` / `exportOptions` — nie mylić z domenowym Import/Export |
+
+Checkboxy wierszy włączają: niepuste **`bulkActions`** (lub injection) **albo** jawne **`enableRowSelection`**.
+
+Wzór Import+Export + selection: `packages/core/src/modules/playbooks/backend/playbooks/page.tsx`.
 
 ## Zakładki (hub wielu list)
 

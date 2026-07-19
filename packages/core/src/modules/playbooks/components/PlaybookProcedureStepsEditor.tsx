@@ -27,6 +27,8 @@ import {
 import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
 import { mergeEntitySearchOption, remoteSearchAuthUsers } from '../../procurement/lib/procurementEntitySearch'
 import { remoteSearchPlaybookHeadsForProcedureInvoke } from '../lib/procedureInvokePlaybookSearch'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { DictionarySelectControl } from '@open-mercato/core/modules/dictionaries/components/DictionarySelectControl'
 import {
   buildProcedureStepTargetLabels,
   createProcedureBlock,
@@ -34,7 +36,12 @@ import {
   moveWithinList,
   updateConditionBranch,
   type ProcedureBlock,
+  type ProcedureNotifyChannel,
 } from '../lib/procedureBlocks'
+import {
+  resolveProcedureActionVariant,
+  type ProcedureActionDictionaryOption,
+} from '../lib/procedureActionDictionary'
 import { PlaybookMarkdownEditor } from './PlaybookMarkdownEditor'
 import { usePlaybookFormTabOptional } from './PlaybookFormTabContext'
 import type { PlaybookFormTranslator } from './playbookFormConfig'
@@ -90,9 +97,52 @@ type BlockListProps = {
   patchBranch: (conditionId: string, side: 'yes' | 'no', next: ProcedureBlock[]) => void
   rootBlocks: ProcedureBlock[]
   targetLabels: Map<string, string>
+  actionDictionaryId: string | null
+  actionVariantByCode: Map<string, ProcedureActionDictionaryOption['legacyVariant']>
   disabled: boolean
   depth: number
   listLabel?: string
+}
+
+function applyActionDictionaryChoice(
+  block: Extract<ProcedureBlock, { kind: 'action' }>,
+  option: ProcedureActionDictionaryOption,
+): ProcedureBlock {
+  const variant = option.legacyVariant
+  if (variant === 'task') {
+    return {
+      ...block,
+      actionCode: option.value,
+      actionVariant: 'task',
+      taskTitle: block.taskTitle ?? '',
+      notifyChannel: null,
+      notifyTarget: null,
+      notifyBody: null,
+      otherInstructions: null,
+    }
+  }
+  if (variant === 'notify') {
+    return {
+      ...block,
+      actionCode: option.value,
+      actionVariant: 'notify',
+      notifyChannel: block.notifyChannel ?? 'email',
+      notifyTarget: block.notifyTarget ?? 'owner',
+      notifyBody: block.notifyBody ?? '',
+      taskTitle: null,
+      otherInstructions: null,
+    }
+  }
+  return {
+    ...block,
+    actionCode: option.value,
+    actionVariant: 'other',
+    otherInstructions: block.otherInstructions ?? '',
+    notifyChannel: null,
+    notifyTarget: null,
+    notifyBody: null,
+    taskTitle: null,
+  }
 }
 
 function ProcedureBlockList({
@@ -101,6 +151,8 @@ function ProcedureBlockList({
   patchBranch,
   rootBlocks,
   targetLabels,
+  actionDictionaryId,
+  actionVariantByCode,
   disabled,
   depth,
   listLabel,
@@ -339,51 +391,36 @@ function ProcedureBlockList({
               {block.kind === 'action' ? (
                 <div className="space-y-2 pl-0 sm:pl-[calc(0.5rem+4rem+0.5rem)]">
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    <div className="space-y-1">
+                    <div className="space-y-1 sm:col-span-1">
                       <Label className="text-xs">{t('playbooks.procedure.actionType', 'Type')}</Label>
-                      <select
-                        className={cn(CRUD_FORM_SELECT_CLASS, 'w-full')}
-                        value={block.actionVariant}
-                        onChange={(e) => {
-                          const v = e.target.value as 'notify' | 'task' | 'other'
-                          if (v === 'task') {
-                            updateAt(index, {
-                              ...block,
-                              actionVariant: 'task',
-                              taskTitle: block.taskTitle ?? '',
-                              notifyChannel: null,
-                              notifyTarget: null,
-                              notifyBody: null,
-                              otherInstructions: null,
-                            })
-                          } else if (v === 'other') {
-                            updateAt(index, {
-                              ...block,
-                              actionVariant: 'other',
-                              otherInstructions: block.otherInstructions ?? '',
-                              notifyChannel: null,
-                              notifyTarget: null,
-                              notifyBody: null,
-                              taskTitle: null,
-                            })
-                          } else {
-                            updateAt(index, {
-                              ...block,
-                              actionVariant: 'notify',
-                              notifyChannel: block.notifyChannel ?? 'email',
-                              notifyTarget: block.notifyTarget ?? 'owner',
-                              notifyBody: block.notifyBody ?? '',
-                              taskTitle: null,
-                              otherInstructions: null,
-                            })
-                          }
-                        }}
-                        disabled={disabled}
-                      >
-                        <option value="notify">{t('playbooks.procedure.actionNotify', 'Notification')}</option>
-                        <option value="task">{t('playbooks.procedure.actionTask', 'Task')}</option>
-                        <option value="other">{t('playbooks.procedure.actionOther', 'Other')}</option>
-                      </select>
+                      {actionDictionaryId ? (
+                        <DictionarySelectControl
+                          dictionaryId={actionDictionaryId}
+                          value={block.actionCode?.trim() || block.actionVariant || 'other'}
+                          onChange={(next) => {
+                            const code = typeof next === 'string' && next.trim().length ? next.trim() : 'other'
+                            const legacyVariant =
+                              actionVariantByCode.get(code) ?? resolveProcedureActionVariant(code)
+                            updateAt(
+                              index,
+                              applyActionDictionaryChoice(block, {
+                                value: code,
+                                label: code,
+                                enabled: true,
+                                legacyVariant,
+                              }),
+                            )
+                          }}
+                          disabled={disabled}
+                          allowInlineCreate
+                          priorityValues={['other', 'task', 'notify']}
+                          selectClassName="w-full"
+                        />
+                      ) : (
+                        <div className="text-xs text-muted-foreground">
+                          {t('common.loading', 'Loading…')}
+                        </div>
+                      )}
                     </div>
                     {block.actionVariant === 'notify' ? (
                       <>
@@ -395,33 +432,37 @@ function ProcedureBlockList({
                             onChange={(e) =>
                               updateAt(index, {
                                 ...block,
-                                notifyChannel: e.target.value as 'email' | 'whatsapp' | 'message',
+                                notifyChannel: e.target.value as ProcedureNotifyChannel,
                               })
                             }
                             disabled={disabled}
                           >
                             <option value="email">{t('playbooks.procedure.channelEmail', 'Email')}</option>
-                            <option value="whatsapp">{t('playbooks.procedure.channelWhatsapp', 'WhatsApp')}</option>
                             <option value="message">{t('playbooks.procedure.channelMessage', 'Message')}</option>
+                            <option value="in_app">
+                              {t('playbooks.procedure.channelInApp', 'In-app notification')}
+                            </option>
                           </select>
                         </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">{t('playbooks.procedure.notifyTarget', 'Recipient')}</Label>
-                          <select
-                            className={cn(CRUD_FORM_SELECT_CLASS, 'w-full')}
-                            value={block.notifyTarget ?? 'owner'}
-                            onChange={(e) =>
-                              updateAt(index, {
-                                ...block,
-                                notifyTarget: e.target.value as 'customer' | 'owner',
-                              })
-                            }
-                            disabled={disabled}
-                          >
-                            <option value="owner">{t('playbooks.procedure.targetOwner', 'Owner')}</option>
-                            <option value="customer">{t('playbooks.procedure.targetCustomer', 'Customer')}</option>
-                          </select>
-                        </div>
+                        {block.notifyChannel !== 'in_app' ? (
+                          <div className="space-y-1">
+                            <Label className="text-xs">{t('playbooks.procedure.notifyTarget', 'Recipient')}</Label>
+                            <select
+                              className={cn(CRUD_FORM_SELECT_CLASS, 'w-full')}
+                              value={block.notifyTarget ?? 'owner'}
+                              onChange={(e) =>
+                                updateAt(index, {
+                                  ...block,
+                                  notifyTarget: e.target.value as 'customer' | 'owner',
+                                })
+                              }
+                              disabled={disabled}
+                            >
+                              <option value="owner">{t('playbooks.procedure.targetOwner', 'Owner')}</option>
+                              <option value="customer">{t('playbooks.procedure.targetCustomer', 'Customer')}</option>
+                            </select>
+                          </div>
+                        ) : null}
                       </>
                     ) : block.actionVariant === 'task' ? (
                       <div className="space-y-1 sm:col-span-2">
@@ -437,7 +478,7 @@ function ProcedureBlockList({
                       </div>
                     ) : null}
                   </div>
-                  {block.actionVariant === 'notify' ? (
+                  {block.actionVariant === 'notify' && block.notifyChannel !== 'in_app' ? (
                     <div className="space-y-1">
                       <Label className="text-xs">{t('playbooks.procedure.notifyBody', 'Notification body')}</Label>
                       <PlaybookMarkdownEditor
@@ -559,6 +600,62 @@ function ProcedureBlockList({
                       )}
                     />
                   </div>
+                  <div className="max-w-xl space-y-1">
+                    <Label className="text-xs">
+                      {t('playbooks.procedure.invokeSlaDuration', 'SLA duration')}
+                    </Label>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        className={cn(CRUD_FORM_TEXT_INPUT_CLASS, 'w-full')}
+                        value={block.slaDuration?.amount ?? ''}
+                        onChange={(event) => {
+                          const raw = event.target.value
+                          updateAt(index, {
+                            ...block,
+                            slaDuration: raw
+                              ? {
+                                  amount: Number(raw),
+                                  unit: block.slaDuration?.unit ?? 'days',
+                                }
+                              : null,
+                          })
+                        }}
+                        placeholder={t('playbooks.procedure.durationAmount', 'Amount')}
+                        aria-label={t('playbooks.procedure.durationAmount', 'Amount')}
+                        disabled={disabled}
+                      />
+                      <select
+                        className={cn(CRUD_FORM_SELECT_CLASS, 'w-full')}
+                        value={block.slaDuration?.unit ?? 'days'}
+                        onChange={(event) => {
+                          if (!block.slaDuration?.amount) return
+                          updateAt(index, {
+                            ...block,
+                            slaDuration: {
+                              amount: block.slaDuration.amount,
+                              unit: event.target.value as 'hours' | 'days' | 'weeks' | 'months',
+                            },
+                          })
+                        }}
+                        aria-label={t('playbooks.procedure.durationUnit', 'Unit')}
+                        disabled={disabled || !block.slaDuration?.amount}
+                      >
+                        <option value="hours">{t('playbooks.duration.hours', 'Hours')}</option>
+                        <option value="days">{t('playbooks.duration.days', 'Days')}</option>
+                        <option value="weeks">{t('playbooks.duration.weeks', 'Weeks')}</option>
+                        <option value="months">{t('playbooks.duration.months', 'Months')}</option>
+                      </select>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {t(
+                        'playbooks.procedure.invokeSlaDurationHint',
+                        'Leave the amount empty to use the invoked playbook default.',
+                      )}
+                    </p>
+                  </div>
                 </div>
               ) : null}
 
@@ -638,6 +735,8 @@ function ProcedureBlockList({
                     patchBranch={patchBranch}
                     rootBlocks={rootBlocks}
                     targetLabels={targetLabels}
+                    actionDictionaryId={actionDictionaryId}
+                    actionVariantByCode={actionVariantByCode}
                     disabled={disabled}
                     depth={depth + 1}
                     listLabel={t('playbooks.procedure.branchYes', 'Yes')}
@@ -648,6 +747,8 @@ function ProcedureBlockList({
                     patchBranch={patchBranch}
                     rootBlocks={rootBlocks}
                     targetLabels={targetLabels}
+                    actionDictionaryId={actionDictionaryId}
+                    actionVariantByCode={actionVariantByCode}
                     disabled={disabled}
                     depth={depth + 1}
                     listLabel={t('playbooks.procedure.branchNo', 'No')}
@@ -730,6 +831,45 @@ function ProcedureStepsInner({
   disabled: boolean
 }) {
   const t = useT()
+  const [actionDictionaryId, setActionDictionaryId] = React.useState<string | null>(null)
+  const [actionVariantByCode, setActionVariantByCode] = React.useState<
+    Map<string, ProcedureActionDictionaryOption['legacyVariant']>
+  >(() => new Map())
+
+  React.useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const ensured = await apiCall<{
+        dictionaryId?: string
+        items?: ProcedureActionDictionaryOption[]
+      }>('/api/playbooks/dictionaries/procedure-action')
+      if (cancelled) return
+      const dictionaryId =
+        ensured.ok && typeof ensured.result?.dictionaryId === 'string'
+          ? ensured.result.dictionaryId.trim()
+          : ''
+      setActionDictionaryId(dictionaryId.length ? dictionaryId : null)
+      const items = ensured.ok && Array.isArray(ensured.result?.items) ? ensured.result.items : []
+      const map = new Map<string, ProcedureActionDictionaryOption['legacyVariant']>()
+      for (const item of items) {
+        if (!item || typeof item.value !== 'string' || !item.value.trim()) continue
+        map.set(
+          item.value.trim(),
+          item.legacyVariant === 'notify' || item.legacyVariant === 'task' || item.legacyVariant === 'other'
+            ? item.legacyVariant
+            : resolveProcedureActionVariant(item.value),
+        )
+      }
+      if (!map.has('other')) map.set('other', 'other')
+      if (!map.has('task')) map.set('task', 'task')
+      if (!map.has('notify')) map.set('notify', 'notify')
+      setActionVariantByCode(map)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const patchBranch = React.useCallback(
     (conditionId: string, side: 'yes' | 'no', next: ProcedureBlock[]) => {
       onChange(updateConditionBranch(value, conditionId, side, next))
@@ -774,6 +914,8 @@ function ProcedureStepsInner({
         patchBranch={patchBranch}
         rootBlocks={value}
         targetLabels={targetLabels}
+        actionDictionaryId={actionDictionaryId}
+        actionVariantByCode={actionVariantByCode}
         disabled={disabled}
         depth={0}
       />

@@ -395,14 +395,61 @@ interface CommandPaletteContextValue {
 | Auth | API key only | API key + session tokens |
 | Permission check | Once at startup | Per tool call |
 | Session tokens | Not required | Required |
-| Use case | Use for Claude Code, MCP Inspector, local testing | Use for web-based AI chat |
+| Use case | Use for Claude Code, Cursor, MCP Inspector, **remote agents** | Use for web-based AI chat |
+
+#### Remote agent (Cursor / Claude → remote CRM)
+
+Preferred setup when the agent runs locally and the CRM runs elsewhere:
+
+1. On the **remote CRM host**, ensure the Next app is up and `APP_URL` / `NEXT_PUBLIC_APP_URL` is the CRM origin reachable from that host (Code Mode `execute` calls this URL).
+2. Start MCP (binds `0.0.0.0` by default):
+
+```bash
+OPEN_MERCATO_MCP_API_KEY=omk_... OPEN_MERCATO_MCP_HOST=0.0.0.0 OPEN_MERCATO_MCP_PORT=3001 yarn mcp:dev
+# or production HTTP:
+# yarn mcp:serve -- --port 3001
+# Local yarn dev also starts MCP when OPEN_MERCATO_MCP_API_KEY is set in apps/mercato/.env
+```
+
+3. On the **local agent** (Cursor / Claude Code / Claude Desktop), configure HTTP MCP:
+
+```json
+{
+  "mcpServers": {
+    "open-mercato": {
+      "type": "http",
+      "url": "https://<remote-host>:3001/mcp",
+      "headers": {
+        "x-api-key": "omk_..."
+      }
+    }
+  }
+}
+```
+
+4. Prefer HTTPS (reverse proxy / TLS) for anything beyond a trusted network. Firewall must allow the MCP port.
+
+5. Agent tools: `context_whoami`, Code Mode `search` + `execute` (full OpenAPI), plus `playbooks_*`. Domain workflows: `.ai/skills/remote-crm-mcp` and `crm-*` skills.
+
+See `.ai/specs/2026-07-18-remote-crm-mcp-agent.md`.
+
+Env for remote MCP:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `OPEN_MERCATO_MCP_API_KEY` | — | CRM API key (`omk_…`) when `.mcp.json` is absent |
+| `OPEN_MERCATO_MCP_HOST` | `0.0.0.0` | Listen address |
+| `OPEN_MERCATO_MCP_PORT` | `3001` | MCP HTTP port |
+| `APP_URL` / `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | Base URL for `execute` → `api.request()` |
+
+Deprecated aliases: `OPEN_MERCATO_API_KEY`, `MCP_API_KEY`, `MCP_SERVER_API_KEY`, `MCP_HOST`, `MCP_DEV_PORT`.
 
 #### Start the Dev Server (`yarn mcp:dev`)
 
-Use for local development and Claude Code integration. Authenticates once using an API key.
+Use for local development and Claude Code / Cursor integration. Authenticates once using an API key. With `yarn dev`, MCP starts automatically when `OPEN_MERCATO_MCP_API_KEY` is set.
 
 ```bash
-# Reads API key from .mcp.json headers.x-api-key or OPEN_MERCATO_API_KEY env
+# Reads API key from OPEN_MERCATO_MCP_API_KEY, else .mcp.json headers.x-api-key
 yarn mcp:dev
 ```
 
@@ -410,7 +457,7 @@ Configure via `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "open-mercato": {
+    "open-mercato-local": {
       "type": "http",
       "url": "http://localhost:3001/mcp",
       "headers": {
@@ -426,7 +473,7 @@ Configure via `.mcp.json`:
 Use for web-based AI chat. Requires two-tier auth: server API key + user session tokens.
 
 ```bash
-# Requires MCP_SERVER_API_KEY in .env
+# Requires OPEN_MERCATO_MCP_API_KEY in .env (deprecated: MCP_SERVER_API_KEY)
 yarn mcp:serve
 ```
 

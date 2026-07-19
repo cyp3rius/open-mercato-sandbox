@@ -3,6 +3,7 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Download } from 'lucide-react'
 import { LoadingMessage } from '@open-mercato/ui/backend/detail'
 import { ApplyBreadcrumb } from '@open-mercato/ui/backend/AppShell'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
@@ -22,6 +23,8 @@ import {
   type PlaybookFormValues,
 } from '../../../components/playbookFormConfig'
 import { PlaybookFormTabProvider } from '../../../components/PlaybookFormTabContext'
+import type { ProcedureDuration } from '../../../lib/duration'
+import { exportPlaybooksMarkdownByIds } from '../../../lib/playbookMarkdownClientExport'
 
 type Row = {
   id: string
@@ -36,6 +39,10 @@ type Row = {
   version?: number
   isActive?: boolean
   is_active?: boolean
+  recommendedOwnerUserIds?: string[]
+  recommended_owner_user_ids?: string[]
+  defaultSlaDuration?: ProcedureDuration | null
+  default_sla_duration?: ProcedureDuration | null
 }
 
 function truncatePlaybookBreadcrumbTitle(name: string, maxLen = 36): string {
@@ -51,12 +58,23 @@ function normalizePlaybookRow(raw: Record<string, unknown> | null | undefined): 
   if (!id) return null
   const tagSource = raw.contextTags ?? raw.context_tags
   const contextTags = Array.isArray(tagSource) ? tagSource.map((x) => String(x)).filter(Boolean) : undefined
+  const ownerSource = raw.recommendedOwnerUserIds ?? raw.recommended_owner_user_ids
+  const recommendedOwnerUserIds = Array.isArray(ownerSource)
+    ? ownerSource.filter((value): value is string => typeof value === 'string')
+    : undefined
+  const slaSource = raw.defaultSlaDuration ?? raw.default_sla_duration
+  const defaultSlaDuration =
+    slaSource && typeof slaSource === 'object'
+      ? (slaSource as ProcedureDuration)
+      : null
   return {
     id,
     slug: String(raw.slug ?? ''),
     title: String(raw.title ?? ''),
     body: String(raw.body ?? ''),
     contextTags,
+    recommendedOwnerUserIds,
+    defaultSlaDuration,
     procedure_definition: raw.procedure_definition ?? raw.procedureDefinition,
     audience: typeof raw.audience === 'string' ? raw.audience : undefined,
     version: typeof raw.version === 'number' ? raw.version : undefined,
@@ -75,6 +93,7 @@ export default function PlaybookDetailPage({ params }: { params?: { id?: string 
   const [formKey, setFormKey] = React.useState(0)
   const [canEdit, setCanEdit] = React.useState(false)
   const [canDelete, setCanDelete] = React.useState(false)
+  const [isExporting, setIsExporting] = React.useState(false)
 
   React.useEffect(() => {
     let cancelled = false
@@ -162,6 +181,30 @@ export default function PlaybookDetailPage({ params }: { params?: { id?: string 
     router.push('/backend/playbooks')
   }, [confirm, row, router, t])
 
+  const handleExport = React.useCallback(async () => {
+    if (!row?.id) return
+    setIsExporting(true)
+    try {
+      const result = await exportPlaybooksMarkdownByIds([row.id])
+      if (!result.ok) {
+        if (result.reason === 'empty') {
+          flash(t('playbooks.list.export.empty', 'No exportable playbooks found for the selection.'), 'error')
+        } else {
+          flash(t('playbooks.list.export.error', 'Could not export playbooks.'), 'error')
+        }
+        return
+      }
+      flash(
+        t('playbooks.list.export.success', 'Exported {count} playbook(s).', {
+          count: result.count,
+        }),
+        'success',
+      )
+    } finally {
+      setIsExporting(false)
+    }
+  }, [row, t])
+
   if (!id) return null
 
   if (loading) {
@@ -217,6 +260,19 @@ export default function PlaybookDetailPage({ params }: { params?: { id?: string 
             initialValues={initialValues}
             readOnly={!canEdit || isArchived}
             onDelete={canDelete ? handleDelete : undefined}
+            extraActions={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="inline-flex items-center gap-2"
+                disabled={isExporting}
+                onClick={() => void handleExport()}
+              >
+                <Download className="size-4 shrink-0" aria-hidden />
+                {t('playbooks.list.export.action', 'Export')}
+              </Button>
+            }
             onSubmit={async (values) => {
               if (!canEdit || isArchived) return
               const slug = values.slug.trim().toLowerCase()
@@ -231,6 +287,8 @@ export default function PlaybookDetailPage({ params }: { params?: { id?: string 
                   title: values.title.trim(),
                   body: values.body,
                   contextTags: tags,
+                  recommendedOwnerUserIds: values.recommendedOwnerUserIds,
+                  defaultSlaDuration: values.defaultSlaDuration,
                   procedureDefinition: Array.isArray(values.procedureDefinition) ? values.procedureDefinition : [],
                   audience: values.audience,
                   isActive: values.isActive,

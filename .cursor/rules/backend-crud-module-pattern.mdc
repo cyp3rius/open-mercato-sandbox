@@ -28,8 +28,14 @@ Nowe encje CRM / platformowe trzymaj **w tej samej rodzinie layoutów** — nie 
 - **`Page` → `PageBody` → `DataTable`** (bez osobnego **`PageHeader`** dla tytułu listy — tytuł i akcje są propsami **`DataTable`**: `title`, `refreshButton`, `actions`, opcjonalnie filtry).
 - **`{ConfirmDialogElement}`** z **`useConfirmDialog()`** na końcu, **obok** `PageBody` (jak w procurement), nie wewnątrz nagłówka tabeli.
 - **Nigdy** nie renderuj **`\<ConfirmDialogElement />`** — hook zwraca **gotowy węzeł React** (Fragment + dialog). Poprawnie: **`{ConfirmDialogElement}`**.
-- **`rowActions`:** kolejność sensowna dla użytkownika — np. **View details**, **Open in new tab**, potem **Delete** (jeśli RBAC). i18n: wzorzec `*.list.actions.viewDetails`, `*.openInNewTab`.
+- **`rowActions`:** kolejność sensowna dla użytkownika — np. **View details**, **Open in new tab**, domenowy **Export** (gdy round-trip plików), potem **Delete** (jeśli RBAC). i18n: wzorzec `*.list.actions.viewDetails`, `*.openInNewTab`.
 - **Wiersz klikalny:** `onRowClick` → ten sam URL co „View details”, nie **`/edit`**.
+
+### Bulk actions vs Import/Export (lista CRUD)
+
+- **`bulkActions`** (FilterBar): tylko **mutacje na zaznaczonych wierszach** (delete many, assign, status…). Injection: `data-table:<tableId>:bulk-actions`.
+- **Import / Export plików domenowych:** w **`DataTable` `actions`** jako **grupa `IconButton`** (Import + Export), **nie** jako bulk w FilterBar. Selection pod Export: **`enableRowSelection`** + **`onSelectedRowsChange`**.
+- Szczegóły i tabela: **`.cursor/rules/backend-module-list-datatable.mdc`** (sekcja „Bulk actions”).
 
 ## Create (pełna strona)
 

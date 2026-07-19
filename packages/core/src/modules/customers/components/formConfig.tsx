@@ -25,6 +25,7 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall, apiCallOrThrow, readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { collectCustomFieldValues } from '@open-mercato/ui/backend/utils/customFieldValues'
 import { PhoneNumberField } from '@open-mercato/ui/backend/inputs/PhoneNumberField'
+import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
 import { isValidPhoneNumber } from '@open-mercato/shared/lib/phone'
 import {
   CRUD_FORM_SELECT_CLASS,
@@ -50,6 +51,10 @@ import type { CustomerDictionaryKind } from '../lib/dictionaries'
 import { normalizeCustomFieldSubmitValue } from './detail/customFieldUtils'
 import { CUSTOMER_PHONE_INVALID_MESSAGE_KEY } from '../data/validators'
 import { createCompanyRegistrySyncBridgeField } from './companyRegistrySync'
+import {
+  mergeEntitySearchOption,
+  remoteSearchAuthUsers,
+} from '../../procurement/lib/procurementEntitySearch'
 
 export const metadata = {
   navHidden: true,
@@ -157,6 +162,7 @@ export type PersonFormValues = {
   displayName: string
   firstName: string
   lastName: string
+  ownerUserId: string
   pesel?: string
   residenceStreet?: string
   residencePostalCode?: string
@@ -177,6 +183,7 @@ export type PersonFormValues = {
 
 export type CompanyFormValues = {
   displayName: string
+  ownerUserId: string
   primaryEmail?: string
   primaryPhone?: string
   status?: string
@@ -513,6 +520,33 @@ const createPrimaryPhoneField = (t: Translator): CrudField => ({
         invalidLabel={t('customers.people.form.primaryPhone.invalid', 'Enter a valid phone number with country code (e.g. +1 212 555 1234)')}
         minDigits={7}
         onDuplicateLookup={!disabled && !error ? duplicateLookup : undefined}
+      />
+    )
+  },
+})
+
+const createOwnerUserField = (t: Translator): CrudField => ({
+  id: 'ownerUserId',
+  label: t('customers.form.owner', 'Guardian'),
+  type: 'custom',
+  required: true,
+  layout: 'half',
+  component: ({ value, setValue, disabled }: CrudCustomFieldRenderProps) => {
+    const ownerUserId = typeof value === 'string' ? value : ''
+    return (
+      <EntitySearchCombobox
+        value={ownerUserId}
+        onChange={setValue}
+        options={mergeEntitySearchOption([], ownerUserId, ownerUserId)}
+        onRemoteSearch={async (query) => {
+          const rows = await remoteSearchAuthUsers(query)
+          return mergeEntitySearchOption(rows, ownerUserId, ownerUserId)
+        }}
+        placeholder={t('customers.form.ownerPlaceholder', 'Choose a guardian…')}
+        searchPlaceholder={t('customers.form.ownerSearch', 'Search users…')}
+        disabled={disabled}
+        createInNewTabHref="/backend/users/create"
+        createInNewTabAriaLabel={t('customers.form.ownerAddUser', 'Create user in a new tab')}
       />
     )
   },
@@ -1334,6 +1368,7 @@ export const createPersonFormSchema = () =>
       displayName: z.string().trim().min(1),
       firstName: z.string().trim().min(1),
       lastName: z.string().trim().min(1),
+      ownerUserId: z.string().trim().uuid(),
       jobTitle: z
         .string()
         .trim()
@@ -1580,6 +1615,7 @@ const dictionaryFields: CrudField[] = dictionaryFieldDefinitions.map((definition
     contactSection,
     createPrimaryEmailField(t),
     createPrimaryPhoneField(t),
+    createOwnerUserField(t),
     registeredAddressSection,
     {
       id: 'pesel',
@@ -1751,6 +1787,7 @@ export const createPersonFormGroups = (t: Translator): CrudFormGroup[] => [
       '__contactInformationSection',
       'primaryEmail',
       'primaryPhone',
+      'ownerUserId',
       '__registeredAddressSection',
       'pesel',
       'residenceStreet',
@@ -1800,6 +1837,8 @@ export function buildPersonPayload(
   payload.displayName = displayNameValue
   payload.firstName = typeof values.firstName === 'string' ? values.firstName.trim() : ''
   payload.lastName = typeof values.lastName === 'string' ? values.lastName.trim() : ''
+  payload.ownerUserId =
+    typeof values.ownerUserId === 'string' ? values.ownerUserId.trim() : ''
 
   const assign = (key: string, val?: string | null) => {
     if (val === null) {
@@ -1865,6 +1904,7 @@ export const createCompanyFormSchema = () =>
   z
     .object({
       displayName: z.string().trim().min(1),
+      ownerUserId: z.string().trim().uuid(),
       primaryEmail: z
         .string()
         .trim()
@@ -2053,6 +2093,7 @@ export const createCompanyFormFields = (t: Translator, options?: CompanyFormFiel
         />
       ),
     } as CrudField,
+    createOwnerUserField(t),
     ...dictionaryFields,
     {
       id: 'legalName',
@@ -2254,6 +2295,7 @@ export const createCompanyFormGroups = (t: Translator, groupOptions?: CompanyFor
       'displayName',
       'primaryEmail',
       'primaryPhone',
+      'ownerUserId',
       'status',
       'lifecycleStage',
       'source',
@@ -2310,6 +2352,8 @@ export function buildCompanyPayload(
     throw new Error('DISPLAY_NAME_REQUIRED')
   }
   payload.displayName = displayNameValue
+  payload.ownerUserId =
+    typeof values.ownerUserId === 'string' ? values.ownerUserId.trim() : ''
 
   const assign = (key: string, val?: string) => {
     const normalized = blankToUndefined(val)
@@ -2515,7 +2559,7 @@ export const createCompanyEditGroups = (t: Translator): CrudFormGroup[] => [
     id: 'details',
     title: t('customers.companies.form.groups.details'),
     column: 1,
-    fields: ['displayName', 'primaryEmail', 'primaryPhone', 'status', 'lifecycleStage', 'source', 'crmRecordType'],
+    fields: ['displayName', 'primaryEmail', 'primaryPhone', 'ownerUserId', 'status', 'lifecycleStage', 'source', 'crmRecordType'],
   },
   {
     id: 'profile',
@@ -2548,6 +2592,7 @@ export const createPersonEditGroups = (t: Translator): CrudFormGroup[] => [
       '__contactInformationSection',
       'primaryEmail',
       'primaryPhone',
+      'ownerUserId',
       '__companyInformationSection',
       'jobTitle',
       'companyEntityId',
@@ -2739,6 +2784,7 @@ export function mapCompanyOverviewToFormValues(overview: CompanyOverview): Parti
   return {
     id: overview.company.id,
     displayName: overview.company.displayName,
+    ownerUserId: overview.company.ownerUserId ?? '',
     primaryEmail: overview.company.primaryEmail ?? '',
     primaryPhone: phoneValue,
     status: overview.company.status ?? '',
@@ -2769,6 +2815,7 @@ export function mapPersonOverviewToFormValues(overview: PersonOverview): Partial
   return {
     id: overview.person.id,
     displayName: overview.person.displayName,
+    ownerUserId: overview.person.ownerUserId ?? '',
     firstName: overview.profile?.firstName ?? '',
     lastName: overview.profile?.lastName ?? '',
     primaryEmail: overview.person.primaryEmail ?? '',

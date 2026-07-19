@@ -27,10 +27,15 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@open-mercato/ui/primitives/input'
 import { Label } from '@open-mercato/ui/primitives/label'
 import { HtmlRichTextEditor } from '@open-mercato/ui/backend/richtext/HtmlRichTextEditor'
+import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
 import type { CaseProcedureBlockJson } from '../lib/procedureBlockJson'
 import { formatProcedurePlaybookLabel } from '../lib/formatProcedurePlaybookLabel'
 import { defaultHtmlFromNotifyBody } from '../lib/htmlToPlainText'
-import { resolveUserDisplayLabel } from '../../procurement/lib/procurementEntitySearch'
+import {
+  mergeEntitySearchOption,
+  remoteSearchAuthUsers,
+  resolveUserDisplayLabel,
+} from '../../procurement/lib/procurementEntitySearch'
 
 type Kind = CaseProcedureBlockJson['kind']
 
@@ -93,12 +98,13 @@ export type CaseProcedureStepExecutorProps = {
   canAnswerYesNo?: boolean
   invokeProcedureOptions?: InvokeProcedureOptionHead[]
   canLaunchInvokeProcedure?: boolean
+  canAssignProcedureOwner?: boolean
   procedureTaskSummary?: ProcedureTaskSummaryHead | null
   canScheduleProcedureTask?: boolean
   onNext?: (options?: { closingNote?: string }) => void
   onSendNotify?: (bodyHtml: string) => void
   onAnswer?: (branch: 'yes' | 'no') => void
-  onLaunchInvokeProcedure?: (slug: string) => void
+  onLaunchInvokeProcedure?: (slug: string, ownerUserId?: string) => void
   onScheduleProcedureTask?: (payload: {
     title: string
     body?: string
@@ -115,6 +121,7 @@ export function CaseProcedureStepExecutor({
   canAnswerYesNo = false,
   invokeProcedureOptions = [],
   canLaunchInvokeProcedure = false,
+  canAssignProcedureOwner = false,
   procedureTaskSummary = null,
   canScheduleProcedureTask = false,
   onNext,
@@ -129,6 +136,7 @@ export function CaseProcedureStepExecutor({
   const [verifierDisplayLabel, setVerifierDisplayLabel] = React.useState('')
   const [closingNoteDraft, setClosingNoteDraft] = React.useState('')
   const [pickedInvokeSlug, setPickedInvokeSlug] = React.useState('')
+  const [invokeOwnerUserId, setInvokeOwnerUserId] = React.useState('')
   const [scheduleOpen, setScheduleOpen] = React.useState(false)
   const [scheduleTitle, setScheduleTitle] = React.useState('')
   const [scheduleDueLocal, setScheduleDueLocal] = React.useState('')
@@ -150,6 +158,10 @@ export function CaseProcedureStepExecutor({
       return resolved[0]?.slug ?? ''
     })
   }, [block?.id, invokeProcedureOptions])
+
+  React.useEffect(() => {
+    setInvokeOwnerUserId('')
+  }, [block?.id, pickedInvokeSlug])
 
   React.useEffect(() => {
     if (block?.kind === 'action' && block.actionVariant === 'task') {
@@ -339,13 +351,14 @@ export function CaseProcedureStepExecutor({
               <div className="mt-0.5 text-sm font-medium">
                 {block.notifyChannel === 'email'
                   ? t('playbooks.procedure.channelEmail', 'Email')
-                  : block.notifyChannel === 'whatsapp'
-                    ? t('playbooks.procedure.channelWhatsapp', 'WhatsApp')
-                    : block.notifyChannel === 'message'
-                      ? t('playbooks.procedure.channelMessage', 'Message')
+                  : block.notifyChannel === 'message'
+                    ? t('playbooks.procedure.channelMessage', 'Message')
+                    : block.notifyChannel === 'in_app'
+                      ? t('playbooks.procedure.channelInApp', 'In-app notification')
                       : '—'}
               </div>
             </div>
+            {block.notifyChannel !== 'in_app' ? (
             <div className="rounded-md border border-border/60 bg-muted/20 px-2.5 py-2 sm:col-span-2">
               <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 {t('playbooks.procedure.notifyTarget', 'Recipient')}
@@ -356,7 +369,9 @@ export function CaseProcedureStepExecutor({
                   : t('playbooks.procedure.targetOwner', 'Owner')}
               </div>
             </div>
+            ) : null}
           </div>
+          {block.notifyChannel !== 'in_app' ? (
           <div className="space-y-1.5">
             <span className="text-xs font-medium text-foreground">
               {t('cases.detail.procedure.notifyEditorLabel', 'Message content')}
@@ -367,6 +382,14 @@ export function CaseProcedureStepExecutor({
               disabled={disabled || notifyReadOnly}
             />
           </div>
+          ) : (
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              {t(
+                'cases.detail.procedure.notifyInAppHint',
+                'This step sends an in-app notification to the procedure owner.',
+              )}
+            </p>
+          )}
           {canSendNotify && onSendNotify ? (
             <div className="flex flex-wrap gap-2 pt-1">
               <Button
@@ -374,10 +397,18 @@ export function CaseProcedureStepExecutor({
                 variant="default"
                 className="gap-2 bg-foreground text-background hover:bg-foreground/90"
                 disabled={disabled}
-                onClick={() => onSendNotify(notifyHtml)}
+                onClick={() =>
+                  onSendNotify(
+                    block.notifyChannel === 'in_app'
+                      ? `<p>${t('cases.detail.procedure.notifyInAppDefaultBody', 'Procedure notification')}</p>`
+                      : notifyHtml,
+                  )
+                }
               >
                 <Send className="size-4 shrink-0" aria-hidden />
-                {t('cases.detail.procedure.sendMessage', 'Send')}
+                {block.notifyChannel === 'in_app'
+                  ? t('cases.detail.procedure.sendInApp', 'Send notification')
+                  : t('cases.detail.procedure.sendMessage', 'Send')}
               </Button>
             </div>
           ) : null}
@@ -534,15 +565,16 @@ export function CaseProcedureStepExecutor({
                     )
                 const selected = pickedInvokeSlug === opt.slug
                 return (
-                  <button
+                  <Button
                     key={opt.slug}
                     type="button"
+                    variant="outline"
                     role="radio"
                     aria-checked={selected}
                     aria-label={primaryLabel}
                     disabled={disabled || !resolved}
                     onClick={() => setPickedInvokeSlug(opt.slug)}
-                    className={`flex w-full items-start gap-3 rounded-md border px-3 py-2.5 text-start transition-colors ${
+                    className={`h-auto w-full justify-start whitespace-normal px-3 py-2.5 text-start ${
                       selected
                         ? 'border-foreground/40 bg-muted/40'
                         : 'border-border/60 bg-muted/10 hover:bg-muted/25'
@@ -559,7 +591,7 @@ export function CaseProcedureStepExecutor({
                     <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-foreground">
                       {primaryLabel}
                     </span>
-                  </button>
+                  </Button>
                 )
               })}
             </div>
@@ -568,6 +600,46 @@ export function CaseProcedureStepExecutor({
               {t('cases.detail.procedure.invokeProcedureEmpty', 'No procedures linked.')}
             </p>
           )}
+          {canAssignProcedureOwner && onLaunchInvokeProcedure && block.playbookSlugs.length ? (
+            <div className="space-y-1.5">
+              <Label>
+                {t('cases.detail.procedure.invokeOwner', 'Procedure owner (optional)')}
+              </Label>
+              <EntitySearchCombobox
+                value={invokeOwnerUserId}
+                onChange={setInvokeOwnerUserId}
+                options={mergeEntitySearchOption(
+                  [],
+                  invokeOwnerUserId,
+                  invokeOwnerUserId,
+                )}
+                onRemoteSearch={async (query) => {
+                  const rows = await remoteSearchAuthUsers(query)
+                  return mergeEntitySearchOption(rows, invokeOwnerUserId, invokeOwnerUserId)
+                }}
+                placeholder={t(
+                  'cases.detail.procedure.invokeOwnerPlaceholder',
+                  'Use recommended owner…',
+                )}
+                searchPlaceholder={t(
+                  'cases.detail.procedure.invokeOwnerSearch',
+                  'Search users…',
+                )}
+                disabled={disabled || !canLaunchInvokeProcedure}
+                createInNewTabHref="/backend/users/create"
+                createInNewTabAriaLabel={t(
+                  'cases.detail.procedure.invokeOwnerAddUser',
+                  'Create user in a new tab',
+                )}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  'cases.detail.procedure.invokeOwnerHint',
+                  'Leave empty to use the first recommended owner or inherit the current owner.',
+                )}
+              </p>
+            </div>
+          ) : null}
           {onLaunchInvokeProcedure && block.playbookSlugs.length ? (
             <Button
               type="button"
@@ -582,7 +654,12 @@ export function CaseProcedureStepExecutor({
                   (o) => o.slug === pickedInvokeSlug && Boolean(o.playbookId?.trim().length),
                 )
               }
-              onClick={() => onLaunchInvokeProcedure(pickedInvokeSlug.trim())}
+              onClick={() =>
+                onLaunchInvokeProcedure(
+                  pickedInvokeSlug.trim(),
+                  invokeOwnerUserId.trim() || undefined,
+                )
+              }
             >
               <PlayCircle className="size-4 shrink-0" aria-hidden />
               {t('cases.detail.procedure.launchInvokeProcedure', 'Launch procedure')}

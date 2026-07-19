@@ -8,6 +8,8 @@ export const features = [
     module: 'cases',
   },
   { id: 'cases.edit', title: 'Edit cases', module: 'cases' },
+  { id: 'cases.owner.assign', title: 'Assign procedure owners', module: 'cases' },
+  { id: 'cases.recurrence.manage', title: 'Manage recurring cases', module: 'cases' },
   { id: 'cases.close', title: 'Close cases', module: 'cases' },
   {
     id: 'cases.close.interruptProcedure',

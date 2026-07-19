@@ -83,6 +83,9 @@ export class DictionaryEntry {
   @Property({ name: 'is_default', type: 'boolean', default: false })
   isDefault: boolean = false
 
+  @Property({ type: 'json', nullable: true })
+  metadata?: Record<string, unknown> | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 

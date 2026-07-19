@@ -70,7 +70,9 @@ import {
   updateDimensionValue,
   updateWeightValue,
   isConfigurableProductType,
+  sanitizeProductCaseTemplates,
 } from "@open-mercato/core/modules/catalog/components/products/productForm";
+import { ProductOfferingFields } from "@open-mercato/core/modules/catalog/components/products/ProductOfferingFields";
 import { CATALOG_PRODUCT_TYPES } from "@open-mercato/core/modules/catalog/data/types";
 import {
   buildAttachmentImageUrl,
@@ -137,6 +139,8 @@ const STEP_FIELD_MATCHERS: Record<
     matchField("sku"),
     matchField("productType"),
     matchField("serviceLineId"),
+    matchField("offeringKind"),
+    matchPrefix("caseTemplates"),
     matchField("description"),
     matchField("mediaItems"),
     matchField("mediaDraftId"),
@@ -572,6 +576,8 @@ export default function CreateCatalogProductPage() {
               sku: formValues.sku?.trim() || undefined,
               productType: formValues.productType || "simple",
               serviceLineId: formValues.serviceLineId ?? null,
+              offeringKind: formValues.offeringKind ?? "internal_service",
+              caseTemplates: sanitizeProductCaseTemplates(formValues.caseTemplates),
               taxRateId: formValues.taxRateId ?? null,
               taxRate: productTaxRate ?? null,
               isConfigurable: isConfigurableProductType(
@@ -2141,6 +2147,12 @@ function ProductMetaSection({
           <p className="text-xs text-red-600">{errors.serviceLineId}</p>
         ) : null}
       </div>
+
+      <ProductOfferingFields
+        values={values}
+        setValue={setValue}
+        errors={errors}
+      />
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">

@@ -53,6 +53,8 @@ import {
 } from "../data/validators";
 import type {
   CatalogProductOptionSchema,
+  CatalogOfferingKind,
+  CatalogProductCaseTemplate,
   CatalogProductType,
 } from "../data/types";
 import {
@@ -90,6 +92,8 @@ type ProductSnapshot = {
   taxRateId: string | null;
   taxRate: string | null;
   productType: CatalogProductType;
+  offeringKind: CatalogOfferingKind;
+  caseTemplates: CatalogProductCaseTemplate[] | null;
   statusEntryId: string | null;
   primaryCurrencyCode: string | null;
   defaultUnit: string | null;
@@ -1217,6 +1221,8 @@ async function loadProductSnapshot(
     taxRateId: record.taxRateId ?? null,
     taxRate: record.taxRate ?? null,
     productType: record.productType,
+    offeringKind: record.offeringKind ?? "internal_service",
+    caseTemplates: Array.isArray(record.caseTemplates) ? cloneJson(record.caseTemplates) : null,
     statusEntryId: record.statusEntryId ?? null,
     primaryCurrencyCode: record.primaryCurrencyCode ?? null,
     defaultUnit: record.defaultUnit ?? null,
@@ -1263,6 +1269,10 @@ function applyProductSnapshot(
   record.taxRateId = snapshot.taxRateId ?? null;
   record.taxRate = snapshot.taxRate ?? null;
   record.productType = snapshot.productType;
+  record.offeringKind = snapshot.offeringKind ?? "internal_service";
+  record.caseTemplates = snapshot.caseTemplates
+    ? cloneJson(snapshot.caseTemplates)
+    : null;
   record.statusEntryId = snapshot.statusEntryId ?? null;
   record.primaryCurrencyCode = snapshot.primaryCurrencyCode ?? null;
   record.defaultUnit = snapshot.defaultUnit ?? null;
@@ -1359,6 +1369,8 @@ const createProductCommand: CommandHandler<
       taxRateId,
       taxRate,
       productType: parsed.productType ?? "simple",
+      offeringKind: parsed.offeringKind ?? "internal_service",
+      caseTemplates: parsed.caseTemplates ?? null,
       statusEntryId: parsed.statusEntryId ?? null,
       primaryCurrencyCode: parsed.primaryCurrencyCode ?? null,
       defaultUnit: resolvedUnits.defaultUnit,
@@ -1598,6 +1610,10 @@ const updateProductCommand: CommandHandler<
     }
     if (parsed.productType !== undefined)
       record.productType = parsed.productType;
+    if (parsed.offeringKind !== undefined)
+      record.offeringKind = parsed.offeringKind;
+    if (parsed.caseTemplates !== undefined)
+      record.caseTemplates = parsed.caseTemplates ?? null;
     if (parsed.statusEntryId !== undefined)
       record.statusEntryId = parsed.statusEntryId ?? null;
     if (parsed.primaryCurrencyCode !== undefined) {

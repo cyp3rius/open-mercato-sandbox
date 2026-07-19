@@ -69,7 +69,7 @@ export async function loadAllModuleTools(): Promise<void> {
 
   // 2. Register Code Mode tools (search + execute)
   // These two tools replace the previous api_discover, call_api, discover_schema,
-  // and all module-specific AI tools. The AI writes JavaScript that runs in a
+  // and most module-specific AI tools. The AI writes JavaScript that runs in a
   // node:vm sandbox with access to the OpenAPI spec and api.request().
   try {
     const { loadCodeModeTools } = await import('./codemode-tools')
@@ -79,9 +79,39 @@ export async function loadAllModuleTools(): Promise<void> {
     console.error('[MCP Tools] Could not load Code Mode tools:', error)
   }
 
-  // Note: Auto-discovered module AI tools (from ai-tools.generated.ts) and
-  // legacy API discovery tools (find_api, call_api, discover_schema) are no
-  // longer loaded. Code Mode's search + execute tools cover all use cases.
+  // 3. Explicit first-class module tools that remain useful alongside Code Mode
+  try {
+    const playbooksAiTools = await import('@open-mercato/core/modules/playbooks/ai-tools')
+    const tools = (playbooksAiTools.aiTools ?? playbooksAiTools.default) as ModuleAiTool[]
+    if (Array.isArray(tools) && tools.length > 0) {
+      loadModuleTools('playbooks', tools)
+      console.error(`[MCP Tools] Registered ${tools.length} playbooks tools`)
+    }
+  } catch (error) {
+    console.error('[MCP Tools] Could not load playbooks AI tools:', error)
+  }
+
+  try {
+    const casesAiTools = await import('@open-mercato/core/modules/cases/ai-tools')
+    const tools = (casesAiTools.aiTools ?? casesAiTools.default) as ModuleAiTool[]
+    if (Array.isArray(tools) && tools.length > 0) {
+      loadModuleTools('cases', tools)
+      console.error(`[MCP Tools] Registered ${tools.length} cases tools`)
+    }
+  } catch (error) {
+    console.error('[MCP Tools] Could not load cases AI tools:', error)
+  }
+
+  try {
+    const customersAiTools = await import('@open-mercato/core/modules/customers/ai-tools')
+    const tools = (customersAiTools.aiTools ?? customersAiTools.default) as ModuleAiTool[]
+    if (Array.isArray(tools) && tools.length > 0) {
+      loadModuleTools('customers', tools)
+      console.error(`[MCP Tools] Registered ${tools.length} customers tools`)
+    }
+  } catch (error) {
+    console.error('[MCP Tools] Could not load customers AI tools:', error)
+  }
 }
 
 /**

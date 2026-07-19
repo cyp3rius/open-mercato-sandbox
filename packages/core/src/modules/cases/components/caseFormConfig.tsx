@@ -7,6 +7,7 @@ import type { CrudField, CrudFormGroup } from '@open-mercato/ui/backend/CrudForm
 import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
 import {
   mergeEntitySearchOption,
+  remoteSearchAuthUsers,
   remoteSearchCustomerEntities,
   resolveResourceDisplayLabel,
 } from '../../procurement/lib/procurementEntitySearch'
@@ -26,6 +27,12 @@ export type CaseCreateFormValues = {
   resourceId: string
   procurementProcessId: string
   insurancePolicyId: string
+  ownerUserId: string
+  recurrenceEnabled: boolean
+  recurrenceIntervalAmount: number | null
+  recurrenceIntervalUnit: '' | 'hours' | 'days' | 'weeks' | 'months'
+  recurrenceCreateLeadTimeAmount: number | null
+  recurrenceCreateLeadTimeUnit: '' | 'hours' | 'days' | 'weeks' | 'months'
 }
 
 export type CaseFormTranslator = TranslateFn
@@ -45,6 +52,32 @@ export function caseCreateFormSchema() {
     resourceId: optionalRelationIdField(),
     procurementProcessId: optionalRelationIdField(),
     insurancePolicyId: optionalRelationIdField(),
+    ownerUserId: z.string().uuid({ message: 'cases.form.errors.ownerRequired' }),
+    recurrenceEnabled: z.boolean(),
+    recurrenceIntervalAmount: z.number().int().positive().nullish(),
+    recurrenceIntervalUnit: z.enum(['', 'hours', 'days', 'weeks', 'months']),
+    recurrenceCreateLeadTimeAmount: z.number().int().positive().nullish(),
+    recurrenceCreateLeadTimeUnit: z.enum(['', 'hours', 'days', 'weeks', 'months']),
+  }).superRefine((values, context) => {
+    if (
+      values.recurrenceEnabled &&
+      (values.recurrenceIntervalAmount == null || !values.recurrenceIntervalUnit)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'cases.recurrence.intervalRequired',
+        path: ['recurrenceIntervalAmount'],
+      })
+    }
+    const hasLeadAmount = values.recurrenceCreateLeadTimeAmount != null
+    const hasLeadUnit = Boolean(values.recurrenceCreateLeadTimeUnit)
+    if (hasLeadAmount !== hasLeadUnit) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'cases.recurrence.leadTimeIncomplete',
+        path: ['recurrenceCreateLeadTimeAmount'],
+      })
+    }
   })
 }
 
@@ -56,11 +89,43 @@ export function defaultCaseCreateValues(): CaseCreateFormValues {
     resourceId: '',
     procurementProcessId: '',
     insurancePolicyId: '',
+    ownerUserId: '',
+    recurrenceEnabled: false,
+    recurrenceIntervalAmount: null,
+    recurrenceIntervalUnit: '',
+    recurrenceCreateLeadTimeAmount: null,
+    recurrenceCreateLeadTimeUnit: '',
   }
 }
 
 export function buildCaseCreateFormFields(t: CaseFormTranslator): CrudField[] {
   return [
+    {
+      id: 'ownerUserId',
+      type: 'custom',
+      label: t('cases.form.owner', 'Owner'),
+      required: true,
+      layout: 'half',
+      component: ({ value, setValue, disabled }) => {
+        const ownerUserId = typeof value === 'string' ? value : ''
+        return (
+          <EntitySearchCombobox
+            value={ownerUserId}
+            onChange={setValue}
+            options={mergeEntitySearchOption([], ownerUserId, ownerUserId)}
+            onRemoteSearch={async (query) => {
+              const rows = await remoteSearchAuthUsers(query)
+              return mergeEntitySearchOption(rows, ownerUserId, ownerUserId)
+            }}
+            placeholder={t('cases.form.ownerPlaceholder', 'Choose an owner…')}
+            searchPlaceholder={t('cases.form.ownerSearch', 'Search users…')}
+            disabled={disabled}
+            createInNewTabHref="/backend/users/create"
+            createInNewTabAriaLabel={t('cases.form.ownerAddUser', 'Create user in a new tab')}
+          />
+        )
+      },
+    },
     {
       id: 'title',
       type: 'text',
@@ -259,6 +324,50 @@ export function buildCaseCreateFormFields(t: CaseFormTranslator): CrudField[] {
         )
       },
     },
+    {
+      id: 'recurrenceEnabled',
+      type: 'checkbox',
+      label: t('cases.recurrence.enabled', 'Recurring case'),
+      layout: 'full',
+    },
+    {
+      id: 'recurrenceIntervalAmount',
+      type: 'number',
+      label: t('cases.recurrence.intervalAmount', 'Repeat every'),
+      layout: 'half',
+    },
+    {
+      id: 'recurrenceIntervalUnit',
+      type: 'select',
+      label: t('cases.recurrence.intervalUnit', 'Interval unit'),
+      layout: 'half',
+      options: [
+        { value: '', label: t('cases.recurrence.selectUnit', 'Select unit…') },
+        { value: 'hours', label: t('cases.duration.hours', 'Hours') },
+        { value: 'days', label: t('cases.duration.days', 'Days') },
+        { value: 'weeks', label: t('cases.duration.weeks', 'Weeks') },
+        { value: 'months', label: t('cases.duration.months', 'Months') },
+      ],
+    },
+    {
+      id: 'recurrenceCreateLeadTimeAmount',
+      type: 'number',
+      label: t('cases.recurrence.leadTimeAmount', 'Create ahead by'),
+      layout: 'half',
+    },
+    {
+      id: 'recurrenceCreateLeadTimeUnit',
+      type: 'select',
+      label: t('cases.recurrence.leadTimeUnit', 'Lead time unit'),
+      layout: 'half',
+      options: [
+        { value: '', label: t('cases.recurrence.selectUnit', 'Select unit…') },
+        { value: 'hours', label: t('cases.duration.hours', 'Hours') },
+        { value: 'days', label: t('cases.duration.days', 'Days') },
+        { value: 'weeks', label: t('cases.duration.weeks', 'Weeks') },
+        { value: 'months', label: t('cases.duration.months', 'Months') },
+      ],
+    },
   ]
 }
 
@@ -268,7 +377,7 @@ export function buildCaseCreateFormGroups(t: CaseFormTranslator): CrudFormGroup[
       id: 'basics',
       title: t('cases.form.groups.basics', 'Basics'),
       column: 1,
-      fields: ['title', 'customerEntityId'],
+      fields: ['title', 'customerEntityId', 'ownerUserId'],
     },
     {
       id: 'procedure',
@@ -281,6 +390,18 @@ export function buildCaseCreateFormGroups(t: CaseFormTranslator): CrudFormGroup[
       title: t('cases.form.groups.relations', 'Relations'),
       column: 2,
       fields: ['resourceId', 'procurementProcessId', 'insurancePolicyId'],
+    },
+    {
+      id: 'recurrence',
+      title: t('cases.form.groups.recurrence', 'Recurrence'),
+      column: 2,
+      fields: [
+        'recurrenceEnabled',
+        'recurrenceIntervalAmount',
+        'recurrenceIntervalUnit',
+        'recurrenceCreateLeadTimeAmount',
+        'recurrenceCreateLeadTimeUnit',
+      ],
     },
   ]
 }

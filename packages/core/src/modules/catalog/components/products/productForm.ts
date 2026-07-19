@@ -4,6 +4,9 @@ import { parseObjectLike } from "@open-mercato/shared/lib/json/parseObjectLike";
 import type { ReferenceUnitCode } from "@open-mercato/shared/lib/units/unitCodes";
 import {
   CATALOG_CONFIGURABLE_PRODUCT_TYPES,
+  CATALOG_OFFERING_KINDS,
+  type CatalogOfferingKind,
+  type CatalogProductCaseTemplate,
   type CatalogProductOptionSchema,
   type CatalogProductType,
 } from "../../data/types";
@@ -77,6 +80,20 @@ export type ProductUnitConversionDraft = {
   isActive: boolean;
 };
 
+export type ProductCaseTemplateRecurrenceUnit =
+  NonNullable<CatalogProductCaseTemplate["recurrenceIntervalUnit"]>;
+
+export type ProductCaseTemplateDraft = {
+  id: string;
+  title: string;
+  playbookId: string | null;
+  recurrenceEnabled: boolean;
+  recurrenceIntervalAmount: string;
+  recurrenceIntervalUnit: ProductCaseTemplateRecurrenceUnit | null;
+  recurrenceLeadTimeAmount: string;
+  recurrenceLeadTimeUnit: ProductCaseTemplateRecurrenceUnit | null;
+};
+
 export type VariantDraft = {
   id: string;
   title: string;
@@ -124,6 +141,8 @@ export type ProductFormValues = {
   tags: string[];
   optionSchemaId?: string | null;
   serviceLineId: string | null;
+  offeringKind: CatalogOfferingKind;
+  caseTemplates: ProductCaseTemplateDraft[];
 };
 
 const optionalPositiveNumberInput = z.preprocess((value) => {
@@ -219,6 +238,27 @@ export const productFormSchema = z
     tags: z.array(z.string().trim().min(1).max(100)).optional(),
     optionSchemaId: z.string().uuid().nullable().optional(),
     serviceLineId: z.string().uuid().nullable().optional(),
+    offeringKind: z.enum(CATALOG_OFFERING_KINDS).optional(),
+    caseTemplates: z
+      .array(
+        z.object({
+          id: z.string().uuid(),
+          title: z.string(),
+          playbookId: z.string().uuid().nullable().optional(),
+          recurrenceEnabled: z.boolean().optional(),
+          recurrenceIntervalAmount: z.union([z.string(), z.number()]).optional(),
+          recurrenceIntervalUnit: z
+            .enum(["hours", "days", "weeks", "months"])
+            .nullable()
+            .optional(),
+          recurrenceLeadTimeAmount: z.union([z.string(), z.number()]).optional(),
+          recurrenceLeadTimeUnit: z
+            .enum(["hours", "days", "weeks", "months"])
+            .nullable()
+            .optional(),
+        }),
+      )
+      .optional(),
   })
   .passthrough()
   .refine(
@@ -271,6 +311,8 @@ export const BASE_INITIAL_VALUES: ProductFormValues = {
   tags: [],
   optionSchemaId: null,
   serviceLineId: null,
+  offeringKind: "internal_service",
+  caseTemplates: [],
 };
 
 export const isConfigurableProductType = (type: string): boolean =>
@@ -309,6 +351,145 @@ export const createProductUnitConversionDraft = (
   isActive: true,
   ...overrides,
 });
+
+const CASE_TEMPLATE_RECURRENCE_UNITS = [
+  "hours",
+  "days",
+  "weeks",
+  "months",
+] as const satisfies readonly ProductCaseTemplateRecurrenceUnit[];
+
+const parseCaseTemplateRecurrenceUnit = (
+  raw: unknown,
+): ProductCaseTemplateRecurrenceUnit | null => {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return (CASE_TEMPLATE_RECURRENCE_UNITS as readonly string[]).includes(trimmed)
+    ? (trimmed as ProductCaseTemplateRecurrenceUnit)
+    : null;
+};
+
+const parseCaseTemplatePositiveInt = (raw: unknown): number | null => {
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+    return Math.trunc(raw);
+  }
+  if (typeof raw === "string" && raw.trim().length) {
+    const numeric = Number(raw.trim());
+    if (Number.isFinite(numeric) && numeric > 0) return Math.trunc(numeric);
+  }
+  return null;
+};
+
+export function createProductCaseTemplateId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return createLocalId();
+}
+
+export const createProductCaseTemplateDraft = (
+  overrides: Partial<ProductCaseTemplateDraft> = {},
+): ProductCaseTemplateDraft => ({
+  id: createProductCaseTemplateId(),
+  title: "",
+  playbookId: null,
+  recurrenceEnabled: false,
+  recurrenceIntervalAmount: "",
+  recurrenceIntervalUnit: null,
+  recurrenceLeadTimeAmount: "",
+  recurrenceLeadTimeUnit: null,
+  ...overrides,
+});
+
+export const normalizeProductCaseTemplates = (
+  raw: unknown,
+): ProductCaseTemplateDraft[] => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const row = entry as Record<string, unknown>;
+      const id =
+        typeof row.id === "string" && row.id.trim().length
+          ? row.id.trim()
+          : createProductCaseTemplateId();
+      const title = typeof row.title === "string" ? row.title : "";
+      const playbookId =
+        typeof row.playbookId === "string" && row.playbookId.trim().length
+          ? row.playbookId.trim()
+          : null;
+      const leadTimeRaw = row.recurrenceCreateLeadTime;
+      const leadTime =
+        leadTimeRaw && typeof leadTimeRaw === "object"
+          ? (leadTimeRaw as Record<string, unknown>)
+          : null;
+      const intervalAmount = row.recurrenceIntervalAmount;
+      const leadAmount = leadTime?.amount;
+      return {
+        id,
+        title,
+        playbookId,
+        recurrenceEnabled: row.recurrenceEnabled === true,
+        recurrenceIntervalAmount:
+          intervalAmount === null || intervalAmount === undefined
+            ? ""
+            : String(intervalAmount),
+        recurrenceIntervalUnit: parseCaseTemplateRecurrenceUnit(
+          row.recurrenceIntervalUnit,
+        ),
+        recurrenceLeadTimeAmount:
+          leadAmount === null || leadAmount === undefined
+            ? ""
+            : String(leadAmount),
+        recurrenceLeadTimeUnit: parseCaseTemplateRecurrenceUnit(leadTime?.unit),
+      } satisfies ProductCaseTemplateDraft;
+    })
+    .filter((entry): entry is ProductCaseTemplateDraft => entry !== null);
+};
+
+export const sanitizeProductCaseTemplates = (
+  drafts: ProductCaseTemplateDraft[] | undefined | null,
+): CatalogProductCaseTemplate[] | null => {
+  const list = Array.isArray(drafts) ? drafts : [];
+  const normalized = list
+    .map((draft) => {
+      const title = draft.title?.trim() ?? "";
+      if (!title.length) return null;
+      const template: CatalogProductCaseTemplate = {
+        id: draft.id,
+        title,
+        playbookId: draft.playbookId?.trim().length
+          ? draft.playbookId.trim()
+          : null,
+        recurrenceEnabled: Boolean(draft.recurrenceEnabled),
+      };
+      if (template.recurrenceEnabled) {
+        const intervalAmount = parseCaseTemplatePositiveInt(
+          draft.recurrenceIntervalAmount,
+        );
+        const intervalUnit = draft.recurrenceIntervalUnit;
+        if (intervalAmount !== null) {
+          template.recurrenceIntervalAmount = intervalAmount;
+        }
+        if (intervalUnit) {
+          template.recurrenceIntervalUnit = intervalUnit;
+        }
+        const leadAmount = parseCaseTemplatePositiveInt(
+          draft.recurrenceLeadTimeAmount,
+        );
+        const leadUnit = draft.recurrenceLeadTimeUnit;
+        if (leadAmount !== null && leadUnit) {
+          template.recurrenceCreateLeadTime = {
+            amount: leadAmount,
+            unit: leadUnit,
+          };
+        }
+      }
+      return template;
+    })
+    .filter((entry): entry is CatalogProductCaseTemplate => entry !== null);
+  return normalized.length ? normalized : null;
+};
 
 export const buildOptionValuesKey = (
   optionValues?: Record<string, string>,

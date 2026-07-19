@@ -9,6 +9,7 @@ import {
   type OpenCodeClient,
   type OpenCodeQuestion,
 } from './opencode-client'
+import { resolveMcpBaseUrl } from './mcpEnv'
 
 let clientInstance: OpenCodeClient | null = null
 
@@ -87,8 +88,8 @@ export async function handleOpenCodeMessage(
 export async function handleOpenCodeHealth(): Promise<OpenCodeHealthResponse> {
   const client = getClient()
   const url = process.env.OPENCODE_URL ?? 'http://localhost:4096'
-  // MCP_URL is the full URL (e.g., https://mcp.example.com), fallback to localhost with port
-  const mcpUrl = process.env.MCP_URL ?? `http://localhost:${process.env.MCP_DEV_PORT ?? '3001'}`
+  // OPEN_MERCATO_MCP_URL is the full URL (e.g., https://mcp.example.com)
+  const mcpUrl = resolveMcpBaseUrl()
   const meilisearchHost = process.env.MEILISEARCH_HOST ?? null
 
   // Check search service availability

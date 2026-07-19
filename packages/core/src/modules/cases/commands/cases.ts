@@ -1,4 +1,4 @@
-import { registerCommand, type CommandHandler } from '@open-mercato/shared/lib/commands'
+import { registerCommand, type CommandHandler, type CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import {
   buildChanges,
@@ -21,6 +21,7 @@ import {
   type CaseUpdateInput,
 } from '../data/validators'
 import { cloneCaseMetadataRow, readCasePlaybookRun, writeCasePlaybookRun } from '../lib/casePlaybookMetadata'
+import { scheduleNextRecurrenceOnClose } from '../lib/scheduleNextRecurrenceOnClose'
 import { caseCrudEvents } from '../lib/crud'
 import { ensureOrganizationScope, ensureTenantScope, extractUndoPayload } from './shared'
 import { E } from '#generated/entities.ids.generated'
@@ -46,6 +47,22 @@ function appendCaseTimelineSystem(
     updatedAt: now,
     deletedAt: null,
   })
+}
+
+async function assertRecurrenceManage(
+  ctx: CommandRuntimeContext,
+  changingRecurrence: boolean,
+): Promise<void> {
+  if (!changingRecurrence) return
+  const rbac = ctx.container.resolve('rbacService') as RbacService
+  const uid = ctx.auth?.sub
+  if (!uid) throw new CrudHttpError(401, { error: 'Unauthorized' })
+  const orgId = ctx.selectedOrganizationId ?? ctx.auth?.orgId ?? null
+  const ok = await rbac.userHasAllFeatures(uid, ['cases.recurrence.manage'], {
+    tenantId: ctx.auth?.tenantId ?? null,
+    organizationId: orgId,
+  })
+  if (!ok) throw new CrudHttpError(403, { error: 'cases.recurrence.forbidden' })
 }
 
 function appendCaseTimelineNote(em: EntityManager, caseRow: ServiceCase, body: string, actorUserId: string | null) {
@@ -80,6 +97,15 @@ type CaseSnapshot = {
   openedAt: string
   closedAt: string | null
   priority: string
+  dueAt: string | null
+  overdueNotifiedAt: string | null
+  recurrenceEnabled: boolean
+  recurrenceSeriesId: string | null
+  recurrenceIntervalAmount: number | null
+  recurrenceIntervalUnit: string | null
+  recurrenceCreateLeadTime: { amount: number; unit: string } | null
+  recurrenceOccurrenceKey: string | null
+  recurrenceNextOccurrenceAt: string | null
   metadata: Record<string, unknown> | null
   createdAt: string
   updatedAt: string
@@ -104,6 +130,15 @@ function toSnapshot(row: ServiceCase): CaseSnapshot {
     openedAt: row.openedAt.toISOString(),
     closedAt: row.closedAt ? row.closedAt.toISOString() : null,
     priority: row.priority,
+    dueAt: row.dueAt?.toISOString() ?? null,
+    overdueNotifiedAt: row.overdueNotifiedAt?.toISOString() ?? null,
+    recurrenceEnabled: row.recurrenceEnabled,
+    recurrenceSeriesId: row.recurrenceSeriesId ?? null,
+    recurrenceIntervalAmount: row.recurrenceIntervalAmount ?? null,
+    recurrenceIntervalUnit: row.recurrenceIntervalUnit ?? null,
+    recurrenceCreateLeadTime: row.recurrenceCreateLeadTime ?? null,
+    recurrenceOccurrenceKey: row.recurrenceOccurrenceKey ?? null,
+    recurrenceNextOccurrenceAt: row.recurrenceNextOccurrenceAt?.toISOString() ?? null,
     metadata: (row.metadata as Record<string, unknown> | null | undefined) ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -171,6 +206,7 @@ const createCaseCommand: CommandHandler<CaseCreateInput, { caseId: string }> = {
       tenantId: parsed.tenantId,
       organizationId: parsed.organizationId,
     })
+    await assertRecurrenceManage(ctx, Boolean(parsed.recurrenceEnabled))
     const now = new Date()
     const openedAt = parsed.openedAt ?? now
     let metadata = cloneCaseMetadataRow(parsed.metadata ?? null)
@@ -193,6 +229,15 @@ const createCaseCommand: CommandHandler<CaseCreateInput, { caseId: string }> = {
       openedAt,
       closedAt: null,
       priority: parsed.priority ?? 'normal',
+      dueAt: parsed.dueAt ?? null,
+      overdueNotifiedAt: null,
+      recurrenceEnabled: parsed.recurrenceEnabled ?? false,
+      recurrenceSeriesId: parsed.recurrenceSeriesId ?? null,
+      recurrenceIntervalAmount: parsed.recurrenceIntervalAmount ?? null,
+      recurrenceIntervalUnit: parsed.recurrenceIntervalUnit ?? null,
+      recurrenceCreateLeadTime: parsed.recurrenceCreateLeadTime ?? null,
+      recurrenceOccurrenceKey: parsed.recurrenceOccurrenceKey ?? null,
+      recurrenceNextOccurrenceAt: parsed.recurrenceNextOccurrenceAt ?? null,
       metadata: metadataForDb,
       createdAt: now,
       updatedAt: now,
@@ -200,6 +245,11 @@ const createCaseCommand: CommandHandler<CaseCreateInput, { caseId: string }> = {
     })
     em.persist(record)
     await em.flush()
+    if (record.recurrenceEnabled && !record.recurrenceSeriesId) {
+      record.recurrenceSeriesId = record.id
+      record.updatedAt = new Date()
+      await em.flush()
+    }
     const dataEngine = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({
       dataEngine,
@@ -329,6 +379,16 @@ const updateCaseCommand: CommandHandler<CaseUpdateInput, { caseId: string }> = {
     const parsedForRecord: Record<string, unknown> = { ...parsed }
     delete parsedForRecord.closingNote
 
+    const recurrenceTouched =
+      parsed.recurrenceEnabled !== undefined ||
+      parsed.recurrenceSeriesId !== undefined ||
+      parsed.recurrenceIntervalAmount !== undefined ||
+      parsed.recurrenceIntervalUnit !== undefined ||
+      parsed.recurrenceCreateLeadTime !== undefined ||
+      parsed.recurrenceOccurrenceKey !== undefined ||
+      parsed.recurrenceNextOccurrenceAt !== undefined
+    await assertRecurrenceManage(ctx, recurrenceTouched)
+
     const changes = buildChanges(record as unknown as Record<string, unknown>, parsedForRecord, [
       'title',
       'statusValue',
@@ -342,6 +402,14 @@ const updateCaseCommand: CommandHandler<CaseUpdateInput, { caseId: string }> = {
       'openedAt',
       'closedAt',
       'priority',
+      'dueAt',
+      'recurrenceEnabled',
+      'recurrenceSeriesId',
+      'recurrenceIntervalAmount',
+      'recurrenceIntervalUnit',
+      'recurrenceCreateLeadTime',
+      'recurrenceOccurrenceKey',
+      'recurrenceNextOccurrenceAt',
       'metadata',
     ])
     for (const [key, change] of Object.entries(changes)) {
@@ -369,6 +437,10 @@ const updateCaseCommand: CommandHandler<CaseUpdateInput, { caseId: string }> = {
     }
     if (closing && noteTrimmed.length) {
       appendCaseTimelineNote(em, record, noteTrimmed, actorForTimeline)
+    }
+
+    if (closing && record.closedAt) {
+      scheduleNextRecurrenceOnClose(record, record.closedAt)
     }
 
     record.updatedAt = new Date()
@@ -431,6 +503,15 @@ const updateCaseCommand: CommandHandler<CaseUpdateInput, { caseId: string }> = {
     row.openedAt = new Date(before.openedAt)
     row.closedAt = before.closedAt ? new Date(before.closedAt) : null
     row.priority = before.priority
+    row.dueAt = before.dueAt ? new Date(before.dueAt) : null
+    row.overdueNotifiedAt = before.overdueNotifiedAt ? new Date(before.overdueNotifiedAt) : null
+    row.recurrenceEnabled = before.recurrenceEnabled
+    row.recurrenceSeriesId = before.recurrenceSeriesId
+    row.recurrenceIntervalAmount = before.recurrenceIntervalAmount
+    row.recurrenceIntervalUnit = before.recurrenceIntervalUnit
+    row.recurrenceCreateLeadTime = before.recurrenceCreateLeadTime
+    row.recurrenceOccurrenceKey = before.recurrenceOccurrenceKey
+    row.recurrenceNextOccurrenceAt = before.recurrenceNextOccurrenceAt ? new Date(before.recurrenceNextOccurrenceAt) : null
     row.metadata = before.metadata
     row.updatedAt = new Date()
     await em.flush()

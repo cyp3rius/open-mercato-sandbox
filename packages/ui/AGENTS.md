@@ -126,6 +126,8 @@ import { IconButton } from '@open-mercato/ui/primitives/icon-button'
 - **Module** list pages (mercato/core hosts): follow **`.cursor/rules/backend-views-conventions.mdc`** and **`.cursor/rules/backend-module-list-datatable.mdc`** so shell, header actions, filters, and row behavior stay consistent.
 - Use `DataTable` as the default list view.
 - DataTable extension spots include: `data-table:<tableId>:columns`, `:row-actions`, `:bulk-actions`, `:filters` (in addition to `:header`/`:footer`).
+- Modules can also pass `bulkActions` directly on `DataTable` (same shape as injection bulk actions); non-empty `bulkActions` (native or injected) enables row selection checkboxes.
+- Use FilterBar `bulkActions` for **mutations on the selection** only. Domain **Import/Export** file actions belong in header `actions` as an **IconButton group**; pair with `enableRowSelection` + `onSelectedRowsChange` when Export needs a selection.
 - Populate `columns` with explicit renderers and set `meta.truncate`/`meta.maxWidth` where truncation is needed.
 - For filters, use `FilterBar`/`FilterOverlay` with async option loaders; keep `pageSize` at or below 100.
 - Support exports using `buildCrudExportUrl` and pass `exportOptions` to `DataTable`.

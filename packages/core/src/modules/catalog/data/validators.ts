@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CATALOG_PRICE_DISPLAY_MODES, CATALOG_PRODUCT_TYPES } from './types'
+import { CATALOG_OFFERING_KINDS, CATALOG_PRICE_DISPLAY_MODES, CATALOG_PRODUCT_TYPES } from './types'
 import { REFERENCE_UNIT_CODES } from '../lib/unitCodes'
 import {
   getCatalogPriceAmountValidationMessage,
@@ -112,6 +112,23 @@ export const offerUpdateSchema = z
   )
 
 const productTypeSchema = z.enum(CATALOG_PRODUCT_TYPES)
+const offeringKindSchema = z.enum(CATALOG_OFFERING_KINDS)
+const catalogCaseTemplateRecurrenceUnitSchema = z.enum(['hours', 'days', 'weeks', 'months'])
+export const catalogProductCaseTemplateSchema = z.object({
+  id: uuid(),
+  title: z.string().trim().min(1).max(500),
+  playbookId: uuid().nullable().optional(),
+  recurrenceEnabled: z.boolean().optional().default(false),
+  recurrenceIntervalAmount: z.number().int().positive().nullable().optional(),
+  recurrenceIntervalUnit: catalogCaseTemplateRecurrenceUnitSchema.nullable().optional(),
+  recurrenceCreateLeadTime: z
+    .object({
+      amount: z.number().int().positive(),
+      unit: catalogCaseTemplateRecurrenceUnitSchema,
+    })
+    .nullable()
+    .optional(),
+})
 const uomRoundingModeSchema = z.enum(['half_up', 'down', 'up'])
 const unitPriceReferenceUnitSchema = z.enum(REFERENCE_UNIT_CODES)
 const unitPriceConfigSchema = z.object({
@@ -185,6 +202,8 @@ const productBaseSchema = scoped.extend({
   taxRateId: uuid().nullable().optional(),
   taxRate: z.coerce.number().min(0).max(100).optional().nullable(),
   productType: productTypeSchema.default('simple'),
+  offeringKind: offeringKindSchema.default('internal_service'),
+  caseTemplates: z.array(catalogProductCaseTemplateSchema).max(50).optional().nullable(),
   statusEntryId: uuid().optional(),
   primaryCurrencyCode: currencyCodeSchema.optional(),
   defaultUnit: z.string().trim().max(50).optional().nullable(),

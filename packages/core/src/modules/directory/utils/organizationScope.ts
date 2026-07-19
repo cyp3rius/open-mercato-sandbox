@@ -17,12 +17,16 @@ export type OrganizationScope = {
 }
 
 export function getSelectedOrganizationFromRequest(req: Request | { cookies?: { get: (name: string) => { value: string } | undefined }; headers?: { get(name: string): string | null } }): string | null {
+  const headerContainer = (req as { headers?: { get(name: string): string | null } }).headers
+  const headerOrg =
+    typeof headerContainer?.get === 'function' ? headerContainer.get('x-organization-id')?.trim() : null
+  if (headerOrg) return headerOrg
+
   const cookieContainer = (req as { cookies?: { get: (name: string) => { value: string } | undefined } }).cookies
   if (cookieContainer && typeof cookieContainer.get === 'function') {
     const val = cookieContainer.get('om_selected_org')?.value
     return val ?? null
   }
-  const headerContainer = (req as { headers?: { get(name: string): string | null } }).headers
   const header = typeof headerContainer?.get === 'function' ? headerContainer.get('cookie') : null
   return parseSelectedOrganizationCookie(header)
 }

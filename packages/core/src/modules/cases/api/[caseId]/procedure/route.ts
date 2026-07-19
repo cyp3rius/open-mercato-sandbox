@@ -50,7 +50,11 @@ const postBodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('next'), closingNote: z.string().max(10000).optional() }),
   z.object({ action: z.literal('sendNotify'), body: z.string().min(1).max(50000) }),
   z.object({ action: z.literal('answer'), branch: z.enum(['yes', 'no']) }),
-  z.object({ action: z.literal('launchInvokeProcedure'), slug: z.string().min(1).max(200) }),
+  z.object({
+    action: z.literal('launchInvokeProcedure'),
+    slug: z.string().min(1).max(200),
+    ownerUserId: z.string().uuid().optional(),
+  }),
   z.object({
     action: z.literal('scheduleProcedureTask'),
     title: z.string().min(1).max(500),
@@ -119,7 +123,7 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
     const meta = caseRow.metadata && typeof caseRow.metadata === 'object' ? (caseRow.metadata as Record<string, unknown>) : {}
     const run = readCasePlaybookRun(meta)
     const uid = typeof ctx.auth?.sub === 'string' ? ctx.auth.sub.trim() : ''
-    const ownerId = caseRow.ownerUserId?.trim() ?? ''
+    const ownerId = run?.procedureOwnerUserId?.trim() || caseRow.ownerUserId?.trim() || ''
     const isOwner = Boolean(uid.length && ownerId.length && uid === ownerId)
 
     let playbookTitle: string | null = null
@@ -333,7 +337,7 @@ export async function POST(req: Request, routeContext: { params?: { caseId?: str
     if (body.data.action === 'launchInvokeProcedure') {
       const input = parseScopedCommandInput(
         casePlaybookLaunchInvokeSchema,
-        { ...merged, slug: body.data.slug },
+        { ...merged, slug: body.data.slug, ...(body.data.ownerUserId ? { ownerUserId: body.data.ownerUserId } : {}) },
         ctx,
         translate,
       )

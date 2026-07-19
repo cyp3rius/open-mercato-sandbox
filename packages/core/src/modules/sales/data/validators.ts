@@ -341,6 +341,8 @@ const lineSharedSchema = z.object({
   statusEntryId: uuid().optional(),
   productId: uuid().optional(),
   productVariantId: uuid().optional(),
+  subscriptionStartsAt: z.coerce.date().optional().nullable(),
+  subscriptionEndsAt: z.coerce.date().optional().nullable(),
   name: z.string().trim().max(255).optional(),
   description: z.string().trim().max(4000).optional(),
   comment: z.string().trim().max(2000).optional(),

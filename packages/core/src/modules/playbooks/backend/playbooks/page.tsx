@@ -3,13 +3,14 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus } from 'lucide-react'
+import { Download, Plus, Upload } from 'lucide-react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
 import { RowActions } from '@open-mercato/ui/backend/RowActions'
 import type { FilterDef, FilterValues } from '@open-mercato/ui/backend/FilterBar'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { IconButton } from '@open-mercato/ui/primitives/icon-button'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { deleteCrud } from '@open-mercato/ui/backend/utils/crud'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -17,6 +18,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { parsePlaybookBooleanField } from '../../lib/playbookFields'
+import { exportPlaybooksMarkdownByIds } from '../../lib/playbookMarkdownClientExport'
 
 const PAGE_SIZE = 20
 
@@ -32,6 +34,15 @@ type PlaybookRow = {
   version?: number
   isActive?: boolean
   updatedAt?: string | null
+}
+
+type FromMarkdownBatchResponse = {
+  ok?: boolean
+  results?: Array<{ ok?: boolean; action?: string; slug?: string | null; error?: string }>
+  summary?: { total?: number; succeeded?: number; failed?: number }
+  action?: string
+  slug?: string
+  error?: string
 }
 
 function normalizePlaybookListItem(raw: Record<string, unknown>): PlaybookRow {
@@ -61,6 +72,72 @@ function playbookAudienceCellLabel(
   return t('playbooks.form.audienceInternal', 'Internal')
 }
 
+function extractMarkdownDocumentsFromJson(parsed: unknown): string[] {
+  if (typeof parsed === 'string' && parsed.trim()) return [parsed]
+  if (Array.isArray(parsed)) {
+    const docs: string[] = []
+    for (const entry of parsed) {
+      if (typeof entry === 'string' && entry.trim()) {
+        docs.push(entry)
+        continue
+      }
+      if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+        const markdown = (entry as { markdown?: unknown }).markdown
+        if (typeof markdown === 'string' && markdown.trim()) docs.push(markdown)
+      }
+    }
+    return docs
+  }
+  if (!parsed || typeof parsed !== 'object') return []
+  const record = parsed as {
+    documents?: unknown
+    items?: unknown
+    markdown?: unknown
+  }
+  if (typeof record.markdown === 'string' && record.markdown.trim()) {
+    return [record.markdown]
+  }
+  if (Array.isArray(record.documents)) {
+    return record.documents.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+  }
+  if (Array.isArray(record.items)) {
+    const docs: string[] = []
+    for (const item of record.items) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+      const markdown = (item as { markdown?: unknown }).markdown
+      if (typeof markdown === 'string' && markdown.trim()) docs.push(markdown)
+    }
+    return docs
+  }
+  return []
+}
+
+async function readMarkdownDocumentsFromFiles(files: FileList | File[]): Promise<string[]> {
+  const list = Array.from(files)
+  const documents: string[] = []
+  for (const file of list) {
+    const text = await file.text()
+    const lower = file.name.toLowerCase()
+    if (lower.endsWith('.json')) {
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(text) as unknown
+      } catch {
+        throw new Error(`Invalid JSON in ${file.name}`)
+      }
+      const extracted = extractMarkdownDocumentsFromJson(parsed)
+      if (extracted.length === 0) {
+        throw new Error(`No markdown documents found in ${file.name}`)
+      }
+      documents.push(...extracted)
+      continue
+    }
+    if (!text.trim()) continue
+    documents.push(text)
+  }
+  return documents
+}
+
 type ListResponse = {
   items: PlaybookRow[]
   total: number
@@ -74,6 +151,7 @@ export default function PlaybooksListPage() {
   const t = useT()
   const scopeVersion = useOrganizationScopeVersion()
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
+  const importInputRef = React.useRef<HTMLInputElement>(null)
   const [rows, setRows] = React.useState<PlaybookRow[]>([])
   const [page, setPage] = React.useState(1)
   const [totalPages, setTotalPages] = React.useState(1)
@@ -83,6 +161,9 @@ export default function PlaybooksListPage() {
     [PLAYBOOK_ACTIVE_FILTER_ID]: 'active' satisfies PlaybookActiveFilterValue,
   })
   const [isLoading, setIsLoading] = React.useState(true)
+  const [isImporting, setIsImporting] = React.useState(false)
+  const [isExporting, setIsExporting] = React.useState(false)
+  const [selectedRows, setSelectedRows] = React.useState<PlaybookRow[]>([])
   const [canManage, setCanManage] = React.useState(false)
   const [reloadToken, setReloadToken] = React.useState(0)
 
@@ -212,6 +293,141 @@ export default function PlaybooksListPage() {
     [router],
   )
 
+  const handleExportSelected = React.useCallback(async () => {
+    const ids = selectedRows
+      .map((row) => (typeof row.id === 'string' && row.id.length > 0 ? row.id : null))
+      .filter((id): id is string => id != null)
+
+    if (ids.length === 0) {
+      flash(t('playbooks.list.export.noneSelected', 'Select at least one playbook to export.'), 'error')
+      return
+    }
+
+    setIsExporting(true)
+    try {
+      const result = await exportPlaybooksMarkdownByIds(ids)
+      if (!result.ok) {
+        if (result.reason === 'empty') {
+          flash(t('playbooks.list.export.empty', 'No exportable playbooks found for the selection.'), 'error')
+        } else {
+          flash(t('playbooks.list.export.error', 'Could not export playbooks.'), 'error')
+        }
+        return
+      }
+      flash(
+        t('playbooks.list.export.success', 'Exported {count} playbook(s).', {
+          count: result.count,
+        }),
+        'success',
+      )
+    } finally {
+      setIsExporting(false)
+    }
+  }, [selectedRows, t])
+
+  const handleExportOne = React.useCallback(
+    async (row: PlaybookRow) => {
+      if (!row?.id) return
+      const result = await exportPlaybooksMarkdownByIds([row.id])
+      if (!result.ok) {
+        if (result.reason === 'empty') {
+          flash(t('playbooks.list.export.empty', 'No exportable playbooks found for the selection.'), 'error')
+        } else {
+          flash(t('playbooks.list.export.error', 'Could not export playbooks.'), 'error')
+        }
+        return
+      }
+      flash(
+        t('playbooks.list.export.success', 'Exported {count} playbook(s).', {
+          count: result.count,
+        }),
+        'success',
+      )
+    },
+    [t],
+  )
+
+  const handleImportFiles = React.useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = event.target.files
+      event.target.value = ''
+      if (!files || files.length === 0) return
+      setIsImporting(true)
+      try {
+        const documents = await readMarkdownDocumentsFromFiles(files)
+        if (documents.length === 0) {
+          flash(t('playbooks.list.import.empty', 'No Markdown documents found in the selected files.'), 'error')
+          return
+        }
+        if (documents.length > 50) {
+          flash(t('playbooks.list.import.tooMany', 'Import at most 50 documents at once.'), 'error')
+          return
+        }
+
+        const call = await apiCall<FromMarkdownBatchResponse>('/api/playbooks/from-markdown', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(documents.length === 1 ? { markdown: documents[0] } : { documents }),
+        })
+
+        if (!call.ok || !call.result) {
+          flash(
+            typeof call.result?.error === 'string'
+              ? call.result.error
+              : t('playbooks.list.import.error', 'Could not import playbooks.'),
+            'error',
+          )
+          return
+        }
+
+        if (Array.isArray(call.result.results)) {
+          const succeeded = call.result.summary?.succeeded ?? call.result.results.filter((item) => item.ok).length
+          const failed = call.result.summary?.failed ?? call.result.results.length - succeeded
+          if (failed > 0) {
+            flash(
+              t(
+                'playbooks.list.import.partial',
+                'Imported {succeeded} playbook(s); {failed} failed. Same slug becomes a new version when content changes.',
+                { succeeded, failed },
+              ),
+              'error',
+            )
+          } else {
+            flash(
+              t(
+                'playbooks.list.import.success',
+                'Imported {count} playbook(s). Matching slug/uid creates a new version when content changes.',
+                { count: succeeded },
+              ),
+              'success',
+            )
+          }
+        } else {
+          flash(
+            t(
+              'playbooks.list.import.successOne',
+              'Imported playbook “{slug}” ({action}). Matching slug creates a new version when content changes.',
+              {
+                slug: call.result.slug ?? '—',
+                action: call.result.action ?? 'updated',
+              },
+            ),
+            'success',
+          )
+        }
+        setReloadToken((x) => x + 1)
+      } catch (err) {
+        flash(
+          err instanceof Error ? err.message : t('playbooks.list.import.error', 'Could not import playbooks.'),
+          'error',
+        )
+      } finally {
+        setIsImporting(false)
+      }
+    },
+    [t],
+  )
+
   const columns = React.useMemo<ColumnDef<PlaybookRow>[]>(
     () => [
       {
@@ -252,51 +468,73 @@ export default function PlaybooksListPage() {
           )
         },
       },
-      {
-        id: 'actions',
-        cell: ({ row }) =>
-          canManage ? (
-            <RowActions
-              items={[
-                {
-                  id: 'delete',
-                  label: t('common.delete', 'Delete'),
-                  destructive: true,
-                  onSelect: () => void handleDelete(row.original),
-                },
-              ]}
-            />
-          ) : null,
-      },
     ],
-    [canManage, handleDelete, t],
+    [t],
   )
+
+  const importAria = t('playbooks.list.import.action', 'Import playbooks')
+  const exportAria = t('playbooks.list.export.action', 'Export')
+  const transferGroupAria = t('playbooks.list.transfer.group', 'Import and export playbooks')
 
   return (
     <Page>
       <PageBody>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".md,.markdown,.json,text/markdown,application/json"
+          multiple
+          className="hidden"
+          onChange={(event) => void handleImportFiles(event)}
+        />
         <DataTable<PlaybookRow>
           title={t('playbooks.list.title', 'Playbooks')}
           refreshButton={{
             label: t('playbooks.list.refresh', 'Refresh'),
-            onRefresh: () => {
-              setSearch('')
-              setPage(1)
-              handleRefresh()
-            },
+            onRefresh: handleRefresh,
           }}
           actions={
-            canManage ? (
-              <Button type="button" asChild size="sm" className="inline-flex items-center gap-2">
-                <Link href="/backend/playbooks/create">
-                  <Plus className="size-4 shrink-0" aria-hidden />
-                  {t('playbooks.create.title', 'New playbook')}
-                </Link>
-              </Button>
-            ) : null
+            <>
+              <div className="inline-flex items-stretch" role="group" aria-label={transferGroupAria}>
+                {canManage ? (
+                  <IconButton
+                    type="button"
+                    variant="outline"
+                    title={importAria}
+                    aria-label={importAria}
+                    disabled={isImporting}
+                    className="rounded-r-none border-r-0"
+                    onClick={() => importInputRef.current?.click()}
+                  >
+                    <Upload className="size-4" aria-hidden />
+                  </IconButton>
+                ) : null}
+                <IconButton
+                  type="button"
+                  variant="outline"
+                  title={exportAria}
+                  aria-label={exportAria}
+                  disabled={isExporting || selectedRows.length === 0}
+                  className={canManage ? 'rounded-l-none' : undefined}
+                  onClick={() => void handleExportSelected()}
+                >
+                  <Download className="size-4" aria-hidden />
+                </IconButton>
+              </div>
+              {canManage ? (
+                <Button type="button" asChild size="sm" className="inline-flex items-center gap-2">
+                  <Link href="/backend/playbooks/create">
+                    <Plus className="size-4 shrink-0" aria-hidden />
+                    {t('playbooks.create.title', 'New playbook')}
+                  </Link>
+                </Button>
+              ) : null}
+            </>
           }
           columns={columns}
           data={rows}
+          enableRowSelection
+          onSelectedRowsChange={setSelectedRows}
           searchValue={search}
           onSearchChange={(value) => {
             setSearch(value)
@@ -321,6 +559,11 @@ export default function PlaybooksListPage() {
                   label: t('playbooks.list.actions.openInNewTab', 'Open in new tab'),
                   onSelect: () =>
                     window.open(`/backend/playbooks/${encodeURIComponent(row.id)}`, '_blank', 'noopener,noreferrer'),
+                },
+                {
+                  id: 'export',
+                  label: t('playbooks.list.export.action', 'Export'),
+                  onSelect: () => void handleExportOne(row),
                 },
                 ...(canManage
                   ? [

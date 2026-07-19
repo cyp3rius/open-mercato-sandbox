@@ -1,0 +1,83 @@
+import { NextResponse } from 'next/server'
+import { z } from 'zod'
+import type { EntityManager } from '@mikro-orm/postgresql'
+import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
+import { CatalogCustomerOffering, CatalogProduct } from '../../data/entities'
+
+export const metadata = {
+  GET: { requireAuth: true, requireFeatures: ['catalog.customer_offerings.view'] },
+}
+
+export const openApi = {
+  tags: ['Catalog'],
+  summary: 'List customer product offerings',
+}
+
+const querySchema = z.object({
+  customerEntityId: z.string().uuid(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+})
+
+export async function GET(req: Request) {
+  const auth = await getAuthFromRequest(req)
+  if (!auth?.tenantId || !auth.orgId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const url = new URL(req.url)
+  const parsed = querySchema.safeParse({
+    customerEntityId: url.searchParams.get('customerEntityId'),
+    page: url.searchParams.get('page') ?? undefined,
+    pageSize: url.searchParams.get('pageSize') ?? undefined,
+  })
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid query' }, { status: 400 })
+  }
+
+  const container = await createRequestContainer()
+  const em = container.resolve<EntityManager>('em').fork()
+  const where = {
+    customerEntityId: parsed.data.customerEntityId,
+    tenantId: auth.tenantId,
+    organizationId: auth.orgId,
+    deletedAt: null,
+  }
+  const [items, total] = await em.findAndCount(CatalogCustomerOffering, where, {
+    orderBy: { createdAt: 'desc' },
+    limit: parsed.data.pageSize,
+    offset: (parsed.data.page - 1) * parsed.data.pageSize,
+  })
+
+  const productIds = [...new Set(items.map((item) => item.productId))]
+  const products = productIds.length
+    ? await em.find(CatalogProduct, {
+        id: { $in: productIds },
+        tenantId: auth.tenantId,
+        organizationId: auth.orgId,
+        deletedAt: null,
+      })
+    : []
+  const productTitleById = new Map(products.map((product) => [product.id, product.title ?? product.id]))
+
+  return NextResponse.json({
+    items: items.map((item) => ({
+      id: item.id,
+      productId: item.productId,
+      productTitle: productTitleById.get(item.productId) ?? item.productId,
+      salesOrderId: item.salesOrderId,
+      salesOrderLineId: item.salesOrderLineId,
+      parentOfferingId: item.parentOfferingId ?? null,
+      offeringKind: item.offeringKind,
+      status: item.status,
+      startsAt: item.startsAt ? item.startsAt.toISOString() : null,
+      endsAt: item.endsAt ? item.endsAt.toISOString() : null,
+      activatedAt: item.activatedAt ? item.activatedAt.toISOString() : null,
+      spawnedCaseCount: Object.keys(item.spawnedCaseIds ?? {}).length,
+      createdAt: item.createdAt.toISOString(),
+    })),
+    total,
+    page: parsed.data.page,
+    pageSize: parsed.data.pageSize,
+  })
+}

@@ -38,8 +38,9 @@ export async function GET(req: NextRequest) {
     // Show the env key that's configured, or the first one as instruction
     const displayEnvKey = getOpenCodeProviderConfiguredEnvKey(providerId)
 
-    // Check if MCP_SERVER_API_KEY is configured (required for MCP authentication)
-    const mcpKeyConfigured = !!process.env.MCP_SERVER_API_KEY?.trim()
+    // Check if OPEN_MERCATO_MCP_API_KEY (or deprecated aliases) is configured
+    const { isMcpApiKeyConfigured } = await import('../../lib/mcpEnv')
+    const mcpKeyConfigured = isMcpApiKeyConfigured()
 
     return NextResponse.json({
       provider: {

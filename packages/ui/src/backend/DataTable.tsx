@@ -194,6 +194,20 @@ export type DataTableProps<T> = {
   replacementHandle?: string
   /** Merged onto the inner `<table>` (e.g. `table-fixed` for column width control). */
   tableClassName?: string
+  /**
+   * Module-owned bulk actions (same shape as injection widgets).
+   * Enables row selection checkboxes when non-empty (merged with injected bulk actions).
+   * Use for mutations on the selection (delete, assign, …) shown in the FilterBar toolbar —
+   * not for Import/Export file actions (those go in header `actions` as an IconButton group).
+   */
+  bulkActions?: InjectionBulkActionDefinition[]
+  /**
+   * Enable checkbox selection without FilterBar bulk action buttons
+   * (e.g. header Export that operates on the current selection).
+   */
+  enableRowSelection?: boolean
+  /** Fires when the selected row set changes (empty array when selection is cleared). */
+  onSelectedRowsChange?: (rows: T[]) => void
 }
 
 const DEFAULT_EXPORT_FORMATS: DataTableExportFormat[] = ['csv', 'json', 'xml', 'markdown']
@@ -668,6 +682,9 @@ export function DataTable<T>({
   injectionContext,
   replacementHandle,
   tableClassName,
+  bulkActions: propBulkActions,
+  enableRowSelection: enableRowSelectionProp = false,
+  onSelectedRowsChange,
 }: DataTableProps<T>) {
   const t = useT()
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
@@ -881,6 +898,11 @@ export function DataTable<T>({
   }, [rowActionWidgets])
   const injectedBulkActions = React.useMemo<InjectionBulkActionDefinition[]>(() => {
     const entries: InjectionBulkActionDefinition[] = []
+    if (Array.isArray(propBulkActions)) {
+      for (const definition of propBulkActions) {
+        entries.push(definition)
+      }
+    }
     for (const widget of bulkActionWidgets) {
       if (!('bulkActions' in widget)) continue
       for (const definition of widget.bulkActions ?? []) {
@@ -888,7 +910,7 @@ export function DataTable<T>({
       }
     }
     return collectUniqueById(entries, 'bulk action')
-  }, [bulkActionWidgets])
+  }, [bulkActionWidgets, propBulkActions])
   const { serverFilters: injectedFilters, clientFilters: injectedClientFilters } = React.useMemo<{
     serverFilters: FilterDef[]
     clientFilters: { id: string; filterFn: (row: unknown, value: unknown) => boolean }[]
@@ -1077,6 +1099,7 @@ export function DataTable<T>({
     )
   }, [data, injectedClientFilters, filterValues])
   const hasInjectedBulkActions = injectedBulkActions.length > 0
+  const rowSelectionEnabled = enableRowSelectionProp || hasInjectedBulkActions
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
   const table = useReactTable<T>({
     data: clientFilteredData,
@@ -1084,7 +1107,7 @@ export function DataTable<T>({
     getCoreRowModel: getCoreRowModel(),
     ...(sortable ? { getSortedRowModel: getSortedRowModel() } : {}),
     state: { sorting, columnVisibility, columnOrder, rowSelection },
-    enableRowSelection: hasInjectedBulkActions,
+    enableRowSelection: rowSelectionEnabled,
     onSortingChange: (updater) => {
       const next = typeof updater === 'function' ? updater(sorting) : updater
       setSorting(next)
@@ -1102,10 +1125,10 @@ export function DataTable<T>({
   })
   React.useEffect(() => { if (sortingProp) setSorting(sortingProp) }, [sortingProp])
   React.useEffect(() => {
-    if (hasInjectedBulkActions) return
+    if (rowSelectionEnabled) return
     if (Object.keys(rowSelection).length === 0) return
     setRowSelection({})
-  }, [hasInjectedBulkActions, rowSelection])
+  }, [rowSelectionEnabled, rowSelection])
   React.useEffect(() => {
     const ids = table.getAllLeafColumns().map((column) => column.id)
     if (!ids.length) return
@@ -1658,9 +1681,14 @@ export function DataTable<T>({
   })
 
   const selectedRows = React.useMemo<T[]>(() => {
-    if (!hasInjectedBulkActions) return []
+    if (!rowSelectionEnabled) return []
     return table.getSelectedRowModel().rows.map((row) => row.original as T)
-  }, [hasInjectedBulkActions, table, rowSelection])
+  }, [rowSelectionEnabled, table, rowSelection])
+
+  React.useEffect(() => {
+    onSelectedRowsChange?.(selectedRows)
+  }, [onSelectedRowsChange, selectedRows])
+
   const trackedBulkProgressJobIdsRef = React.useRef(new Set<string>())
 
   const clearTrackedBulkProgressJob = React.useCallback((jobId: string | null): boolean => {
@@ -1972,9 +2000,10 @@ export function DataTable<T>({
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>
-                {hasInjectedBulkActions ? (
+                {rowSelectionEnabled ? (
                   <TableHead className="w-8">
                     <Checkbox
+                      className="mt-0.5"
                       checked={table.getIsAllPageRowsSelected()}
                       onCheckedChange={(checked) => {
                         table.toggleAllPageRowsSelected(Boolean(checked))
@@ -2019,7 +2048,7 @@ export function DataTable<T>({
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={mergedColumns.length + (rowActions || injectedRowActions.length > 0 ? 1 : 0) + (hasInjectedBulkActions ? 1 : 0)} className="h-24 text-center">
+                <TableCell colSpan={mergedColumns.length + (rowActions || injectedRowActions.length > 0 ? 1 : 0) + (rowSelectionEnabled ? 1 : 0)} className="h-24 text-center">
                   <div className="flex items-center justify-center gap-2">
                     <Spinner size="md" />
                     <span className="text-muted-foreground">{t('ui.dataTable.loading', 'Loading data...')}</span>
@@ -2028,7 +2057,7 @@ export function DataTable<T>({
               </TableRow>
             ) : error ? (
               <TableRow>
-                <TableCell colSpan={mergedColumns.length + (rowActions || injectedRowActions.length > 0 ? 1 : 0) + (hasInjectedBulkActions ? 1 : 0)} className="h-24 text-center text-destructive">
+                <TableCell colSpan={mergedColumns.length + (rowActions || injectedRowActions.length > 0 ? 1 : 0) + (rowSelectionEnabled ? 1 : 0)} className="h-24 text-center text-destructive">
                   {error}
                 </TableCell>
               </TableRow>
@@ -2062,9 +2091,10 @@ export function DataTable<T>({
                       }
                     } : undefined}
                   >
-                    {hasInjectedBulkActions ? (
+                    {rowSelectionEnabled ? (
                       <TableCell className="w-8">
                         <Checkbox
+                          className="mt-0.5"
                           checked={row.getIsSelected()}
                           onCheckedChange={(checked) => row.toggleSelected(Boolean(checked))}
                           aria-label={t('ui.dataTable.bulkAction.selectRow', 'Select row')}
@@ -2133,7 +2163,7 @@ export function DataTable<T>({
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={mergedColumns.length + (rowActions || injectedRowActions.length > 0 ? 1 : 0) + (hasInjectedBulkActions ? 1 : 0)} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={mergedColumns.length + (rowActions || injectedRowActions.length > 0 ? 1 : 0) + (rowSelectionEnabled ? 1 : 0)} className="h-24 text-center text-muted-foreground">
                   {emptyState ?? t('ui.dataTable.emptyState.default', 'No results.')}
                 </TableCell>
               </TableRow>

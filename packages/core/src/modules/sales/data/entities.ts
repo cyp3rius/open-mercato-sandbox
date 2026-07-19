@@ -592,6 +592,12 @@ export class SalesOrderLine {
   @Property({ name: 'product_variant_id', type: 'uuid', nullable: true })
   productVariantId?: string | null
 
+  @Property({ name: 'subscription_starts_at', type: Date, nullable: true })
+  subscriptionStartsAt?: Date | null
+
+  @Property({ name: 'subscription_ends_at', type: Date, nullable: true })
+  subscriptionEndsAt?: Date | null
+
   @Property({ name: 'catalog_snapshot', type: 'jsonb', nullable: true })
   catalogSnapshot?: Record<string, unknown> | null
 

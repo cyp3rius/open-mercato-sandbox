@@ -49,6 +49,8 @@ const createPlaybookCommand: CommandHandler<PlaybookCreateInput, { playbookId: s
       title: parsed.title.trim(),
       body: parsed.body,
       contextTags: parsed.contextTags ?? [],
+      recommendedOwnerUserIds: parsed.recommendedOwnerUserIds ?? [],
+      defaultSlaDuration: parsed.defaultSlaDuration ?? null,
       procedureDefinition: parsed.procedureDefinition ?? [],
       audience: parsed.audience ?? 'internal',
       version: parsed.version ?? 0,
@@ -145,6 +147,12 @@ const updatePlaybookCommand: CommandHandler<PlaybookUpdateInput, { ok: true; pla
       title: merged.title,
       body: merged.body,
       contextTags: tags,
+      recommendedOwnerUserIds:
+        parsed.recommendedOwnerUserIds !== undefined
+          ? Array.from(new Set(parsed.recommendedOwnerUserIds))
+          : [...(row.recommendedOwnerUserIds ?? [])],
+      defaultSlaDuration:
+        parsed.defaultSlaDuration !== undefined ? parsed.defaultSlaDuration : row.defaultSlaDuration ?? null,
       procedureDefinition: proc,
       audience: merged.audience,
       version: row.version + 1,

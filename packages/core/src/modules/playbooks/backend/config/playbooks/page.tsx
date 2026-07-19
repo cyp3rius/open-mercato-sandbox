@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
+import { ProcedureActionDictionaryButton } from '../../../components/ProcedureActionDictionaryButton'
 
 export default async function PlaybooksSettingsPage({
   searchParams,
@@ -51,6 +52,22 @@ export default async function PlaybooksSettingsPage({
                 {translate('playbooks.config.openPlaybooks', 'Open playbooks')}
               </Link>
             </Button>
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium">
+                {translate('playbooks.config.actions.title', 'Procedure actions')}
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {translate(
+                  'playbooks.config.actions.lead',
+                  'Manage action codes and notification behavior available in procedure steps.',
+                )}
+              </p>
+            </div>
+            <ProcedureActionDictionaryButton />
           </div>
         </div>
       </PageBody>

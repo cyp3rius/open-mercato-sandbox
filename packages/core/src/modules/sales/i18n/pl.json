@@ -1184,6 +1184,8 @@
   "sales.orders.form.payments": "Płatności",
   "sales.orders.form.shipments": "Wysyłki",
   "sales.orders.lines.delete": "Usuń pozycję zamówienia",
+  "sales.orders.lines.subscriptionDatesInvalid": "Data rozpoczęcia subskrypcji musi być wcześniejsza lub równa dacie zakończenia.",
+  "sales.orders.lines.subscriptionDatesRequired": "Dla produktów subskrypcyjnych wymagane są daty rozpoczęcia i zakończenia subskrypcji.",
   "sales.orders.lines.upsert": "Zaktualizuj pozycję zamówienia",
   "sales.orders.list.title": "Zamówienia",
   "sales.orders.status_change.actor_api_key": "Klucz API {name}",

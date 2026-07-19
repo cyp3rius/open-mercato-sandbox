@@ -1,10 +1,16 @@
-import { Entity, Index, ManyToOne, PrimaryKey, Property } from '@mikro-orm/core'
+import { Entity, Index, ManyToOne, PrimaryKey, Property, Unique } from '@mikro-orm/core'
 
 @Entity({ tableName: 'cases_cases' })
 @Index({ name: 'cases_cases_scope_idx', properties: ['tenantId', 'organizationId'] })
 @Index({ name: 'cases_cases_customer_idx', properties: ['customerEntityId'] })
 @Index({ name: 'cases_cases_owner_idx', properties: ['ownerUserId'] })
 @Index({ name: 'cases_cases_status_idx', properties: ['statusValue'] })
+@Index({ name: 'cases_cases_due_idx', properties: ['dueAt'] })
+@Index({ name: 'cases_cases_recurrence_series_idx', properties: ['recurrenceSeriesId'] })
+@Unique({
+  name: 'cases_cases_recurrence_occurrence_unique',
+  properties: ['recurrenceSeriesId', 'recurrenceOccurrenceKey'],
+})
 export class ServiceCase {
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -47,6 +53,33 @@ export class ServiceCase {
 
   @Property({ name: 'closed_at', type: Date, nullable: true })
   closedAt?: Date | null
+
+  @Property({ name: 'due_at', type: Date, nullable: true })
+  dueAt?: Date | null
+
+  @Property({ name: 'overdue_notified_at', type: Date, nullable: true })
+  overdueNotifiedAt?: Date | null
+
+  @Property({ name: 'recurrence_enabled', type: 'boolean', default: false })
+  recurrenceEnabled: boolean = false
+
+  @Property({ name: 'recurrence_series_id', type: 'uuid', nullable: true })
+  recurrenceSeriesId?: string | null
+
+  @Property({ name: 'recurrence_interval_amount', type: 'int', nullable: true })
+  recurrenceIntervalAmount?: number | null
+
+  @Property({ name: 'recurrence_interval_unit', type: 'text', nullable: true })
+  recurrenceIntervalUnit?: string | null
+
+  @Property({ name: 'recurrence_create_lead_time', type: 'json', nullable: true })
+  recurrenceCreateLeadTime?: { amount: number; unit: string } | null
+
+  @Property({ name: 'recurrence_occurrence_key', type: 'text', nullable: true })
+  recurrenceOccurrenceKey?: string | null
+
+  @Property({ name: 'recurrence_next_occurrence_at', type: Date, nullable: true })
+  recurrenceNextOccurrenceAt?: Date | null
 
   @Property({ type: 'text' })
   priority: string = 'normal'
