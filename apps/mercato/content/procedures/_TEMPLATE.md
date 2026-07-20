@@ -29,5 +29,13 @@ Stable step identity is the local kebab `id` within the playbook `slug`
   actionCode: task
   taskTitle: Confirm intake details with the customer
 
+# Optional: select or create a related record (customer, resource, order, quote, deal, policy)
+# - id: pick-customer
+#   kind: select_entity
+#   label: Select customer
+#   entityKind: customer
+#   required: true
+#   allowCreate: true
+
 - id: end
   kind: end

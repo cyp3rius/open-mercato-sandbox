@@ -27,7 +27,12 @@ interface SalesLineRouteConfig {
   parentFkColumn: string
   parentFkParam: string
   createSchema: z.ZodObject<z.ZodRawShape>
-  features: { view: string; manage: string }
+  features: {
+    view: string
+    manage: string
+    simpleView?: string
+    simpleManage?: string
+  }
   commandPrefix: string
   openApi: {
     resourceName: string
@@ -134,10 +139,30 @@ export function makeSalesLineRoute(config: SalesLineRouteConfig) {
   })
 
   const routeMetadata = {
-    GET: { requireAuth: true, requireFeatures: [features.view] },
-    POST: { requireAuth: true, requireFeatures: [features.manage] },
-    PUT: { requireAuth: true, requireFeatures: [features.manage] },
-    DELETE: { requireAuth: true, requireFeatures: [features.manage] },
+    GET: {
+      requireAuth: true,
+      requireAnyFeatures: [features.view, features.simpleView].filter(
+        (feature): feature is string => typeof feature === 'string' && feature.length > 0,
+      ),
+    },
+    POST: {
+      requireAuth: true,
+      requireAnyFeatures: [features.manage, features.simpleManage].filter(
+        (feature): feature is string => typeof feature === 'string' && feature.length > 0,
+      ),
+    },
+    PUT: {
+      requireAuth: true,
+      requireAnyFeatures: [features.manage, features.simpleManage].filter(
+        (feature): feature is string => typeof feature === 'string' && feature.length > 0,
+      ),
+    },
+    DELETE: {
+      requireAuth: true,
+      requireAnyFeatures: [features.manage, features.simpleManage].filter(
+        (feature): feature is string => typeof feature === 'string' && feature.length > 0,
+      ),
+    },
   }
 
   const crud = makeCrudRoute({

@@ -1,26 +1,36 @@
 import {
   cloneCaseTemplatesSnapshot,
   isRecurrenceOccurrenceWithinSubscription,
+  isSubscriptionServiceLineCode,
   resolveCustomerOfferingIdFromMetadata,
   resolveRecurrenceSeriesEndsAt,
   shouldActivateOfferingNow,
 } from '../customerOffering'
 
 describe('customerOffering helpers', () => {
+  describe('isSubscriptionServiceLineCode', () => {
+    it('matches subscription code case-insensitively', () => {
+      expect(isSubscriptionServiceLineCode('subscription')).toBe(true)
+      expect(isSubscriptionServiceLineCode('Subscription')).toBe(true)
+      expect(isSubscriptionServiceLineCode('internal_service')).toBe(false)
+      expect(isSubscriptionServiceLineCode(null)).toBe(false)
+    })
+  })
+
   describe('shouldActivateOfferingNow', () => {
     const now = new Date('2026-07-18T12:00:00.000Z')
 
     it('activates non-subscription offerings immediately', () => {
       expect(
         shouldActivateOfferingNow({
-          offeringKind: 'internal_service',
+          isSubscription: false,
           startsAt: new Date('2026-08-01T00:00:00.000Z'),
           now,
         }),
       ).toBe(true)
       expect(
         shouldActivateOfferingNow({
-          offeringKind: 'resource',
+          isSubscription: false,
           startsAt: null,
           now,
         }),
@@ -30,21 +40,21 @@ describe('customerOffering helpers', () => {
     it('activates subscriptions only when startsAt has arrived', () => {
       expect(
         shouldActivateOfferingNow({
-          offeringKind: 'subscription',
+          isSubscription: true,
           startsAt: new Date('2026-07-18T11:59:00.000Z'),
           now,
         }),
       ).toBe(true)
       expect(
         shouldActivateOfferingNow({
-          offeringKind: 'subscription',
+          isSubscription: true,
           startsAt: new Date('2026-07-18T12:00:00.000Z'),
           now,
         }),
       ).toBe(true)
       expect(
         shouldActivateOfferingNow({
-          offeringKind: 'subscription',
+          isSubscription: true,
           startsAt: new Date('2026-07-19T00:00:00.000Z'),
           now,
         }),
@@ -54,7 +64,7 @@ describe('customerOffering helpers', () => {
     it('does not activate subscriptions without startsAt', () => {
       expect(
         shouldActivateOfferingNow({
-          offeringKind: 'subscription',
+          isSubscription: true,
           startsAt: null,
           now,
         }),
@@ -140,7 +150,7 @@ describe('customerOffering helpers', () => {
       const futureStart = new Date('2026-08-01T00:00:00.000Z')
       expect(
         shouldActivateOfferingNow({
-          offeringKind: 'subscription',
+          isSubscription: true,
           startsAt: futureStart,
           now,
         }),
@@ -149,7 +159,7 @@ describe('customerOffering helpers', () => {
       const shouldActivate =
         force ||
         shouldActivateOfferingNow({
-          offeringKind: 'subscription',
+          isSubscription: true,
           startsAt: futureStart,
           now,
         })

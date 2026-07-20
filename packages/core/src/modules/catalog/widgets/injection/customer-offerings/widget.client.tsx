@@ -14,7 +14,6 @@ type OfferingRow = {
   productTitle: string
   salesOrderId: string
   parentOfferingId: string | null
-  offeringKind: string
   status: string
   startsAt: string | null
   endsAt: string | null
@@ -194,9 +193,6 @@ export default function CustomerOfferingsWidget({
                 {t('catalog.customerOfferings.columns.product', 'Product')}
               </th>
               <th className="px-3 py-2 font-medium">
-                {t('catalog.customerOfferings.columns.kind', 'Kind')}
-              </th>
-              <th className="px-3 py-2 font-medium">
                 {t('catalog.customerOfferings.columns.status', 'Status')}
               </th>
               <th className="px-3 py-2 font-medium">
@@ -224,7 +220,6 @@ export default function CustomerOfferingsWidget({
                       </div>
                     ) : null}
                   </td>
-                  <td className="px-3 py-2">{item.offeringKind}</td>
                   <td className="px-3 py-2">{item.status}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">
                     {item.startsAt || item.endsAt

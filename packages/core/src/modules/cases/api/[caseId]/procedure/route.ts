@@ -30,6 +30,7 @@ import {
   casePlaybookSelectSchema,
   casePlaybookLaunchInvokeSchema,
   casePlaybookScheduleProcedureTaskSchema,
+  casePlaybookSelectEntitySchema,
   casePlaybookSendNotifySchema,
   casePlaybookStartSchema,
 } from '../../../commands/caseProcedure'
@@ -60,6 +61,11 @@ const postBodySchema = z.discriminatedUnion('action', [
     title: z.string().min(1).max(500),
     body: z.string().max(20000).optional(),
     dueAt: z.string().max(60).optional().nullable(),
+  }),
+  z.object({
+    action: z.literal('selectEntity'),
+    entityId: z.string().uuid(),
+    label: z.string().max(500).optional().nullable(),
   }),
 ])
 
@@ -215,6 +221,16 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
 
     const canSelectPlaybook = !locked
     const canStart = hasPlaybook && !started
+    const isSelectEntityStep = currentBlock?.kind === 'select_entity'
+    const selectEntityRequired =
+      isSelectEntityStep && currentBlock != null && currentBlock.kind === 'select_entity'
+        ? currentBlock.required !== false
+        : false
+    const currentEntitySelection =
+      isSelectEntityStep && typeof run?.currentBlockId === 'string' && run.currentBlockId.trim().length
+        ? run.entitySelectionByBlockId?.[run.currentBlockId.trim()] ?? null
+        : null
+    const canConfirmSelectEntity = started && isOwner && isSelectEntityStep
     const canNext =
       started &&
       Boolean(run?.currentBlockId) &&
@@ -223,6 +239,7 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
       currentBlock.kind !== 'condition' &&
       currentBlock.kind !== 'invoke_procedure' &&
       !isNotifyAction &&
+      !selectEntityRequired &&
       taskStepAllowsNext
 
     let invokeProcedureOptions: {
@@ -272,6 +289,9 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
       canLaunchInvokeProcedure,
       procedureTaskSummary,
       canScheduleProcedureTask,
+      canConfirmSelectEntity,
+      entitySelection: currentEntitySelection,
+      customerEntityId: caseRow.customerEntityId ?? null,
     })
   } catch (err) {
     if (isCrudHttpError(err)) {
@@ -357,6 +377,20 @@ export async function POST(req: Request, routeContext: { params?: { caseId?: str
         translate,
       )
       const { result } = await commandBus.execute('cases.playbook.scheduleProcedureTask', { input, ctx })
+      return NextResponse.json(result)
+    }
+    if (body.data.action === 'selectEntity') {
+      const input = parseScopedCommandInput(
+        casePlaybookSelectEntitySchema,
+        {
+          ...merged,
+          entityId: body.data.entityId,
+          label: body.data.label ?? null,
+        },
+        ctx,
+        translate,
+      )
+      const { result } = await commandBus.execute('cases.playbook.selectEntity', { input, ctx })
       return NextResponse.json(result)
     }
     const input = parseScopedCommandInput(

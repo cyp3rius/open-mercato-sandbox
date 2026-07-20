@@ -6,10 +6,12 @@ import {
   expandBundleChildProducts,
   upsertCustomerOfferingFromOrderLine,
 } from '../commands/customerOfferings'
-import { shouldActivateOfferingNow } from '../lib/customerOffering'
+import { isSubscriptionProduct, shouldActivateOfferingNow } from '../lib/customerOffering'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { SalesOrder, SalesOrderLine } from '../../sales/data/entities'
+import { loadSalesSettings } from '../../sales/commands/settings'
+import { isSubscriptionActivationOrderStatus } from '../../sales/lib/subscriptionActivation'
 
 type OrderPayload = {
   id?: string
@@ -23,9 +25,13 @@ type ResolverContext = {
   resolve: <T = unknown>(name: string) => T
 }
 
-function isConfirmedStatus(status: string | null | undefined): boolean {
-  const value = typeof status === 'string' ? status.trim().toLowerCase() : ''
-  return value === 'confirmed'
+async function loadActivationStatuses(
+  em: EntityManager,
+  tenantId: string,
+  organizationId: string,
+): Promise<string[] | null> {
+  const settings = await loadSalesSettings(em, { tenantId, organizationId })
+  return settings?.subscriptionActivationOrderStatuses ?? null
 }
 
 function buildCommandCtx(
@@ -47,12 +53,14 @@ function buildCommandCtx(
 }
 
 async function activateIfReady(
+  em: EntityManager,
   commandCtx: CommandRuntimeContext,
-  offering: { id: string; offeringKind: string; startsAt?: Date | null },
+  offering: { id: string; productId: string; startsAt?: Date | null },
 ): Promise<void> {
+  const isSubscription = await isSubscriptionProduct(em, offering.productId)
   if (
     shouldActivateOfferingNow({
-      offeringKind: offering.offeringKind as 'subscription' | 'resource' | 'internal_service' | 'external_service',
+      isSubscription,
       startsAt: offering.startsAt,
     })
   ) {
@@ -68,19 +76,20 @@ export async function processConfirmedSalesOrderOfferings(
   const tenantId = payload.tenantId
   const organizationId = payload.organizationId
   if (!orderId || !tenantId || !organizationId) return
-  if (!isConfirmedStatus(payload.status)) {
-    const emProbe = ctx.resolve<EntityManager>('em').fork()
-    const orderProbe = await emProbe.findOne(SalesOrder, { id: orderId, deletedAt: null })
-    if (!isConfirmedStatus(orderProbe?.status)) return
-  }
 
   const em = ctx.resolve<EntityManager>('em').fork()
+  const activationStatuses = await loadActivationStatuses(em, tenantId, organizationId)
+  if (!isSubscriptionActivationOrderStatus(payload.status, activationStatuses)) {
+    const orderProbe = await em.findOne(SalesOrder, { id: orderId, deletedAt: null })
+    if (!isSubscriptionActivationOrderStatus(orderProbe?.status, activationStatuses)) return
+  }
+
   const order = await em.findOne(
     SalesOrder,
     { id: orderId, tenantId, organizationId, deletedAt: null },
     { populate: ['lines'] },
   )
-  if (!order || !isConfirmedStatus(order.status)) return
+  if (!order || !isSubscriptionActivationOrderStatus(order.status, activationStatuses)) return
   const customerEntityId = order.customerEntityId?.trim()
   if (!customerEntityId) return
 
@@ -113,7 +122,8 @@ export async function processConfirmedSalesOrderOfferings(
     })
     if (!product) continue
 
-    if (product.offeringKind === 'subscription') {
+    const isSubscription = await isSubscriptionProduct(em, product.id)
+    if (isSubscription) {
       if (!line.subscriptionStartsAt || !line.subscriptionEndsAt) {
         console.error(
           '[catalog:sales-order-confirmed-offerings] Subscription line missing dates',
@@ -134,11 +144,12 @@ export async function processConfirmedSalesOrderOfferings(
         subscriptionStartsAt: line.subscriptionStartsAt ?? null,
         subscriptionEndsAt: line.subscriptionEndsAt ?? null,
       })
-      await activateIfReady(commandCtx, offering)
+      await activateIfReady(em, commandCtx, offering)
 
       const children = await expandBundleChildProducts(em, product)
       for (const child of children) {
-        if (child.offeringKind === 'subscription') {
+        const childIsSubscription = await isSubscriptionProduct(em, child.id)
+        if (childIsSubscription) {
           if (!line.subscriptionStartsAt || !line.subscriptionEndsAt) continue
         }
         const childOffering = await upsertCustomerOfferingFromOrderLine(em, {
@@ -152,7 +163,7 @@ export async function processConfirmedSalesOrderOfferings(
           subscriptionEndsAt: line.subscriptionEndsAt ?? null,
           parentOfferingId: offering.id,
         })
-        await activateIfReady(commandCtx, childOffering)
+        await activateIfReady(em, commandCtx, childOffering)
       }
     } catch (err) {
       console.error('[catalog:sales-order-confirmed-offerings] Failed for line', line.id, err)

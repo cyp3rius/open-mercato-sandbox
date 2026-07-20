@@ -33,8 +33,8 @@ export class ServiceCase {
   @Property({ name: 'status_color', type: 'text', nullable: true })
   statusColor?: string | null
 
-  @Property({ name: 'customer_entity_id', type: 'uuid' })
-  customerEntityId!: string
+  @Property({ name: 'customer_entity_id', type: 'uuid', nullable: true })
+  customerEntityId?: string | null
 
   @Property({ name: 'resource_id', type: 'uuid', nullable: true })
   resourceId?: string | null

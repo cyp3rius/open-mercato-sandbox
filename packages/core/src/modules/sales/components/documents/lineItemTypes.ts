@@ -23,4 +23,6 @@ export type SalesLineRecord = {
   customFields?: Record<string, unknown> | null
   status?: string | null
   statusEntryId?: string | null
+  subscriptionStartsAt?: string | null
+  subscriptionEndsAt?: string | null
 }

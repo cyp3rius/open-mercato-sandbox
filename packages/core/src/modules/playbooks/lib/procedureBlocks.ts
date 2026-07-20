@@ -8,6 +8,17 @@ export type ProcedureConditionMode = 'manual' | 'verification'
 export type ProcedureNotifyChannel = 'email' | 'message' | 'in_app'
 export type ProcedureNotifyTarget = 'customer' | 'owner'
 
+export const PROCEDURE_ENTITY_KINDS = [
+  'customer',
+  'resource',
+  'sales_order',
+  'sales_quote',
+  'sales_deal',
+  'insurance_policy',
+] as const
+
+export type ProcedureEntityKind = (typeof PROCEDURE_ENTITY_KINDS)[number]
+
 /** Optional kebab-case id from Markdown authoring; ignored by runtime flow. */
 type ProcedureBlockSourceMeta = {
   sourceStepId?: string | null
@@ -45,6 +56,14 @@ export type ProcedureBlock =
       label?: string | null
       playbookSlugs: string[]
       slaDuration?: ProcedureDuration | null
+    } & ProcedureBlockSourceMeta)
+  | ({
+      id: string
+      kind: 'select_entity'
+      label?: string | null
+      entityKind: ProcedureEntityKind
+      required?: boolean
+      allowCreate?: boolean
     } & ProcedureBlockSourceMeta)
 
 const sourceStepIdField = z.string().trim().min(1).max(120).nullish()
@@ -93,6 +112,15 @@ export function createProcedureBlock(
       return { id, kind: 'goto', label: '', targetStepId: '' }
     case 'invoke_procedure':
       return { id, kind: 'invoke_procedure', label: '', playbookSlugs: [], slaDuration: null }
+    case 'select_entity':
+      return {
+        id,
+        kind: 'select_entity',
+        label: '',
+        entityKind: 'customer',
+        required: true,
+        allowCreate: true,
+      }
   }
 }
 
@@ -149,6 +177,15 @@ const procedureBlockSchema: z.ZodType<ProcedureBlock> = z.lazy(() =>
       label: z.string().max(400).nullish(),
       playbookSlugs: z.array(z.string().min(1).max(160)).max(20),
       slaDuration: procedureDurationSchema.nullish(),
+      sourceStepId: sourceStepIdField,
+    }),
+    z.object({
+      id: z.string().uuid(),
+      kind: z.literal('select_entity'),
+      label: z.string().max(400).nullish(),
+      entityKind: z.enum(PROCEDURE_ENTITY_KINDS),
+      required: z.boolean().optional(),
+      allowCreate: z.boolean().optional(),
       sourceStepId: sourceStepIdField,
     }),
   ]),

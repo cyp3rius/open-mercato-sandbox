@@ -4,8 +4,6 @@ import { parseObjectLike } from "@open-mercato/shared/lib/json/parseObjectLike";
 import type { ReferenceUnitCode } from "@open-mercato/shared/lib/units/unitCodes";
 import {
   CATALOG_CONFIGURABLE_PRODUCT_TYPES,
-  CATALOG_OFFERING_KINDS,
-  type CatalogOfferingKind,
   type CatalogProductCaseTemplate,
   type CatalogProductOptionSchema,
   type CatalogProductType,
@@ -141,7 +139,6 @@ export type ProductFormValues = {
   tags: string[];
   optionSchemaId?: string | null;
   serviceLineId: string | null;
-  offeringKind: CatalogOfferingKind;
   caseTemplates: ProductCaseTemplateDraft[];
 };
 
@@ -238,7 +235,6 @@ export const productFormSchema = z
     tags: z.array(z.string().trim().min(1).max(100)).optional(),
     optionSchemaId: z.string().uuid().nullable().optional(),
     serviceLineId: z.string().uuid().nullable().optional(),
-    offeringKind: z.enum(CATALOG_OFFERING_KINDS).optional(),
     caseTemplates: z
       .array(
         z.object({
@@ -311,7 +307,6 @@ export const BASE_INITIAL_VALUES: ProductFormValues = {
   tags: [],
   optionSchemaId: null,
   serviceLineId: null,
-  offeringKind: "internal_service",
   caseTemplates: [],
 };
 

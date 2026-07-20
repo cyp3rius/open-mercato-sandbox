@@ -147,8 +147,8 @@ export async function remoteSearchInsurancePoliciesForCaseCustomer(
   query: string,
 ): Promise<EntitySearchComboboxOption[]> {
   const cid = resolvedCustomerId(customerEntityId)
-  if (!cid) return []
-  const params = new URLSearchParams({ pageSize: '20', page: '1', customerEntityId: cid })
+  const params = new URLSearchParams({ pageSize: '20', page: '1' })
+  if (cid) params.set('customerEntityId', cid)
   const q = query.trim()
   if (q.length) params.set('search', q)
   const call = await apiCall<Record<string, unknown>>(`/api/insurance/policies?${params.toString()}`)

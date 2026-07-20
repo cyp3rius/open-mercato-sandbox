@@ -14,6 +14,8 @@ const crud = makeCrudRoute(
     deleteCommandId: 'sales.orders.delete',
     manageFeature: 'sales.orders.manage',
     viewFeature: 'sales.orders.view',
+    simpleManageFeature: 'sales.simple_orders.manage',
+    simpleViewFeature: 'sales.simple_orders.view',
   }),
 )
 
@@ -32,4 +34,6 @@ export const openApi = buildDocumentOpenApi({
   deleteCommandId: 'sales.orders.delete',
   manageFeature: 'sales.orders.manage',
   viewFeature: 'sales.orders.view',
+  simpleManageFeature: 'sales.simple_orders.manage',
+  simpleViewFeature: 'sales.simple_orders.view',
 })

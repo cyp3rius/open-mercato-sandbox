@@ -6,6 +6,7 @@ import { StatusSettings } from '../../../components/StatusSettings'
 import { TaxRatesSettings } from '../../../components/TaxRatesSettings'
 import { DocumentNumberSettings } from '../../../components/DocumentNumberSettings'
 import { OrderEditingSettings } from '../../../components/OrderEditingSettings'
+import { SubscriptionActivationSettings } from '../../../components/SubscriptionActivationSettings'
 import { ShippingMethodsSettings } from '../../../components/ShippingMethodsSettings'
 import { PaymentMethodsSettings } from '../../../components/PaymentMethodsSettings'
 import { AdjustmentKindSettings } from '../../../components/AdjustmentKindSettings'
@@ -36,6 +37,7 @@ export default async function SalesConfigurationPage({
         <PaymentMethodsSettings />
         <TaxRatesSettings />
         <OrderEditingSettings />
+        <SubscriptionActivationSettings />
         <DocumentNumberSettings />
       </PageBody>
     </Page>

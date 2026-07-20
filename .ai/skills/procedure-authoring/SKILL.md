@@ -49,6 +49,7 @@ Preferred tools: `playbooks_import_markdown` / `playbooks_apply_markdown` (alias
 - `goto.target` = local step `id`.
 - Prefer leaf `invoke_procedure` playbooks before parents.
 - Do not put database block UUIDs in MD.
+- `select_entity`: set `entityKind` to one of `customer`, `resource`, `sales_order`, `sales_quote`, `sales_deal`, `insurance_policy`. Optional `required` / `allowCreate` (default true). Runtime uses EntitySearchCombobox (pick + create in new tab).
 
 ## Do not
 

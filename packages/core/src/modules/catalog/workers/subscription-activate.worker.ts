@@ -2,6 +2,7 @@ import type { JobContext, QueuedJob, WorkerMeta } from '@open-mercato/queue'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { CatalogCustomerOffering } from '../data/entities'
 import { activateCustomerOfferingById } from '../commands/customerOfferings'
+import { isSubscriptionProduct } from '../lib/customerOffering'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 
 type Payload = { tenantId?: string; organizationId?: string }
@@ -19,7 +20,6 @@ export default async function handle(job: QueuedJob<Payload>, ctx: Context): Pro
   const where: Record<string, unknown> = {
     deletedAt: null,
     status: 'pending',
-    offeringKind: 'subscription',
     startsAt: { $lte: now },
   }
   if (job.payload?.tenantId) where.tenantId = job.payload.tenantId
@@ -27,6 +27,8 @@ export default async function handle(job: QueuedJob<Payload>, ctx: Context): Pro
 
   const pending = await em.find(CatalogCustomerOffering, where, { limit: 100 })
   for (const offering of pending) {
+    const isSubscription = await isSubscriptionProduct(em, offering.productId)
+    if (!isSubscription) continue
     const commandCtx = {
       container: { resolve: ctx.resolve },
       auth: {

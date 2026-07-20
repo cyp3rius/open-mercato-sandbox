@@ -47,7 +47,7 @@ function optionalRelationIdField() {
 export function caseCreateFormSchema() {
   return z.object({
     title: z.string().min(1).max(500),
-    customerEntityId: z.string().uuid(),
+    customerEntityId: optionalRelationIdField(),
     playbookId: optionalRelationIdField(),
     resourceId: optionalRelationIdField(),
     procurementProcessId: optionalRelationIdField(),
@@ -137,7 +137,7 @@ export function buildCaseCreateFormFields(t: CaseFormTranslator): CrudField[] {
       id: 'customerEntityId',
       type: 'custom',
       label: t('cases.form.customer', 'Customer'),
-      required: true,
+      required: false,
       layout: 'half',
       component: ({ value, setValue, setFormValue, disabled }) => {
         const str = typeof value === 'string' ? value : ''
@@ -304,7 +304,6 @@ export function buildCaseCreateFormFields(t: CaseFormTranslator): CrudField[] {
         const str = typeof value === 'string' ? value : ''
         const customerRaw = values?.customerEntityId
         const customerId = typeof customerRaw === 'string' ? customerRaw.trim() : ''
-        const hasCustomer = z.string().uuid().safeParse(customerId).success
         return (
           <EntitySearchCombobox
             value={str}
@@ -314,12 +313,8 @@ export function buildCaseCreateFormFields(t: CaseFormTranslator): CrudField[] {
               const rows = await remoteSearchInsurancePoliciesForCaseCustomer(customerId, q)
               return mergeEntitySearchOption(rows, str, str)
             }}
-            placeholder={
-              hasCustomer
-                ? t('cases.form.relations.insurancePolicySearch', 'Search policies by number…')
-                : t('cases.form.relations.selectCustomerFirst', 'Select a customer first…')
-            }
-            disabled={disabled || !hasCustomer}
+            placeholder={t('cases.form.relations.insurancePolicySearch', 'Search policies by number…')}
+            disabled={disabled}
           />
         )
       },

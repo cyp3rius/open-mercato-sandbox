@@ -8,7 +8,10 @@ import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 
 export const metadata = {
-  POST: { requireAuth: true, requireFeatures: ['catalog.customer_offerings.manage'] },
+  POST: {
+    requireAuth: true,
+    requireAnyFeatures: ['catalog.customer_offerings.manage', 'catalog.simple_offerings.manage'],
+  },
 }
 
 export const openApi = {

@@ -26,6 +26,7 @@ const saveSalesSettingsCommand: CommandHandler<
     nextQuoteNumber: number
     orderCustomerEditableStatuses: string[] | null
     orderAddressEditableStatuses: string[] | null
+    subscriptionActivationOrderStatuses: string[] | null
   }
 > = {
   id: 'sales.settings.save',
@@ -51,6 +52,7 @@ const saveSalesSettingsCommand: CommandHandler<
         quoteNumberFormat: quoteFormat,
         orderCustomerEditableStatuses: input.orderCustomerEditableStatuses ?? null,
         orderAddressEditableStatuses: input.orderAddressEditableStatuses ?? null,
+        subscriptionActivationOrderStatuses: input.subscriptionActivationOrderStatuses ?? null,
       })
       em.persist(settings)
     } else {
@@ -61,6 +63,10 @@ const saveSalesSettingsCommand: CommandHandler<
       }
       if (input.orderAddressEditableStatuses !== undefined) {
         settings.orderAddressEditableStatuses = input.orderAddressEditableStatuses ?? null
+      }
+      if (input.subscriptionActivationOrderStatuses !== undefined) {
+        settings.subscriptionActivationOrderStatuses =
+          input.subscriptionActivationOrderStatuses ?? null
       }
       settings.updatedAt = new Date()
     }
@@ -84,6 +90,7 @@ const saveSalesSettingsCommand: CommandHandler<
       nextQuoteNumber: sequences.quote,
       orderCustomerEditableStatuses: settings.orderCustomerEditableStatuses ?? null,
       orderAddressEditableStatuses: settings.orderAddressEditableStatuses ?? null,
+      subscriptionActivationOrderStatuses: settings.subscriptionActivationOrderStatuses ?? null,
     }
   },
 }

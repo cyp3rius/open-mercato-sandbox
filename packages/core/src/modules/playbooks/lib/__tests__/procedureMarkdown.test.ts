@@ -183,6 +183,66 @@ title: Custom
     ])
   })
 
+  it('compiles and exports select_entity blocks', () => {
+    const md = `---
+slug: pick-customer-flow
+title: Pick customer
+---
+
+## Procedure
+
+- id: start
+  kind: start
+
+- id: pick-customer
+  kind: select_entity
+  label: Wybierz klienta
+  entityKind: customer
+  required: true
+  allowCreate: true
+
+- id: end
+  kind: end
+`
+    const payload = compileProcedureDocument(md)
+    const select = payload.procedureDefinition.find((b) => b.kind === 'select_entity')
+    expect(select).toMatchObject({
+      kind: 'select_entity',
+      entityKind: 'customer',
+      required: true,
+      allowCreate: true,
+      sourceStepId: 'pick-customer',
+    })
+    const exported = exportProcedureDocument(payload)
+    expect(exported).toContain('kind: select_entity')
+    expect(exported).toContain('entityKind: customer')
+    const roundTrip = compileProcedureDocument(exported)
+    expect(roundTrip.procedureDefinition.find((b) => b.kind === 'select_entity')).toMatchObject({
+      entityKind: 'customer',
+      required: true,
+      allowCreate: true,
+    })
+  })
+
+  it('rejects select_entity without a valid entityKind', () => {
+    const md = `---
+slug: x
+title: Y
+---
+
+## Procedure
+
+- id: start
+  kind: start
+- id: pick
+  kind: select_entity
+  entityKind: unknown_thing
+- id: end
+  kind: end
+`
+    expect(() => compileProcedureDocument(md)).toThrow(/invalidEntityKind/)
+  })
+
   it('rejects missing Procedure section', () => {
     expect(() =>
       parseProcedureMarkdown(`---

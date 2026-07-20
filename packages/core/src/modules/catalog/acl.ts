@@ -21,6 +21,16 @@ export const features = [
     title: 'Manage customer product offerings',
     module: 'catalog',
   },
+  {
+    id: 'catalog.simple_offerings.view',
+    title: 'View simple customer offerings',
+    module: 'catalog',
+  },
+  {
+    id: 'catalog.simple_offerings.manage',
+    title: 'Manage simple customer offerings',
+    module: 'catalog',
+  },
 ]
 
 export default features

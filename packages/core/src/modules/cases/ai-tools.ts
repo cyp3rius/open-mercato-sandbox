@@ -134,10 +134,10 @@ const getTool: AiToolDefinition = {
 const createWithPlaybookTool: AiToolDefinition = {
   name: 'cases_create_with_playbook',
   description: `Create a case linked to a playbook (procedure template) without starting the procedure.
-Provide playbookId or playbookSlug. ownerUserId is required. Prefer customers_find / customers_ensure_* for customerEntityId.`,
+Provide playbookId or playbookSlug. ownerUserId is required. customerEntityId is optional.`,
   inputSchema: z.object({
     title: z.string().min(1).max(500),
-    customerEntityId: z.string().uuid(),
+    customerEntityId: z.string().uuid().optional().nullable(),
     ownerUserId: z.string().uuid(),
     playbookId: z.string().uuid().optional(),
     playbookSlug: z.string().min(1).optional(),
@@ -149,7 +149,7 @@ Provide playbookId or playbookSlug. ownerUserId is required. Prefer customers_fi
   handler: async (input, ctx) => {
     const parsed = input as {
       title: string
-      customerEntityId: string
+      customerEntityId?: string | null
       ownerUserId: string
       playbookId?: string
       playbookSlug?: string
@@ -180,7 +180,7 @@ Provide playbookId or playbookSlug. ownerUserId is required. Prefer customers_fi
         tenantId,
         organizationId,
         title: parsed.title.trim(),
-        customerEntityId: parsed.customerEntityId,
+        customerEntityId: parsed.customerEntityId ?? null,
         ownerUserId: parsed.ownerUserId,
         playbookId,
         statusValue: parsed.statusValue ?? 'open',

@@ -65,10 +65,14 @@ export async function GET(request: Request, context: { params?: Record<string, u
   if (!rbac || !auth?.sub) {
     return forbidden('Access denied')
   }
-  const hasFeature = await rbac.userHasAllFeatures(auth.sub, ['customers.deals.view'], {
-    tenantId: auth.tenantId ?? null,
-    organizationId: auth.orgId ?? null,
-  })
+  const hasFeature = await rbac.userHasAnyFeature(
+    auth.sub,
+    ['customers.deals.view', 'customers.simple_deals.view'],
+    {
+      tenantId: auth.tenantId ?? null,
+      organizationId: auth.orgId ?? null,
+    },
+  )
   if (!hasFeature) {
     return forbidden('Access denied')
   }

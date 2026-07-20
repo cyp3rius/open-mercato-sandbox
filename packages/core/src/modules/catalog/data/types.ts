@@ -9,14 +9,8 @@ export const CATALOG_PRODUCT_TYPES = [
 
 export type CatalogProductType = (typeof CATALOG_PRODUCT_TYPES)[number]
 
-export const CATALOG_OFFERING_KINDS = [
-  'resource',
-  'internal_service',
-  'external_service',
-  'subscription',
-] as const
-
-export type CatalogOfferingKind = (typeof CATALOG_OFFERING_KINDS)[number]
+/** Service-line code that marks a product as a timed subscription offering. */
+export const CATALOG_SUBSCRIPTION_SERVICE_LINE_CODE = 'subscription'
 
 export type CatalogProductCaseTemplate = {
   id: string

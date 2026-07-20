@@ -15,7 +15,6 @@ export const MERCATO_SIDEBAR_DEDUPE_HREFS: readonly string[] = [
   '/backend/tasks',
   '/backend/customers/companies',
   '/backend/customers/people',
-  '/backend/customers/deals',
   '/backend/resources/resources',
   '/backend/resources/resource-types',
   '/backend/partner_programs/programs',
@@ -26,6 +25,10 @@ export const MERCATO_SIDEBAR_DEDUPE_HREFS: readonly string[] = [
   '/backend/insurance-desk/policies',
   '/backend/insurance-desk/insurers',
   '/backend/accounting',
+  '/backend/customers/simple-deals',
+  '/backend/sales/simple-orders',
+  '/backend/sales/simple-quotes',
+  '/backend/catalog/products',
 ]
 
 export function buildMercatoShortcutsSidebarGroup(
@@ -96,8 +99,18 @@ export function buildMercatoDailyWorkStructuredGroup(
     [
       '/backend/customers/companies',
       '/backend/customers/people',
-      '/backend/customers/deals',
       '/backend/partner_programs/programs',
+    ] as const
+  )
+    .map(pick)
+    .filter((x): x is SidebarNavItem => x !== null)
+
+  const salesChildren = (
+    [
+      '/backend/customers/simple-deals',
+      '/backend/sales/simple-quotes',
+      '/backend/sales/simple-orders',
+      '/backend/catalog/products',
     ] as const
   )
     .map(pick)
@@ -139,6 +152,19 @@ export function buildMercatoDailyWorkStructuredGroup(
       enabled: true,
       pageContext: 'main',
       children: clientsChildren,
+    })
+  }
+
+  if (salesChildren.length) {
+    items.push({
+      id: 'mercato-section-sales',
+      variant: 'section',
+      href: '',
+      title: translate('backend.nav.section.sales', 'Sales'),
+      defaultTitle: 'Sales',
+      enabled: true,
+      pageContext: 'main',
+      children: salesChildren,
     })
   }
 

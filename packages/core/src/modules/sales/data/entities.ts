@@ -791,6 +791,10 @@ export class SalesSettings {
   @Property({ name: 'order_address_editable_statuses', type: 'jsonb', nullable: true })
   orderAddressEditableStatuses?: string[] | null
 
+  /** Order status values that trigger customer offering upsert/activation. Null/empty ⇒ ['confirmed']. */
+  @Property({ name: 'subscription_activation_order_statuses', type: 'jsonb', nullable: true })
+  subscriptionActivationOrderStatuses?: string[] | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 

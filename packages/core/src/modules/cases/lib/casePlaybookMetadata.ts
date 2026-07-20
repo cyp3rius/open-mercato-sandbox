@@ -1,3 +1,11 @@
+import type { ProcedureEntityKind } from '../../playbooks/lib/procedureBlocks'
+
+export type CasePlaybookEntitySelection = {
+  entityKind: ProcedureEntityKind
+  entityId: string
+  label?: string | null
+}
+
 export type CasePlaybookStackFrame = {
   playbookId: string
   startedAt?: string
@@ -8,6 +16,7 @@ export type CasePlaybookStackFrame = {
   procedureOverdueNotifiedAt?: string
   verificationTaskByConditionId?: Record<string, string>
   actionTaskByActionBlockId?: Record<string, string>
+  entitySelectionByBlockId?: Record<string, CasePlaybookEntitySelection>
 }
 
 export type CasePlaybookRunMetadata = Omit<CasePlaybookStackFrame, 'invokeBlockId'> & {
@@ -15,11 +24,47 @@ export type CasePlaybookRunMetadata = Omit<CasePlaybookStackFrame, 'invokeBlockI
 }
 
 const KEY = 'casePlaybookRun'
+const PROCEDURE_ENTITY_KIND_SET = new Set<string>([
+  'customer',
+  'resource',
+  'sales_order',
+  'sales_quote',
+  'sales_deal',
+  'insurance_policy',
+])
 
 export function cloneCaseMetadataRow(metadata: unknown): Record<string, unknown> {
   return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
     ? { ...(metadata as Record<string, unknown>) }
     : {}
+}
+
+function readStringMap(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const out = Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  )
+  return Object.keys(out).length ? out : undefined
+}
+
+function readEntitySelectionMap(value: unknown): Record<string, CasePlaybookEntitySelection> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const out: Record<string, CasePlaybookEntitySelection> = {}
+  for (const [blockId, raw] of Object.entries(value)) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+    const row = raw as Record<string, unknown>
+    const entityKind = typeof row.entityKind === 'string' ? row.entityKind.trim() : ''
+    const entityId = typeof row.entityId === 'string' ? row.entityId.trim() : ''
+    if (!PROCEDURE_ENTITY_KIND_SET.has(entityKind) || !entityId.length) continue
+    const label =
+      typeof row.label === 'string' && row.label.trim().length ? row.label.trim() : null
+    out[blockId] = {
+      entityKind: entityKind as ProcedureEntityKind,
+      entityId,
+      ...(label ? { label } : {}),
+    }
+  }
+  return Object.keys(out).length ? out : undefined
 }
 
 export function readCasePlaybookRun(meta: Record<string, unknown> | null | undefined): CasePlaybookRunMetadata | null {
@@ -32,10 +77,6 @@ export function readCasePlaybookRun(meta: Record<string, unknown> | null | undef
     typeof o.currentBlockId === 'string' && o.currentBlockId.trim().length ? o.currentBlockId.trim() : null
   const startedAt =
     typeof o.startedAt === 'string' && o.startedAt.trim().length ? o.startedAt.trim() : undefined
-  const readMap = (value: unknown): Record<string, string> | undefined =>
-    value && typeof value === 'object' && !Array.isArray(value)
-      ? Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
-      : undefined
   const readFrame = (value: unknown): CasePlaybookStackFrame | null => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null
     const frame = value as Record<string, unknown>
@@ -50,8 +91,9 @@ export function readCasePlaybookRun(meta: Record<string, unknown> | null | undef
       ...(typeof frame.procedureOwnerUserId === 'string' && frame.procedureOwnerUserId.trim() ? { procedureOwnerUserId: frame.procedureOwnerUserId.trim() } : {}),
       ...(typeof frame.procedureDueAt === 'string' && frame.procedureDueAt.trim() ? { procedureDueAt: frame.procedureDueAt.trim() } : {}),
       ...(typeof frame.procedureOverdueNotifiedAt === 'string' && frame.procedureOverdueNotifiedAt.trim() ? { procedureOverdueNotifiedAt: frame.procedureOverdueNotifiedAt.trim() } : {}),
-      ...(readMap(frame.verificationTaskByConditionId) ? { verificationTaskByConditionId: readMap(frame.verificationTaskByConditionId) } : {}),
-      ...(readMap(frame.actionTaskByActionBlockId) ? { actionTaskByActionBlockId: readMap(frame.actionTaskByActionBlockId) } : {}),
+      ...(readStringMap(frame.verificationTaskByConditionId) ? { verificationTaskByConditionId: readStringMap(frame.verificationTaskByConditionId) } : {}),
+      ...(readStringMap(frame.actionTaskByActionBlockId) ? { actionTaskByActionBlockId: readStringMap(frame.actionTaskByActionBlockId) } : {}),
+      ...(readEntitySelectionMap(frame.entitySelectionByBlockId) ? { entitySelectionByBlockId: readEntitySelectionMap(frame.entitySelectionByBlockId) } : {}),
     }
   }
   const stack = Array.isArray(o.stack) ? o.stack.map(readFrame).filter((frame): frame is CasePlaybookStackFrame => frame !== null) : []
@@ -63,8 +105,9 @@ export function readCasePlaybookRun(meta: Record<string, unknown> | null | undef
     ...(typeof o.procedureDueAt === 'string' && o.procedureDueAt.trim() ? { procedureDueAt: o.procedureDueAt.trim() } : {}),
     ...(typeof o.procedureOverdueNotifiedAt === 'string' && o.procedureOverdueNotifiedAt.trim() ? { procedureOverdueNotifiedAt: o.procedureOverdueNotifiedAt.trim() } : {}),
     ...(stack.length ? { stack } : {}),
-    ...(readMap(o.verificationTaskByConditionId) ? { verificationTaskByConditionId: readMap(o.verificationTaskByConditionId) } : {}),
-    ...(readMap(o.actionTaskByActionBlockId) ? { actionTaskByActionBlockId: readMap(o.actionTaskByActionBlockId) } : {}),
+    ...(readStringMap(o.verificationTaskByConditionId) ? { verificationTaskByConditionId: readStringMap(o.verificationTaskByConditionId) } : {}),
+    ...(readStringMap(o.actionTaskByActionBlockId) ? { actionTaskByActionBlockId: readStringMap(o.actionTaskByActionBlockId) } : {}),
+    ...(readEntitySelectionMap(o.entitySelectionByBlockId) ? { entitySelectionByBlockId: readEntitySelectionMap(o.entitySelectionByBlockId) } : {}),
   }
 }
 
@@ -90,6 +133,9 @@ export function writeCasePlaybookRun(
       : {}),
     ...(run.actionTaskByActionBlockId && Object.keys(run.actionTaskByActionBlockId).length
       ? { actionTaskByActionBlockId: run.actionTaskByActionBlockId }
+      : {}),
+    ...(run.entitySelectionByBlockId && Object.keys(run.entitySelectionByBlockId).length
+      ? { entitySelectionByBlockId: run.entitySelectionByBlockId }
       : {}),
   }
   return base

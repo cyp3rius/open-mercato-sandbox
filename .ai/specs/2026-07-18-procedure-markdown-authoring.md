@@ -100,3 +100,4 @@ Additive tooling + optional `sourceStepId`. Export no longer emits `blockId` (le
 | 2026-07-19 | Export/import round-trip (`blockId`), CLI import/export, to-markdown API, seedExamples, skills. |
 | 2026-07-19 | Backend list Export/Import UI; from-markdown batch `documents`; MCP/API batch export/import. |
 | 2026-07-19 | Drop `blockId` from export MD/API; identity is local `id` + slug → UUID v5; legacy `blockId` still accepted on import. |
+| 2026-07-19 | Add `select_entity` procedure block (`entityKind`: customer, resource, sales_order, sales_quote, sales_deal, insurance_policy). |

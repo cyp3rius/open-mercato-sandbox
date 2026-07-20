@@ -104,6 +104,11 @@ function exportStep(block: ProcedureBlock, uuidToLocal: Map<string, string>): Ex
       step.playbookSlugs = [...(block.playbookSlugs ?? [])]
       if (block.slaDuration) step.slaDuration = block.slaDuration
       return step
+    case 'select_entity':
+      step.entityKind = block.entityKind
+      if (block.required === false) step.required = false
+      if (block.allowCreate === false) step.allowCreate = false
+      return step
   }
 }
 

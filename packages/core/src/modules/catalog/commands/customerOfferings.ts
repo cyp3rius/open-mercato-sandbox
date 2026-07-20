@@ -12,6 +12,7 @@ import {
 } from '../data/entities'
 import {
   cloneCaseTemplatesSnapshot,
+  isSubscriptionProduct,
   shouldActivateOfferingNow,
 } from '../lib/customerOffering'
 import type { CatalogProductCaseTemplate } from '../data/types'
@@ -136,10 +137,11 @@ export async function activateCustomerOfferingById(
 
   const now = new Date()
   const force = Boolean(options?.force)
+  const isSubscription = await isSubscriptionProduct(em, offering.productId)
   if (
     !force &&
     !shouldActivateOfferingNow({
-      offeringKind: offering.offeringKind,
+      isSubscription,
       startsAt: offering.startsAt,
       now,
     })
@@ -277,7 +279,7 @@ export async function upsertCustomerOfferingFromOrderLine(
     (input.product.caseTemplates ?? null) as CatalogProductCaseTemplate[] | null,
   )
   const now = new Date()
-  const isSubscription = input.product.offeringKind === 'subscription'
+  const isSubscription = await isSubscriptionProduct(em, input.product.id)
   const startsAt = isSubscription
     ? input.subscriptionStartsAt ?? null
     : now
@@ -287,7 +289,6 @@ export async function upsertCustomerOfferingFromOrderLine(
     if (existing.status === 'active' || existing.status === 'cancelled') return existing
     existing.customerEntityId = input.customerEntityId
     existing.productId = input.product.id
-    existing.offeringKind = input.product.offeringKind
     existing.startsAt = startsAt
     existing.endsAt = endsAt
     existing.parentOfferingId = input.parentOfferingId ?? existing.parentOfferingId ?? null
@@ -305,7 +306,6 @@ export async function upsertCustomerOfferingFromOrderLine(
     salesOrderId: input.salesOrderId,
     salesOrderLineId: input.salesOrderLineId,
     parentOfferingId: input.parentOfferingId ?? null,
-    offeringKind: input.product.offeringKind,
     status: 'pending',
     startsAt,
     endsAt,

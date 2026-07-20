@@ -76,7 +76,6 @@ import {
 import { ProductOfferingFields } from "@open-mercato/core/modules/catalog/components/products/ProductOfferingFields";
 import {
   CATALOG_PRODUCT_TYPES,
-  type CatalogOfferingKind,
   type CatalogProductOptionSchema,
   type CatalogProductType,
 } from "@open-mercato/core/modules/catalog/data/types";
@@ -318,6 +317,42 @@ export default function EditCatalogProductPage({
     channels: ProductCategorizePickerOption[];
     tags: ProductCategorizePickerOption[];
   }>({ categories: [], channels: [], tags: [] });
+  const [canCreateSimpleQuote, setCanCreateSimpleQuote] = React.useState(false);
+  const [canCreateSimpleOrder, setCanCreateSimpleOrder] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    async function loadSalesCreatePerm() {
+      const call = await apiCall<{ granted?: string[]; ok?: boolean }>(
+        "/api/auth/feature-check",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            features: [
+              "sales.simple_quotes.manage",
+              "sales.simple_orders.manage",
+            ],
+          }),
+        },
+      );
+      if (cancelled) return;
+      const granted = Array.isArray(call.result?.granted)
+        ? call.result.granted
+        : [];
+      const allGranted = call.result?.ok === true;
+      setCanCreateSimpleQuote(
+        allGranted || granted.includes("sales.simple_quotes.manage"),
+      );
+      setCanCreateSimpleOrder(
+        allGranted || granted.includes("sales.simple_orders.manage"),
+      );
+    }
+    void loadSalesCreatePerm();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loadVariants = React.useCallback(async (id: string) => {
     try {
@@ -578,13 +613,6 @@ export default function EditCatalogProductPage({
             : typeof record.serviceLineId === "string"
               ? record.serviceLineId
               : null;
-        const offeringKind = (
-          typeof record.offering_kind === "string"
-            ? record.offering_kind
-            : typeof record.offeringKind === "string"
-              ? record.offeringKind
-              : "internal_service"
-        ) as CatalogOfferingKind;
         const caseTemplates = normalizeProductCaseTemplates(
           record.case_templates ?? record.caseTemplates,
         );
@@ -696,7 +724,6 @@ export default function EditCatalogProductPage({
           channelIds,
           tags: tagValues,
           serviceLineId,
-          offeringKind,
           caseTemplates,
         };
         if (!cancelled) {
@@ -1002,8 +1029,6 @@ export default function EditCatalogProductPage({
         tags: parsed.data.tags ?? [],
         optionSchemaId: parsed.data.optionSchemaId ?? null,
         serviceLineId: parsed.data.serviceLineId ?? null,
-        offeringKind: (parsed.data.offeringKind ??
-          "internal_service") as CatalogOfferingKind,
         caseTemplates: Array.isArray(parsed.data.caseTemplates)
           ? parsed.data.caseTemplates.map((entry) => ({
               id: typeof entry.id === "string" ? entry.id : createLocalId(),
@@ -1175,7 +1200,6 @@ export default function EditCatalogProductPage({
         taxRateId: values.taxRateId ?? null,
         taxRate: productTaxRateValue ?? null,
         serviceLineId: values.serviceLineId ?? null,
-        offeringKind: values.offeringKind ?? "internal_service",
         caseTemplates: sanitizeProductCaseTemplates(values.caseTemplates),
         isConfigurable: isConfigurableProductType(
           values.productType || "simple",
@@ -1371,17 +1395,55 @@ export default function EditCatalogProductPage({
             resourceId: productId ? String(productId) : "",
           }}
           extraActions={productId ? (
-            <SendObjectMessageDialog
-              object={{
-                entityModule: "catalog",
-                entityType: "product",
-                entityId: productId,
-                previewData: {
-                  title: initialValues?.title ?? productId,
-                }
-              }}
-              viewHref={`/backend/catalog/products/${productId}/edit`}
-            />
+            <>
+              {canCreateSimpleQuote ? (
+                <Button
+                  asChild
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="inline-flex items-center gap-2"
+                >
+                  <Link
+                    href={`/backend/sales/simple-quotes/create?productId=${encodeURIComponent(productId)}`}
+                  >
+                    {t(
+                      "catalog.products.actions.createQuote",
+                      "Create quote",
+                    )}
+                  </Link>
+                </Button>
+              ) : null}
+              {canCreateSimpleOrder ? (
+                <Button
+                  asChild
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="inline-flex items-center gap-2"
+                >
+                  <Link
+                    href={`/backend/sales/simple-orders/create?productId=${encodeURIComponent(productId)}`}
+                  >
+                    {t(
+                      "catalog.products.actions.createOrder",
+                      "Create order",
+                    )}
+                  </Link>
+                </Button>
+              ) : null}
+              <SendObjectMessageDialog
+                object={{
+                  entityModule: "catalog",
+                  entityType: "product",
+                  entityId: productId,
+                  previewData: {
+                    title: initialValues?.title ?? productId,
+                  },
+                }}
+                viewHref={`/backend/catalog/products/${productId}/edit`}
+              />
+            </>
           ) : undefined}
           fields={[]}
           groups={groups}

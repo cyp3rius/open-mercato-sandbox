@@ -34,6 +34,8 @@ type DocumentBinding = {
   deleteCommandId: string
   manageFeature: string
   viewFeature: string
+  simpleManageFeature?: string
+  simpleViewFeature?: string
 }
 
 const rawBodySchema = z.object({}).passthrough()
@@ -258,11 +260,18 @@ export function buildDocumentCrudOptions(binding: DocumentBinding) {
   const numberColumn = binding.numberField === 'orderNumber' ? 'order_number' : 'quote_number'
   const createSchema = binding.kind === 'order' ? orderCreateSchema : quoteCreateSchema
 
+  const viewFeatures = [binding.viewFeature, binding.simpleViewFeature].filter(
+    (feature): feature is string => typeof feature === 'string' && feature.length > 0,
+  )
+  const manageFeatures = [binding.manageFeature, binding.simpleManageFeature].filter(
+    (feature): feature is string => typeof feature === 'string' && feature.length > 0,
+  )
+
   const routeMetadata = {
-    GET: { requireAuth: true, requireFeatures: [binding.viewFeature] },
-    POST: { requireAuth: true, requireFeatures: [binding.manageFeature] },
-    PUT: { requireAuth: true, requireFeatures: [binding.manageFeature] },
-    DELETE: { requireAuth: true, requireFeatures: [binding.manageFeature] },
+    GET: { requireAuth: true, requireAnyFeatures: viewFeatures },
+    POST: { requireAuth: true, requireAnyFeatures: manageFeatures },
+    PUT: { requireAuth: true, requireAnyFeatures: manageFeatures },
+    DELETE: { requireAuth: true, requireAnyFeatures: manageFeatures },
   }
 
   const commonFields = [

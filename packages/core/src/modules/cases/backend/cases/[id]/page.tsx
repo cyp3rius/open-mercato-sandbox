@@ -82,6 +82,13 @@ type CaseProcedureState = {
   canLaunchInvokeProcedure?: boolean
   procedureTaskSummary?: ProcedureTaskSummaryHead | null
   canScheduleProcedureTask?: boolean
+  canConfirmSelectEntity?: boolean
+  entitySelection?: {
+    entityKind: string
+    entityId: string
+    label?: string | null
+  } | null
+  customerEntityId?: string | null
 }
 
 function procedureErrorMessage(err: string | null | undefined, t: (key: string, fallback: string) => string) {
@@ -196,7 +203,7 @@ type CaseDetail = {
   id: string
   title: string
   statusValue?: string
-  customerEntityId?: string
+  customerEntityId?: string | null
   resourceId?: string | null
   procurementProcessId?: string | null
   insurancePolicyId?: string | null
@@ -530,14 +537,11 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
     async (next: string | null) => {
       if (!caseId || !canEdit || caseRow?.closedAt) return
       const trimmed = typeof next === 'string' ? next.trim() : ''
-      if (!trimmed.length) {
-        flash(t('cases.detail.customerRequired', 'Customer is required.'), 'error')
-        return
-      }
+      const value = trimmed.length ? trimmed : null
       try {
         await updateCrud(
           'cases',
-          { id: caseId, customerEntityId: trimmed },
+          { id: caseId, customerEntityId: value },
           { errorMessage: t('cases.detail.saveError', 'Could not save.') },
         )
         flash(t('cases.detail.saved', 'Saved.'), 'success')
@@ -1288,6 +1292,9 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
                       canAssignProcedureOwner={canAssignProcedureOwner}
                       procedureTaskSummary={procedure.procedureTaskSummary ?? null}
                       canScheduleProcedureTask={Boolean(procedure.canScheduleProcedureTask && canMutate)}
+                      canConfirmSelectEntity={Boolean(procedure.canConfirmSelectEntity && canMutate)}
+                      entitySelection={procedure.entitySelection ?? null}
+                      customerEntityId={procedure.customerEntityId ?? null}
                       onNext={(opts) =>
                         void runProcedurePost({
                           action: 'next',
@@ -1309,6 +1316,13 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
                           title: payload.title,
                           ...(payload.body !== undefined ? { body: payload.body } : {}),
                           ...(payload.dueAt !== undefined ? { dueAt: payload.dueAt } : {}),
+                        })
+                      }
+                      onSelectEntity={(payload) =>
+                        void runProcedurePost({
+                          action: 'selectEntity',
+                          entityId: payload.entityId,
+                          ...(payload.label ? { label: payload.label } : {}),
                         })
                       }
                     />
@@ -1514,12 +1528,8 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
                           draft === caseRow.insurancePolicyId?.trim() ? policyRelLabel || draft : draft,
                         )
                       }}
-                      placeholder={
-                        hasCaseCustomerForRelations
-                          ? t('cases.form.relations.insurancePolicySearch', 'Search policies by number…')
-                          : t('cases.form.relations.selectCustomerFirst', 'Select a customer first…')
-                      }
-                      disabled={!canMutate || !hasCaseCustomerForRelations}
+                      placeholder={t('cases.form.relations.insurancePolicySearch', 'Search policies by number…')}
+                      disabled={!canMutate}
                     />
                   )}
                   renderDisplay={({ value: vid, emptyLabel: empty, requestEdit }) => {

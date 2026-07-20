@@ -89,7 +89,7 @@ type CaseSnapshot = {
   statusValue: string
   statusLabel: string | null
   statusColor: string | null
-  customerEntityId: string
+  customerEntityId: string | null
   resourceId: string | null
   procurementProcessId: string | null
   insurancePolicyId: string | null
@@ -122,7 +122,7 @@ function toSnapshot(row: ServiceCase): CaseSnapshot {
     statusValue: row.statusValue,
     statusLabel: row.statusLabel ?? null,
     statusColor: row.statusColor ?? null,
-    customerEntityId: row.customerEntityId,
+    customerEntityId: row.customerEntityId ?? null,
     resourceId: row.resourceId ?? null,
     procurementProcessId: row.procurementProcessId ?? null,
     insurancePolicyId: row.insurancePolicyId ?? null,
@@ -163,7 +163,7 @@ async function assertCaseResourceMatchesCustomer(
   translate: CaseTranslate,
   params: {
     resourceId: string | null | undefined
-    customerEntityId: string
+    customerEntityId: string | null | undefined
     tenantId: string
     organizationId: string
   },
@@ -181,8 +181,9 @@ async function assertCaseResourceMatchesCustomer(
       error: translate('cases.errors.resourceNotFound', 'Selected resource was not found.'),
     })
   }
+  const caseCustomer = typeof params.customerEntityId === 'string' ? params.customerEntityId.trim() : ''
   const resourceCustomer = resource.customerEntityId?.trim() ?? ''
-  if (resourceCustomer.length > 0 && resourceCustomer !== params.customerEntityId) {
+  if (resourceCustomer.length > 0 && caseCustomer.length > 0 && resourceCustomer !== caseCustomer) {
     throw new CrudHttpError(400, {
       error: translate(
         'cases.errors.resourceCustomerMismatch',
@@ -202,7 +203,7 @@ const createCaseCommand: CommandHandler<CaseCreateInput, { caseId: string }> = {
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     await assertCaseResourceMatchesCustomer(em, translate, {
       resourceId: parsed.resourceId,
-      customerEntityId: parsed.customerEntityId,
+      customerEntityId: parsed.customerEntityId ?? null,
       tenantId: parsed.tenantId,
       organizationId: parsed.organizationId,
     })
@@ -221,7 +222,7 @@ const createCaseCommand: CommandHandler<CaseCreateInput, { caseId: string }> = {
       statusValue: parsed.statusValue ?? 'open',
       statusLabel: parsed.statusLabel ?? null,
       statusColor: parsed.statusColor ?? null,
-      customerEntityId: parsed.customerEntityId,
+      customerEntityId: parsed.customerEntityId ?? null,
       resourceId: parsed.resourceId ?? null,
       procurementProcessId: parsed.procurementProcessId ?? null,
       insurancePolicyId: parsed.insurancePolicyId ?? null,
@@ -324,13 +325,12 @@ const updateCaseCommand: CommandHandler<CaseUpdateInput, { caseId: string }> = {
     ensureOrganizationScope(ctx, record.organizationId)
 
     const { translate } = await resolveTranslations()
-    const nextCustomerId = (parsed.customerEntityId !== undefined
-      ? parsed.customerEntityId
-      : record.customerEntityId) as string
+    const nextCustomerId =
+      parsed.customerEntityId !== undefined ? parsed.customerEntityId : record.customerEntityId
     const nextResourceId = parsed.resourceId !== undefined ? parsed.resourceId : record.resourceId
     await assertCaseResourceMatchesCustomer(em, translate, {
       resourceId: nextResourceId,
-      customerEntityId: nextCustomerId,
+      customerEntityId: nextCustomerId ?? null,
       tenantId: record.tenantId,
       organizationId: record.organizationId,
     })

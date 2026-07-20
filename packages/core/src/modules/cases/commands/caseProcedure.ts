@@ -80,6 +80,14 @@ export const casePlaybookLaunchInvokeSchema = z.object({
   ownerUserId: uuid.optional(),
 })
 
+export const casePlaybookSelectEntitySchema = z.object({
+  tenantId: uuid,
+  organizationId: uuid,
+  caseId: uuid,
+  entityId: uuid,
+  label: z.string().max(500).optional().nullable(),
+})
+
 export const casePlaybookScheduleProcedureTaskSchema = z.object({
   tenantId: uuid,
   organizationId: uuid,
@@ -351,6 +359,7 @@ async function finishOrResumeProcedure(
     ...(parent.procedureOverdueNotifiedAt ? { procedureOverdueNotifiedAt: parent.procedureOverdueNotifiedAt } : {}),
     ...(parent.verificationTaskByConditionId ? { verificationTaskByConditionId: parent.verificationTaskByConditionId } : {}),
     ...(parent.actionTaskByActionBlockId ? { actionTaskByActionBlockId: parent.actionTaskByActionBlockId } : {}),
+    ...(parent.entitySelectionByBlockId ? { entitySelectionByBlockId: parent.entitySelectionByBlockId } : {}),
     ...(stack.length ? { stack } : {}),
   }
   return nextId
@@ -499,6 +508,18 @@ const nextPlaybookStepCommand: CommandHandler<
     }
     if (block.kind === 'invoke_procedure') {
       throw new CrudHttpError(400, { error: 'cases.procedure.useLaunchForInvokeProcedure' })
+    }
+    if (block.kind === 'select_entity') {
+      const required = block.required !== false
+      const existing = run.entitySelectionByBlockId?.[block.id]
+      const hasSelection =
+        existing &&
+        existing.entityKind === block.entityKind &&
+        typeof existing.entityId === 'string' &&
+        existing.entityId.trim().length > 0
+      if (required && !hasSelection) {
+        throw new CrudHttpError(400, { error: 'cases.procedure.useSelectEntity' })
+      }
     }
     if (block.kind === 'action' && block.actionVariant === 'task') {
       const tid =
@@ -979,6 +1000,7 @@ const launchInvokeProcedureCommand: CommandHandler<
         ...(run.procedureOverdueNotifiedAt ? { procedureOverdueNotifiedAt: run.procedureOverdueNotifiedAt } : {}),
         ...(run.verificationTaskByConditionId ? { verificationTaskByConditionId: run.verificationTaskByConditionId } : {}),
         ...(run.actionTaskByActionBlockId ? { actionTaskByActionBlockId: run.actionTaskByActionBlockId } : {}),
+        ...(run.entitySelectionByBlockId ? { entitySelectionByBlockId: run.entitySelectionByBlockId } : {}),
       },
     ]
     let nextRun: CasePlaybookRunMetadata = {
@@ -1028,6 +1050,99 @@ const launchInvokeProcedureCommand: CommandHandler<
   },
 }
 
+const selectEntityPlaybookStepCommand: CommandHandler<
+  z.infer<typeof casePlaybookSelectEntitySchema>,
+  { ok: true; caseClosed?: boolean }
+> = {
+  id: 'cases.playbook.selectEntity',
+  async execute(input, ctx) {
+    const parsed = casePlaybookSelectEntitySchema.parse(input)
+    ensureTenantScope(ctx, parsed.tenantId)
+    ensureOrganizationScope(ctx, parsed.organizationId)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const caseRow = await resolveCase(em, ctx, parsed.caseId)
+    const uid = typeof ctx.auth?.sub === 'string' ? ctx.auth.sub.trim() : ''
+    if (!uid.length) {
+      throw new CrudHttpError(401, { error: 'cases.procedure.actorRequired' })
+    }
+    const meta = getMetaObject(caseRow)
+    const run = readCasePlaybookRun(meta)
+    if (!run?.startedAt || !run.playbookId || !run.currentBlockId) {
+      throw new CrudHttpError(400, { error: 'cases.procedure.notRunning' })
+    }
+    assertProcedureActor(caseRow, run, ctx)
+    const pb = await ensurePlaybook(em, run.playbookId, parsed.tenantId, parsed.organizationId)
+    const def = loadDefinition(pb)
+    const cur = findWithPath(def, run.currentBlockId)
+    if (!cur || cur.block.kind !== 'select_entity') {
+      throw new CrudHttpError(400, { error: 'cases.procedure.notSelectEntityStep' })
+    }
+    const block = cur.block
+    const entityId = parsed.entityId.trim()
+    const labelRaw = typeof parsed.label === 'string' ? parsed.label.trim() : ''
+    const selectionMap = { ...(run.entitySelectionByBlockId ?? {}) }
+    selectionMap[block.id] = {
+      entityKind: block.entityKind,
+      entityId,
+      ...(labelRaw.length ? { label: labelRaw } : {}),
+    }
+
+    if (block.entityKind === 'customer') {
+      caseRow.customerEntityId = entityId
+    } else if (block.entityKind === 'resource') {
+      caseRow.resourceId = entityId
+    } else if (block.entityKind === 'insurance_policy') {
+      caseRow.insurancePolicyId = entityId
+    }
+
+    const nextId = nextGlobal(def, run.currentBlockId)
+    let nextRun: CasePlaybookRunMetadata = {
+      ...run,
+      currentBlockId: nextId,
+      entitySelectionByBlockId: selectionMap,
+    }
+    if (nextId) {
+      const loc = findWithPath(def, nextId)
+      if (loc?.block) {
+        nextRun = await tryCreateVerificationTask(em, caseRow, loc.block, nextRun)
+      }
+    }
+    const completion = nextId
+      ? null
+      : await finishOrResumeProcedure(em, caseRow, nextRun, parsed.tenantId, parsed.organizationId)
+    caseRow.metadata = writeCasePlaybookRun(meta, completion?.run ?? nextRun)
+    caseRow.updatedAt = new Date()
+    await em.flush()
+    const dataEngine = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine,
+      action: 'updated',
+      entity: caseRow,
+      identifiers: { id: caseRow.id, organizationId: caseRow.organizationId, tenantId: caseRow.tenantId },
+      events: caseCrudEvents,
+      indexer: caseProcedureIndexer,
+    })
+    await appendSystemTimeline(em, caseRow, 'cases.timeline.system.entity_selected', uid, {
+      kind: 'procedure_entity_selected',
+      entityKind: block.entityKind,
+      entityId,
+      label: labelRaw.length ? labelRaw : null,
+    })
+    if (!nextId) {
+      await appendSystemTimeline(em, caseRow, 'cases.timeline.system.playbook_finished', uid)
+    }
+    await em.flush()
+    if (!nextId && completion?.caseClosed) {
+      const closed = await closeCaseWhenProcedureFinishes(em, caseRow, ctx, {
+        actorUserId: uid,
+        closingNote: null,
+      })
+      return closed ? { ok: true as const, caseClosed: true as const } : { ok: true as const }
+    }
+    return { ok: true as const }
+  },
+}
+
 registerCommand(selectPlaybookCommand)
 registerCommand(startPlaybookCommand)
 registerCommand(launchInvokeProcedureCommand)
@@ -1035,3 +1150,4 @@ registerCommand(scheduleProcedureTaskCommand)
 registerCommand(nextPlaybookStepCommand)
 registerCommand(answerConditionCommand)
 registerCommand(sendNotifyPlaybookStepCommand)
+registerCommand(selectEntityPlaybookStepCommand)

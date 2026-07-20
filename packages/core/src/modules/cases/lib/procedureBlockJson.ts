@@ -1,4 +1,7 @@
-import type { ProcedureBlock } from '../../playbooks/lib/procedureBlocks'
+import type {
+  ProcedureBlock,
+  ProcedureEntityKind,
+} from '../../playbooks/lib/procedureBlocks'
 
 /** Serializable procedure step for case procedure API (client translates labels). */
 export type CaseProcedureBlockJson =
@@ -42,6 +45,14 @@ export type CaseProcedureBlockJson =
       kind: 'invoke_procedure'
       label: string | null
       playbookSlugs: string[]
+    }
+  | {
+      id: string
+      kind: 'select_entity'
+      label: string | null
+      entityKind: ProcedureEntityKind
+      required: boolean
+      allowCreate: boolean
     }
 
 export function procedureBlockToCaseJson(block: ProcedureBlock): CaseProcedureBlockJson {
@@ -87,6 +98,15 @@ export function procedureBlockToCaseJson(block: ProcedureBlock): CaseProcedureBl
         kind: 'invoke_procedure',
         label: block.label?.trim() ? block.label.trim() : null,
         playbookSlugs: Array.isArray(block.playbookSlugs) ? [...block.playbookSlugs] : [],
+      }
+    case 'select_entity':
+      return {
+        id: block.id,
+        kind: 'select_entity',
+        label: block.label?.trim() ? block.label.trim() : null,
+        entityKind: block.entityKind,
+        required: block.required !== false,
+        allowCreate: block.allowCreate !== false,
       }
   }
 }

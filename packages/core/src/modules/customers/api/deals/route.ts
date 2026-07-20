@@ -35,10 +35,22 @@ const listSchema = z
   .passthrough()
 
 const routeMetadata = {
-  GET: { requireAuth: true, requireFeatures: ['customers.deals.view'] },
-  POST: { requireAuth: true, requireFeatures: ['customers.deals.manage'] },
-  PUT: { requireAuth: true, requireFeatures: ['customers.deals.manage'] },
-  DELETE: { requireAuth: true, requireFeatures: ['customers.deals.manage'] },
+  GET: {
+    requireAuth: true,
+    requireAnyFeatures: ['customers.deals.view', 'customers.simple_deals.view'],
+  },
+  POST: {
+    requireAuth: true,
+    requireAnyFeatures: ['customers.deals.manage', 'customers.simple_deals.manage'],
+  },
+  PUT: {
+    requireAuth: true,
+    requireAnyFeatures: ['customers.deals.manage', 'customers.simple_deals.manage'],
+  },
+  DELETE: {
+    requireAuth: true,
+    requireAnyFeatures: ['customers.deals.manage', 'customers.simple_deals.manage'],
+  },
 }
 
 export const metadata = routeMetadata

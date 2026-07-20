@@ -1,7 +1,7 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { AwilixContainer } from 'awilix'
 import { Dictionary, DictionaryEntry, type DictionaryManagerVisibility } from '@open-mercato/core/modules/dictionaries/data/entities'
-import { CatalogPriceKind } from '../data/entities'
+import { CatalogPriceKind, CatalogServiceLine } from '../data/entities'
 import { seedCatalogExamples } from '../seed/examples'
 
 export type CatalogSeedScope = { tenantId: string; organizationId: string }
@@ -52,6 +52,49 @@ const PRICE_KIND_DEFAULTS = [
   { code: 'regular', title: 'Regular', isPromotion: false, displayMode: 'including-tax' as const, currencyCode: 'USD' as const },
   { code: 'sale', title: 'Sale', isPromotion: true, displayMode: 'including-tax' as const, currencyCode: 'USD' as const },
 ] as const
+
+const SERVICE_LINE_DEFAULTS: Array<{ code: string; title: string; description?: string; sortOrder: number }> = [
+  { code: 'financing', title: 'Financing', description: 'Financing products and services.', sortOrder: 10 },
+  { code: 'insurance', title: 'Insurance', description: 'Insurance products and services.', sortOrder: 20 },
+  { code: 'leasing', title: 'Leasing', description: 'Leasing products and services.', sortOrder: 30 },
+  { code: 'internal_service', title: 'Internal service', description: 'Services delivered by the organization.', sortOrder: 40 },
+  { code: 'external_service', title: 'External service', description: 'Services delivered by external partners.', sortOrder: 50 },
+  { code: 'subscription', title: 'Subscription', description: 'Recurring subscription offerings.', sortOrder: 60 },
+  { code: 'resource', title: 'Resource', description: 'Assignable resources and assets.', sortOrder: 70 },
+]
+
+export async function seedCatalogServiceLines(
+  em: EntityManager,
+  scope: CatalogSeedScope,
+) {
+  const existing = await em.find(CatalogServiceLine, {
+    tenantId: scope.tenantId,
+    organizationId: scope.organizationId,
+    deletedAt: null,
+  })
+  const existingByCode = new Map(existing.map((row) => [row.code.toLowerCase(), row]))
+  const now = new Date()
+  let sort = 0
+  for (const def of SERVICE_LINE_DEFAULTS) {
+    const key = def.code.toLowerCase()
+    if (existingByCode.has(key)) continue
+    const record = em.create(CatalogServiceLine, {
+      organizationId: scope.organizationId,
+      tenantId: scope.tenantId,
+      code: def.code,
+      title: def.title,
+      description: def.description ?? null,
+      sortOrder: def.sortOrder || sort,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    })
+    em.persist(record)
+    sort += 10
+  }
+  await em.flush()
+}
 
 export async function seedCatalogUnits(
   em: EntityManager,
@@ -183,6 +226,7 @@ export async function installExampleCatalogData(
   const manager = em ?? container.resolve<EntityManager>('em')
   await seedCatalogUnits(manager, scope)
   await seedCatalogPriceKinds(manager, scope)
+  await seedCatalogServiceLines(manager, scope)
   const seededExamples = await seedCatalogExamples(manager, container, scope)
   return { seededExamples }
 }

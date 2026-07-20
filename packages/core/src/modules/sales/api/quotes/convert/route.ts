@@ -23,7 +23,15 @@ const convertSchema = z.object({
 })
 
 export const metadata = {
-  POST: { requireAuth: true, requireFeatures: ['sales.quotes.manage', 'sales.orders.manage'] },
+  POST: {
+    requireAuth: true,
+    requireAnyFeatures: [
+      'sales.quotes.manage',
+      'sales.simple_quotes.manage',
+      'sales.orders.manage',
+      'sales.simple_orders.manage',
+    ],
+  },
 }
 
 type RequestContext = {
@@ -34,6 +42,42 @@ function resolveUserFeatures(auth: unknown): string[] {
   const features = (auth as { features?: unknown })?.features
   if (!Array.isArray(features)) return []
   return features.filter((value): value is string => typeof value === 'string')
+}
+
+async function assertConvertFeatures(
+  ctx: CommandRuntimeContext,
+  translate: (key: string, fallback?: string) => string,
+) {
+  const auth = ctx.auth
+  if (!auth?.sub || !auth.tenantId) {
+    throw new CrudHttpError(401, {
+      error: translate('sales.documents.errors.unauthorized', 'Unauthorized'),
+    })
+  }
+  const rbac = ctx.container.resolve('rbacService') as {
+    userHasAnyFeature: (
+      userId: string,
+      features: string[],
+      scope: { tenantId: string | null; organizationId: string | null },
+    ) => Promise<boolean>
+  }
+  const organizationId = ctx.selectedOrganizationId ?? auth.orgId ?? null
+  const scope = { tenantId: auth.tenantId, organizationId }
+  const canQuote = await rbac.userHasAnyFeature(
+    auth.sub,
+    ['sales.quotes.manage', 'sales.simple_quotes.manage'],
+    scope,
+  )
+  const canOrder = await rbac.userHasAnyFeature(
+    auth.sub,
+    ['sales.orders.manage', 'sales.simple_orders.manage'],
+    scope,
+  )
+  if (!canQuote || !canOrder) {
+    throw new CrudHttpError(403, {
+      error: translate('sales.documents.errors.forbidden', 'Forbidden'),
+    })
+  }
 }
 
 async function runGuards(
@@ -110,6 +154,7 @@ export async function POST(req: Request) {
   try {
     const { ctx } = await resolveRequestContext(req)
     const { translate } = await resolveTranslations()
+    await assertConvertFeatures(ctx, translate)
     const payload = await req.json().catch(() => ({}))
     const scoped = withScopedPayload(payload ?? {}, ctx, translate)
     const input = convertSchema.parse(scoped)

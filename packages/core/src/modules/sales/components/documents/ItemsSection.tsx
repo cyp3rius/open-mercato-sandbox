@@ -260,6 +260,20 @@ export function SalesDocumentItemsSection({
                   ? item.statusEntryId
                   : null;
             const status = typeof item.status === "string" ? item.status : null;
+            const subscriptionStartsAtRaw =
+              item.subscription_starts_at ?? item.subscriptionStartsAt;
+            const subscriptionEndsAtRaw =
+              item.subscription_ends_at ?? item.subscriptionEndsAt;
+            const toIsoOrNull = (raw: unknown): string | null => {
+              if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+                return raw.toISOString();
+              }
+              if (typeof raw === "string" && raw.trim().length) {
+                const parsed = new Date(raw);
+                return Number.isNaN(parsed.getTime()) ? raw.trim() : parsed.toISOString();
+              }
+              return null;
+            };
             const record: SalesLineRecord = {
               id,
               name,
@@ -300,6 +314,8 @@ export function SalesDocumentItemsSection({
                 : null,
               status,
               statusEntryId,
+              subscriptionStartsAt: toIsoOrNull(subscriptionStartsAtRaw),
+              subscriptionEndsAt: toIsoOrNull(subscriptionEndsAtRaw),
             };
             return [record];
           },

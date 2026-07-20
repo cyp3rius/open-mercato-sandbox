@@ -53,6 +53,7 @@ import {
   CatalogProduct,
   CatalogProductUnitConversion,
 } from "../../catalog/data/entities";
+import { isSubscriptionProduct } from "../../catalog/lib/customerOffering";
 import { Dictionary, DictionaryEntry } from "../../dictionaries/data/entities";
 import { CustomFieldValue } from "@open-mercato/core/modules/entities/data/entities";
 import {
@@ -2635,7 +2636,8 @@ async function validateOrderLineSubscriptionDates(
     tenantId,
     deletedAt: null,
   });
-  if (!product || product.offeringKind !== "subscription") return;
+  if (!product) return;
+  if (!(await isSubscriptionProduct(em, product.id))) return;
   const startsAt = line.subscriptionStartsAt ?? null;
   const endsAt = line.subscriptionEndsAt ?? null;
   if (!startsAt || !endsAt) {

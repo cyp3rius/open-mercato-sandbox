@@ -351,6 +351,7 @@ type ProductListItem = Record<string, unknown> & {
   categoryIds?: string[];
   tags?: string[];
   service_line_id?: string | null;
+  service_line_code?: string | null;
   service_line_attributes?: Record<string, unknown> | null;
 };
 
@@ -673,6 +674,7 @@ async function decorateProductsAfterList(
       if (!id) continue;
       item.service_line_id = serviceLineIdByProductId.get(id) ?? null;
       const lineCode = serviceLineCodeByProductId.get(id) ?? null;
+      item.service_line_code = lineCode;
       const lineAttrs = attributesByProductId.get(id) ?? null;
       item.service_line_attributes = lineAttrs;
       Object.assign(
@@ -914,6 +916,7 @@ const productListItemSchema = z.object({
   sku: z.string().nullable().optional(),
   handle: z.string().nullable().optional(),
   service_line_id: z.string().uuid().nullable().optional(),
+  service_line_code: z.string().nullable().optional(),
   product_type: z.string().nullable().optional(),
   status_entry_id: z.string().uuid().nullable().optional(),
   primary_currency_code: z.string().nullable().optional(),

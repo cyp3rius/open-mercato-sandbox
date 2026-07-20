@@ -44,10 +44,13 @@ export type DealFormProps = {
   onDelete?: () => Promise<void> | void
   submitLabel?: string
   cancelLabel?: string
+  cancelHref?: string
   isSubmitting?: boolean
   embedded?: boolean
   title?: string
   backHref?: string
+  /** Extra header/footer actions (e.g. convert). Shown before Cancel when cancelHref is unset. */
+  extraActions?: React.ReactNode
 }
 
 type EntityOption = {
@@ -422,10 +425,12 @@ export function DealForm({
   onDelete,
   submitLabel,
   cancelLabel,
+  cancelHref,
   isSubmitting = false,
   embedded = true,
   title,
   backHref,
+  extraActions,
 }: DealFormProps) {
   const t = useT()
   const [pending, setPending] = React.useState(false)
@@ -902,6 +907,7 @@ export function DealForm({
       embedded={embedded}
       title={title}
       backHref={backHref}
+      cancelHref={cancelHref}
       versionHistory={mode === 'edit' && initialValues?.id
         ? { resourceKind: 'customers.deal', resourceId: String(initialValues.id) }
         : undefined}
@@ -920,14 +926,19 @@ export function DealForm({
           : t('customers.people.detail.deals.save', 'Save deal (⌘/Ctrl + Enter)'))
       }
       extraActions={(
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onCancel}
-          disabled={pending || isSubmitting}
-        >
-          {cancelLabel ?? t('customers.people.detail.deals.cancel', 'Cancel')}
-        </Button>
+        <>
+          {extraActions}
+          {!cancelHref ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onCancel}
+              disabled={pending || isSubmitting}
+            >
+              {cancelLabel ?? t('customers.people.detail.deals.cancel', 'Cancel')}
+            </Button>
+          ) : null}
+        </>
       )}
     />
   )

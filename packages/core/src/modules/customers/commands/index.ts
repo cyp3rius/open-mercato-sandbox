@@ -1,6 +1,7 @@
 import './people'
 import './companies'
 import './deals'
+import './dealConvertToQuote'
 import './activities'
 import './comments'
 import './addresses'

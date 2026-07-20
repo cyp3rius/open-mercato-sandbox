@@ -1,4 +1,9 @@
-import type { CatalogOfferingKind, CatalogProductCaseTemplate } from '../data/types'
+import type { EntityManager } from '@mikro-orm/postgresql'
+import {
+  CATALOG_SUBSCRIPTION_SERVICE_LINE_CODE,
+  type CatalogProductCaseTemplate,
+} from '../data/types'
+import { CatalogProductServiceLineExtension } from '../data/entities'
 
 export const CATALOG_CUSTOMER_OFFERING_STATUSES = [
   'pending',
@@ -9,13 +14,39 @@ export const CATALOG_CUSTOMER_OFFERING_STATUSES = [
 
 export type CatalogCustomerOfferingStatus = (typeof CATALOG_CUSTOMER_OFFERING_STATUSES)[number]
 
+export function isSubscriptionServiceLineCode(code: string | null | undefined): boolean {
+  return typeof code === 'string' && code.trim().toLowerCase() === CATALOG_SUBSCRIPTION_SERVICE_LINE_CODE
+}
+
+export async function resolveProductServiceLineCode(
+  em: EntityManager,
+  productId: string,
+): Promise<string | null> {
+  const extension = await em.findOne(
+    CatalogProductServiceLineExtension,
+    { product: productId },
+    { populate: ['serviceLine'] },
+  )
+  const line = extension?.serviceLine
+  if (!line || line.deletedAt) return null
+  return typeof line.code === 'string' ? line.code : null
+}
+
+export async function isSubscriptionProduct(
+  em: EntityManager,
+  productId: string,
+): Promise<boolean> {
+  const code = await resolveProductServiceLineCode(em, productId)
+  return isSubscriptionServiceLineCode(code)
+}
+
 export function shouldActivateOfferingNow(input: {
-  offeringKind: CatalogOfferingKind
+  isSubscription: boolean
   startsAt: Date | null | undefined
   now?: Date
 }): boolean {
   const now = input.now ?? new Date()
-  if (input.offeringKind !== 'subscription') return true
+  if (!input.isSubscription) return true
   if (!input.startsAt) return false
   return input.startsAt.getTime() <= now.getTime()
 }

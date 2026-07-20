@@ -9,6 +9,7 @@ import {
   GitBranch,
   Layers,
   PlayCircle,
+  Search,
   StopCircle,
   Trash2,
   Zap,
@@ -34,8 +35,10 @@ import {
   createProcedureBlock,
   moveToInsertSlot,
   moveWithinList,
+  PROCEDURE_ENTITY_KINDS,
   updateConditionBranch,
   type ProcedureBlock,
+  type ProcedureEntityKind,
   type ProcedureNotifyChannel,
 } from '../lib/procedureBlocks'
 import {
@@ -62,6 +65,8 @@ function kindIcon(kind: ProcedureBlockKind) {
       return CornerDownLeft
     case 'invoke_procedure':
       return Layers
+    case 'select_entity':
+      return Search
   }
 }
 
@@ -78,7 +83,9 @@ function KindTag({ kind }: { kind: ProcedureBlockKind }) {
             ? t('playbooks.procedure.kind.condition', 'Condition')
             : kind === 'goto'
               ? t('playbooks.procedure.kind.goto', 'Go to step')
-              : t('playbooks.procedure.kind.invoke_procedure', 'Procedure')
+              : kind === 'select_entity'
+                ? t('playbooks.procedure.kind.select_entity', 'Select entity')
+                : t('playbooks.procedure.kind.invoke_procedure', 'Procedure')
   const Icon = kindIcon(kind)
   return (
     <span
@@ -659,6 +666,75 @@ function ProcedureBlockList({
                 </div>
               ) : null}
 
+              {block.kind === 'select_entity' ? (
+                <div className="space-y-2 pl-0 sm:pl-[calc(0.5rem+4rem+0.5rem)]">
+                  <p className="max-w-2xl text-xs leading-snug text-muted-foreground">
+                    {t(
+                      'playbooks.procedure.selectEntityHint',
+                      'At runtime the operator searches and selects a related record (or opens create in a new tab).',
+                    )}
+                  </p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">{t('playbooks.procedure.entityKindLabel', 'Entity')}</Label>
+                      <select
+                        className={cn(CRUD_FORM_SELECT_CLASS, 'w-full')}
+                        value={block.entityKind}
+                        onChange={(e) =>
+                          updateAt(index, {
+                            ...block,
+                            entityKind: e.target.value as ProcedureEntityKind,
+                          })
+                        }
+                        disabled={disabled}
+                      >
+                        {PROCEDURE_ENTITY_KINDS.map((kind) => (
+                          <option key={kind} value={kind}>
+                            {t(`playbooks.procedure.entityKind.${kind}`, kind)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">{t('playbooks.procedure.selectEntityRequired', 'Required')}</Label>
+                      <select
+                        className={cn(CRUD_FORM_SELECT_CLASS, 'w-full')}
+                        value={block.required !== false ? 'yes' : 'no'}
+                        onChange={(e) =>
+                          updateAt(index, {
+                            ...block,
+                            required: e.target.value === 'yes',
+                          })
+                        }
+                        disabled={disabled}
+                      >
+                        <option value="yes">{t('playbooks.procedure.branchYes', 'Yes')}</option>
+                        <option value="no">{t('playbooks.procedure.branchNo', 'No')}</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">
+                        {t('playbooks.procedure.selectEntityAllowCreate', 'Allow create')}
+                      </Label>
+                      <select
+                        className={cn(CRUD_FORM_SELECT_CLASS, 'w-full')}
+                        value={block.allowCreate !== false ? 'yes' : 'no'}
+                        onChange={(e) =>
+                          updateAt(index, {
+                            ...block,
+                            allowCreate: e.target.value === 'yes',
+                          })
+                        }
+                        disabled={disabled}
+                      >
+                        <option value="yes">{t('playbooks.procedure.branchYes', 'Yes')}</option>
+                        <option value="no">{t('playbooks.procedure.branchNo', 'No')}</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               {block.kind === 'condition' ? (
                 <div className="space-y-3 pt-1 pl-0 sm:pl-[calc(0.5rem+4rem+0.5rem)]">
                   <div className="space-y-2">
@@ -775,8 +851,8 @@ function ProcedureBlockList({
       <div className={cn('flex flex-wrap gap-2', blocks.length === 0 && 'pt-1')}>
         {(
           depth > 0
-            ? (['action', 'condition', 'goto', 'invoke_procedure', 'end'] as const)
-            : (['start', 'action', 'condition', 'goto', 'invoke_procedure', 'end'] as const)
+            ? (['action', 'condition', 'goto', 'invoke_procedure', 'select_entity', 'end'] as const)
+            : (['start', 'action', 'condition', 'goto', 'invoke_procedure', 'select_entity', 'end'] as const)
         ).map((kind) => {
           const Icon =
             kind === 'start'
@@ -789,7 +865,9 @@ function ProcedureBlockList({
                     ? CornerDownLeft
                     : kind === 'invoke_procedure'
                       ? Layers
-                      : StopCircle
+                      : kind === 'select_entity'
+                        ? Search
+                        : StopCircle
           const isTerminalToolbarKind = kind === 'start' || kind === 'end'
           return (
             <Button
@@ -812,7 +890,9 @@ function ProcedureBlockList({
                       ? t('playbooks.procedure.addGoto', 'Go to')
                       : kind === 'invoke_procedure'
                         ? t('playbooks.procedure.addInvokeProcedure', 'Procedure')
-                        : t('playbooks.procedure.addEnd', 'End')}
+                        : kind === 'select_entity'
+                          ? t('playbooks.procedure.addSelectEntity', 'Select entity')
+                          : t('playbooks.procedure.addEnd', 'End')}
             </Button>
           )
         })}
@@ -890,7 +970,9 @@ function ProcedureStepsInner({
                 ? t('playbooks.procedure.targetShort.condition', 'Condition')
                 : kind === 'goto'
                   ? t('playbooks.procedure.targetShort.goto', 'Jump')
-                  : t('playbooks.procedure.targetShort.invoke_procedure', 'Procedure'),
+                  : kind === 'select_entity'
+                    ? t('playbooks.procedure.targetShort.select_entity', 'Select')
+                    : t('playbooks.procedure.targetShort.invoke_procedure', 'Procedure'),
       ),
     [value, t],
   )

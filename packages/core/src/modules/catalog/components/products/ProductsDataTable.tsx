@@ -19,7 +19,6 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { E } from '#generated/entities.ids.generated'
 import { ProductImageCell } from './ProductImageCell'
-import { Label } from '@open-mercato/ui/primitives/label'
 import { getServiceLineListColumnDefs } from '../../lib/serviceLineListColumns'
 import type { ServiceLineSummary } from './productForm'
 
@@ -87,7 +86,6 @@ type ProductsResponse = {
 
 const PAGE_SIZE = 25
 const ENTITY_ID = E.catalog.catalog_product
-const SERVICE_LINE_STORAGE_KEY = 'catalog.products.list.serviceLineId'
 
 function formatDate(value?: string): string {
   if (!value) return '—'
@@ -165,9 +163,6 @@ export default function ProductsDataTable() {
   const [categoryOptionsCache, setCategoryOptionsCache] = React.useState<Record<string, FilterOption>>({})
   const [tagOptionsCache, setTagOptionsCache] = React.useState<Record<string, FilterOption>>({})
   const [serviceLines, setServiceLines] = React.useState<ServiceLineSummary[]>([])
-  const [serviceLinesLoading, setServiceLinesLoading] = React.useState(true)
-  const [selectedServiceLineId, setSelectedServiceLineId] = React.useState('')
-  const serviceLineSelectionInitializedRef = React.useRef(false)
 
   const registerOptions = React.useCallback(
     (
@@ -315,18 +310,13 @@ export default function ProductsDataTable() {
   }, [productTypeOptions])
 
   React.useEffect(() => {
-    serviceLineSelectionInitializedRef.current = false
-  }, [scopeVersion])
-
-  React.useEffect(() => {
     let cancelled = false
     async function loadServiceLines() {
-      setServiceLinesLoading(true)
       try {
         const payload = await readApiResultOrThrow<{ items?: ServiceLineSummary[] }>(
           '/api/catalog/service-lines?pageSize=100',
           undefined,
-          { errorMessage: t('catalog.products.list.serviceLinesLoadError', 'Failed to load service lines') },
+          { errorMessage: t('catalog.products.list.serviceLinesLoadError', 'Failed to load product lines') },
         )
         if (cancelled) return
         const items = Array.isArray(payload?.items) ? payload.items : []
@@ -334,10 +324,8 @@ export default function ProductsDataTable() {
       } catch {
         if (!cancelled) {
           setServiceLines([])
-          flash(t('catalog.products.list.serviceLinesLoadError', 'Failed to load service lines'), 'error')
+          flash(t('catalog.products.list.serviceLinesLoadError', 'Failed to load product lines'), 'error')
         }
-      } finally {
-        if (!cancelled) setServiceLinesLoading(false)
       }
     }
     void loadServiceLines()
@@ -346,24 +334,10 @@ export default function ProductsDataTable() {
     }
   }, [scopeVersion, t])
 
-  React.useEffect(() => {
-    if (serviceLinesLoading || !serviceLines.length) return
-    if (serviceLineSelectionInitializedRef.current) return
-    serviceLineSelectionInitializedRef.current = true
-    let stored: string | null = null
-    try {
-      stored = typeof window !== 'undefined' ? localStorage.getItem(SERVICE_LINE_STORAGE_KEY) : null
-    } catch {
-      /* ignore */
-    }
-    const valid = stored && serviceLines.some((line) => line.id === stored)
-    if (valid && stored) {
-      setSelectedServiceLineId(stored)
-      return
-    }
-    const first = serviceLines.find((line) => line.isActive) ?? serviceLines[0]
-    if (first) setSelectedServiceLineId(first.id)
-  }, [serviceLinesLoading, serviceLines])
+  const selectedServiceLineId = React.useMemo(() => {
+    const raw = filterValues.serviceLineId
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : ''
+  }, [filterValues.serviceLineId])
 
   const selectedServiceLineCode = React.useMemo(() => {
     const line = serviceLines.find((entry) => entry.id === selectedServiceLineId)
@@ -375,21 +349,21 @@ export default function ProductsDataTable() {
     [selectedServiceLineCode],
   )
 
-  const handleServiceLineChange = React.useCallback((nextId: string) => {
-    setSelectedServiceLineId(nextId)
-    setPage(1)
-    try {
-      localStorage.setItem(SERVICE_LINE_STORAGE_KEY, nextId)
-    } catch {
-      /* ignore */
-    }
-  }, [])
-
   const filters = React.useMemo<FilterDef[]>(() => [
     { id: 'status', label: t('catalog.products.filters.status'), type: 'text' },
     { id: 'isActive', label: t('catalog.products.filters.active'), type: 'checkbox' },
     { id: 'configurable', label: t('catalog.products.filters.configurable'), type: 'checkbox' },
-    { id: 'productType', label: t('catalog.products.filters.productType', 'Type'), type: 'select', options: productTypeOptions },
+    {
+      id: 'serviceLineId',
+      label: t('catalog.products.filters.serviceLine', 'Product line'),
+      type: 'select',
+      options: serviceLines
+        .filter((line) => line.isActive !== false)
+        .map((line) => ({
+          value: line.id,
+          label: line.code ? `${line.code} — ${line.title}` : line.title,
+        })),
+    },
     {
       id: 'channelIds',
       label: t('catalog.products.filters.channels'),
@@ -424,7 +398,7 @@ export default function ProductsDataTable() {
     loadCategoryOptions,
     loadChannelOptions,
     loadTagOptions,
-    productTypeOptions,
+    serviceLines,
     tagOptions,
     tagOptionsCache,
     t,
@@ -631,14 +605,6 @@ export default function ProductsDataTable() {
   }, [customFieldsetFilter, filterValues, page, search, selectedServiceLineId, sorting])
 
   React.useEffect(() => {
-    if (!selectedServiceLineId) {
-      setIsLoading(false)
-      setRows([])
-      setTotal(0)
-      setTotalPages(1)
-      setCacheStatus(null)
-      return
-    }
     let cancelled = false
     async function load() {
       setIsLoading(true)
@@ -681,7 +647,7 @@ export default function ProductsDataTable() {
     return () => {
       cancelled = true
     }
-  }, [queryParams, reloadToken, scopeVersion, selectedServiceLineId, t])
+  }, [queryParams, reloadToken, scopeVersion, t])
 
   const handleDelete = React.useCallback(async (row: ProductRow) => {
     const confirmed = await confirm({
@@ -719,46 +685,6 @@ export default function ProductsDataTable() {
 
   return (
     <>
-      <div className="mb-4 space-y-2 rounded-lg border border-border bg-muted/30 p-4">
-        <div className="flex flex-col gap-2 sm:max-w-md">
-          <Label htmlFor="catalog-products-service-line">
-            {t('catalog.products.list.serviceLineLabel', 'Service line')}
-          </Label>
-          <select
-            id="catalog-products-service-line"
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            value={selectedServiceLineId}
-            onChange={(event) => handleServiceLineChange(event.target.value)}
-            disabled={serviceLinesLoading || !serviceLines.length}
-            required
-          >
-            {!selectedServiceLineId ? (
-              <option value="">
-                {t('catalog.products.list.serviceLinePlaceholder', 'Select a service line to list products')}
-              </option>
-            ) : null}
-            {serviceLines.map((line) => (
-              <option key={line.id} value={line.id}>
-                {line.code ? `${line.code} — ${line.title}` : line.title}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-muted-foreground">
-            {t(
-              'catalog.products.list.serviceLineRequired',
-              'Choose a service line — the list always shows products for one line only.',
-            )}
-          </p>
-          {!serviceLinesLoading && !serviceLines.length ? (
-            <p className="text-sm text-amber-700 dark:text-amber-500">
-              {t(
-                'catalog.products.list.noServiceLines',
-                'Define at least one service line to use this list.',
-              )}
-            </p>
-          ) : null}
-        </div>
-      </div>
       <DataTable<ProductRow>
         title={t('catalog.products.page.title', 'Products & services')}
         entityId={ENTITY_ID}
@@ -804,7 +730,7 @@ export default function ProductsDataTable() {
           cacheStatus,
         }}
         exporter={exportConfig}
-        isLoading={isLoading || serviceLinesLoading}
+        isLoading={isLoading}
         perspective={{ tableId: 'catalog.products.list' }}
         rowActions={(row) => (
           <RowActions

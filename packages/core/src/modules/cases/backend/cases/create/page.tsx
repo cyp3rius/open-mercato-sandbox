@@ -66,7 +66,7 @@ export default function CaseCreatePage() {
               'cases',
               {
                 title: values.title.trim(),
-                customerEntityId: values.customerEntityId.trim(),
+                customerEntityId: toNullIfEmpty(values.customerEntityId ?? ''),
                 playbookId: toNullIfEmpty(values.playbookId ?? ''),
                 resourceId: toNullIfEmpty(values.resourceId ?? ''),
                 procurementProcessId: toNullIfEmpty(values.procurementProcessId ?? ''),

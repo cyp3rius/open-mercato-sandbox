@@ -12,6 +12,7 @@ import {
   GitBranch,
   Layers,
   PlayCircle,
+  Search,
   Send,
   StopCircle,
   X,
@@ -27,10 +28,14 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@open-mercato/ui/primitives/input'
 import { Label } from '@open-mercato/ui/primitives/label'
 import { HtmlRichTextEditor } from '@open-mercato/ui/backend/richtext/HtmlRichTextEditor'
-import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
+import {
+  EntitySearchCombobox,
+  type EntitySearchComboboxOption,
+} from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
 import type { CaseProcedureBlockJson } from '../lib/procedureBlockJson'
 import { formatProcedurePlaybookLabel } from '../lib/formatProcedurePlaybookLabel'
 import { defaultHtmlFromNotifyBody } from '../lib/htmlToPlainText'
+import { getProcedureEntityKindAdapter } from '../lib/procedureEntitySearch'
 import {
   mergeEntitySearchOption,
   remoteSearchAuthUsers,
@@ -45,6 +50,7 @@ function blockKindIcon(kind: Kind) {
   if (kind === 'action') return Zap
   if (kind === 'condition') return GitBranch
   if (kind === 'invoke_procedure') return Layers
+  if (kind === 'select_entity') return Search
   return CornerDownLeft
 }
 
@@ -61,7 +67,9 @@ function BlockKindBadge({ kind }: { kind: Kind }) {
             ? t('playbooks.procedure.kind.condition', 'Condition')
             : kind === 'goto'
               ? t('playbooks.procedure.kind.goto', 'Go to step')
-              : t('playbooks.procedure.kind.invoke_procedure', 'Procedure')
+              : kind === 'select_entity'
+                ? t('playbooks.procedure.kind.select_entity', 'Select entity')
+                : t('playbooks.procedure.kind.invoke_procedure', 'Procedure')
   const Icon = blockKindIcon(kind)
   return (
     <span
@@ -89,6 +97,12 @@ export type ProcedureTaskSummaryHead = {
   userTaskId?: string | null
 }
 
+export type CaseProcedureEntitySelectionHead = {
+  entityKind: string
+  entityId: string
+  label?: string | null
+}
+
 export type CaseProcedureStepExecutorProps = {
   block: CaseProcedureBlockJson | null
   caseId?: string
@@ -101,6 +115,9 @@ export type CaseProcedureStepExecutorProps = {
   canAssignProcedureOwner?: boolean
   procedureTaskSummary?: ProcedureTaskSummaryHead | null
   canScheduleProcedureTask?: boolean
+  canConfirmSelectEntity?: boolean
+  entitySelection?: CaseProcedureEntitySelectionHead | null
+  customerEntityId?: string | null
   onNext?: (options?: { closingNote?: string }) => void
   onSendNotify?: (bodyHtml: string) => void
   onAnswer?: (branch: 'yes' | 'no') => void
@@ -110,6 +127,7 @@ export type CaseProcedureStepExecutorProps = {
     body?: string
     dueAt?: string | null
   }) => boolean | Promise<boolean>
+  onSelectEntity?: (payload: { entityId: string; label?: string | null }) => void
 }
 
 export function CaseProcedureStepExecutor({
@@ -124,11 +142,15 @@ export function CaseProcedureStepExecutor({
   canAssignProcedureOwner = false,
   procedureTaskSummary = null,
   canScheduleProcedureTask = false,
+  canConfirmSelectEntity = false,
+  entitySelection = null,
+  customerEntityId = null,
   onNext,
   onSendNotify,
   onAnswer,
   onLaunchInvokeProcedure,
   onScheduleProcedureTask,
+  onSelectEntity,
 }: CaseProcedureStepExecutorProps) {
   const t = useT()
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
@@ -141,6 +163,10 @@ export function CaseProcedureStepExecutor({
   const [scheduleTitle, setScheduleTitle] = React.useState('')
   const [scheduleDueLocal, setScheduleDueLocal] = React.useState('')
   const [scheduleSaving, setScheduleSaving] = React.useState(false)
+  const [selectEntityId, setSelectEntityId] = React.useState('')
+  const [selectEntityLabel, setSelectEntityLabel] = React.useState('')
+  const [selectEntityEditing, setSelectEntityEditing] = React.useState(true)
+  const selectEntityOptionsRef = React.useRef<EntitySearchComboboxOption[]>([])
 
   React.useEffect(() => {
     setClosingNoteDraft('')
@@ -178,6 +204,28 @@ export function CaseProcedureStepExecutor({
       setNotifyHtml('')
     }
   }, [block])
+
+  React.useEffect(() => {
+    if (block?.kind !== 'select_entity') {
+      setSelectEntityId('')
+      setSelectEntityLabel('')
+      setSelectEntityEditing(true)
+      selectEntityOptionsRef.current = []
+      return
+    }
+    const savedId = entitySelection?.entityId?.trim() ?? ''
+    const savedLabel = entitySelection?.label?.trim() ?? ''
+    if (savedId.length) {
+      setSelectEntityId(savedId)
+      setSelectEntityLabel(savedLabel.length ? savedLabel : savedId)
+      setSelectEntityEditing(false)
+    } else {
+      setSelectEntityId('')
+      setSelectEntityLabel('')
+      setSelectEntityEditing(true)
+    }
+    selectEntityOptionsRef.current = []
+  }, [block?.id, block?.kind, entitySelection?.entityId, entitySelection?.label])
 
   React.useEffect(() => {
     let cancelled = false
@@ -233,12 +281,26 @@ export function CaseProcedureStepExecutor({
               ? t('playbooks.procedure.kind.condition', 'Condition')
               : block.kind === 'goto'
                 ? t('playbooks.procedure.kind.goto', 'Go to step')
-                : t('playbooks.procedure.kind.invoke_procedure', 'Procedure')
+                : block.kind === 'select_entity'
+                  ? t('playbooks.procedure.kind.select_entity', 'Select entity')
+                  : t('playbooks.procedure.kind.invoke_procedure', 'Procedure')
 
   const onPlaybookTaskStep = block.kind === 'action' && block.actionVariant === 'task'
   const showSchedulePlaybookTask =
     onPlaybookTaskStep && Boolean(canScheduleProcedureTask && onScheduleProcedureTask)
   const showNextButton = Boolean(canNext && onNext && !showSchedulePlaybookTask)
+  const selectEntityAdapter =
+    block.kind === 'select_entity' ? getProcedureEntityKindAdapter(block.entityKind) : null
+  const selectEntityKindLabel =
+    block.kind === 'select_entity'
+      ? t(`playbooks.procedure.entityKind.${block.entityKind}`, block.entityKind)
+      : ''
+  const showSelectEntityConfirm = Boolean(
+    block.kind === 'select_entity' &&
+      canConfirmSelectEntity &&
+      onSelectEntity &&
+      selectEntityId.trim().length,
+  )
 
   const submitScheduleTask = async () => {
     const title = scheduleTitle.trim()
@@ -663,6 +725,109 @@ export function CaseProcedureStepExecutor({
             >
               <PlayCircle className="size-4 shrink-0" aria-hidden />
               {t('cases.detail.procedure.launchInvokeProcedure', 'Launch procedure')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {block.kind === 'select_entity' && selectEntityAdapter ? (
+        <div className="space-y-3">
+          <div className="rounded-md border border-border/60 bg-muted/20 px-2.5 py-2">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {t('playbooks.procedure.entityKindLabel', 'Entity')}
+            </div>
+            <div className="mt-0.5 text-sm font-medium">{selectEntityKindLabel}</div>
+          </div>
+          {!selectEntityEditing && selectEntityId.trim().length ? (
+            <div className="rounded-md border border-border/60 bg-muted/15 px-3 py-2.5 space-y-2">
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {t('cases.detail.procedure.selectEntitySaved', 'Selected')}
+              </div>
+              <div className="text-sm font-semibold leading-snug break-words">
+                {selectEntityLabel.trim() || selectEntityId}
+              </div>
+              {canConfirmSelectEntity ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={disabled}
+                  onClick={() => setSelectEntityEditing(true)}
+                >
+                  {t('cases.detail.procedure.selectEntityChange', 'Change')}
+                </Button>
+              ) : null}
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label>
+                {t('cases.detail.procedure.selectEntityPicker', 'Search and select')}
+              </Label>
+              <EntitySearchCombobox
+                value={selectEntityId}
+                onChange={(next) => {
+                  const id = next.trim()
+                  setSelectEntityId(id)
+                  const match = selectEntityOptionsRef.current.find((row) => row.value === id)
+                  setSelectEntityLabel(match?.label?.trim() || id)
+                }}
+                options={mergeEntitySearchOption(
+                  selectEntityOptionsRef.current,
+                  selectEntityId,
+                  selectEntityLabel || selectEntityId,
+                )}
+                onRemoteSearch={async (query) => {
+                  const rows = await selectEntityAdapter.onRemoteSearch(query, {
+                    customerEntityId,
+                  })
+                  selectEntityOptionsRef.current = rows
+                  return mergeEntitySearchOption(rows, selectEntityId, selectEntityLabel || selectEntityId)
+                }}
+                placeholder={t('cases.detail.procedure.selectEntityPlaceholder', 'Search…')}
+                searchPlaceholder={t('cases.detail.procedure.selectEntitySearch', 'Search…')}
+                disabled={disabled || !canConfirmSelectEntity}
+                createInNewTabHref={
+                  block.allowCreate !== false ? selectEntityAdapter.createInNewTabHref : null
+                }
+                createInNewTabAriaLabel={t(
+                  'cases.detail.procedure.selectEntityCreate',
+                  'Create in a new tab',
+                )}
+                selectedDisplayOverride={selectEntityLabel || undefined}
+              />
+              {block.required !== false ? (
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'cases.detail.procedure.selectEntityRequiredHint',
+                    'Select a record and confirm to continue.',
+                  )}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'cases.detail.procedure.selectEntityOptionalHint',
+                    'Optional — confirm a selection or skip with Next.',
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+          {showSelectEntityConfirm ? (
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              className="gap-2"
+              disabled={disabled || !selectEntityId.trim().length}
+              onClick={() =>
+                onSelectEntity!({
+                  entityId: selectEntityId.trim(),
+                  label: selectEntityLabel.trim() || null,
+                })
+              }
+            >
+              <Check className="size-4 shrink-0" aria-hidden />
+              {t('cases.detail.procedure.selectEntityConfirm', 'Confirm selection')}
             </Button>
           ) : null}
         </div>

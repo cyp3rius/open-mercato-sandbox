@@ -7,8 +7,10 @@ import {
   type ProcedureActionVariant,
   type ProcedureBlock,
   type ProcedureConditionMode,
+  type ProcedureEntityKind,
   type ProcedureNotifyChannel,
   type ProcedureNotifyTarget,
+  PROCEDURE_ENTITY_KINDS,
 } from './procedureBlocks'
 
 /** DNS namespace UUID — deterministic UUID v5 for procedure step ids. */
@@ -54,6 +56,9 @@ export type RawProcedureStep = {
   targetStepId?: string | null
   playbookSlugs?: string[]
   slaDuration?: ProcedureDuration | null
+  entityKind?: string | null
+  required?: boolean | null
+  allowCreate?: boolean | null
 }
 
 export type ParsedProcedureMarkdown = {
@@ -251,6 +256,21 @@ function compileStep(
         sourceStepId,
         playbookSlugs,
         slaDuration: step.slaDuration ?? null,
+      }
+    }
+    case 'select_entity': {
+      const entityKindRaw = typeof step.entityKind === 'string' ? step.entityKind.trim() : ''
+      if (!(PROCEDURE_ENTITY_KINDS as readonly string[]).includes(entityKindRaw)) {
+        throw new Error(`procedureMarkdown.invalidEntityKind:${entityKindRaw || '(empty)'}`)
+      }
+      return {
+        id,
+        kind: 'select_entity',
+        label,
+        sourceStepId,
+        entityKind: entityKindRaw as ProcedureEntityKind,
+        required: step.required === false ? false : true,
+        allowCreate: step.allowCreate === false ? false : true,
       }
     }
     default:

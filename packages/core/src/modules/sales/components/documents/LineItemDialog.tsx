@@ -40,6 +40,7 @@ import {
   extractCustomFieldValues,
 } from "./customFieldHelpers";
 import { canonicalizeUnitCode } from "@open-mercato/shared/lib/units/unitCodes";
+import { CATALOG_SUBSCRIPTION_SERVICE_LINE_CODE } from "@open-mercato/core/modules/catalog/data/types";
 
 type ProductOption = {
   id: string;
@@ -51,6 +52,7 @@ type ProductOption = {
   defaultUnit?: string | null;
   defaultSalesUnit?: string | null;
   defaultSalesUnitQuantity?: number | null;
+  serviceLineCode?: string | null;
 };
 
 type VariantOption = {
@@ -115,6 +117,8 @@ type LineFormState = {
   catalogSnapshot?: Record<string, unknown> | null;
   customFieldSetId?: string | null;
   statusEntryId?: string | null;
+  subscriptionStartsAt?: string | null;
+  subscriptionEndsAt?: string | null;
 };
 
 type FieldRenderProps = CrudCustomFieldRenderProps;
@@ -237,9 +241,44 @@ const defaultForm = (currencyCode?: string | null): LineFormState => ({
   catalogSnapshot: null,
   customFieldSetId: null,
   statusEntryId: null,
+  subscriptionStartsAt: null,
+  subscriptionEndsAt: null,
 });
 
 const UNIT_PRICE_INPUT_SCALE = 4;
+
+function toDatePickerValue(value: string | Date | null | undefined): string | null {
+  if (value == null) return null;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return value.toISOString().slice(0, 10);
+  }
+  const trimmed = value.trim();
+  if (!trimmed.length) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+}
+
+function datePickerToIsoStart(value: string | null | undefined): string | null {
+  const day = typeof value === "string" ? value.trim() : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  return `${day}T00:00:00.000Z`;
+}
+
+function datePickerToIsoEnd(value: string | null | undefined): string | null {
+  const day = typeof value === "string" ? value.trim() : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  return `${day}T23:59:59.999Z`;
+}
+
+function isSubscriptionServiceLineCode(code: string | null | undefined): boolean {
+  return (
+    typeof code === "string" &&
+    code.trim().toLowerCase() === CATALOG_SUBSCRIPTION_SERVICE_LINE_CODE
+  );
+}
 
 function buildPriceScopeReason(
   item: Record<string, unknown>,
@@ -595,6 +634,12 @@ export function LineItemDialog({
           const defaultUnit = uomFields.defaultUnit;
           const defaultSalesUnit = uomFields.defaultSalesUnit;
           const defaultSalesUnitQuantity = uomFields.defaultSalesUnitQuantity;
+          const serviceLineCode =
+            typeof productItem.service_line_code === "string"
+              ? productItem.service_line_code.trim()
+              : typeof productItem.serviceLineCode === "string"
+                ? productItem.serviceLineCode.trim()
+                : null;
           const matches =
             !needle ||
             title.toLowerCase().includes(needle) ||
@@ -627,6 +672,7 @@ export function LineItemDialog({
               )
                 ? defaultSalesUnitQuantity
                 : null,
+              serviceLineCode: serviceLineCode?.length ? serviceLineCode : null,
             } satisfies ProductOption,
           } as LookupSelectItem & { option: ProductOption };
         })
@@ -1215,6 +1261,54 @@ export function LineItemDialog({
         );
       }
 
+      const isSubscriptionLine =
+        kind === "order" &&
+        !isCustomLine &&
+        isSubscriptionServiceLineCode(productOption?.serviceLineCode);
+      const subscriptionStartsAtIso = isSubscriptionLine
+        ? datePickerToIsoStart(values.subscriptionStartsAt)
+        : null;
+      const subscriptionEndsAtIso = isSubscriptionLine
+        ? datePickerToIsoEnd(values.subscriptionEndsAt)
+        : null;
+      if (isSubscriptionLine) {
+        if (!subscriptionStartsAtIso || !subscriptionEndsAtIso) {
+          throw createCrudFormError(
+            t(
+              "sales.orders.lines.subscriptionDatesRequired",
+              "Subscription start and end dates are required for subscription products.",
+            ),
+            {
+              subscriptionStartsAt: t(
+                "sales.orders.lines.subscriptionDatesRequired",
+                "Subscription start and end dates are required for subscription products.",
+              ),
+              subscriptionEndsAt: t(
+                "sales.orders.lines.subscriptionDatesRequired",
+                "Subscription start and end dates are required for subscription products.",
+              ),
+            },
+          );
+        }
+        if (
+          new Date(subscriptionStartsAtIso).getTime() >
+          new Date(subscriptionEndsAtIso).getTime()
+        ) {
+          throw createCrudFormError(
+            t(
+              "sales.orders.lines.subscriptionDatesInvalid",
+              "Subscription start date must be on or before the end date.",
+            ),
+            {
+              subscriptionStartsAt: t(
+                "sales.orders.lines.subscriptionDatesInvalid",
+                "Subscription start date must be on or before the end date.",
+              ),
+            },
+          );
+        }
+      }
+
       const qtyNumber = Number(values.quantity ?? 0);
       if (!Number.isFinite(qtyNumber) || qtyNumber <= 0) {
         throw createCrudFormError(
@@ -1391,6 +1485,16 @@ export function LineItemDialog({
         values.statusEntryId.trim().length
           ? { statusEntryId: values.statusEntryId.trim() }
           : {}),
+        ...(kind === "order"
+          ? {
+              subscriptionStartsAt: isSubscriptionLine
+                ? subscriptionStartsAtIso
+                : null,
+              subscriptionEndsAt: isSubscriptionLine
+                ? subscriptionEndsAtIso
+                : null,
+            }
+          : {}),
       };
 
       const customFields = collectCustomFieldValues(values, {
@@ -1426,6 +1530,7 @@ export function LineItemDialog({
       documentId,
       documentKey,
       editingId,
+      kind,
       priceOptions,
       productOption,
       resourcePath,
@@ -1462,6 +1567,8 @@ export function LineItemDialog({
               setFormValue?.("priceId", null);
               setFormValue?.("catalogSnapshot", null);
               setFormValue?.("quantityUnit", null);
+              setFormValue?.("subscriptionStartsAt", null);
+              setFormValue?.("subscriptionEndsAt", null);
             } else {
               setFormValue?.("unitPrice", "");
               setFormValue?.("priceMode", "gross");
@@ -1567,10 +1674,20 @@ export function LineItemDialog({
                               defaultUnit: selectedOption?.defaultUnit ?? null,
                               defaultSalesUnit:
                                 selectedOption?.defaultSalesUnit ?? null,
+                              serviceLineCode:
+                                selectedOption?.serviceLineCode ?? null,
                             },
                           }
                         : null,
                     );
+                    if (
+                      !isSubscriptionServiceLineCode(
+                        selectedOption?.serviceLineCode,
+                      )
+                    ) {
+                      setFormValue?.("subscriptionStartsAt", null);
+                      setFormValue?.("subscriptionEndsAt", null);
+                    }
                     if (next) {
                       void loadProductUnits(next, selectedOption);
                       void loadPrices(
@@ -2327,6 +2444,32 @@ export function LineItemDialog({
           />
         ),
       } satisfies CrudField,
+      ...(kind === "order" &&
+      !isCustomLine &&
+      isSubscriptionServiceLineCode(productOption?.serviceLineCode)
+        ? [
+            {
+              id: "subscriptionStartsAt",
+              label: t(
+                "sales.orders.lines.subscriptionStartsAt",
+                "Subscription start",
+              ),
+              type: "datepicker" as const,
+              required: true,
+              layout: "half" as const,
+            } satisfies CrudField,
+            {
+              id: "subscriptionEndsAt",
+              label: t(
+                "sales.orders.lines.subscriptionEndsAt",
+                "Subscription end",
+              ),
+              type: "datepicker" as const,
+              required: true,
+              layout: "half" as const,
+            } satisfies CrudField,
+          ]
+        : []),
       {
         id: "name",
         label: t("sales.documents.items.name", "Name"),
@@ -2344,6 +2487,7 @@ export function LineItemDialog({
     convertUnitPriceForUnitChange,
     currencyCode,
     findTaxRateIdByValue,
+    kind,
     loadPrices,
     loadProductUnits,
     loadProductOptions,
@@ -2432,6 +2576,12 @@ export function LineItemDialog({
     nextForm.catalogSnapshot = snapshot ?? null;
     nextForm.customFieldSetId = initialLine.customFieldSetId ?? null;
     nextForm.statusEntryId = initialLine.statusEntryId ?? null;
+    nextForm.subscriptionStartsAt = toDatePickerValue(
+      initialLine.subscriptionStartsAt,
+    );
+    nextForm.subscriptionEndsAt = toDatePickerValue(
+      initialLine.subscriptionEndsAt,
+    );
     nextForm.lineMode =
       metaLineMode ??
       (initialLine.productId || initialLine.productVariantId
@@ -2484,11 +2634,17 @@ export function LineItemDialog({
           ? metaRecord.productThumbnail
           : null;
       if (productTitle && initialLine.productId) {
-        const option = {
+        const option: ProductOption = {
           id: initialLine.productId,
           title: productTitle,
           sku: productSku,
           thumbnailUrl: productThumbnail,
+          serviceLineCode:
+            typeof snapshotProduct?.serviceLineCode === "string"
+              ? snapshotProduct.serviceLineCode
+              : typeof snapshotProduct?.service_line_code === "string"
+                ? snapshotProduct.service_line_code
+                : null,
         };
         productOptionsRef.current.set(initialLine.productId, option);
         resolvedProductOption = option;
@@ -2540,6 +2696,12 @@ export function LineItemDialog({
         thumbnailUrl: snapshotThumb,
         taxRateId: typeof sp.taxRateId === "string" ? sp.taxRateId : null,
         taxRate: Number.isFinite(snapshotTaxRate) ? snapshotTaxRate : null,
+        serviceLineCode:
+          typeof sp.serviceLineCode === "string"
+            ? sp.serviceLineCode
+            : typeof sp.service_line_code === "string"
+              ? sp.service_line_code
+              : null,
       };
       productOptionsRef.current.set(initialLine.productId, option);
       resolvedProductOption = option;
@@ -2609,6 +2771,48 @@ export function LineItemDialog({
         nextForm.quantity,
         nextForm.quantityUnit,
       );
+      if (
+        !isSubscriptionServiceLineCode(resolvedProductOption?.serviceLineCode)
+      ) {
+        const productIdForHydration = initialLine.productId;
+        void (async () => {
+          try {
+            const response = await apiCall<{
+              items?: Array<Record<string, unknown>>;
+            }>(
+              `/api/catalog/products?id=${encodeURIComponent(productIdForHydration)}&pageSize=1`,
+              undefined,
+              { fallback: { items: [] } },
+            );
+            const records = Array.isArray(response.result?.items)
+              ? response.result.items
+              : [];
+            const matched =
+              records.find((entry) => entry.id === productIdForHydration) ??
+              records[0] ??
+              null;
+            if (!matched) return;
+            const codeRaw =
+              typeof matched.service_line_code === "string"
+                ? matched.service_line_code.trim()
+                : typeof matched.serviceLineCode === "string"
+                  ? matched.serviceLineCode.trim()
+                  : "";
+            const code = codeRaw.length ? codeRaw : null;
+            setProductOption((prev) => {
+              if (!prev || prev.id !== productIdForHydration) return prev;
+              const next = { ...prev, serviceLineCode: code };
+              productOptionsRef.current.set(productIdForHydration, next);
+              return next;
+            });
+          } catch (err) {
+            console.error(
+              "sales.document.items.hydrateSubscriptionServiceLine",
+              err,
+            );
+          }
+        })();
+      }
     } else {
       setPriceOptions([]);
       setUnitOptions([]);

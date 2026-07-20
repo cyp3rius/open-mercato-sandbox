@@ -8,6 +8,7 @@ import { DocumentCustomerCard } from '../DocumentCustomerCard'
 import { DocumentTotals } from '../documents/DocumentTotals'
 import { DocumentNumberSettings } from '../DocumentNumberSettings'
 import { OrderEditingSettings } from '../OrderEditingSettings'
+import { SubscriptionActivationSettings } from '../SubscriptionActivationSettings'
 import { AdjustmentKindSettings } from '../AdjustmentKindSettings'
 import { PaymentMethodsSettings } from '../PaymentMethodsSettings'
 import { ShippingMethodsSettings } from '../ShippingMethodsSettings'
@@ -437,6 +438,23 @@ describe('sales components', () => {
     render(<OrderEditingSettings />)
     await waitFor(() => expect(mockApiCall).toHaveBeenCalled())
     expect(screen.getAllByRole('switch').length).toBeGreaterThan(0)
+  })
+
+  it('renders subscription activation settings', async () => {
+    mockApiCall.mockResolvedValueOnce({
+      ok: true,
+      result: {
+        subscriptionActivationOrderStatuses: ['confirmed'],
+        orderStatuses: [
+          { id: '11111111-1111-1111-1111-111111111111', value: 'confirmed', label: 'Confirmed' },
+          { id: '22222222-2222-2222-2222-222222222222', value: 'fulfilled', label: 'Fulfilled' },
+        ],
+      },
+    })
+    render(<SubscriptionActivationSettings />)
+    await waitFor(() => expect(mockApiCall).toHaveBeenCalled())
+    expect(screen.getByText('Confirmed')).toBeInTheDocument()
+    expect(screen.getByText('Fulfilled')).toBeInTheDocument()
   })
 
   it('renders sales channel offers panel', async () => {

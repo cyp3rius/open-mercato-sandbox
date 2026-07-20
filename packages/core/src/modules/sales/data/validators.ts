@@ -55,6 +55,7 @@ export const salesSettingsUpsertSchema = scoped.extend({
   quoteNextNumber: z.coerce.number().int().min(1).max(1_000_000_000).optional(),
   orderCustomerEditableStatuses: statusListSchema,
   orderAddressEditableStatuses: statusListSchema,
+  subscriptionActivationOrderStatuses: statusListSchema,
 })
 
 export type SalesSettingsUpsertInput = z.infer<typeof salesSettingsUpsertSchema>
@@ -67,6 +68,16 @@ export const salesEditingSettingsSchema = scoped.extend({
 })
 
 export type SalesEditingSettingsInput = z.infer<typeof salesEditingSettingsSchema>
+
+export const salesSubscriptionActivationSettingsSchema = scoped.extend({
+  orderNumberFormat: numberFormatSchema.optional(),
+  quoteNumberFormat: numberFormatSchema.optional(),
+  subscriptionActivationOrderStatuses: statusListSchema,
+})
+
+export type SalesSubscriptionActivationSettingsInput = z.infer<
+  typeof salesSubscriptionActivationSettingsSchema
+>
 
 export const channelCreateSchema = scoped.extend({
   name: z.string().trim().min(1).max(255),

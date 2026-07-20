@@ -14,7 +14,6 @@ import type {
   CatalogProductOptionSchema,
   CatalogProductRelationType,
   CatalogProductType,
-  CatalogOfferingKind,
   CatalogProductCaseTemplate,
 } from './types'
 import type { ReferenceUnitCode } from '@open-mercato/shared/lib/units/unitCodes'
@@ -160,9 +159,6 @@ export class CatalogProduct {
 
   @Property({ name: 'product_type', type: 'text', default: 'simple' })
   productType: CatalogProductType = 'simple'
-
-  @Property({ name: 'offering_kind', type: 'text', default: 'internal_service' })
-  offeringKind: CatalogOfferingKind = 'internal_service'
 
   @Property({ name: 'case_templates', type: 'jsonb', nullable: true })
   caseTemplates?: CatalogProductCaseTemplate[] | null
@@ -974,9 +970,6 @@ export class CatalogCustomerOffering {
 
   @Property({ name: 'parent_offering_id', type: 'uuid', nullable: true })
   parentOfferingId?: string | null
-
-  @Property({ name: 'offering_kind', type: 'text' })
-  offeringKind: CatalogOfferingKind = 'internal_service'
 
   @Property({ type: 'text', default: 'pending' })
   status: string = 'pending'

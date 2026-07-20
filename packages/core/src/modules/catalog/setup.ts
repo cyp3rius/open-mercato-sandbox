@@ -1,5 +1,5 @@
 import type { ModuleSetupConfig } from '@open-mercato/shared/modules/setup'
-import { seedCatalogUnits, seedCatalogPriceKinds, seedCatalogExamplesForScope } from './lib/seeds'
+import { seedCatalogUnits, seedCatalogPriceKinds, seedCatalogServiceLines, seedCatalogExamplesForScope } from './lib/seeds'
 import { registerCatalogSubscriptionSchedule } from './lib/registerCatalogSubscriptionSchedule'
 
 export const setup: ModuleSetupConfig = {
@@ -7,6 +7,7 @@ export const setup: ModuleSetupConfig = {
     const scope = { tenantId: ctx.tenantId, organizationId: ctx.organizationId }
     await seedCatalogUnits(ctx.em, scope)
     await seedCatalogPriceKinds(ctx.em, scope)
+    await seedCatalogServiceLines(ctx.em, scope)
     await registerCatalogSubscriptionSchedule(ctx.container, scope)
   },
 
@@ -27,6 +28,8 @@ export const setup: ModuleSetupConfig = {
       'catalog.pricing.manage',
       'catalog.customer_offerings.view',
       'catalog.customer_offerings.manage',
+      'catalog.simple_offerings.view',
+      'catalog.simple_offerings.manage',
     ],
   },
 }
