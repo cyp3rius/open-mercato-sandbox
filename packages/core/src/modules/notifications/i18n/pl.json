@@ -81,6 +81,8 @@
   "notifications.preferences.loading": "Ładowanie preferencji powiadomień...",
   "notifications.preferences.empty": "Brak powiadomień dostępnych do konfiguracji dla Twoich uprawnień.",
   "notifications.preferences.moduleAll": "Wszystkie",
+  "notifications.preferences.audience.global": "Globalne",
+  "notifications.preferences.audience.individual": "Indywidualne",
   "notifications.preferences.lockedByRole": "Wymagane przez rolę",
   "notifications.preferences.save": "Zapisz preferencje",
   "notifications.preferences.saving": "Zapisywanie...",

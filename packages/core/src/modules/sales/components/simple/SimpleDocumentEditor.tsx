@@ -165,6 +165,8 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
       setInitialValues({
         customerEntityId,
         customerLabel,
+        ownerUserId: typeof doc.ownerUserId === 'string' ? doc.ownerUserId : '',
+        ownerLabel: typeof doc.ownerUserId === 'string' ? doc.ownerUserId : '',
         statusEntryId: typeof doc.statusEntryId === 'string' ? doc.statusEntryId : '',
         currencyCode: typeof doc.currencyCode === 'string' ? doc.currencyCode : 'EUR',
         documentNumber:
@@ -200,7 +202,10 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
     () => buildSimpleDocumentFormFields({ kind, mode, i18nPrefix, t }),
     [i18nPrefix, kind, mode, t],
   )
-  const groups = React.useMemo(() => buildSimpleDocumentFormGroups(i18nPrefix, t), [i18nPrefix, t])
+  const groups = React.useMemo(
+    () => buildSimpleDocumentFormGroups(kind, i18nPrefix, t),
+    [i18nPrefix, kind, t],
+  )
 
   const validate = React.useCallback(
     (values: SimpleDocumentFormValues): void => {
@@ -299,9 +304,11 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
       if (kind === 'order') {
         header.placedAt = datePickerToIsoStart(values.documentDate)
         if (values.documentNumber.trim()) header.orderNumber = values.documentNumber.trim()
+        header.ownerUserId = values.ownerUserId.trim() ? values.ownerUserId.trim() : null
       } else {
         header.validFrom = datePickerToIsoStart(values.documentDate)
         if (values.documentNumber.trim()) header.quoteNumber = values.documentNumber.trim()
+        header.ownerUserId = values.ownerUserId.trim() ? values.ownerUserId.trim() : null
       }
 
       const lines = Array.isArray(values.lines) ? values.lines : []

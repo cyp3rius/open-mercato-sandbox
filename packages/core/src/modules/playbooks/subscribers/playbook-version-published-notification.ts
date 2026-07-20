@@ -1,6 +1,8 @@
-import { resolveNotificationService } from '../../notifications/lib/notificationService'
-import { buildFeatureNotificationFromType } from '../../notifications/lib/notificationBuilder'
-import { notificationTypes } from '../notifications'
+import { notifyFeatureUsersFromType } from '../../notifications/lib/moduleNotificationDelivery'
+import {
+  PLAYBOOKS_VERSION_PUBLISHED_NOTIFY_FEATURE,
+  notificationTypes,
+} from '../notifications'
 
 export const metadata = {
   event: 'playbooks.playbook.version_published',
@@ -24,30 +26,22 @@ type ResolverContext = {
 export default async function handle(payload: PlaybookVersionPublishedPayload, ctx: ResolverContext) {
   if (!payload.playbookId || !payload.tenantId) return
 
-  try {
-    const typeDef = notificationTypes.find((type) => type.type === 'playbooks.playbook.version_published')
-    if (!typeDef) return
-
-    const notificationService = resolveNotificationService(ctx)
-    const linkHref = `/backend/playbooks/${encodeURIComponent(payload.playbookId)}`
-    const notificationInput = buildFeatureNotificationFromType(typeDef, {
-      requiredFeature: 'playbooks.view',
-      titleVariables: { title: payload.title, version: String(payload.version) },
-      bodyVariables: {
-        title: payload.title,
-        slug: payload.slug,
-        version: String(payload.version),
-      },
-      sourceEntityType: 'playbooks:playbook',
-      sourceEntityId: payload.playbookId,
-      linkHref,
-    })
-
-    await notificationService.createForFeature(notificationInput, {
-      tenantId: payload.tenantId,
-      organizationId: payload.organizationId ?? null,
-    })
-  } catch (err) {
-    console.error('[playbooks:playbook-version-published-notification] Failed to create notification:', err)
-  }
+  const linkHref = `/backend/playbooks/${encodeURIComponent(payload.playbookId)}`
+  await notifyFeatureUsersFromType(ctx, {
+    notificationType: 'playbooks.playbook.version_published',
+    types: notificationTypes,
+    requiredFeature: PLAYBOOKS_VERSION_PUBLISHED_NOTIFY_FEATURE,
+    tenantId: payload.tenantId,
+    organizationId: payload.organizationId ?? null,
+    titleVariables: { title: payload.title, version: String(payload.version) },
+    bodyVariables: {
+      title: payload.title,
+      slug: payload.slug,
+      version: String(payload.version),
+    },
+    sourceEntityType: 'playbooks:playbook',
+    sourceEntityId: payload.playbookId,
+    linkHref,
+    logLabel: 'playbooks:playbook-version-published-notification',
+  })
 }

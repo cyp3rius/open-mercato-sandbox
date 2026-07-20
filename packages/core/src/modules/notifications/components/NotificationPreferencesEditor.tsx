@@ -8,11 +8,14 @@ import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 
+type PreferenceAudience = 'global' | 'individual'
+
 type PreferenceTypeState = {
   type: string
   labelKey: string
   enabled: boolean
   locked: boolean
+  audience?: PreferenceAudience
 }
 
 type PreferenceModuleGroup = {
@@ -36,6 +39,82 @@ function isModuleFullyEnabled(group: PreferenceModuleGroup, preferences: Record<
 function isModulePartiallyEnabled(group: PreferenceModuleGroup, preferences: Record<string, boolean>): boolean {
   const enabledCount = group.types.filter((entry) => preferences[entry.type] !== false).length
   return enabledCount > 0 && enabledCount < group.types.length
+}
+
+function splitTypesByAudience(types: PreferenceTypeState[]): {
+  shouldSplit: boolean
+  global: PreferenceTypeState[]
+  individual: PreferenceTypeState[]
+  unscoped: PreferenceTypeState[]
+} {
+  const global = types.filter((entry) => entry.audience === 'global')
+  const individual = types.filter((entry) => entry.audience === 'individual')
+  const unscoped = types.filter((entry) => entry.audience !== 'global' && entry.audience !== 'individual')
+  return {
+    shouldSplit: global.length > 0 && individual.length > 0,
+    global,
+    individual,
+    unscoped,
+  }
+}
+
+function PreferenceTypeRow(props: {
+  entry: PreferenceTypeState
+  checked: boolean
+  onToggle: (enabled: boolean) => void
+  lockedLabel: string
+  translate: (key: string, fallback: string) => string
+}) {
+  const { entry, checked, onToggle, lockedLabel, translate } = props
+  return (
+    <div className="flex items-start gap-2">
+      <input
+        id={`notification-type-${entry.type}`}
+        type="checkbox"
+        className="mt-0.5 h-4 w-4"
+        checked={checked}
+        disabled={entry.locked}
+        onChange={(event) => onToggle(event.target.checked)}
+      />
+      <label
+        htmlFor={`notification-type-${entry.type}`}
+        className={`text-sm ${entry.locked ? 'text-muted-foreground' : ''}`}
+      >
+        {translate(entry.labelKey, entry.type)}
+        {entry.locked ? (
+          <span className="ml-2 text-xs text-muted-foreground">{lockedLabel}</span>
+        ) : null}
+      </label>
+    </div>
+  )
+}
+
+function PreferenceAudienceSection(props: {
+  title: string
+  types: PreferenceTypeState[]
+  preferences: Record<string, boolean>
+  onToggle: (type: string, enabled: boolean) => void
+  lockedLabel: string
+  translate: (key: string, fallback: string) => string
+}) {
+  if (props.types.length === 0) return null
+  return (
+    <div className="space-y-2">
+      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{props.title}</div>
+      <div className="space-y-2">
+        {props.types.map((entry) => (
+          <PreferenceTypeRow
+            key={entry.type}
+            entry={entry}
+            checked={props.preferences[entry.type] !== false}
+            onToggle={(enabled) => props.onToggle(entry.type, enabled)}
+            lockedLabel={props.lockedLabel}
+            translate={props.translate}
+          />
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export function NotificationPreferencesEditor() {
@@ -126,6 +205,8 @@ export function NotificationPreferencesEditor() {
     )
   }
 
+  const lockedLabel = t('notifications.preferences.lockedByRole', 'Required by role')
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -134,6 +215,7 @@ export function NotificationPreferencesEditor() {
           const modulePartial = isModulePartiallyEnabled(group, preferences)
           const editableTypes = group.types.filter((entry) => !entry.locked)
           const moduleCheckboxDisabled = editableTypes.length === 0
+          const audienceSplit = splitTypesByAudience(group.types)
 
           return (
             <div key={group.moduleId} className="rounded border p-3">
@@ -160,34 +242,53 @@ export function NotificationPreferencesEditor() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                {group.types.map((entry) => {
-                  const checked = preferences[entry.type] !== false
-                  return (
-                    <div key={entry.type} className="flex items-start gap-2">
-                      <input
-                        id={`notification-type-${entry.type}`}
-                        type="checkbox"
-                        className="mt-0.5 h-4 w-4"
-                        checked={checked}
-                        disabled={entry.locked}
-                        onChange={(event) => setTypeEnabled(entry.type, event.target.checked)}
-                      />
-                      <label
-                        htmlFor={`notification-type-${entry.type}`}
-                        className={`text-sm ${entry.locked ? 'text-muted-foreground' : ''}`}
-                      >
-                        {t(entry.labelKey, entry.type)}
-                        {entry.locked ? (
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            {t('notifications.preferences.lockedByRole', 'Required by role')}
-                          </span>
-                        ) : null}
-                      </label>
+              {audienceSplit.shouldSplit ? (
+                <div className="space-y-4">
+                  <PreferenceAudienceSection
+                    title={t('notifications.preferences.audience.global', 'Global')}
+                    types={audienceSplit.global}
+                    preferences={preferences}
+                    onToggle={setTypeEnabled}
+                    lockedLabel={lockedLabel}
+                    translate={t}
+                  />
+                  <PreferenceAudienceSection
+                    title={t('notifications.preferences.audience.individual', 'Individual')}
+                    types={audienceSplit.individual}
+                    preferences={preferences}
+                    onToggle={setTypeEnabled}
+                    lockedLabel={lockedLabel}
+                    translate={t}
+                  />
+                  {audienceSplit.unscoped.length > 0 ? (
+                    <div className="space-y-2">
+                      {audienceSplit.unscoped.map((entry) => (
+                        <PreferenceTypeRow
+                          key={entry.type}
+                          entry={entry}
+                          checked={preferences[entry.type] !== false}
+                          onToggle={(enabled) => setTypeEnabled(entry.type, enabled)}
+                          lockedLabel={lockedLabel}
+                          translate={t}
+                        />
+                      ))}
                     </div>
-                  )
-                })}
-              </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {group.types.map((entry) => (
+                    <PreferenceTypeRow
+                      key={entry.type}
+                      entry={entry}
+                      checked={preferences[entry.type] !== false}
+                      onToggle={(enabled) => setTypeEnabled(entry.type, enabled)}
+                      lockedLabel={lockedLabel}
+                      translate={t}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}

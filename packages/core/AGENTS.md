@@ -243,6 +243,9 @@ src/modules/<module>/
 - **Notification types**: Declare in `notifications.ts` exporting `notificationTypes: NotificationTypeDefinition[]`
 - **Reactive handlers**: Declare in `notifications.handlers.ts` exporting `notificationHandlers: NotificationHandler[]`
 - **Subscribers**: Create event subscribers in `subscribers/` to emit notifications on domain events
+- **Delivery helpers**: Prefer `notifyBroadcastFromType` / `notifyPersonalFromType` / `notifyFeatureUsersFromType` from `modules/notifications/lib/moduleNotificationDelivery` instead of re-implementing preference checks and recipient fan-out in each subscriber. Pass the module's `notificationTypes` via `types` (or an explicit `typeDef`).
+  - **Global** preferences (`audience: 'global'`): deliver via `notifyFeatureUsersFromType` and declare `lockFeature` + `lockedWhenRoleGrants: true` (role-driven; typically `scopeFeature` equals the notify feature).
+  - **Individual** preferences (`audience: 'individual'`): deliver via `notifyPersonalFromType` and control with user preferences (`scopeFeature` for who can configure them).
 - **Client renderers**: Declare in `notifications.client.ts`; store components in `widgets/notifications/`
 - **i18n**: Add translations to `i18n/<locale>.json` under `<module>.notifications.*` keys
 - **Handler behavior**: Keep handlers idempotent; use `ctx.emitEvent(...)` for cross-component updates and `ctx.toast(...)`/`ctx.popup(...)` for UX side-effects

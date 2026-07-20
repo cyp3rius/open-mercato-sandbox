@@ -6,6 +6,7 @@ import {
   emitCrudSideEffects,
   emitCrudUndoSideEffects,
   requireId,
+  normalizeAuthorUserId,
 } from '@open-mercato/shared/lib/commands/helpers'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { EntityManager } from '@mikro-orm/postgresql'
@@ -36,7 +37,14 @@ import { E } from '#generated/entities.ids.generated'
 import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { resolveNotificationService } from '../../notifications/lib/notificationService'
 import { buildNotificationFromType } from '../../notifications/lib/notificationBuilder'
-import { notificationTypes } from '../notifications'
+import {
+  notifyFeatureUsersFromType,
+  notifyOwnerOnCreateIfDifferentFromActor,
+} from '../../notifications/lib/moduleNotificationDelivery'
+import {
+  CUSTOMERS_DEAL_CREATE_NOTIFY_FEATURE,
+  notificationTypes,
+} from '../notifications'
 import { assertCustomerIsReferringParty } from '../lib/referringParty'
 
 const DEAL_ENTITY_ID = 'customers:customer_deal'
@@ -298,6 +306,35 @@ const createDealCommand: CommandHandler<DealCreateInput, { dealId: string }> = {
       },
       indexer: dealCrudIndexer,
       events: dealCrudEvents,
+    })
+
+    await notifyFeatureUsersFromType(ctx.container, {
+      notificationType: 'customers.deal.created',
+      types: notificationTypes,
+      requiredFeature: CUSTOMERS_DEAL_CREATE_NOTIFY_FEATURE,
+      tenantId: deal.tenantId,
+      organizationId: deal.organizationId,
+      titleVariables: { title: deal.title },
+      bodyVariables: { title: deal.title },
+      sourceEntityType: 'customers:deal',
+      sourceEntityId: deal.id,
+      linkHref: `/backend/customers/deals/${encodeURIComponent(deal.id)}`,
+      logLabel: 'customers.deals.create',
+    })
+
+    await notifyOwnerOnCreateIfDifferentFromActor(ctx.container, {
+      notificationType: 'customers.deal.owner_assigned',
+      types: notificationTypes,
+      ownerUserId: deal.ownerUserId,
+      actorUserId: normalizeAuthorUserId(null, ctx.auth),
+      tenantId: deal.tenantId,
+      organizationId: deal.organizationId,
+      titleVariables: { title: deal.title },
+      bodyVariables: { title: deal.title },
+      sourceEntityType: 'customers:deal',
+      sourceEntityId: deal.id,
+      linkHref: `/backend/customers/deals/${encodeURIComponent(deal.id)}`,
+      logLabel: 'customers.deals.create:owner',
     })
 
     return { dealId: deal.id }

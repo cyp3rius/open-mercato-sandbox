@@ -3,6 +3,9 @@ import { resolveNotificationService } from '@open-mercato/core/modules/notificat
 import { buildFeatureNotificationFromType } from '@open-mercato/core/modules/notifications/lib/notificationBuilder'
 import type { NotificationTypeDefinition } from '@open-mercato/shared/modules/notifications/types'
 
+/**
+ * Role-driven fan-out for inject notifications (`createForFeature`).
+ */
 export async function notifyInjectFeatureUsers(
   container: AwilixContainer,
   options: {
@@ -33,7 +36,7 @@ export async function notifyInjectFeatureUsers(
       linkHref: options.linkHref,
     })
 
-    await notificationService.createForNotificationType(input, {
+    await notificationService.createForFeature(input, {
       tenantId: options.tenantId,
       organizationId: options.organizationId,
     })

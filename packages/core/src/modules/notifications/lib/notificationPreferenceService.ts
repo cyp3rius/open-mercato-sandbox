@@ -185,6 +185,7 @@ export type NotificationPreferenceModuleGroup = {
     labelKey: string
     enabled: boolean
     locked: boolean
+    audience?: 'global' | 'individual'
   }>
 }
 
@@ -221,6 +222,7 @@ export function buildNotificationPreferenceGroups(options: {
       labelKey: entry.preference.labelKey,
       enabled: state.enabled,
       locked: state.locked,
+      audience: entry.preference.audience,
     })
   }
 

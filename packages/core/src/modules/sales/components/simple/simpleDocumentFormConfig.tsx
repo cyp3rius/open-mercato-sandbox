@@ -12,6 +12,7 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import {
   mergeEntitySearchOption,
+  remoteSearchAuthUsers,
   remoteSearchCustomerEntities,
 } from '@open-mercato/core/modules/procurement/lib/procurementEntitySearch'
 import {
@@ -42,6 +43,8 @@ export type SimpleDocumentLineDraft = {
 export type SimpleDocumentFormValues = {
   customerEntityId: string
   customerLabel: string
+  ownerUserId: string
+  ownerLabel: string
   statusEntryId: string
   currencyCode: string
   documentDate: string
@@ -72,6 +75,8 @@ export function defaultSimpleDocumentValues(): SimpleDocumentFormValues {
   return {
     customerEntityId: '',
     customerLabel: '',
+    ownerUserId: '',
+    ownerLabel: '',
     statusEntryId: '',
     currencyCode: 'PLN',
     documentDate: new Date().toISOString().slice(0, 10),
@@ -649,6 +654,43 @@ export function buildSimpleDocumentFormFields(args: {
         />
       ),
     },
+    ...(kind === 'quote' || kind === 'order'
+      ? [
+          {
+            id: 'ownerUserId',
+            type: 'custom' as const,
+            label: t(`${i18nPrefix}.fields.owner`, 'Owner'),
+            layout: 'half' as const,
+            component: ({
+              value,
+              setValue,
+              disabled,
+              values,
+            }: {
+              value: unknown
+              setValue: (next: unknown) => void
+              disabled?: boolean
+              values?: Record<string, unknown>
+            }) => {
+              const str = typeof value === 'string' ? value : ''
+              const ownerLabel =
+                typeof values?.ownerLabel === 'string' && values.ownerLabel.trim().length
+                  ? values.ownerLabel
+                  : str
+              return (
+                <EntitySearchCombobox
+                  value={str}
+                  onChange={(next) => setValue(next)}
+                  options={mergeEntitySearchOption([], str, ownerLabel)}
+                  onRemoteSearch={remoteSearchAuthUsers}
+                  placeholder={t(`${i18nPrefix}.fields.ownerSearch`, 'Search users…')}
+                  disabled={disabled}
+                />
+              )
+            },
+          },
+        ]
+      : []),
     {
       id: 'statusEntryId',
       type: 'custom',
@@ -724,13 +766,24 @@ export function buildSimpleDocumentFormFields(args: {
   ]
 }
 
-export function buildSimpleDocumentFormGroups(i18nPrefix: string, t: (key: string, fallback?: string) => string): CrudFormGroup[] {
+export function buildSimpleDocumentFormGroups(
+  kind: SimpleDocumentKind,
+  i18nPrefix: string,
+  t: (key: string, fallback?: string) => string,
+): CrudFormGroup[] {
   return [
     {
       id: 'basics',
       title: t(`${i18nPrefix}.form.groups.basics`, 'Basics'),
       column: 1,
-      fields: ['customerEntityId', 'statusEntryId', 'currencyCode', 'documentDate', 'documentNumber'],
+      fields: [
+        'customerEntityId',
+        ...(kind === 'quote' || kind === 'order' ? (['ownerUserId'] as const) : []),
+        'statusEntryId',
+        'currencyCode',
+        'documentDate',
+        'documentNumber',
+      ],
     },
     {
       id: 'lines',

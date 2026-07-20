@@ -32,8 +32,7 @@ import { caseCrudEvents } from '../lib/crud'
 import { resolveInvokeProcedureOwner } from '../lib/resolveProcedureOwner'
 import { scheduleNextRecurrenceOnClose } from '../lib/scheduleNextRecurrenceOnClose'
 import { resolveProcedureActionEntry } from '../../playbooks/lib/resolveProcedureActionEntry'
-import { resolveNotificationService } from '../../notifications/lib/notificationService'
-import { buildNotificationFromType } from '../../notifications/lib/notificationBuilder'
+import { notifyPersonalFromType } from '../../notifications/lib/moduleNotificationDelivery'
 import { notificationTypes } from '../notifications'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
 
@@ -167,26 +166,20 @@ async function maybeNotifyActionInApp(
   }
   const recipientUserId = run.procedureOwnerUserId?.trim() || caseRow.ownerUserId?.trim() || ''
   if (!recipientUserId.length) return
-  const typeDef = notificationTypes.find((type) => type.type === 'cases.procedure.action_notify')
-  if (!typeDef) return
-  try {
-    const notificationService = resolveNotificationService(ctx)
-    const linkHref = `/backend/cases/${encodeURIComponent(caseRow.id)}`
-    const notificationInput = buildNotificationFromType(typeDef, {
-      recipientUserId,
-      titleVariables: { title: caseRow.title },
-      bodyVariables: { title: caseRow.title },
-      sourceEntityType: 'cases:case',
-      sourceEntityId: caseRow.id,
-      linkHref,
-    })
-    await notificationService.create(notificationInput, {
-      tenantId: caseRow.tenantId,
-      organizationId: caseRow.organizationId,
-    })
-  } catch (err) {
-    console.error('[cases.procedure.action_notify] Failed to create notification:', err)
-  }
+  const linkHref = `/backend/cases/${encodeURIComponent(caseRow.id)}`
+  await notifyPersonalFromType(ctx, {
+    notificationType: 'cases.procedure.action_notify',
+    types: notificationTypes,
+    recipientUserId,
+    tenantId: caseRow.tenantId,
+    organizationId: caseRow.organizationId,
+    titleVariables: { title: caseRow.title },
+    bodyVariables: { title: caseRow.title },
+    sourceEntityType: 'cases:case',
+    sourceEntityId: caseRow.id,
+    linkHref,
+    logLabel: 'cases.procedure.action_notify',
+  })
 }
 
 async function appendClosingNoteTimeline(

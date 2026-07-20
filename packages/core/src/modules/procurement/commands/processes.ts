@@ -1,6 +1,6 @@
 import { registerCommand, type CommandHandler } from '@open-mercato/shared/lib/commands'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { buildChanges, emitCrudSideEffects, emitCrudUndoSideEffects, requireId } from '@open-mercato/shared/lib/commands/helpers'
+import { buildChanges, emitCrudSideEffects, emitCrudUndoSideEffects, requireId, normalizeAuthorUserId } from '@open-mercato/shared/lib/commands/helpers'
 import { extractUndoPayload, type UndoPayload } from '@open-mercato/shared/lib/commands/undo'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
@@ -52,6 +52,8 @@ import {
   shouldAutoSetStartedAtOnStatusChange,
 } from '../lib/procurementStatusStartedAt'
 import { resourcesResourceCrudEvents } from '@open-mercato/core/modules/resources/lib/crud'
+import { notifyOwnerOnCreateIfDifferentFromActor } from '@open-mercato/core/modules/notifications/lib/moduleNotificationDelivery'
+import { notificationTypes } from '../notifications'
 import { E } from '#generated/entities.ids.generated'
 
 const resourcesResourceCrudIndexer = { entityType: E.resources.resources_resource }
@@ -377,6 +379,22 @@ const createProcessCommand: CommandHandler<ProcurementProcessCreateInput, { proc
       events: procurementProcessCrudEvents,
       indexer: procurementProcessCrudIndexer,
     })
+
+    await notifyOwnerOnCreateIfDifferentFromActor(ctx.container, {
+      notificationType: 'procurement.process.handler_assigned',
+      types: notificationTypes,
+      ownerUserId: record.handlerUserId,
+      actorUserId: normalizeAuthorUserId(null, ctx.auth),
+      tenantId: record.tenantId,
+      organizationId: record.organizationId,
+      titleVariables: { title: record.title },
+      bodyVariables: { title: record.title },
+      sourceEntityType: 'procurement:process',
+      sourceEntityId: record.id,
+      linkHref: `/backend/procurement/processes/${encodeURIComponent(record.id)}`,
+      logLabel: 'procurement.processes.create:handler',
+    })
+
     if (createStatusAutomation?.workflowId) {
       await runProcurementTransitionAutomation(
         em,

@@ -1,6 +1,16 @@
 import type { NotificationTypeDefinition } from '@open-mercato/shared/modules/notifications/types'
 
 export const CASES_CASE_CREATE_NOTIFY_FEATURE = 'cases.cases.create.notify'
+export const CASES_CASE_OVERDUE_NOTIFY_FEATURE = 'cases.cases.overdue.notify'
+export const CASES_CASE_CLOSED_NOTIFY_FEATURE = 'cases.cases.closed.notify'
+
+const caseViewAction = {
+  id: 'open',
+  labelKey: 'cases.list.actions.viewDetails',
+  variant: 'outline' as const,
+  href: '/backend/cases/{sourceEntityId}',
+  icon: 'external-link',
+}
 
 export const notificationTypes: NotificationTypeDefinition[] = [
   {
@@ -12,38 +22,28 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     severity: 'info',
     userPreference: {
       labelKey: 'cases.notifications.preferences.case_created',
-      scopeFeature: 'cases.view',
+      scopeFeature: CASES_CASE_CREATE_NOTIFY_FEATURE,
       lockFeature: CASES_CASE_CREATE_NOTIFY_FEATURE,
       lockedWhenRoleGrants: true,
+      audience: 'global',
     },
-    actions: [
-      {
-        id: 'open',
-        labelKey: 'cases.list.actions.viewDetails',
-        variant: 'outline',
-        href: '/backend/cases/{sourceEntityId}',
-        icon: 'external-link',
-      },
-    ],
+    actions: [caseViewAction],
     linkHref: '/backend/cases/{sourceEntityId}',
     expiresAfterHours: 168,
   },
   {
-    type: 'cases.case.closed',
+    type: 'cases.case.created.owner',
     module: 'cases',
-    titleKey: 'cases.notifications.case.closed.title',
-    bodyKey: 'cases.notifications.case.closed.body',
+    titleKey: 'cases.notifications.case.created.title',
+    bodyKey: 'cases.notifications.case.created.body',
     icon: 'briefcase',
     severity: 'info',
-    actions: [
-      {
-        id: 'open',
-        labelKey: 'cases.list.actions.viewDetails',
-        variant: 'outline',
-        href: '/backend/cases/{sourceEntityId}',
-        icon: 'external-link',
-      },
-    ],
+    userPreference: {
+      labelKey: 'cases.notifications.preferences.case_created_owner',
+      scopeFeature: 'cases.view',
+      audience: 'individual',
+    },
+    actions: [caseViewAction],
     linkHref: '/backend/cases/{sourceEntityId}',
     expiresAfterHours: 168,
   },
@@ -54,7 +54,64 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     bodyKey: 'cases.notifications.case.overdue.body',
     icon: 'alert-triangle',
     severity: 'warning',
-    actions: [{ id: 'open', labelKey: 'cases.list.actions.viewDetails', variant: 'outline', href: '/backend/cases/{sourceEntityId}', icon: 'external-link' }],
+    userPreference: {
+      labelKey: 'cases.notifications.preferences.case_overdue',
+      scopeFeature: CASES_CASE_OVERDUE_NOTIFY_FEATURE,
+      lockFeature: CASES_CASE_OVERDUE_NOTIFY_FEATURE,
+      lockedWhenRoleGrants: true,
+      audience: 'global',
+    },
+    actions: [caseViewAction],
+    linkHref: '/backend/cases/{sourceEntityId}',
+    expiresAfterHours: 168,
+  },
+  {
+    type: 'cases.case.overdue.owner',
+    module: 'cases',
+    titleKey: 'cases.notifications.case.overdue.title',
+    bodyKey: 'cases.notifications.case.overdue.body',
+    icon: 'alert-triangle',
+    severity: 'warning',
+    userPreference: {
+      labelKey: 'cases.notifications.preferences.case_overdue_owner',
+      scopeFeature: 'cases.view',
+      audience: 'individual',
+    },
+    actions: [caseViewAction],
+    linkHref: '/backend/cases/{sourceEntityId}',
+    expiresAfterHours: 168,
+  },
+  {
+    type: 'cases.case.closed',
+    module: 'cases',
+    titleKey: 'cases.notifications.case.closed.title',
+    bodyKey: 'cases.notifications.case.closed.body',
+    icon: 'briefcase',
+    severity: 'info',
+    userPreference: {
+      labelKey: 'cases.notifications.preferences.case_closed',
+      scopeFeature: CASES_CASE_CLOSED_NOTIFY_FEATURE,
+      lockFeature: CASES_CASE_CLOSED_NOTIFY_FEATURE,
+      lockedWhenRoleGrants: true,
+      audience: 'global',
+    },
+    actions: [caseViewAction],
+    linkHref: '/backend/cases/{sourceEntityId}',
+    expiresAfterHours: 168,
+  },
+  {
+    type: 'cases.case.closed.owner',
+    module: 'cases',
+    titleKey: 'cases.notifications.case.closed.title',
+    bodyKey: 'cases.notifications.case.closed.body',
+    icon: 'briefcase',
+    severity: 'info',
+    userPreference: {
+      labelKey: 'cases.notifications.preferences.case_closed_owner',
+      scopeFeature: 'cases.view',
+      audience: 'individual',
+    },
+    actions: [caseViewAction],
     linkHref: '/backend/cases/{sourceEntityId}',
     expiresAfterHours: 168,
   },
@@ -65,7 +122,12 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     bodyKey: 'cases.notifications.case.stage_owner_assigned.body',
     icon: 'briefcase',
     severity: 'info',
-    actions: [{ id: 'open', labelKey: 'cases.list.actions.viewDetails', variant: 'outline', href: '/backend/cases/{sourceEntityId}', icon: 'external-link' }],
+    userPreference: {
+      labelKey: 'cases.notifications.preferences.case_stage_owner_assigned',
+      scopeFeature: 'cases.view',
+      audience: 'individual',
+    },
+    actions: [caseViewAction],
     linkHref: '/backend/cases/{sourceEntityId}',
     expiresAfterHours: 168,
   },
@@ -76,7 +138,12 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     bodyKey: 'cases.notifications.procedure.action_notify.body',
     icon: 'bell',
     severity: 'info',
-    actions: [{ id: 'open', labelKey: 'cases.list.actions.viewDetails', variant: 'outline', href: '/backend/cases/{sourceEntityId}', icon: 'external-link' }],
+    userPreference: {
+      labelKey: 'cases.notifications.preferences.procedure_action_notify',
+      scopeFeature: 'cases.view',
+      audience: 'individual',
+    },
+    actions: [caseViewAction],
     linkHref: '/backend/cases/{sourceEntityId}',
     expiresAfterHours: 72,
   },

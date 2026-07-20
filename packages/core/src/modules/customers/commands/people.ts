@@ -7,6 +7,7 @@ import {
   emitCrudUndoSideEffects,
   requireId,
   snapshotsEqual,
+  normalizeAuthorUserId,
 } from '@open-mercato/shared/lib/commands/helpers'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
@@ -24,6 +25,8 @@ import {
   CustomerTagAssignment,
 } from '../data/entities'
 import { resolvePersonCustomFieldRouting, CUSTOMER_ENTITY_ID, PERSON_ENTITY_ID } from '../lib/customFieldRouting'
+import { notifyOwnerOnCreateIfDifferentFromActor } from '../../notifications/lib/moduleNotificationDelivery'
+import { notificationTypes } from '../notifications'
 import {
   personCreateSchema,
   personUpdateSchema,
@@ -632,6 +635,21 @@ const createPersonCommand: CommandHandler<PersonCreateInput, { entityId: string;
       },
       indexer: personCrudIndexer,
       events: personCrudEvents,
+    })
+
+    await notifyOwnerOnCreateIfDifferentFromActor(ctx.container, {
+      notificationType: 'customers.person.owner_assigned',
+      types: notificationTypes,
+      ownerUserId: entity.ownerUserId,
+      actorUserId: normalizeAuthorUserId(null, ctx.auth),
+      tenantId,
+      organizationId,
+      titleVariables: { name: entity.displayName },
+      bodyVariables: { name: entity.displayName },
+      sourceEntityType: 'customers:person',
+      sourceEntityId: entity.id,
+      linkHref: `/backend/customers/people/${encodeURIComponent(entity.id)}`,
+      logLabel: 'customers.people.create:owner',
     })
 
     return { entityId: entity.id, personId: profile.id }

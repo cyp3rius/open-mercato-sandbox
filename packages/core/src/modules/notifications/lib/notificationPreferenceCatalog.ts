@@ -1,29 +1,80 @@
 import type { NotificationUserPreferenceDefinition } from '@open-mercato/shared/modules/notifications/types'
 
 export const CORE_NOTIFICATION_PREFERENCE_DEFINITIONS: Record<string, NotificationUserPreferenceDefinition> = {
+  'customers.deal.created': {
+    labelKey: 'customers.notifications.preferences.deal_created',
+    scopeFeature: 'customers.deals.create.notify',
+    lockFeature: 'customers.deals.create.notify',
+    lockedWhenRoleGrants: true,
+    audience: 'global',
+  },
+  'customers.person.owner_assigned': {
+    labelKey: 'customers.notifications.preferences.person_owner_assigned',
+    scopeFeature: 'customers.people.view',
+    audience: 'individual',
+  },
+  'customers.company.owner_assigned': {
+    labelKey: 'customers.notifications.preferences.company_owner_assigned',
+    scopeFeature: 'customers.companies.view',
+    audience: 'individual',
+  },
+  'customers.deal.owner_assigned': {
+    labelKey: 'customers.notifications.preferences.deal_owner_assigned',
+    scopeFeature: 'customers.deals.view',
+    audience: 'individual',
+  },
   'customers.deal.won': {
     labelKey: 'customers.notifications.preferences.deal_won',
     scopeFeature: 'customers.deals.view',
+    audience: 'individual',
   },
   'customers.deal.lost': {
     labelKey: 'customers.notifications.preferences.deal_lost',
     scopeFeature: 'customers.deals.view',
+    audience: 'individual',
   },
   'sales.order.created': {
     labelKey: 'sales.notifications.preferences.order_created',
+    scopeFeature: 'sales.orders.create.notify',
+    lockFeature: 'sales.orders.create.notify',
+    lockedWhenRoleGrants: true,
+    audience: 'global',
+  },
+  'sales.order.owner_assigned': {
+    labelKey: 'sales.notifications.preferences.order_owner_assigned',
     scopeFeature: 'sales.orders.view',
+    audience: 'individual',
   },
   'sales.quote.created': {
     labelKey: 'sales.notifications.preferences.quote_created',
+    scopeFeature: 'sales.quotes.create.notify',
+    lockFeature: 'sales.quotes.create.notify',
+    lockedWhenRoleGrants: true,
+    audience: 'global',
+  },
+  'sales.quote.owner_assigned': {
+    labelKey: 'sales.notifications.preferences.quote_owner_assigned',
     scopeFeature: 'sales.quotes.view',
+    audience: 'individual',
   },
   'sales.payment.received': {
     labelKey: 'sales.notifications.preferences.payment_received',
-    scopeFeature: 'sales.orders.view',
+    scopeFeature: 'sales.payments.received.notify',
+    lockFeature: 'sales.payments.received.notify',
+    lockedWhenRoleGrants: true,
+    audience: 'global',
   },
   'sales.quote.expiring': {
     labelKey: 'sales.notifications.preferences.quote_expiring',
+    scopeFeature: 'sales.quotes.expiring.notify',
+    lockFeature: 'sales.quotes.expiring.notify',
+    lockedWhenRoleGrants: true,
+    audience: 'global',
+  },
+  'sales.quote.expiring.owner': {
+    labelKey: 'sales.notifications.preferences.quote_expiring_owner',
     scopeFeature: 'sales.quotes.view',
+    audience: 'individual',
   },
   'staff.leave_request.pending': {
     labelKey: 'staff.notifications.preferences.leave_request_pending',
@@ -41,9 +92,51 @@ export const CORE_NOTIFICATION_PREFERENCE_DEFINITIONS: Record<string, Notificati
     labelKey: 'inbox_ops.notifications.preferences.proposal_created',
     scopeFeature: 'inbox_ops.proposals.view',
   },
+  'cases.case.created': {
+    labelKey: 'cases.notifications.preferences.case_created',
+    scopeFeature: 'cases.cases.create.notify',
+    lockFeature: 'cases.cases.create.notify',
+    lockedWhenRoleGrants: true,
+    audience: 'global',
+  },
+  'cases.case.created.owner': {
+    labelKey: 'cases.notifications.preferences.case_created_owner',
+    scopeFeature: 'cases.view',
+    audience: 'individual',
+  },
   'cases.case.closed': {
     labelKey: 'cases.notifications.preferences.case_closed',
+    scopeFeature: 'cases.cases.closed.notify',
+    lockFeature: 'cases.cases.closed.notify',
+    lockedWhenRoleGrants: true,
+    audience: 'global',
+  },
+  'cases.case.closed.owner': {
+    labelKey: 'cases.notifications.preferences.case_closed_owner',
     scopeFeature: 'cases.view',
+    audience: 'individual',
+  },
+  'cases.case.overdue': {
+    labelKey: 'cases.notifications.preferences.case_overdue',
+    scopeFeature: 'cases.cases.overdue.notify',
+    lockFeature: 'cases.cases.overdue.notify',
+    lockedWhenRoleGrants: true,
+    audience: 'global',
+  },
+  'cases.case.overdue.owner': {
+    labelKey: 'cases.notifications.preferences.case_overdue_owner',
+    scopeFeature: 'cases.view',
+    audience: 'individual',
+  },
+  'cases.case.stage_owner_assigned': {
+    labelKey: 'cases.notifications.preferences.case_stage_owner_assigned',
+    scopeFeature: 'cases.view',
+    audience: 'individual',
+  },
+  'cases.procedure.action_notify': {
+    labelKey: 'cases.notifications.preferences.procedure_action_notify',
+    scopeFeature: 'cases.view',
+    audience: 'individual',
   },
   'catalog.product.low_stock': {
     labelKey: 'catalog.notifications.preferences.product_low_stock',
@@ -76,6 +169,12 @@ export const CORE_NOTIFICATION_PREFERENCE_DEFINITIONS: Record<string, Notificati
   'procurement.process_task.assigned': {
     labelKey: 'procurement.notifications.preferences.task_assigned',
     scopeFeature: 'procurement.processes.view',
+    audience: 'individual',
+  },
+  'procurement.process.handler_assigned': {
+    labelKey: 'procurement.notifications.preferences.process_handler_assigned',
+    scopeFeature: 'procurement.processes.view',
+    audience: 'individual',
   },
   'procurement.process.created': {
     labelKey: 'procurement.notifications.preferences.process_created',
@@ -83,15 +182,47 @@ export const CORE_NOTIFICATION_PREFERENCE_DEFINITIONS: Record<string, Notificati
   },
   'playbooks.playbook.created': {
     labelKey: 'playbooks.notifications.preferences.playbook_created',
-    scopeFeature: 'playbooks.edit',
+    scopeFeature: 'playbooks.playbook.created.notify',
+    lockFeature: 'playbooks.playbook.created.notify',
+    lockedWhenRoleGrants: true,
+    audience: 'global',
   },
   'playbooks.playbook.version_published': {
     labelKey: 'playbooks.notifications.preferences.playbook_version_published',
-    scopeFeature: 'playbooks.view',
+    scopeFeature: 'playbooks.playbook.version_published.notify',
+    lockFeature: 'playbooks.playbook.version_published.notify',
+    lockedWhenRoleGrants: true,
+    audience: 'global',
   },
   'messages.new': {
     labelKey: 'messages.notifications.preferences.new_message',
     scopeFeature: 'messages.view',
+  },
+  'insurance_desk.lead.injected': {
+    labelKey: 'insurance_desk.notifications.preferences.lead_injected',
+    scopeFeature: 'insurance_desk.leads.inject.notify',
+    lockFeature: 'insurance_desk.leads.inject.notify',
+    lockedWhenRoleGrants: true,
+    audience: 'global',
+  },
+  'insurance_desk.policy.from_enquiry': {
+    labelKey: 'insurance_desk.notifications.preferences.policy_from_enquiry',
+    scopeFeature: 'insurance_desk.policies.from_enquiry.notify',
+    lockFeature: 'insurance_desk.policies.from_enquiry.notify',
+    lockedWhenRoleGrants: true,
+    audience: 'global',
+  },
+  'insurance_desk.policy.expiring.all': {
+    labelKey: 'insurance_desk.notifications.preferences.policy_expiring_all',
+    scopeFeature: 'insurance_desk.policies.expiring.notify',
+    lockFeature: 'insurance_desk.policies.expiring.notify',
+    lockedWhenRoleGrants: true,
+    audience: 'global',
+  },
+  'insurance_desk.policy.expiring.my': {
+    labelKey: 'insurance_desk.notifications.preferences.policy_expiring_my',
+    scopeFeature: 'insurance.policies.view',
+    audience: 'individual',
   },
   'customer_accounts.user.signup': {
     labelKey: 'customer_accounts.notifications.preferences.user_signup',

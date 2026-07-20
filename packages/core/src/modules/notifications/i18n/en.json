@@ -81,6 +81,8 @@
   "notifications.preferences.loading": "Loading notification preferences...",
   "notifications.preferences.empty": "No configurable notifications are available for your permissions.",
   "notifications.preferences.moduleAll": "All",
+  "notifications.preferences.audience.global": "Global",
+  "notifications.preferences.audience.individual": "Individual",
   "notifications.preferences.lockedByRole": "Required by role",
   "notifications.preferences.save": "Save preferences",
   "notifications.preferences.saving": "Saving...",

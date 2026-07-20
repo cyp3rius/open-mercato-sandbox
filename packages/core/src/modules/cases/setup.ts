@@ -8,6 +8,8 @@ export const setup: ModuleSetupConfig = {
       'cases.view',
       'cases.create',
       'cases.cases.create.notify',
+      'cases.cases.overdue.notify',
+      'cases.cases.closed.notify',
       'cases.edit',
       'cases.close',
       'messages.view',

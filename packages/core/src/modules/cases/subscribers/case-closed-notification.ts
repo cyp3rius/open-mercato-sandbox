@@ -1,8 +1,13 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import { resolveNotificationService } from '../../notifications/lib/notificationService'
-import { buildNotificationFromType } from '../../notifications/lib/notificationBuilder'
-import { notificationTypes } from '../notifications'
+import {
+  notifyFeatureUsersFromType,
+  notifyPersonalFromType,
+} from '../../notifications/lib/moduleNotificationDelivery'
+import {
+  CASES_CASE_CLOSED_NOTIFY_FEATURE,
+  notificationTypes,
+} from '../notifications'
 import { ServiceCase } from '../data/entities'
 
 export const metadata = {
@@ -24,36 +29,42 @@ type ResolverContext = {
 export default async function handle(payload: CaseClosedPayload, ctx: ResolverContext) {
   if (!payload.id || !payload.tenantId) return
 
-  try {
-    const em = ctx.resolve<EntityManager>('em')
-    const caseRow = await findOneWithDecryption(
-      em,
-      ServiceCase,
-      { id: payload.id, deletedAt: null },
-      undefined,
-      { tenantId: payload.tenantId, organizationId: payload.organizationId ?? null },
-    )
-    if (!caseRow?.ownerUserId) return
+  const em = ctx.resolve<EntityManager>('em')
+  const caseRow = await findOneWithDecryption(
+    em,
+    ServiceCase,
+    { id: payload.id, deletedAt: null },
+    undefined,
+    { tenantId: payload.tenantId, organizationId: payload.organizationId ?? null },
+  )
+  if (!caseRow) return
 
-    const typeDef = notificationTypes.find((type) => type.type === 'cases.case.closed')
-    if (!typeDef) return
+  const linkHref = `/backend/cases/${encodeURIComponent(caseRow.id)}`
+  const shared = {
+    types: notificationTypes,
+    tenantId: payload.tenantId,
+    organizationId: payload.organizationId ?? null,
+    titleVariables: { title: caseRow.title },
+    bodyVariables: { title: caseRow.title },
+    sourceEntityType: 'cases:case',
+    sourceEntityId: caseRow.id,
+    linkHref,
+  } as const
 
-    const notificationService = resolveNotificationService(ctx)
-    const linkHref = `/backend/cases/${encodeURIComponent(caseRow.id)}`
-    const notificationInput = buildNotificationFromType(typeDef, {
-      recipientUserId: caseRow.ownerUserId,
-      titleVariables: { title: caseRow.title },
-      bodyVariables: { title: caseRow.title },
-      sourceEntityType: 'cases:case',
-      sourceEntityId: caseRow.id,
-      linkHref,
-    })
+  await notifyFeatureUsersFromType(ctx, {
+    ...shared,
+    notificationType: 'cases.case.closed',
+    requiredFeature: CASES_CASE_CLOSED_NOTIFY_FEATURE,
+    logLabel: 'cases:case-closed-notification:global',
+  })
 
-    await notificationService.create(notificationInput, {
-      tenantId: payload.tenantId,
-      organizationId: payload.organizationId ?? null,
-    })
-  } catch (err) {
-    console.error('[cases:case-closed-notification] Failed to create notification:', err)
-  }
+  const ownerUserId = caseRow.ownerUserId?.trim()
+  if (!ownerUserId) return
+
+  await notifyPersonalFromType(ctx, {
+    ...shared,
+    notificationType: 'cases.case.closed.owner',
+    recipientUserId: ownerUserId,
+    logLabel: 'cases:case-closed-notification:owner',
+  })
 }

@@ -55,12 +55,19 @@ export type NotificationRendererProps = {
   actions: NotificationTypeAction[]
 }
 
+export type NotificationPreferenceAudience = 'global' | 'individual'
+
 export type NotificationUserPreferenceDefinition = {
   labelKey: string
   scopeFeature: string
   lockFeature?: string
   lockedWhenRoleGrants?: boolean
   defaultEnabled?: boolean
+  /**
+   * Optional delivery audience for preference UI grouping.
+   * Modules that declare both `global` and `individual` preferences render subsections.
+   */
+  audience?: NotificationPreferenceAudience
 }
 
 export type NotificationTypeDefinition = {

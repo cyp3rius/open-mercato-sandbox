@@ -5,6 +5,11 @@ export const features = [
   { id: 'customers.companies.manage', title: 'Manage companies', module: 'customers' },
   { id: 'customers.deals.view', title: 'View deals', module: 'customers' },
   { id: 'customers.deals.manage', title: 'Manage deals', module: 'customers' },
+  {
+    id: 'customers.deals.create.notify',
+    title: 'Receive team notifications when a deal is created',
+    module: 'customers',
+  },
   { id: 'customers.simple_deals.view', title: 'View simple deals', module: 'customers' },
   { id: 'customers.simple_deals.manage', title: 'Manage simple deals', module: 'customers' },
   { id: 'customers.activities.view', title: 'View activities', module: 'customers' },

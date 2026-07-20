@@ -361,6 +361,9 @@ export class SalesOrder {
   @Property({ name: 'customer_entity_id', type: 'uuid', nullable: true })
   customerEntityId?: string | null
 
+  @Property({ name: 'owner_user_id', type: 'uuid', nullable: true })
+  ownerUserId?: string | null
+
   @Property({ name: 'customer_contact_id', type: 'uuid', nullable: true })
   customerContactId?: string | null
 
@@ -870,6 +873,9 @@ export class SalesQuote {
 
   @Property({ name: 'customer_entity_id', type: 'uuid', nullable: true })
   customerEntityId?: string | null
+
+  @Property({ name: 'owner_user_id', type: 'uuid', nullable: true })
+  ownerUserId?: string | null
 
   @Property({ name: 'customer_contact_id', type: 'uuid', nullable: true })
   customerContactId?: string | null

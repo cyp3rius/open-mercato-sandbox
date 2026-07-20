@@ -24,7 +24,10 @@ export const setup: ModuleSetupConfig = {
   },
   defaultRoleFeatures: {
     admin: ['playbooks.*'],
-    employee: ['playbooks.view'],
+    employee: [
+      'playbooks.view',
+      'playbooks.playbook.version_published.notify',
+    ],
   },
 }
 

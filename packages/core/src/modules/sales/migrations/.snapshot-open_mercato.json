@@ -3163,7 +3163,7 @@
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "unique": false,
           "length": null,
           "precision": null,
@@ -3933,22 +3933,6 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
-        "offering_kind": {
-          "name": "offering_kind",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "text"
-        },
         "status": {
           "name": "status",
           "type": "text",
@@ -4092,6 +4076,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "parent_offering_id": {
+          "name": "parent_offering_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
       "name": "catalog_customer_offerings",
@@ -4109,12 +4109,23 @@
         },
         {
           "columnNames": [
-            "sales_order_line_id"
+            "sales_order_line_id",
+            "product_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "catalog_customer_offerings_line_product_unique",
+          "unique": true,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "parent_offering_id"
           ],
           "composite": false,
           "constraint": false,
-          "keyName": "catalog_customer_offerings_order_line_unique",
-          "unique": true,
+          "keyName": "catalog_customer_offerings_parent_idx",
+          "unique": false,
           "primary": false
         },
         {
@@ -8702,22 +8713,6 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "decimal"
-        },
-        "offering_kind": {
-          "name": "offering_kind",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": "'internal_service'",
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "text"
         },
         "case_templates": {
           "name": "case_templates",
@@ -45425,6 +45420,22 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
         "customer_contact_id": {
           "name": "customer_contact_id",
           "type": "uuid",
@@ -48983,6 +48994,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
       "name": "sales_quotes",
@@ -49717,6 +49744,22 @@
         },
         "order_address_editable_statuses": {
           "name": "order_address_editable_statuses",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "json"
+        },
+        "subscription_activation_order_statuses": {
+          "name": "subscription_activation_order_statuses",
           "type": "jsonb",
           "unsigned": false,
           "autoincrement": false,

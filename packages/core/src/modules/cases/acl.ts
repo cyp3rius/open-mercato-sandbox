@@ -4,7 +4,17 @@ export const features = [
   { id: 'cases.create', title: 'Create cases', module: 'cases' },
   {
     id: 'cases.cases.create.notify',
-    title: 'Receive notifications when a case is created',
+    title: 'Receive team notifications when a case is created',
+    module: 'cases',
+  },
+  {
+    id: 'cases.cases.overdue.notify',
+    title: 'Receive team notifications when a case is overdue',
+    module: 'cases',
+  },
+  {
+    id: 'cases.cases.closed.notify',
+    title: 'Receive team notifications when a case is closed',
     module: 'cases',
   },
   { id: 'cases.edit', title: 'Edit cases', module: 'cases' },

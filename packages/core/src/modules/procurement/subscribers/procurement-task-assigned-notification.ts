@@ -1,5 +1,6 @@
-import { resolveNotificationService } from '../../notifications/lib/notificationService'
-import { buildNotificationFromType } from '../../notifications/lib/notificationBuilder'
+import {
+  notifyPersonalFromType,
+} from '../../notifications/lib/moduleNotificationDelivery'
 import { notificationTypes } from '../notifications'
 import { buildProcurementProcessTaskDeepLink } from '../lib/procurementDeepLink'
 
@@ -14,6 +15,7 @@ type TaskAssignedPayload = {
   processId: string
   title: string
   assignedUserId: string
+  actorUserId?: string | null
   dueAt?: string | null
   tenantId: string
   organizationId?: string | null
@@ -26,37 +28,28 @@ type ResolverContext = {
 export default async function handle(payload: TaskAssignedPayload, ctx: ResolverContext) {
   if (!payload.assignedUserId) return
 
-  try {
-    const notificationService = resolveNotificationService(ctx)
-    const typeDef = notificationTypes.find((type) => type.type === 'procurement.process_task.assigned')
-    if (!typeDef) return
+  const actorUserId = typeof payload.actorUserId === 'string' ? payload.actorUserId.trim() : ''
+  if (actorUserId && actorUserId === payload.assignedUserId) return
 
-    const dueLine =
-      typeof payload.dueAt === 'string' && payload.dueAt.trim().length > 0
-        ? ` (${payload.dueAt})`
-        : ''
-    const deepLink = buildProcurementProcessTaskDeepLink(payload.processId, payload.taskId)
-    const notificationInput = buildNotificationFromType(typeDef, {
-      recipientUserId: payload.assignedUserId,
-      bodyVariables: {
-        title: payload.title,
-        dueLine,
-      },
-      sourceEntityType: 'procurement:process',
-      sourceEntityId: payload.processId,
-      linkHref: deepLink,
-    })
-    if (Array.isArray(notificationInput.actions) && notificationInput.actions.length > 0) {
-      notificationInput.actions = notificationInput.actions.map((action) =>
-        action.id === 'view' ? { ...action, href: deepLink } : action,
-      )
-    }
+  const dueLine =
+    typeof payload.dueAt === 'string' && payload.dueAt.trim().length > 0
+      ? ` (${payload.dueAt})`
+      : ''
+  const deepLink = buildProcurementProcessTaskDeepLink(payload.processId, payload.taskId)
 
-    await notificationService.create(notificationInput, {
-      tenantId: payload.tenantId,
-      organizationId: payload.organizationId ?? null,
-    })
-  } catch (err) {
-    console.error('[procurement:task-assigned-notification] Failed to create notification:', err)
-  }
+  await notifyPersonalFromType(ctx, {
+    notificationType: 'procurement.process_task.assigned',
+    types: notificationTypes,
+    recipientUserId: payload.assignedUserId,
+    tenantId: payload.tenantId,
+    organizationId: payload.organizationId ?? null,
+    bodyVariables: {
+      title: payload.title,
+      dueLine,
+    },
+    sourceEntityType: 'procurement:process',
+    sourceEntityId: payload.processId,
+    linkHref: deepLink,
+    logLabel: 'procurement:task-assigned-notification',
+  })
 }

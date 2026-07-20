@@ -1,4 +1,5 @@
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+import { normalizeAuthorUserId } from '@open-mercato/shared/lib/commands/helpers'
 
 export type ProcurementTaskAssignedEventPayload = {
   taskId: string
@@ -8,6 +9,7 @@ export type ProcurementTaskAssignedEventPayload = {
   dueAt: string | null
   tenantId: string
   organizationId: string
+  actorUserId?: string | null
 }
 
 export async function emitProcurementTaskAssignedEvent(
@@ -19,9 +21,14 @@ export async function emitProcurementTaskAssignedEvent(
     const eventBus = ctx.container.resolve('eventBus') as {
       emitEvent: (event: string, data: unknown, options?: { persistent?: boolean }) => Promise<void>
     }
-    // Avoid `{ persistent: true }`: the bus already delivers to subscribers synchronously, and
-    // persistence also enqueues for the events worker — the same subscriber would run twice.
-    await eventBus.emitEvent('procurement.process_task.assigned', payload)
+    const actorUserId =
+      payload.actorUserId !== undefined
+        ? payload.actorUserId
+        : normalizeAuthorUserId(null, ctx.auth)
+    await eventBus.emitEvent('procurement.process_task.assigned', {
+      ...payload,
+      actorUserId,
+    })
   } catch {
     // non-blocking
   }

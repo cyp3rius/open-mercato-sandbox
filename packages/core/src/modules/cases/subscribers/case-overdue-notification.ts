@@ -1,8 +1,13 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import { resolveNotificationService } from '../../notifications/lib/notificationService'
-import { buildNotificationFromType } from '../../notifications/lib/notificationBuilder'
-import { notificationTypes } from '../notifications'
+import {
+  notifyFeatureUsersFromType,
+  notifyPersonalFromType,
+} from '../../notifications/lib/moduleNotificationDelivery'
+import {
+  CASES_CASE_OVERDUE_NOTIFY_FEATURE,
+  notificationTypes,
+} from '../notifications'
 import { ServiceCase } from '../data/entities'
 
 export const metadata = {
@@ -25,39 +30,42 @@ type ResolverContext = {
 export default async function handle(payload: CaseOverduePayload, ctx: ResolverContext) {
   if (!payload.caseId || !payload.tenantId) return
 
-  try {
-    const em = ctx.resolve<EntityManager>('em')
-    const caseRow = await findOneWithDecryption(
-      em,
-      ServiceCase,
-      { id: payload.caseId, deletedAt: null },
-      undefined,
-      { tenantId: payload.tenantId, organizationId: payload.organizationId ?? null },
-    )
-    if (!caseRow) return
+  const em = ctx.resolve<EntityManager>('em')
+  const caseRow = await findOneWithDecryption(
+    em,
+    ServiceCase,
+    { id: payload.caseId, deletedAt: null },
+    undefined,
+    { tenantId: payload.tenantId, organizationId: payload.organizationId ?? null },
+  )
+  if (!caseRow) return
 
-    const recipientUserId = payload.ownerUserId?.trim() || caseRow.ownerUserId?.trim() || ''
-    if (!recipientUserId.length) return
+  const linkHref = `/backend/cases/${encodeURIComponent(caseRow.id)}`
+  const shared = {
+    types: notificationTypes,
+    tenantId: payload.tenantId,
+    organizationId: payload.organizationId ?? null,
+    titleVariables: { title: caseRow.title },
+    bodyVariables: { title: caseRow.title },
+    sourceEntityType: 'cases:case',
+    sourceEntityId: caseRow.id,
+    linkHref,
+  } as const
 
-    const typeDef = notificationTypes.find((type) => type.type === 'cases.case.overdue')
-    if (!typeDef) return
+  await notifyFeatureUsersFromType(ctx, {
+    ...shared,
+    notificationType: 'cases.case.overdue',
+    requiredFeature: CASES_CASE_OVERDUE_NOTIFY_FEATURE,
+    logLabel: 'cases:case-overdue-notification:global',
+  })
 
-    const notificationService = resolveNotificationService(ctx)
-    const linkHref = `/backend/cases/${encodeURIComponent(caseRow.id)}`
-    const notificationInput = buildNotificationFromType(typeDef, {
-      recipientUserId,
-      titleVariables: { title: caseRow.title },
-      bodyVariables: { title: caseRow.title },
-      sourceEntityType: 'cases:case',
-      sourceEntityId: caseRow.id,
-      linkHref,
-    })
+  const ownerUserId = payload.ownerUserId?.trim() || caseRow.ownerUserId?.trim() || ''
+  if (!ownerUserId) return
 
-    await notificationService.create(notificationInput, {
-      tenantId: payload.tenantId,
-      organizationId: payload.organizationId ?? null,
-    })
-  } catch (err) {
-    console.error('[cases:case-overdue-notification] Failed to create notification:', err)
-  }
+  await notifyPersonalFromType(ctx, {
+    ...shared,
+    notificationType: 'cases.case.overdue.owner',
+    recipientUserId: ownerUserId,
+    logLabel: 'cases:case-overdue-notification:owner',
+  })
 }

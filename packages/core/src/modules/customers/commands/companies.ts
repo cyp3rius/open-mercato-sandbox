@@ -7,6 +7,7 @@ import {
   emitCrudUndoSideEffects,
   requireId,
   snapshotsEqual,
+  normalizeAuthorUserId,
 } from '@open-mercato/shared/lib/commands/helpers'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { EntityManager } from '@mikro-orm/postgresql'
@@ -47,6 +48,8 @@ import {
   type QueryIndexEventEntry,
 } from './shared'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
+import { notifyOwnerOnCreateIfDifferentFromActor } from '../../notifications/lib/moduleNotificationDelivery'
+import { notificationTypes } from '../notifications'
 import {
   loadCustomFieldSnapshot,
   buildCustomFieldResetMap,
@@ -488,6 +491,21 @@ const createCompanyCommand: CommandHandler<CompanyCreateInput, { entityId: strin
       },
       indexer: companyCrudIndexer,
       events: companyCrudEvents,
+    })
+
+    await notifyOwnerOnCreateIfDifferentFromActor(ctx.container, {
+      notificationType: 'customers.company.owner_assigned',
+      types: notificationTypes,
+      ownerUserId: entity.ownerUserId,
+      actorUserId: normalizeAuthorUserId(null, ctx.auth),
+      tenantId: entity.tenantId,
+      organizationId: entity.organizationId,
+      titleVariables: { name: entity.displayName },
+      bodyVariables: { name: entity.displayName },
+      sourceEntityType: 'customers:company',
+      sourceEntityId: entity.id,
+      linkHref: `/backend/customers/companies/${encodeURIComponent(entity.id)}`,
+      logLabel: 'customers.companies.create:owner',
     })
 
     return { entityId: entity.id, companyId: profile.id }

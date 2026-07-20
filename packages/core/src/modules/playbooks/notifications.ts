@@ -1,5 +1,16 @@
 import type { NotificationTypeDefinition } from '@open-mercato/shared/modules/notifications/types'
 
+export const PLAYBOOKS_CREATED_NOTIFY_FEATURE = 'playbooks.playbook.created.notify'
+export const PLAYBOOKS_VERSION_PUBLISHED_NOTIFY_FEATURE = 'playbooks.playbook.version_published.notify'
+
+const playbookViewAction = {
+  id: 'open',
+  labelKey: 'playbooks.notifications.actions.openPlaybook',
+  variant: 'outline' as const,
+  href: '/backend/playbooks/{sourceEntityId}',
+  icon: 'external-link',
+}
+
 export const notificationTypes: NotificationTypeDefinition[] = [
   {
     type: 'playbooks.playbook.created',
@@ -8,15 +19,14 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     bodyKey: 'playbooks.notifications.playbook.created.body',
     icon: 'book-open',
     severity: 'info',
-    actions: [
-      {
-        id: 'open',
-        labelKey: 'playbooks.notifications.actions.openPlaybook',
-        variant: 'outline',
-        href: '/backend/playbooks/{sourceEntityId}',
-        icon: 'external-link',
-      },
-    ],
+    userPreference: {
+      labelKey: 'playbooks.notifications.preferences.playbook_created',
+      scopeFeature: PLAYBOOKS_CREATED_NOTIFY_FEATURE,
+      lockFeature: PLAYBOOKS_CREATED_NOTIFY_FEATURE,
+      lockedWhenRoleGrants: true,
+      audience: 'global',
+    },
+    actions: [playbookViewAction],
     linkHref: '/backend/playbooks/{sourceEntityId}',
     expiresAfterHours: 168,
   },
@@ -27,15 +37,14 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     bodyKey: 'playbooks.notifications.playbook.versionPublished.body',
     icon: 'book-open',
     severity: 'info',
-    actions: [
-      {
-        id: 'open',
-        labelKey: 'playbooks.notifications.actions.openPlaybook',
-        variant: 'outline',
-        href: '/backend/playbooks/{sourceEntityId}',
-        icon: 'external-link',
-      },
-    ],
+    userPreference: {
+      labelKey: 'playbooks.notifications.preferences.playbook_version_published',
+      scopeFeature: PLAYBOOKS_VERSION_PUBLISHED_NOTIFY_FEATURE,
+      lockFeature: PLAYBOOKS_VERSION_PUBLISHED_NOTIFY_FEATURE,
+      lockedWhenRoleGrants: true,
+      audience: 'global',
+    },
+    actions: [playbookViewAction],
     linkHref: '/backend/playbooks/{sourceEntityId}',
     expiresAfterHours: 168,
   },

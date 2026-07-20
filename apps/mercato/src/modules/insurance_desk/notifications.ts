@@ -4,6 +4,14 @@ export const INSURANCE_DESK_LEAD_INJECT_NOTIFY_FEATURE = 'insurance_desk.leads.i
 export const INSURANCE_DESK_POLICY_FROM_ENQUIRY_NOTIFY_FEATURE = 'insurance_desk.policies.from_enquiry.notify'
 export const INSURANCE_DESK_POLICY_EXPIRING_ALL_NOTIFY_FEATURE = 'insurance_desk.policies.expiring.notify'
 
+const policyViewAction = {
+  id: 'open-policy',
+  labelKey: 'insurance_desk.policies.viewDetails',
+  variant: 'outline' as const,
+  href: '/backend/insurance-desk/policies/{sourceEntityId}',
+  icon: 'external-link',
+}
+
 export const notificationTypes: NotificationTypeDefinition[] = [
   {
     type: 'insurance_desk.lead.injected',
@@ -14,9 +22,10 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     severity: 'info',
     userPreference: {
       labelKey: 'insurance_desk.notifications.preferences.lead_injected',
-      scopeFeature: 'insurance_desk.access',
+      scopeFeature: INSURANCE_DESK_LEAD_INJECT_NOTIFY_FEATURE,
       lockFeature: INSURANCE_DESK_LEAD_INJECT_NOTIFY_FEATURE,
       lockedWhenRoleGrants: true,
+      audience: 'global',
     },
     actions: [
       {
@@ -39,19 +48,30 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     severity: 'success',
     userPreference: {
       labelKey: 'insurance_desk.notifications.preferences.policy_from_enquiry',
-      scopeFeature: 'insurance_desk.access',
+      scopeFeature: INSURANCE_DESK_POLICY_FROM_ENQUIRY_NOTIFY_FEATURE,
       lockFeature: INSURANCE_DESK_POLICY_FROM_ENQUIRY_NOTIFY_FEATURE,
       lockedWhenRoleGrants: true,
+      audience: 'global',
     },
-    actions: [
-      {
-        id: 'open-policy',
-        labelKey: 'insurance_desk.policies.viewDetails',
-        variant: 'outline',
-        href: '/backend/insurance-desk/policies/{sourceEntityId}',
-        icon: 'external-link',
-      },
-    ],
+    actions: [policyViewAction],
+    linkHref: '/backend/insurance-desk/policies/{sourceEntityId}',
+    expiresAfterHours: 168,
+  },
+  {
+    type: 'insurance_desk.policy.expiring.all',
+    module: 'insurance_desk',
+    titleKey: 'insurance_desk.notifications.policy_expiring.all.title',
+    bodyKey: 'insurance_desk.notifications.policy_expiring.all.body',
+    icon: 'shield',
+    severity: 'warning',
+    userPreference: {
+      labelKey: 'insurance_desk.notifications.preferences.policy_expiring_all',
+      scopeFeature: INSURANCE_DESK_POLICY_EXPIRING_ALL_NOTIFY_FEATURE,
+      lockFeature: INSURANCE_DESK_POLICY_EXPIRING_ALL_NOTIFY_FEATURE,
+      lockedWhenRoleGrants: true,
+      audience: 'global',
+    },
+    actions: [policyViewAction],
     linkHref: '/backend/insurance-desk/policies/{sourceEntityId}',
     expiresAfterHours: 168,
   },
@@ -65,41 +85,9 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     userPreference: {
       labelKey: 'insurance_desk.notifications.preferences.policy_expiring_my',
       scopeFeature: 'insurance.policies.view',
+      audience: 'individual',
     },
-    actions: [
-      {
-        id: 'open-policy',
-        labelKey: 'insurance_desk.policies.viewDetails',
-        variant: 'outline',
-        href: '/backend/insurance-desk/policies/{sourceEntityId}',
-        icon: 'external-link',
-      },
-    ],
-    linkHref: '/backend/insurance-desk/policies/{sourceEntityId}',
-    expiresAfterHours: 168,
-  },
-  {
-    type: 'insurance_desk.policy.expiring.all',
-    module: 'insurance_desk',
-    titleKey: 'insurance_desk.notifications.policy_expiring.all.title',
-    bodyKey: 'insurance_desk.notifications.policy_expiring.all.body',
-    icon: 'shield',
-    severity: 'warning',
-    userPreference: {
-      labelKey: 'insurance_desk.notifications.preferences.policy_expiring_all',
-      scopeFeature: 'insurance_desk.access',
-      lockFeature: INSURANCE_DESK_POLICY_EXPIRING_ALL_NOTIFY_FEATURE,
-      lockedWhenRoleGrants: true,
-    },
-    actions: [
-      {
-        id: 'open-policy',
-        labelKey: 'insurance_desk.policies.viewDetails',
-        variant: 'outline',
-        href: '/backend/insurance-desk/policies/{sourceEntityId}',
-        icon: 'external-link',
-      },
-    ],
+    actions: [policyViewAction],
     linkHref: '/backend/insurance-desk/policies/{sourceEntityId}',
     expiresAfterHours: 168,
   },

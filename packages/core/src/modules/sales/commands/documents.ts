@@ -8,6 +8,7 @@ import {
   buildChanges,
   emitCrudSideEffects,
   requireId,
+  normalizeAuthorUserId,
   type CrudEventsConfig,
 } from "@open-mercato/shared/lib/commands/helpers";
 import type { EntityManager } from "@mikro-orm/postgresql";
@@ -19,8 +20,15 @@ import {
   invalidateCrudCache,
 } from "@open-mercato/shared/lib/crud/cache";
 import { resolveTranslations } from "@open-mercato/shared/lib/i18n/server";
-import { resolveNotificationService } from "../../notifications/lib/notificationService";
-import { buildFeatureNotificationFromType } from "../../notifications/lib/notificationBuilder";
+import {
+  notifyFeatureUsersFromType,
+  notifyOwnerOnCreateIfDifferentFromActor,
+} from "../../notifications/lib/moduleNotificationDelivery";
+import {
+  notificationTypes,
+  SALES_ORDER_CREATE_NOTIFY_FEATURE,
+  SALES_QUOTE_CREATE_NOTIFY_FEATURE,
+} from "../notifications";
 import { setRecordCustomFields } from "@open-mercato/core/modules/entities/lib/helpers";
 import { loadCustomFieldValues } from "@open-mercato/shared/lib/crud/custom-fields";
 import { normalizeCustomFieldValues } from "@open-mercato/shared/lib/custom-fields/normalize";
@@ -108,7 +116,6 @@ import { resolveDictionaryEntryValue } from "../lib/dictionaries";
 import { resolveStatusEntryIdByValue } from "../lib/statusHelpers";
 import { SalesDocumentNumberGenerator } from "../services/salesDocumentNumberGenerator";
 import { loadSalesSettings } from "./settings";
-import { notificationTypes } from "../notifications";
 import {
   REFERENCE_UNIT_CODES,
   canonicalizeUnitCode,
@@ -194,6 +201,7 @@ type QuoteGraphSnapshot = {
     statusEntryId: string | null;
     status: string | null;
     customerEntityId: string | null;
+    ownerUserId: string | null;
     customerContactId: string | null;
     customerSnapshot: Record<string, unknown> | null;
     billingAddressId: string | null;
@@ -299,6 +307,7 @@ type OrderGraphSnapshot = {
     paymentStatusEntryId: string | null;
     paymentStatus: string | null;
     customerEntityId: string | null;
+    ownerUserId: string | null;
     customerContactId: string | null;
     customerSnapshot: Record<string, unknown> | null;
     billingAddressId: string | null;
@@ -448,6 +457,7 @@ export const documentUpdateSchema = z
   .object({
     id: z.string().uuid(),
     customerEntityId: z.string().uuid().nullable().optional(),
+    ownerUserId: z.string().uuid().nullable().optional(),
     customerContactId: z.string().uuid().nullable().optional(),
     customerSnapshot: z.record(z.string(), z.unknown()).nullable().optional(),
     metadata: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -867,6 +877,13 @@ async function applyDocumentUpdate({
   }
   if (kind === "quote" && typeof input.quoteNumber === "string") {
     (entity as SalesQuote).quoteNumber = input.quoteNumber;
+  }
+  if (input.ownerUserId !== undefined) {
+    if (kind === "quote") {
+      (entity as SalesQuote).ownerUserId = input.ownerUserId ?? null;
+    } else {
+      (entity as SalesOrder).ownerUserId = input.ownerUserId ?? null;
+    }
   }
 
   if (input.customerEntityId !== undefined) {
@@ -1293,6 +1310,7 @@ async function loadQuoteSnapshot(
       statusEntryId: quote.statusEntryId ?? null,
       status: quote.status ?? null,
       customerEntityId: quote.customerEntityId ?? null,
+      ownerUserId: quote.ownerUserId ?? null,
       customerContactId: quote.customerContactId ?? null,
       customerSnapshot: quote.customerSnapshot
         ? cloneJson(quote.customerSnapshot)
@@ -1565,6 +1583,7 @@ async function loadOrderSnapshot(
       paymentStatusEntryId: order.paymentStatusEntryId ?? null,
       paymentStatus: order.paymentStatus ?? null,
       customerEntityId: order.customerEntityId ?? null,
+      ownerUserId: order.ownerUserId ?? null,
       customerContactId: order.customerContactId ?? null,
       customerSnapshot: order.customerSnapshot
         ? cloneJson(order.customerSnapshot)
@@ -3313,8 +3332,10 @@ function buildDocumentUpdateChangeKeys(kind: SalesDocumentKind, input: DocumentU
   const keys = new Set<string>();
   if (kind === "order") {
     if (input.orderNumber !== undefined) keys.add("orderNumber");
+    if (input.ownerUserId !== undefined) keys.add("ownerUserId");
   } else {
     if (input.quoteNumber !== undefined) keys.add("quoteNumber");
+    if (input.ownerUserId !== undefined) keys.add("ownerUserId");
   }
   if (input.statusEntryId !== undefined) {
     keys.add("statusEntryId");
@@ -3445,6 +3466,7 @@ function applyQuoteSnapshot(
   quote.statusEntryId = snapshot.statusEntryId ?? null;
   quote.status = snapshot.status ?? null;
   quote.customerEntityId = snapshot.customerEntityId ?? null;
+  quote.ownerUserId = snapshot.ownerUserId ?? null;
   quote.customerContactId = snapshot.customerContactId ?? null;
   quote.customerSnapshot = snapshot.customerSnapshot
     ? cloneJson(snapshot.customerSnapshot)
@@ -3506,6 +3528,7 @@ function applyOrderSnapshot(
   order.paymentStatusEntryId = snapshot.paymentStatusEntryId ?? null;
   order.paymentStatus = snapshot.paymentStatus ?? null;
   order.customerEntityId = snapshot.customerEntityId ?? null;
+  order.ownerUserId = snapshot.ownerUserId ?? null;
   order.customerContactId = snapshot.customerContactId ?? null;
   order.customerSnapshot = snapshot.customerSnapshot
     ? cloneJson(snapshot.customerSnapshot)
@@ -3580,6 +3603,7 @@ async function restoreQuoteGraph(
       statusEntryId: snapshot.quote.statusEntryId ?? null,
       status: snapshot.quote.status ?? null,
       customerEntityId: snapshot.quote.customerEntityId ?? null,
+      ownerUserId: snapshot.quote.ownerUserId ?? null,
       customerContactId: snapshot.quote.customerContactId ?? null,
       customerSnapshot: snapshot.quote.customerSnapshot
         ? cloneJson(snapshot.quote.customerSnapshot)
@@ -3874,6 +3898,7 @@ async function restoreOrderGraph(
       paymentStatusEntryId: snapshot.order.paymentStatusEntryId ?? null,
       paymentStatus: snapshot.order.paymentStatus ?? null,
       customerEntityId: snapshot.order.customerEntityId ?? null,
+      ownerUserId: snapshot.order.ownerUserId ?? null,
       customerContactId: snapshot.order.customerContactId ?? null,
       customerSnapshot: snapshot.order.customerSnapshot
         ? cloneJson(snapshot.order.customerSnapshot)
@@ -4247,6 +4272,7 @@ const createQuoteCommand: CommandHandler<
       statusEntryId: parsed.statusEntryId ?? null,
       status: quoteStatus,
       customerEntityId: parsed.customerEntityId ?? null,
+      ownerUserId: parsed.ownerUserId ?? null,
       customerContactId: parsed.customerContactId ?? null,
       customerSnapshot: resolvedCustomerSnapshot
         ? cloneJson(resolvedCustomerSnapshot)
@@ -4450,42 +4476,43 @@ const createQuoteCommand: CommandHandler<
     });
     await em.flush();
 
-    // Create notification for users with sales.quotes.manage feature
-    try {
-      const notificationService = resolveNotificationService(ctx.container);
-      const typeDef = notificationTypes.find(
-        (type) => type.type === "sales.quote.created",
-      );
-      if (typeDef) {
-        const totalAmount =
-          quote.grandTotalGrossAmount && quote.currencyCode
-            ? `${quote.grandTotalGrossAmount} ${quote.currencyCode}`
-            : "";
-        const totalDisplay = totalAmount ? ` (${totalAmount})` : "";
-        const notificationInput = buildFeatureNotificationFromType(typeDef, {
-          requiredFeature: "sales.quotes.manage",
-          bodyVariables: {
-            quoteNumber: quote.quoteNumber,
-            total: totalDisplay,
-            totalAmount,
-          },
-          sourceEntityType: "sales:quote",
-          sourceEntityId: quote.id,
-          linkHref: `/backend/sales/quotes/${quote.id}`,
-        });
+    // Create notification for users with sales.quotes.create.notify feature
+    const totalAmount =
+      quote.grandTotalGrossAmount && quote.currencyCode
+        ? `${quote.grandTotalGrossAmount} ${quote.currencyCode}`
+        : "";
+    const totalDisplay = totalAmount ? ` (${totalAmount})` : "";
+    await notifyFeatureUsersFromType(ctx.container, {
+      notificationType: "sales.quote.created",
+      types: notificationTypes,
+      requiredFeature: SALES_QUOTE_CREATE_NOTIFY_FEATURE,
+      tenantId: quote.tenantId,
+      organizationId: quote.organizationId ?? null,
+      bodyVariables: {
+        quoteNumber: quote.quoteNumber,
+        total: totalDisplay,
+        totalAmount,
+      },
+      sourceEntityType: "sales:quote",
+      sourceEntityId: quote.id,
+      linkHref: `/backend/sales/quotes/${quote.id}`,
+      logLabel: "sales.quotes.create",
+    });
 
-        await notificationService.createForFeature(notificationInput, {
-          tenantId: quote.tenantId,
-          organizationId: quote.organizationId ?? null,
-        });
-      }
-    } catch (err) {
-      // Notification creation is non-critical, don't fail the command
-      console.error(
-        "[sales.quotes.create] Failed to create notification:",
-        err,
-      );
-    }
+    await notifyOwnerOnCreateIfDifferentFromActor(ctx.container, {
+      notificationType: "sales.quote.owner_assigned",
+      types: notificationTypes,
+      ownerUserId: quote.ownerUserId,
+      actorUserId: normalizeAuthorUserId(null, ctx.auth),
+      tenantId: quote.tenantId,
+      organizationId: quote.organizationId,
+      titleVariables: { quoteNumber: quote.quoteNumber },
+      bodyVariables: { quoteNumber: quote.quoteNumber },
+      sourceEntityType: "sales:quote",
+      sourceEntityId: quote.id,
+      linkHref: `/backend/sales/quotes/${encodeURIComponent(quote.id)}`,
+      logLabel: "sales.quotes.create:owner",
+    });
 
     // Emit CRUD side effects to trigger workflow event listeners
     const dataEngine = ctx.container.resolve("dataEngine") as DataEngine;
@@ -5141,6 +5168,7 @@ const createOrderCommand: CommandHandler<
       paymentStatusEntryId: parsed.paymentStatusEntryId ?? null,
       paymentStatus,
       customerEntityId: parsed.customerEntityId ?? null,
+      ownerUserId: parsed.ownerUserId ?? null,
       customerContactId: parsed.customerContactId ?? null,
       customerSnapshot: resolvedCustomerSnapshot
         ? cloneJson(resolvedCustomerSnapshot)
@@ -5359,42 +5387,43 @@ const createOrderCommand: CommandHandler<
     });
     await em.flush();
 
-    // Create notification for users with sales.orders.manage feature
-    try {
-      const notificationService = resolveNotificationService(ctx.container);
-      const typeDef = notificationTypes.find(
-        (type) => type.type === "sales.order.created",
-      );
-      if (typeDef) {
-        const totalAmount =
-          order.grandTotalGrossAmount && order.currencyCode
-            ? `${order.grandTotalGrossAmount} ${order.currencyCode}`
-            : "";
-        const totalDisplay = totalAmount ? ` (${totalAmount})` : "";
-        const notificationInput = buildFeatureNotificationFromType(typeDef, {
-          requiredFeature: "sales.orders.manage",
-          bodyVariables: {
-            orderNumber: order.orderNumber,
-            total: totalDisplay,
-            totalAmount,
-          },
-          sourceEntityType: "sales:order",
-          sourceEntityId: order.id,
-          linkHref: `/backend/sales/orders/${order.id}`,
-        });
+    // Create notification for users with sales.orders.create.notify feature
+    const totalAmount =
+      order.grandTotalGrossAmount && order.currencyCode
+        ? `${order.grandTotalGrossAmount} ${order.currencyCode}`
+        : "";
+    const totalDisplay = totalAmount ? ` (${totalAmount})` : "";
+    await notifyFeatureUsersFromType(ctx.container, {
+      notificationType: "sales.order.created",
+      types: notificationTypes,
+      requiredFeature: SALES_ORDER_CREATE_NOTIFY_FEATURE,
+      tenantId: order.tenantId,
+      organizationId: order.organizationId ?? null,
+      bodyVariables: {
+        orderNumber: order.orderNumber,
+        total: totalDisplay,
+        totalAmount,
+      },
+      sourceEntityType: "sales:order",
+      sourceEntityId: order.id,
+      linkHref: `/backend/sales/orders/${order.id}`,
+      logLabel: "sales.orders.create",
+    });
 
-        await notificationService.createForFeature(notificationInput, {
-          tenantId: order.tenantId,
-          organizationId: order.organizationId ?? null,
-        });
-      }
-    } catch (err) {
-      // Notification creation is non-critical, don't fail the command
-      console.error(
-        "[sales.orders.create] Failed to create notification:",
-        err,
-      );
-    }
+    await notifyOwnerOnCreateIfDifferentFromActor(ctx.container, {
+      notificationType: "sales.order.owner_assigned",
+      types: notificationTypes,
+      ownerUserId: order.ownerUserId,
+      actorUserId: normalizeAuthorUserId(null, ctx.auth),
+      tenantId: order.tenantId,
+      organizationId: order.organizationId,
+      titleVariables: { orderNumber: order.orderNumber },
+      bodyVariables: { orderNumber: order.orderNumber },
+      sourceEntityType: "sales:order",
+      sourceEntityId: order.id,
+      linkHref: `/backend/sales/orders/${encodeURIComponent(order.id)}`,
+      logLabel: "sales.orders.create:owner",
+    });
 
     // Emit CRUD side effects to trigger workflow event listeners
     const dataEngine = ctx.container.resolve("dataEngine") as DataEngine;
@@ -5730,6 +5759,7 @@ const convertQuoteToOrderCommand: CommandHandler<
       paymentStatusEntryId: null,
       paymentStatus: null,
       customerEntityId: snapshot.quote.customerEntityId ?? null,
+      ownerUserId: snapshot.quote.ownerUserId ?? null,
       customerContactId: snapshot.quote.customerContactId ?? null,
       customerSnapshot: snapshot.quote.customerSnapshot
         ? cloneJson(snapshot.quote.customerSnapshot)
