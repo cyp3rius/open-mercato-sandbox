@@ -72,6 +72,7 @@ function registerStatusDictionaryCommands(kind: SalesDictionaryKind): void {
   })
 }
 
+registerStatusDictionaryCommands('quote-status')
 registerStatusDictionaryCommands('order-status')
 registerStatusDictionaryCommands('order-line-status')
 registerStatusDictionaryCommands('shipment-status')

@@ -17,12 +17,18 @@ Procedura przyjęcia nowego klienta do systemu.
 
 1. Kontakt z klientem — zbieramy nazwę oraz informację, czy to firma.
 2. Dla firm — dodatkowo pobieramy NIP.
-3. Wprowadzamy rekord klienta do systemu.
+3. Wybieramy lub tworzymy rekord klienta (`select_entity`).
 4. Jeżeli klient jest zainteresowany usługą konsjerż — uruchamiamy proces konsjerż.
+
+## Powiązane procedury
+
+- `sales-customer-meeting` — pełna ścieżka od spotkania do wydania
+- `client-service-intake` — wprowadzenie do obsługi (pojazd, terminy, opiekun)
+- `client-guardian-care` — bieżąca opieka opiekuna
 
 ## Luki (TODO)
 
-- **Proces konsjerż** — nie jest jeszcze zdefiniowany jako osobna procedura. W gałęzi „tak” poniżej zostawiona jest pusta luka do uzupełnienia (bez `invoke_procedure` / bez slugów playbooka).
+- **Abonament konsjerż vs jednorazowa sprzedaż** — warsztat nie rozróżnia ścieżek cenowych; obecnie „zainteresowany konsjerżem” uruchamia intake obsługi.
 
 ## Procedure
 
@@ -46,30 +52,26 @@ Procedura przyjęcia nowego klienta do systemu.
       label: Pobierz NIP
       actionVariant: task
       actionCode: task
-      taskTitle: Pobierz NIP firmy i zapisz w notatce sprawy
+      taskTitle: Pobierz NIP firmy (do uzupełnienia przy tworzeniu rekordu)
   no: []
 
-- id: create-customer-record
-  kind: action
-  label: Wprowadź rekord klienta do systemu
-  actionVariant: task
-  actionCode: task
-  taskTitle: Utwórz rekord klienta w CRM (osoba lub firma) na podstawie zebranych danych
+- id: pick-or-create-customer
+  kind: select_entity
+  label: Wybierz lub utwórz klienta
+  entityKind: customer
+  required: true
+  allowCreate: true
 
 - id: interested-in-concierge
   kind: condition
   label: Klient zainteresowany usługą konsjerż?
   conditionMode: manual
   yes:
-    - id: concierge-process-gap
-      kind: action
-      label: TODO — proces konsjerż (niezdefiniowany)
-      actionVariant: other
-      actionCode: other
-      otherInstructions: |
-        TODO: Uzupełnij tę lukę, gdy procedura konsjerż będzie gotowa.
-        Preferowane: zamień ten krok na invoke_procedure z playbookSlugs wskazującymi
-        na procedurę konsjerż. Na razie nie uruchamiaj żadnego podprocesu.
+    - id: start-service-intake
+      kind: invoke_procedure
+      label: Wprowadzenie do obsługi konsjerż
+      playbookSlugs:
+        - client-service-intake
   no: []
 
 - id: end

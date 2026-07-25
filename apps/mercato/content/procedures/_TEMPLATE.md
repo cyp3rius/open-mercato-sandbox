@@ -22,20 +22,21 @@ Stable step identity is the local kebab `id` within the playbook `slug`
 - id: start
   kind: start
 
+# When the operator must pick or create a CRM record, use select_entity (not a task).
+# entityKind: customer | resource | sales_order | sales_quote | sales_deal | insurance_policy
+- id: pick-customer
+  kind: select_entity
+  label: Select customer
+  entityKind: customer
+  required: true
+  allowCreate: true
+
 - id: confirm-intake
   kind: action
   label: Confirm intake details
   actionVariant: task
   actionCode: task
   taskTitle: Confirm intake details with the customer
-
-# Optional: select or create a related record (customer, resource, order, quote, deal, policy)
-# - id: pick-customer
-#   kind: select_entity
-#   label: Select customer
-#   entityKind: customer
-#   required: true
-#   allowCreate: true
 
 - id: end
   kind: end

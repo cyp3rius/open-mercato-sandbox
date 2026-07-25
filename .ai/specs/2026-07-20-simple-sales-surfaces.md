@@ -13,7 +13,7 @@
 - `/backend/customers/simple-deals` (+ create / `[id]`) — proste szanse
 - `/backend/catalog/simple-offerings` — lista `CatalogCustomerOffering` (+ linki z karty klienta)
 - Settings (sales): **który status zamówienia** uruchamia aktywację **linii subscription**
-- CTA: deal → quote, quote → order (1-click, reuse convert)
+- CTA: deal → quote, quote → order (prefill create; save to create + link)
 
 **Out of scope (v1):**
 - Fork danych / nowe tabele dokumentów
@@ -32,7 +32,7 @@
 | 5 | Activate **only subscription product lines** that have start/end dates |
 | 6 | **Prices required** (net/gross + currency + tax as needed for existing line validators) |
 | 7 | Simple deal = title + customer + pipeline status + links; convertible to quote (lead→deal→order narrative via pipeline + convert CTAs) |
-| 8 | Quote → order = **one button**, reuse `sales.quotes.convert_to_order` / `POST /api/sales/quotes/convert` |
+| 8 | Quote → order = **navigate to simple order create** with quote prefill (customer, owner, currency, lines); link on save via quote `metadata.simpleOrderId` — does **not** call destructive `sales.quotes.convert_to_order` from simple UI |
 | 9 | Deal → quote v1: **quote header only** (no lines); operator adds lines on simple quote |
 | 10 | Simple offerings sidebar under **Customers** group (`customers.nav.group`); routes may live in `catalog` module |
 | 11 | API `requireFeatures`: **OR** classic feature **or** matching `simple_*` feature |
@@ -97,8 +97,8 @@ flowchart LR
   Order -->|"status ∈ activationStatuses"| Offerings["subscription CatalogCustomerOffering"]
 ```
 
-1. **Deal → Quote:** new command e.g. `customers.deals.convert_to_quote` (or `sales.quotes.create_from_deal`) — creates quote draft, returns `quoteId`, redirects to `/backend/sales/simple-quotes/[id]`.
-2. **Quote → Order:** existing `sales.quotes.convert_to_order` via `POST /api/sales/quotes/convert`; redirect to `/backend/sales/simple-orders/[id]`.
+1. **Deal → Quote:** navigate to simple quote create with prefill (`sourceDealId`, customer, owner, currency); link (`payload.simpleQuoteId`) on quote save.
+2. **Quote → Order:** navigate to `/backend/sales/simple-orders/create?sourceQuoteId=…` with header + lines prefilled; on order save set order `metadata.sourceQuoteId` and quote `metadata.simpleOrderId`. Full-doc convert API remains for classic sales UI / public accept.
 
 ### Activation (settings-driven)
 
@@ -291,3 +291,4 @@ See Phases 1–5. Each phase ends with app runnable and tests for that slice.
 | 2026-07-20 | Phases 2–5: simple orders/quotes/deals/offerings UI, ACL OR on APIs, deal→quote convert, offerings list |
 | 2026-07-20 | Backend UI conventions: DataTable hubs (RBAC, perspective, ConfirmDialog), CrudForm + EntitySearchCombobox document editor, DealForm shell (no double header) |
 | 2026-07-20 | Product detail CTAs → simple quote/order create with `?productId=` line prefill |
+| 2026-07-21 | Simple convert CTAs: deep-link with `sourceDealId` / `sourceOfferId` only; create forms fetch prefill from API |

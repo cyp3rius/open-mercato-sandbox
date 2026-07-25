@@ -14,6 +14,12 @@ import { E } from '#generated/entities.ids.generated'
 import { collectCustomFieldValues } from '@open-mercato/ui/backend/utils/customFieldValues'
 import { useCurrencyDictionary } from './hooks/useCurrencyDictionary'
 import { DictionaryEntrySelect } from '@open-mercato/core/modules/dictionaries/components/DictionaryEntrySelect'
+import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
+import {
+  mergeEntitySearchOption,
+  remoteSearchAuthUsers,
+  resolveUserDisplayLabel,
+} from '@open-mercato/core/modules/procurement/lib/procurementEntitySearch'
 import { normalizeCustomFieldSubmitValue } from './customFieldUtils'
 
 export type DealFormBaseValues = {
@@ -27,6 +33,7 @@ export type DealFormBaseValues = {
   probability?: number | null
   expectedCloseAt?: string | null
   description?: string | null
+  ownerUserId: string
   personIds?: string[]
   companyIds?: string[]
 }
@@ -157,6 +164,11 @@ const schema = z.object({
     )
     .optional(),
   description: z.string().max(4000, 'customers.people.detail.deals.descriptionTooLong').optional(),
+  ownerUserId: z
+    .string()
+    .trim()
+    .min(1, 'customers.form.ownerRequired')
+    .uuid('customers.form.ownerRequired'),
   personIds: z.array(z.string().trim().min(1)).optional(),
   companyIds: z.array(z.string().trim().min(1)).optional(),
 }).passthrough()
@@ -644,6 +656,46 @@ export function DealForm({
       required: true,
     },
     {
+      id: 'ownerUserId',
+      label: t('customers.form.owner', 'Guardian'),
+      type: 'custom',
+      required: true,
+      layout: 'half',
+      component: ({ value, setValue, disabled: fieldDisabled }) => {
+        const ownerUserId = typeof value === 'string' ? value : ''
+        const [ownerLabel, setOwnerLabel] = React.useState(ownerUserId)
+        React.useEffect(() => {
+          let cancelled = false
+          if (!ownerUserId.trim()) {
+            setOwnerLabel('')
+            return
+          }
+          void resolveUserDisplayLabel(ownerUserId).then((label) => {
+            if (!cancelled) setOwnerLabel(label ?? ownerUserId)
+          })
+          return () => {
+            cancelled = true
+          }
+        }, [ownerUserId])
+        return (
+          <EntitySearchCombobox
+            value={ownerUserId}
+            onChange={(next) => setValue(next)}
+            options={mergeEntitySearchOption([], ownerUserId, ownerLabel || ownerUserId)}
+            onRemoteSearch={async (query) => {
+              const rows = await remoteSearchAuthUsers(query)
+              return mergeEntitySearchOption(rows, ownerUserId, ownerLabel || ownerUserId)
+            }}
+            placeholder={t('customers.form.ownerPlaceholder', 'Choose a guardian…')}
+            searchPlaceholder={t('customers.form.ownerSearch', 'Search users…')}
+            disabled={fieldDisabled || disabled}
+            createInNewTabHref="/backend/users/create"
+            createInNewTabAriaLabel={t('customers.form.ownerAddUser', 'Create user in a new tab')}
+          />
+        )
+      },
+    } as CrudField,
+    {
       id: 'status',
       label: t('customers.people.detail.deals.fields.status', 'Status'),
       type: 'custom',
@@ -795,7 +847,7 @@ export function DealForm({
       id: 'details',
       title: t('customers.people.detail.deals.form.details', 'Deal details'),
       column: 1,
-      fields: ['title', 'status', 'pipelineId', 'pipelineStageId', 'valueAmount', 'valueCurrency', 'probability', 'expectedCloseAt', 'description'],
+      fields: ['title', 'ownerUserId', 'status', 'pipelineId', 'pipelineStageId', 'valueAmount', 'valueCurrency', 'probability', 'expectedCloseAt', 'description'],
     },
     {
       id: 'associations',
@@ -848,6 +900,8 @@ export function DealForm({
       probability: normalizeNumber(initialValues?.probability ?? null),
       expectedCloseAt: toDateInputValue(initialValues?.expectedCloseAt ?? null),
       description: initialValues?.description ?? '',
+      ownerUserId:
+        typeof initialValues?.ownerUserId === 'string' ? initialValues.ownerUserId : '',
       personIds: sanitizeIdList(initialValues?.personIds ?? resolveIdsFromSource(initialValues?.people)),
       companyIds: sanitizeIdList(initialValues?.companyIds ?? resolveIdsFromSource(initialValues?.companies)),
       ...Object.fromEntries(
@@ -888,6 +942,7 @@ export function DealForm({
           description: parsed.data.description && parsed.data.description.length
             ? parsed.data.description
             : undefined,
+          ownerUserId: parsed.data.ownerUserId,
           personIds,
           companyIds,
         }

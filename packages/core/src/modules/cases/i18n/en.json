@@ -304,6 +304,8 @@
   "cases.detail.procedure.selectEntityPlaceholder": "Search…",
   "cases.detail.procedure.selectEntitySearch": "Search…",
   "cases.detail.procedure.selectEntityCreate": "Create in a new tab",
+  "cases.detail.procedure.selectEntityCreatePerson": "Person",
+  "cases.detail.procedure.selectEntityCreateCompany": "Company",
   "cases.detail.procedure.selectEntityConfirm": "Confirm selection",
   "cases.detail.procedure.selectEntityChange": "Change",
   "cases.detail.procedure.selectEntitySaved": "Selected",

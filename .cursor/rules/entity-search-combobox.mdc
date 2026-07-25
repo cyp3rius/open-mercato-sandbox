@@ -48,6 +48,7 @@ Build **`EntitySearchComboboxOption`**: `value`, `label`, optional `description`
 - Set **`useEntitySearchCombobox: true`**.
 - Use **`remoteSelectSearch: true`** and **`loadOptions`** that accept a **search string** when the API is query-driven; otherwise load once and rely on local cmdk filter.
 - Optional **`createInNewTabHref`** / **`createInNewTabAriaLabel`** for the square `+` (opens `noopener,noreferrer` tab).
+- When create can be **person or company** (or other dual targets), pass **`createInNewTabChoices`** (`{ href, label }[]`) — the `+` opens a chooser before opening a tab. Prefer this over a single href that only creates one subtype.
 - Reuse **`useEntitySearchCombobox` hook** from CrudForm when wiring custom field components.
 
 ## Detail pages — preview (read-only)

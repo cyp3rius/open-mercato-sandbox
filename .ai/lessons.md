@@ -568,3 +568,13 @@ Centralize shared command utilities like undo extraction in `packages/shared/src
 **Rule**: Any publishable cross-package registry that must be visible across bootstrap, API routes, and request containers must persist via `globalThis` with a stable key. Do not store bootstrap-critical registries only in module-local variables.
 
 **Applies to**: ORM/entity registries, DI registrars, module registries, and other standalone-sensitive bootstrap state in `@open-mercato/*` packages.
+
+## Always extract repeated procedure subflows
+
+**Context**: Workshop CRM procedures duplicated policy linking, peer QC, and partner assignment across multiple Markdown playbooks.
+
+**Problem**: Copy-pasted step clusters drift; parents become harder to review; later services (ceramika, detailing) cannot reuse QC without more duplication.
+
+**Rule**: When authoring procedures, always scan the batch for repeated multi-step clusters and extract them as leaf playbooks wired via `invoke_procedure`. Keep single standalone `select_entity` entry picks inline. Remember call-stack resume: invoke must be last in its list/branch; parent continues after nested `end`.
+
+**Applies to**: `apps/mercato/content/procedures/`, `.ai/skills/procedure-authoring/SKILL.md`.

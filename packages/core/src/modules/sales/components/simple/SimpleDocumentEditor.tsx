@@ -12,16 +12,35 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { createCrud, updateCrud } from '@open-mercato/ui/backend/utils/crud'
 import { createCrudFormError } from '@open-mercato/ui/backend/utils/serverErrors'
-import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { ArrowRightLeft } from 'lucide-react'
+import {
+  readCurrencyCodeFromSearchParams,
+  readCustomerEntityIdFromSearchParams,
+  readOwnerUserIdFromSearchParams,
+  readSourceDealIdFromSearchParams,
+} from '@open-mercato/core/modules/customers/components/detail/customerEntityCreatePrefill'
+import {
+  resolveCustomerEntityDisplayLabel,
+  resolveUserDisplayLabel,
+} from '@open-mercato/core/modules/procurement/lib/procurementEntitySearch'
 import type { SimpleDocumentKind } from './SimpleDocumentsTable'
+import {
+  buildSimpleOrderCreateFromOfferHref,
+  readLinkedOrderIdFromQuoteDoc,
+  readSourceOfferIdFromSearchParams,
+} from './simpleDocumentCreatePrefill'
 import {
   buildSimpleDocumentFormFields,
   buildSimpleDocumentFormGroups,
   defaultSimpleDocumentValues,
   fetchSimpleDocumentPrefillValues,
+  fetchSimpleOrderPrefillFromQuote,
+  fetchSimpleQuotePrefillFromDeal,
   isSimpleDocumentProductPrefillId,
   isSubscriptionLine,
+  hydrateSimpleDocumentLineProductLabels,
+  mapSalesLineApiItemToDraft,
   type SimpleDocumentFormValues,
   type SimpleDocumentLineDraft,
 } from './simpleDocumentFormConfig'
@@ -53,7 +72,6 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
   const t = useT()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const i18nPrefix = kind === 'order' ? 'sales.simpleOrders' : 'sales.simpleQuotes'
   const resource = kind === 'order' ? 'orders' : 'quotes'
   const linesResource = kind === 'order' ? 'order-lines' : 'quote-lines'
@@ -61,45 +79,229 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
   const parentFk = kind === 'order' ? 'orderId' : 'quoteId'
   const prefillProductId = mode === 'create' ? searchParams.get('productId') : null
   const hasPrefillProduct = isSimpleDocumentProductPrefillId(prefillProductId)
+  const prefillCustomerEntityId =
+    mode === 'create' ? readCustomerEntityIdFromSearchParams(searchParams) : ''
+  const prefillOwnerUserId = mode === 'create' ? readOwnerUserIdFromSearchParams(searchParams) : ''
+  const prefillCurrencyCode = mode === 'create' ? readCurrencyCodeFromSearchParams(searchParams) : ''
+  const prefillSourceDealId =
+    mode === 'create' && kind === 'quote' ? readSourceDealIdFromSearchParams(searchParams) : ''
+  const prefillSourceOfferId =
+    mode === 'create' && kind === 'order' ? readSourceOfferIdFromSearchParams(searchParams) : ''
+  const hasPrefillCustomerOrOwner = Boolean(prefillCustomerEntityId || prefillOwnerUserId)
+  const hasCreatePrefill = Boolean(
+    hasPrefillProduct ||
+      hasPrefillCustomerOrOwner ||
+      prefillCurrencyCode ||
+      prefillSourceDealId ||
+      prefillSourceOfferId,
+  )
 
-  const [loading, setLoading] = React.useState(mode === 'edit' || hasPrefillProduct)
+  const [loading, setLoading] = React.useState(mode === 'edit' || hasCreatePrefill)
   const [error, setError] = React.useState<string | null>(null)
-  const [initialValues, setInitialValues] = React.useState<SimpleDocumentFormValues>(defaultSimpleDocumentValues())
+  const [initialValues, setInitialValues] = React.useState<SimpleDocumentFormValues>(() => {
+    const base = defaultSimpleDocumentValues()
+    if (mode !== 'create') return base
+    return {
+      ...base,
+      customerEntityId: prefillCustomerEntityId,
+      customerLabel: '',
+      ownerUserId: prefillOwnerUserId,
+      ownerLabel: '',
+      currencyCode: prefillCurrencyCode || base.currencyCode,
+    }
+  })
   const [formKey, setFormKey] = React.useState(0)
-  const [converting, setConverting] = React.useState(false)
-  const [createReady, setCreateReady] = React.useState(mode !== 'create' || !hasPrefillProduct)
+  const [linkedOrderId, setLinkedOrderId] = React.useState<string | null>(null)
+  const [createReady, setCreateReady] = React.useState(mode !== 'create' || !hasCreatePrefill)
+  const [prefillQuoteNumber, setPrefillQuoteNumber] = React.useState('')
+  const [prefillDealTitle, setPrefillDealTitle] = React.useState('')
+
+  const loadCreatePrefillLabels = React.useCallback(async () => {
+    if (mode !== 'create' || !hasPrefillCustomerOrOwner) return null
+    const [customerLabel, ownerLabel] = await Promise.all([
+      prefillCustomerEntityId
+        ? resolveCustomerEntityDisplayLabel(prefillCustomerEntityId)
+        : Promise.resolve(null),
+      prefillOwnerUserId ? resolveUserDisplayLabel(prefillOwnerUserId) : Promise.resolve(null),
+    ])
+    return {
+      customerLabel: customerLabel ?? '',
+      ownerLabel: ownerLabel ?? '',
+    }
+  }, [hasPrefillCustomerOrOwner, mode, prefillCustomerEntityId, prefillOwnerUserId])
 
   const loadPrefillProduct = React.useCallback(async () => {
-    if (mode !== 'create' || !hasPrefillProduct || !prefillProductId) {
+    if (mode !== 'create' || !hasCreatePrefill) {
       setCreateReady(true)
       setLoading(false)
       return
     }
     setLoading(true)
     try {
-      const prefilled = await fetchSimpleDocumentPrefillValues(prefillProductId.trim())
-      if (prefilled) {
-        setInitialValues(prefilled)
+      if (prefillSourceDealId && kind === 'quote') {
+        const fromDeal = await fetchSimpleQuotePrefillFromDeal(prefillSourceDealId)
+        if (!fromDeal) {
+          flash(
+            t(
+              `${i18nPrefix}.errors.prefillDeal`,
+              'Could not load the selected deal for the new quote.',
+            ),
+            'error',
+          )
+          setCreateReady(true)
+          setLoading(false)
+          return
+        }
+        const [ownerLabel, customerLabel] = await Promise.all([
+          fromDeal.values.ownerUserId
+            ? resolveUserDisplayLabel(fromDeal.values.ownerUserId)
+            : Promise.resolve(null),
+          fromDeal.values.customerEntityId
+            ? resolveCustomerEntityDisplayLabel(fromDeal.values.customerEntityId)
+            : Promise.resolve(null),
+        ])
+        setPrefillDealTitle(fromDeal.dealTitle)
+        setInitialValues({
+          ...fromDeal.values,
+          customerLabel: customerLabel ?? '',
+          ownerLabel: ownerLabel ?? '',
+        })
         setFormKey((key) => key + 1)
+        return
+      }
+
+      if (prefillSourceOfferId) {
+        const fromQuote = await fetchSimpleOrderPrefillFromQuote(prefillSourceOfferId)
+        if (!fromQuote) {
+          flash(
+            t(
+              `${i18nPrefix}.errors.prefillQuote`,
+              'Could not load the selected quote for the new order.',
+            ),
+            'error',
+          )
+          setCreateReady(true)
+          setLoading(false)
+          return
+        }
+        const ownerLabel = fromQuote.values.ownerUserId
+          ? ((await resolveUserDisplayLabel(fromQuote.values.ownerUserId)) ?? '')
+          : ''
+        const customerLabel =
+          fromQuote.values.customerLabel ||
+          (fromQuote.values.customerEntityId
+            ? ((await resolveCustomerEntityDisplayLabel(fromQuote.values.customerEntityId)) ?? '')
+            : '')
+        setPrefillQuoteNumber(fromQuote.quoteNumber)
+        setInitialValues({
+          ...fromQuote.values,
+          customerLabel,
+          ownerLabel,
+        })
+        setFormKey((key) => key + 1)
+        return
+      }
+
+      const labels = await loadCreatePrefillLabels()
+      const applyDealPrefill = (values: SimpleDocumentFormValues): SimpleDocumentFormValues => ({
+        ...values,
+        customerEntityId: prefillCustomerEntityId || values.customerEntityId,
+        customerLabel:
+          labels?.customerLabel ||
+          (prefillCustomerEntityId ? values.customerLabel : values.customerLabel),
+        ownerUserId: prefillOwnerUserId || values.ownerUserId,
+        ownerLabel: labels?.ownerLabel || (prefillOwnerUserId ? values.ownerLabel : values.ownerLabel),
+        currencyCode: prefillCurrencyCode || values.currencyCode,
+      })
+      if (hasPrefillProduct && prefillProductId) {
+        const prefilled = await fetchSimpleDocumentPrefillValues(prefillProductId.trim())
+        if (prefilled) {
+          setInitialValues(applyDealPrefill(prefilled))
+          setFormKey((key) => key + 1)
+        } else {
+          flash(
+            t(
+              `${i18nPrefix}.errors.prefillProduct`,
+              'Could not load the selected product for the new document.',
+            ),
+            'error',
+          )
+          setInitialValues(
+            applyDealPrefill({
+              ...defaultSimpleDocumentValues(),
+              customerLabel: labels?.customerLabel ?? '',
+              ownerLabel: labels?.ownerLabel ?? '',
+            }),
+          )
+          setFormKey((key) => key + 1)
+        }
       } else {
-        flash(
-          t(`${i18nPrefix}.errors.prefillProduct`, 'Could not load the selected product for the new document.'),
-          'error',
+        setInitialValues(
+          applyDealPrefill({
+            ...defaultSimpleDocumentValues(),
+            customerEntityId: prefillCustomerEntityId,
+            customerLabel: labels?.customerLabel ?? '',
+            ownerUserId: prefillOwnerUserId,
+            ownerLabel: labels?.ownerLabel ?? '',
+          }),
         )
-        setInitialValues(defaultSimpleDocumentValues())
+        setFormKey((key) => key + 1)
       }
     } catch (err) {
       console.error('simple.document.prefill failed', err)
-      flash(
-        t(`${i18nPrefix}.errors.prefillProduct`, 'Could not load the selected product for the new document.'),
-        'error',
-      )
-      setInitialValues(defaultSimpleDocumentValues())
+      if (prefillSourceDealId && kind === 'quote') {
+        flash(
+          t(
+            `${i18nPrefix}.errors.prefillDeal`,
+            'Could not load the selected deal for the new quote.',
+          ),
+          'error',
+        )
+      } else if (prefillSourceOfferId) {
+        flash(
+          t(
+            `${i18nPrefix}.errors.prefillQuote`,
+            'Could not load the selected quote for the new order.',
+          ),
+          'error',
+        )
+      } else if (hasPrefillProduct) {
+        flash(
+          t(
+            `${i18nPrefix}.errors.prefillProduct`,
+            'Could not load the selected product for the new document.',
+          ),
+          'error',
+        )
+      }
+      setInitialValues({
+        ...defaultSimpleDocumentValues(),
+        customerEntityId: prefillCustomerEntityId,
+        customerLabel: '',
+        ownerUserId: prefillOwnerUserId,
+        ownerLabel: '',
+        currencyCode: prefillCurrencyCode || defaultSimpleDocumentValues().currencyCode,
+      })
+      setFormKey((key) => key + 1)
     } finally {
       setCreateReady(true)
       setLoading(false)
     }
-  }, [hasPrefillProduct, i18nPrefix, mode, prefillProductId, t])
+  }, [
+    hasCreatePrefill,
+    hasPrefillProduct,
+    i18nPrefix,
+    kind,
+    loadCreatePrefillLabels,
+    mode,
+    prefillCurrencyCode,
+    prefillCustomerEntityId,
+    prefillOwnerUserId,
+    prefillProductId,
+    prefillSourceDealId,
+    prefillSourceOfferId,
+    t,
+  ])
 
   const loadDocument = React.useCallback(async () => {
     if (!documentId) {
@@ -121,6 +323,11 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
         setError(t(`${i18nPrefix}.errors.notFound`, 'Document not found.'))
         return
       }
+      if (kind === 'quote') {
+        setLinkedOrderId(readLinkedOrderIdFromQuoteDoc(doc))
+      } else {
+        setLinkedOrderId(null)
+      }
       const snapshot =
         doc.customerSnapshot && typeof doc.customerSnapshot === 'object'
           ? (doc.customerSnapshot as Record<string, unknown>)
@@ -132,41 +339,25 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
           ? customer.displayName
           : customerEntityId
 
+      const ownerUserId = typeof doc.ownerUserId === 'string' ? doc.ownerUserId : ''
+      const ownerLabel = ownerUserId
+        ? ((await resolveUserDisplayLabel(ownerUserId)) ?? ownerUserId)
+        : ''
+
       const linesCall = await apiCall<{ items?: Array<Record<string, unknown>> }>(
         `/api/sales/${linesResource}?${parentFk}=${documentId}&page=1&pageSize=100`,
       )
       const lineItems = Array.isArray(linesCall.result?.items) ? linesCall.result.items : []
-      const lines: SimpleDocumentLineDraft[] = lineItems.length
-        ? lineItems.map((item) => ({
-            key: typeof item.id === 'string' ? item.id : crypto.randomUUID(),
-            id: typeof item.id === 'string' ? item.id : undefined,
-            productId: typeof item.productId === 'string' ? item.productId : '',
-            productLabel:
-              typeof item.productTitle === 'string'
-                ? item.productTitle
-                : typeof item.productId === 'string'
-                  ? item.productId
-                  : '',
-            serviceLineCode:
-              typeof item.serviceLineCode === 'string'
-                ? item.serviceLineCode
-                : typeof item.service_line_code === 'string'
-                  ? item.service_line_code
-                  : null,
-            quantity: String(item.quantity ?? '1'),
-            unitPriceNet: item.unitPriceNet != null ? String(item.unitPriceNet) : '',
-            taxRate: item.taxRate != null ? String(item.taxRate) : '23',
-            unitPriceGross: item.unitPriceGross != null ? String(item.unitPriceGross) : '',
-            subscriptionStartsAt: isoToDateInput(item.subscriptionStartsAt),
-            subscriptionEndsAt: isoToDateInput(item.subscriptionEndsAt),
-          }))
+      const mappedLines: SimpleDocumentLineDraft[] = lineItems.length
+        ? lineItems.map((item) => mapSalesLineApiItemToDraft(item, { keepId: true }))
         : defaultSimpleDocumentValues().lines
+      const lines = await hydrateSimpleDocumentLineProductLabels(mappedLines)
 
       setInitialValues({
         customerEntityId,
         customerLabel,
-        ownerUserId: typeof doc.ownerUserId === 'string' ? doc.ownerUserId : '',
-        ownerLabel: typeof doc.ownerUserId === 'string' ? doc.ownerUserId : '',
+        ownerUserId,
+        ownerLabel,
         statusEntryId: typeof doc.statusEntryId === 'string' ? doc.statusEntryId : '',
         currencyCode: typeof doc.currencyCode === 'string' ? doc.currencyCode : 'EUR',
         documentNumber:
@@ -248,7 +439,7 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
             throw createCrudFormError(
               t(
                 `${i18nPrefix}.errors.subscriptionDatesRequired`,
-                'Subscription lines require start and end dates.',
+                'Subscription products require start and end dates.',
               ),
             )
           }
@@ -284,6 +475,10 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
         unitPriceGross: gross,
       }
       if (line.id) payload.id = line.id
+      const productName = line.productLabel.trim()
+      if (productName && productName !== line.productId.trim()) {
+        payload.name = productName
+      }
       if (isSubscriptionLine(line.serviceLineCode)) {
         payload.subscriptionStartsAt = datePickerToIsoStart(line.subscriptionStartsAt)
         payload.subscriptionEndsAt = datePickerToIsoEnd(line.subscriptionEndsAt)
@@ -305,10 +500,22 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
         header.placedAt = datePickerToIsoStart(values.documentDate)
         if (values.documentNumber.trim()) header.orderNumber = values.documentNumber.trim()
         header.ownerUserId = values.ownerUserId.trim() ? values.ownerUserId.trim() : null
+        if (mode === 'create' && prefillSourceOfferId) {
+          header.metadata = { sourceOfferId: prefillSourceOfferId }
+          header.comments = prefillQuoteNumber
+            ? `From quote: ${prefillQuoteNumber}`
+            : `From quote ${prefillSourceOfferId}`
+        }
       } else {
         header.validFrom = datePickerToIsoStart(values.documentDate)
         if (values.documentNumber.trim()) header.quoteNumber = values.documentNumber.trim()
         header.ownerUserId = values.ownerUserId.trim() ? values.ownerUserId.trim() : null
+        if (mode === 'create' && prefillSourceDealId) {
+          header.metadata = { sourceDealId: prefillSourceDealId }
+          header.comments = prefillDealTitle.trim()
+            ? `From deal: ${prefillDealTitle.trim()}`
+            : `From deal ${prefillSourceDealId}`
+        }
       }
 
       const lines = Array.isArray(values.lines) ? values.lines : []
@@ -318,7 +525,13 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
           errorMessage: t(`${i18nPrefix}.errors.save`, 'Failed to save.'),
         })
         let id =
-          typeof created.result?.id === 'string' ? created.result.id : undefined
+          typeof created.result?.id === 'string'
+            ? created.result.id
+            : typeof (created.result as { quoteId?: string } | undefined)?.quoteId === 'string'
+              ? (created.result as { quoteId: string }).quoteId
+              : typeof (created.result as { orderId?: string } | undefined)?.orderId === 'string'
+                ? (created.result as { orderId: string }).orderId
+                : undefined
         if (!id) {
           const list = await apiCall<{ items?: Array<{ id?: string }> }>(
             `/api/sales/${resource}?page=1&pageSize=1&sortField=createdAt&sortDir=desc`,
@@ -327,11 +540,98 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
         }
         if (!id) throw new Error(t(`${i18nPrefix}.errors.save`, 'Failed to save.'))
         for (const line of lines) {
-          await apiCall(`/api/sales/${linesResource}`, {
+          const lineCall = await apiCall(`/api/sales/${linesResource}`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify(buildLinePayload(line, id, values.currencyCode)),
           })
+          if (!lineCall.ok) {
+            throw new Error(t(`${i18nPrefix}.errors.save`, 'Failed to save.'))
+          }
+        }
+        if (kind === 'quote' && prefillSourceDealId) {
+          try {
+            const dealCall = await apiCall<{
+              deal?: { payload?: Record<string, unknown> | null }
+            }>(`/api/customers/deals/${encodeURIComponent(prefillSourceDealId)}`)
+            const existingPayload =
+              dealCall.result?.deal?.payload && typeof dealCall.result.deal.payload === 'object'
+                ? dealCall.result.deal.payload
+                : {}
+            await updateCrud(
+              'customers/deals',
+              {
+                id: prefillSourceDealId,
+                payload: {
+                  ...existingPayload,
+                  simpleQuoteId: id,
+                  sourceDealId: prefillSourceDealId,
+                },
+              },
+              {
+                errorMessage: t(
+                  `${i18nPrefix}.errors.linkDeal`,
+                  'Quote saved, but linking back to the deal failed.',
+                ),
+              },
+            )
+          } catch (err) {
+            console.error('simple.quote.linkDeal failed', err)
+            flash(
+              t(
+                `${i18nPrefix}.errors.linkDeal`,
+                'Quote saved, but linking back to the deal failed.',
+              ),
+              'error',
+            )
+          }
+        }
+        if (kind === 'order' && prefillSourceOfferId) {
+          try {
+            const quoteCall = await apiCall<Record<string, unknown>>(
+              `/api/sales/quotes?id=${encodeURIComponent(prefillSourceOfferId)}`,
+            )
+            const items = Array.isArray(quoteCall.result?.items)
+              ? (quoteCall.result.items as Array<Record<string, unknown>>)
+              : quoteCall.result &&
+                  typeof quoteCall.result === 'object' &&
+                  'id' in (quoteCall.result as object)
+                ? [quoteCall.result as Record<string, unknown>]
+                : []
+            const quoteDoc = items[0]
+            const existingMetadata =
+              quoteDoc?.metadata &&
+              typeof quoteDoc.metadata === 'object' &&
+              !Array.isArray(quoteDoc.metadata)
+                ? (quoteDoc.metadata as Record<string, unknown>)
+                : {}
+            await updateCrud(
+              'sales/quotes',
+              {
+                id: prefillSourceOfferId,
+                metadata: {
+                  ...existingMetadata,
+                  simpleOrderId: id,
+                  sourceOfferId: prefillSourceOfferId,
+                },
+              },
+              {
+                errorMessage: t(
+                  `${i18nPrefix}.errors.linkQuote`,
+                  'Order saved, but linking back to the quote failed.',
+                ),
+              },
+            )
+          } catch (err) {
+            console.error('simple.order.linkQuote failed', err)
+            flash(
+              t(
+                `${i18nPrefix}.errors.linkQuote`,
+                'Order saved, but linking back to the quote failed.',
+              ),
+              'error',
+            )
+          }
         }
         flash(t(`${i18nPrefix}.success.create`, 'Created.'), 'success')
         router.push(`${basePath}/${id}`)
@@ -359,11 +659,14 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
         }
       }
       for (const line of lines) {
-        await apiCall(`/api/sales/${linesResource}`, {
+        const lineCall = await apiCall(`/api/sales/${linesResource}`, {
           method: line.id ? 'PUT' : 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(buildLinePayload(line, documentId, values.currencyCode)),
         })
+        if (!lineCall.ok) {
+          throw new Error(t(`${i18nPrefix}.errors.save`, 'Failed to save.'))
+        }
       }
       flash(t(`${i18nPrefix}.success.save`, 'Saved.'), 'success')
       setFormKey((key) => key + 1)
@@ -379,6 +682,10 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
       loadDocument,
       mode,
       parentFk,
+      prefillDealTitle,
+      prefillQuoteNumber,
+      prefillSourceDealId,
+      prefillSourceOfferId,
       resource,
       router,
       t,
@@ -386,36 +693,10 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
     ],
   )
 
-  const handleConvert = React.useCallback(async () => {
+  const handleConvert = React.useCallback(() => {
     if (!documentId || kind !== 'quote') return
-    const ok = await confirm({
-      title: t(`${i18nPrefix}.actions.convertConfirm`, 'Convert this quote to an order?'),
-    })
-    if (!ok) return
-    setConverting(true)
-    try {
-      const call = await apiCall<{ orderId?: string }>('/api/sales/quotes/convert', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ quoteId: documentId }),
-      })
-      if (!call.ok || !call.result?.orderId) {
-        flash(t(`${i18nPrefix}.errors.convert`, 'Failed to convert quote to order.'), 'error')
-        return
-      }
-      flash(t(`${i18nPrefix}.success.convert`, 'Converted to order.'), 'success')
-      router.push(`/backend/sales/simple-orders/${call.result.orderId}`)
-    } catch (err) {
-      flash(
-        err instanceof Error
-          ? err.message
-          : t(`${i18nPrefix}.errors.convert`, 'Failed to convert quote to order.'),
-        'error',
-      )
-    } finally {
-      setConverting(false)
-    }
-  }, [confirm, documentId, i18nPrefix, kind, router, t])
+    router.push(buildSimpleOrderCreateFromOfferHref(documentId))
+  }, [documentId, kind, router])
 
   if ((mode === 'edit' && loading) || (mode === 'create' && (!createReady || loading))) {
     return (
@@ -440,7 +721,6 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
             )}
           />
         </PageBody>
-        {ConfirmDialogElement}
       </Page>
     )
   }
@@ -476,19 +756,22 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
             onSubmit={handleSubmit}
             extraActions={
               kind === 'quote' && mode === 'edit' ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={converting}
-                  onClick={() => void handleConvert()}
-                >
-                  {t(`${i18nPrefix}.actions.convertToOrder`, 'Convert to order')}
-                </Button>
+                linkedOrderId ? (
+                  <Button asChild type="button" variant="outline">
+                    <Link href={`/backend/sales/simple-orders/${encodeURIComponent(linkedOrderId)}`}>
+                      {t(`${i18nPrefix}.actions.openOrder`, 'Open order')}
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button type="button" variant="outline" onClick={handleConvert}>
+                    <ArrowRightLeft className="mr-2 h-4 w-4" aria-hidden />
+                    {t(`${i18nPrefix}.actions.convertToOrder`, 'Convert to order')}
+                  </Button>
+                )
               ) : undefined
             }
           />
         </PageBody>
-        {ConfirmDialogElement}
       </Page>
     </>
   )

@@ -1,13 +1,17 @@
 'use client'
 
 import * as React from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
 import { createCrud } from '@open-mercato/ui/backend/utils/crud'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeDetail } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
+import {
+  readCustomerEntityIdFromSearchParams,
+  readOwnerUserIdFromSearchParams,
+} from '@open-mercato/core/modules/customers/components/detail/customerEntityCreatePrefill'
 import {
   caseCreateFormSchema,
   defaultCaseCreateValues,
@@ -19,11 +23,23 @@ import {
 export default function CaseCreatePage() {
   const t = useT()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { organizationId, tenantId } = useOrganizationScopeDetail()
 
   const schema = React.useMemo(() => caseCreateFormSchema(), [])
   const fields = React.useMemo(() => buildCaseCreateFormFields(t), [t])
   const groups = React.useMemo(() => buildCaseCreateFormGroups(t), [t])
+
+  const initialValues = React.useMemo(() => {
+    const base = defaultCaseCreateValues()
+    const customerEntityId = readCustomerEntityIdFromSearchParams(searchParams)
+    const ownerUserId = readOwnerUserIdFromSearchParams(searchParams)
+    return {
+      ...base,
+      customerEntityId: customerEntityId || base.customerEntityId,
+      ownerUserId: ownerUserId || base.ownerUserId,
+    }
+  }, [searchParams])
 
   return (
     <Page>
@@ -36,7 +52,7 @@ export default function CaseCreatePage() {
           schema={schema}
           fields={fields}
           groups={groups}
-          initialValues={defaultCaseCreateValues()}
+          initialValues={initialValues}
           onSubmit={async (values) => {
             if (!tenantId || !organizationId) {
               flash(t('cases.create.validationScope', 'Organization context is missing.'), 'error')

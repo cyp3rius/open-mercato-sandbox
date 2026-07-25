@@ -2568,16 +2568,16 @@ export const createCompanyEditGroups = (t: Translator): CrudFormGroup[] => [
     fields: ['legalName', 'brandName', 'nip', 'regon', 'domain', 'websiteUrl', 'industry', 'sizeBucket', 'annualRevenue'],
   },
   {
-    id: 'notes',
-    title: t('customers.companies.form.groups.notes'),
-    column: 2,
-    fields: ['description'],
-  },
-  {
     id: 'customFields',
     title: t('customers.companies.form.groups.custom'),
     column: 2,
     kind: 'customFields',
+  },
+  {
+    id: 'notes',
+    title: t('customers.companies.form.groups.notes'),
+    column: 2,
+    fields: ['description'],
   },
 ]
 
@@ -2610,16 +2610,16 @@ export const createPersonEditGroups = (t: Translator): CrudFormGroup[] => [
     fields: ['department', 'linkedInUrl', 'twitterUrl'],
   },
   {
-    id: 'notes',
-    title: t('customers.people.form.groups.notes'),
-    column: 2,
-    fields: ['description'],
-  },
-  {
     id: 'customFields',
     title: t('customers.people.form.groups.custom'),
     column: 2,
     kind: 'customFields',
+  },
+  {
+    id: 'notes',
+    title: t('customers.people.form.groups.notes'),
+    column: 2,
+    fields: ['description'],
   },
 ]
 

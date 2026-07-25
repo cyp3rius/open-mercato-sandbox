@@ -101,6 +101,7 @@ const convertDealToQuoteCommand: CommandHandler<
         customerEntityId: string
         currencyCode: string
         comments?: string
+        ownerUserId?: string | null
         metadata?: Record<string, unknown>
       },
       { quoteId: string }
@@ -111,6 +112,7 @@ const convertDealToQuoteCommand: CommandHandler<
         customerEntityId,
         currencyCode,
         comments: deal.title ? `From deal: ${deal.title}` : undefined,
+        ownerUserId: deal.ownerUserId ?? null,
         metadata: {
           sourceDealId: deal.id,
         },

@@ -76,17 +76,22 @@ export default function InsurancePolicyCreatePage() {
   const leadIdFromUrl = searchParams.get('leadId')
   const isLeadPrefill = Boolean(leadIdFromUrl?.trim())
   const duplicateFromPolicyId = searchParams.get('duplicateFrom')
+  const prefillOwnerUserId = (searchParams.get('ownerUserId') ?? '').trim()
+  const prefillPersonId = (searchParams.get('personId') ?? '').trim()
+  const prefillCompanyId = (searchParams.get('companyId') ?? '').trim()
   const [formKey, setFormKey] = React.useState(0)
   const [leadFlowReady, setLeadFlowReady] = React.useState(() => !searchParams.get('leadId'))
 
   const emptyInitial = React.useMemo(() => {
     const leadBase = buildLeadFormValuesFromPayload(null, {})
+    const insuredCompanyEntityId = prefillCompanyId || ''
+    const insuredPersonEntityId = prefillPersonId || ''
     return {
       ...leadBase,
       policyNumber: '',
       insurerId: '',
       insurerContactId: '',
-      caretakerUserId: '',
+      caretakerUserId: prefillOwnerUserId,
       referringPartnerEntityId: '',
       catalogProductId: '',
       validFrom: '',
@@ -95,10 +100,10 @@ export default function InsurancePolicyCreatePage() {
       insuranceSubject: emptyInsuranceSubjectValue(),
       sourceLeadId: '',
       crmContactEntityId: '',
-      insuredPersonEntityId: '',
-      insuredCompanyEntityId: '',
+      insuredPersonEntityId,
+      insuredCompanyEntityId,
     }
-  }, [])
+  }, [prefillCompanyId, prefillOwnerUserId, prefillPersonId])
 
   const [initialValues, setInitialValues] = React.useState(emptyInitial)
   const attachmentDraftRecordId = React.useMemo(() => crypto.randomUUID(), [])

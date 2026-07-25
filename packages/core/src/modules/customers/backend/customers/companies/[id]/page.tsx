@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { Separator } from '@open-mercato/ui/primitives/separator'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCallOrThrow, readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
@@ -23,8 +22,7 @@ import {
   NotesSection,
   type CommentSummary,
   InlineSelectEditor,
-  type SectionAction,
-} from '@open-mercato/ui/backend/detail'
+  } from '@open-mercato/ui/backend/detail'
 import {
   TagsSection,
   type TagOption,
@@ -64,6 +62,16 @@ import {
   remoteSearchAuthUsers,
   resolveUserDisplayLabel,
 } from '../../../../../procurement/lib/procurementEntitySearch'
+import {
+  buildCustomerDetailTabDefinitions,
+  resolveCustomerDetailTab,
+} from '../../../../components/detail/customerEntityDetailTabs'
+import { buildSimpleDealCreateHref } from '../../../../components/detail/customerEntityCreatePrefill'
+import { CustomerEntityOrdersTab } from '../../../../components/detail/CustomerEntityOrdersTab'
+import { CustomerEntityQuotesTab } from '../../../../components/detail/CustomerEntityQuotesTab'
+import { CustomerEntityCasesTab } from '../../../../components/detail/CustomerEntityCasesTab'
+import { CustomerEntityPoliciesTab } from '../../../../components/detail/CustomerEntityPoliciesTab'
+import { PersonResourcesSection } from '../../../../components/detail/PersonResourcesSection'
 
 type CompanyOverview = {
   company: {
@@ -111,7 +119,7 @@ type CompanyOverview = {
   } | null
 }
 
-type SectionKey = 'notes' | 'activities' | 'deals' | 'people' | 'addresses' | 'tasks' | string
+type SectionKey = string
 
 export default function CustomerCompanyDetailPage({ params }: { params?: { id?: string } }) {
   const id = params?.id
@@ -121,22 +129,21 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
   const notesAdapter = React.useMemo(() => createCustomerNotesAdapter(detailTranslator), [detailTranslator])
   const router = useRouter()
   const searchParams = useSearchParams()
-  const initialTab = React.useMemo(() => {
-    const raw = searchParams?.get('tab')
-    if (raw === 'notes' || raw === 'activities' || raw === 'deals' || raw === 'people' || raw === 'addresses' || raw === 'tasks') {
-      return raw
-    }
-    return 'notes'
-  }, [searchParams])
+  const initialTab = React.useMemo(
+    () => resolveCustomerDetailTab(searchParams?.get('tab')),
+    [searchParams],
+  )
   const [data, setData] = React.useState<CompanyOverview | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [activeTab, setActiveTab] = React.useState<SectionKey>(initialTab)
-  const [sectionAction, setSectionAction] = React.useState<SectionAction | null>(null)
   const [isDeleting, setIsDeleting] = React.useState(false)
   const [ownerLabel, setOwnerLabel] = React.useState<string | null>(null)
   const currentCompanyId = data?.company?.id ?? null
   const ownerUserId = data?.company?.ownerUserId?.trim() ?? ''
+  React.useEffect(() => {
+    setActiveTab(initialTab)
+  }, [initialTab])
   React.useEffect(() => {
     if (!ownerUserId) {
       setOwnerLabel(null)
@@ -229,19 +236,6 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
     [injectionContext, runMutation],
   )
 
-  const handleSectionActionChange = React.useCallback((action: SectionAction | null) => {
-    setSectionAction(action)
-  }, [])
-
-  const handleSectionAction = React.useCallback(() => {
-    if (!sectionAction || sectionAction.disabled) return
-    sectionAction.onClick()
-  }, [sectionAction])
-
-  React.useEffect(() => {
-    setSectionAction(null)
-  }, [activeTab])
-
   const validators = React.useMemo(() => ({
     email: (value: string) => {
       if (!value) return null
@@ -331,15 +325,13 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
   const injectedTabMap = React.useMemo(() => new Map(injectedTabs.map((tab) => [tab.id, tab.render])), [injectedTabs])
 
   const tabs = React.useMemo(
-    () => [
-      { id: 'notes' as const, label: t('customers.companies.detail.tabs.notes', 'Notes') },
-      { id: 'activities' as const, label: t('customers.companies.detail.tabs.activities', 'Activities') },
-      { id: 'deals' as const, label: t('customers.companies.detail.tabs.deals', 'Deals') },
-      { id: 'people' as const, label: t('customers.companies.detail.tabs.people', 'People') },
-      { id: 'addresses' as const, label: t('customers.companies.detail.tabs.addresses', 'Addresses') },
-      { id: 'tasks' as const, label: t('customers.companies.detail.tabs.tasks', 'Tasks') },
-      ...injectedTabs.map((tab) => ({ id: tab.id as SectionKey, label: tab.label })),
-    ],
+    () =>
+      buildCustomerDetailTabDefinitions({
+        kind: 'company',
+        t,
+        i18nPrefix: 'customers.companies.detail',
+        injectedTabs: injectedTabs.map((tab) => ({ id: tab.id, label: tab.label })),
+      }),
     [injectedTabs, t],
   )
 
@@ -744,6 +736,18 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
     [currentCompanyId],
   )
 
+  const dealCreateHref = React.useMemo(
+    () =>
+      currentCompanyId
+        ? buildSimpleDealCreateHref({
+            customerEntityId: currentCompanyId,
+            ownerUserId: data?.company?.ownerUserId ?? null,
+            kind: 'company',
+          })
+        : null,
+    [currentCompanyId, data?.company?.ownerUserId],
+  )
+
   if (isLoading) {
     return (
       <Page>
@@ -1030,7 +1034,7 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
   return (
     <Page>
       <PageBody>
-        <div className="space-y-8">
+        <div className="space-y-4">
           <CompanyHighlights
             company={company}
             profile={profile ?? null}
@@ -1083,28 +1087,46 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
                     nextInteractionIcon: payload?.icon ?? null,
                     nextInteractionColor: payload?.color ?? null,
                   },
-                })
+                }),
               )
             }}
             onDelete={handleDelete}
             isDeleting={isDeleting}
           />
 
-          <DetailTabsLayout
-            className="space-y-6"
-            tabs={tabs}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            sectionAction={sectionAction}
-            onSectionAction={handleSectionAction}
-            navAriaLabel={t('customers.companies.detail.tabs.label', 'Company detail sections')}
-            navClassName="gap-4"
-            panelContentKey={activeTab}
-          >
-            {(() => {
-              const injected = injectedTabMap.get(activeTab)
-              if (injected) return injected()
-              if (activeTab === 'notes') {
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[7fr_3fr] lg:items-start">
+            <div className="min-w-0">
+              <DetailTabsLayout
+                className="space-y-6"
+                tabs={tabs}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                navAriaLabel={t('customers.companies.detail.tabs.label', 'Company detail sections')}
+                navClassName="gap-4"
+                panelContentKey={activeTab}
+              >
+                {(() => {
+                  const injected = injectedTabMap.get(activeTab)
+                  if (injected) return injected()
+                  if (activeTab === 'details') {
+                    return (
+                      <div className="space-y-6">
+                        <div className="space-y-3">
+                          <h2 className="text-sm font-semibold">{t('customers.companies.detail.sections.details', 'Company details')}</h2>
+                          <DetailFieldsSection
+                            fields={detailFields.filter((field) => field.key !== 'description')}
+                          />
+                          <InjectionSpot
+                            spotId="customers.company.detail:details"
+                            context={injectionContext}
+                            data={data}
+                            onDataChange={(next) => setData(next as CompanyOverview)}
+                          />
+                        </div>
+                      </div>
+                    )
+                  }
+                  if (activeTab === 'notes') {
                 return (
                   <NotesSection
                     entityId={companyId}
@@ -1117,7 +1139,6 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
                       title: t('customers.companies.detail.emptyState.notes.title', 'Keep everyone in the loop'),
                       actionLabel: t('customers.companies.detail.emptyState.notes.action', 'Create a note'),
                     }}
-                    onActionChange={handleSectionActionChange}
                     translator={translateCompanyDetail}
                     onLoadingChange={handleNotesLoadingChange}
                     dataAdapter={notesAdapter}
@@ -1139,7 +1160,6 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
                       title: t('customers.companies.detail.emptyState.activities.title', 'No activities logged yet'),
                       actionLabel: t('customers.companies.detail.emptyState.activities.action', 'Log activity'),
                     }}
-                    onActionChange={handleSectionActionChange}
                     onLoadingChange={handleActivitiesLoadingChange}
                   />
                 )
@@ -1154,9 +1174,37 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
                       title: t('customers.companies.detail.emptyState.deals.title', 'No deals yet'),
                       actionLabel: t('customers.companies.detail.emptyState.deals.action', 'Create a deal'),
                     }}
-                    onActionChange={handleSectionActionChange}
                     onLoadingChange={handleDealsLoadingChange}
                     translator={detailTranslator}
+                    createHref={dealCreateHref}
+                  />
+                )
+              }
+              if (activeTab === 'quotes') {
+                return (
+                  <CustomerEntityQuotesTab
+                    customerEntityId={companyId}
+                    ownerUserId={data.company.ownerUserId ?? null}
+                    kind="company"
+                    addActionLabel={t('customers.companies.detail.actions.addQuote', 'Add quote')}
+                    emptyState={{
+                      title: t('customers.companies.detail.emptyState.quotes.title', 'No quotes yet'),
+                      actionLabel: t('customers.companies.detail.emptyState.quotes.action', 'Create a quote'),
+                    }}
+                  />
+                )
+              }
+              if (activeTab === 'orders') {
+                return (
+                  <CustomerEntityOrdersTab
+                    customerEntityId={companyId}
+                    ownerUserId={data.company.ownerUserId ?? null}
+                    kind="company"
+                    addActionLabel={t('customers.companies.detail.actions.addOrder', 'Add order')}
+                    emptyState={{
+                      title: t('customers.companies.detail.emptyState.orders.title', 'No orders yet'),
+                      actionLabel: t('customers.companies.detail.emptyState.orders.action', 'Create an order'),
+                    }}
                   />
                 )
               }
@@ -1171,7 +1219,6 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
                       title: t('customers.companies.detail.emptyState.people.title', 'Build the account team'),
                       actionLabel: t('customers.companies.detail.emptyState.people.action', 'Create person'),
                     }}
-                    onActionChange={handleSectionActionChange}
                     onLoadingChange={handlePeopleLoadingChange}
                     translator={detailTranslator}
                     runGuardedMutation={runMutationWithContext}
@@ -1191,7 +1238,6 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
                       title: t('customers.companies.detail.emptyState.addresses.title', 'No addresses yet'),
                       actionLabel: t('customers.companies.detail.emptyState.addresses.action', 'Add address'),
                     }}
-                    onActionChange={handleSectionActionChange}
                     onLoadingChange={handleAddressesLoadingChange}
                     translator={detailTranslator}
                   />
@@ -1209,7 +1255,6 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
                       title: t('customers.companies.detail.emptyState.tasks.title', 'Plan what happens next'),
                       actionLabel: t('customers.companies.detail.emptyState.tasks.action', 'Create task'),
                     }}
-                    onActionChange={handleSectionActionChange}
                     onLoadingChange={handleTasksLoadingChange}
                     translator={translateCompanyDetail}
                     entityName={companyName}
@@ -1218,38 +1263,73 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
                   />
                 )
               }
+              if (activeTab === 'resources') {
+                return (
+                  <PersonResourcesSection
+                    customerEntityId={companyId}
+                    translate={translateCompanyDetail}
+                  />
+                )
+              }
+              if (activeTab === 'cases') {
+                return (
+                  <CustomerEntityCasesTab
+                    customerEntityId={companyId}
+                    ownerUserId={data.company.ownerUserId ?? null}
+                    kind="company"
+                    addActionLabel={t('customers.companies.detail.actions.addCase', 'Add case')}
+                    emptyState={{
+                      title: t('customers.companies.detail.emptyState.cases.title', 'No cases yet'),
+                      actionLabel: t('customers.companies.detail.emptyState.cases.action', 'Create a case'),
+                    }}
+                  />
+                )
+              }
+              if (activeTab === 'policies') {
+                return (
+                  <CustomerEntityPoliciesTab
+                    customerEntityId={companyId}
+                    ownerUserId={data.company.ownerUserId ?? null}
+                    kind="company"
+                    addActionLabel={t('customers.companies.detail.actions.addPolicy', 'Add policy')}
+                    emptyState={{
+                      title: t('customers.companies.detail.emptyState.policies.title', 'No policies yet'),
+                      actionLabel: t('customers.companies.detail.emptyState.policies.action', 'Create a policy'),
+                    }}
+                  />
+                )
+              }
               return null
             })()}
-          </DetailTabsLayout>
-
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <h2 className="text-sm font-semibold">{t('customers.companies.detail.sections.details', 'Company details')}</h2>
-              <DetailFieldsSection fields={detailFields} />
-              <InjectionSpot
-                spotId="customers.company.detail:details"
-                context={injectionContext}
-                data={data}
-                onDataChange={(next) => setData(next as CompanyOverview)}
-              />
+              </DetailTabsLayout>
             </div>
 
-            <CustomDataSection
-              entityIds={[E.customers.customer_entity, E.customers.customer_company_profile]}
-              values={data.customFields ?? {}}
-              onSubmit={handleCustomFieldsSubmit}
-              title={t('customers.companies.detail.sections.customFields', 'Custom fields')}
-            />
-
-            <TagsSection
-              entityId={companyId}
-              tags={data.tags}
-              onChange={handleTagsChange}
-              isSubmitting={false}
-            />
+            <aside className="min-w-0 space-y-4">
+              <div className="rounded-lg border bg-card px-4 py-3">
+                <CustomDataSection
+                  entityIds={[E.customers.customer_entity, E.customers.customer_company_profile]}
+                  values={data.customFields ?? {}}
+                  onSubmit={handleCustomFieldsSubmit}
+                  title={t('customers.companies.detail.sections.customFields', 'Custom fields')}
+                />
+              </div>
+              <div className="rounded-lg border bg-card px-4 py-3 space-y-3">
+                <h2 className="text-sm font-semibold">{t('customers.companies.form.groups.notes', 'Notes')}</h2>
+                <DetailFieldsSection
+                  fields={detailFields.filter((field) => field.key === 'description')}
+                  className="sm:grid-cols-1 xl:grid-cols-1"
+                />
+              </div>
+              <div className="rounded-lg border bg-card px-4 py-3">
+                <TagsSection
+                  entityId={companyId}
+                  tags={data.tags}
+                  onChange={handleTagsChange}
+                  isSubmitting={false}
+                />
+              </div>
+            </aside>
           </div>
-
-          <Separator className="my-4" />
         </div>
       </PageBody>
       {ConfirmDialogElement}

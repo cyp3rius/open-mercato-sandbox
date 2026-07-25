@@ -138,6 +138,265 @@ export async function fetchSimpleDocumentPrefillValues(
   }
 }
 
+function isoToDateInput(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) return ''
+  return value.slice(0, 10)
+}
+
+function readApiString(item: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = item[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return ''
+}
+
+function readApiScalar(item: Record<string, unknown>, ...keys: string[]): unknown {
+  for (const key of keys) {
+    if (item[key] != null && item[key] !== '') return item[key]
+  }
+  return undefined
+}
+
+function productLabelFromLineItem(item: Record<string, unknown>, productId: string): string {
+  const direct = readApiString(item, 'productTitle', 'product_title', 'title', 'name')
+  if (direct && direct !== productId) return direct
+  const snapshot =
+    item.catalogSnapshot && typeof item.catalogSnapshot === 'object'
+      ? (item.catalogSnapshot as Record<string, unknown>)
+      : item.catalog_snapshot && typeof item.catalog_snapshot === 'object'
+        ? (item.catalog_snapshot as Record<string, unknown>)
+        : null
+  const product =
+    snapshot?.product && typeof snapshot.product === 'object'
+      ? (snapshot.product as Record<string, unknown>)
+      : snapshot
+  const fromSnapshot = readApiString(product ?? {}, 'title', 'name', 'displayName')
+  if (fromSnapshot && fromSnapshot !== productId) return fromSnapshot
+  return direct || productId
+}
+
+function serviceLineCodeFromLineItem(item: Record<string, unknown>): string | null {
+  const direct = readApiString(item, 'serviceLineCode', 'service_line_code')
+  if (direct) return direct
+  const snapshot =
+    item.catalogSnapshot && typeof item.catalogSnapshot === 'object'
+      ? (item.catalogSnapshot as Record<string, unknown>)
+      : item.catalog_snapshot && typeof item.catalog_snapshot === 'object'
+        ? (item.catalog_snapshot as Record<string, unknown>)
+        : null
+  const product =
+    snapshot?.product && typeof snapshot.product === 'object'
+      ? (snapshot.product as Record<string, unknown>)
+      : null
+  const fromSnapshot = readApiString(product ?? {}, 'serviceLineCode', 'service_line_code')
+  return fromSnapshot || null
+}
+
+/** Map quote/order line API row (camelCase or snake_case) to the simple editor draft. */
+export function mapSalesLineApiItemToDraft(
+  item: Record<string, unknown>,
+  options?: { keepId?: boolean },
+): SimpleDocumentLineDraft {
+  const productId = readApiString(item, 'productId', 'product_id')
+  const id = readApiString(item, 'id')
+  return {
+    key: options?.keepId && id ? id : crypto.randomUUID(),
+    ...(options?.keepId && id ? { id } : {}),
+    productId,
+    productLabel: productLabelFromLineItem(item, productId),
+    serviceLineCode: serviceLineCodeFromLineItem(item),
+    quantity: String(readApiScalar(item, 'quantity') ?? '1'),
+    unitPriceNet: (() => {
+      const value = readApiScalar(item, 'unitPriceNet', 'unit_price_net')
+      return value != null ? String(value) : ''
+    })(),
+    taxRate: (() => {
+      const value = readApiScalar(item, 'taxRate', 'tax_rate')
+      return value != null ? String(value) : '23'
+    })(),
+    unitPriceGross: (() => {
+      const value = readApiScalar(item, 'unitPriceGross', 'unit_price_gross')
+      return value != null ? String(value) : ''
+    })(),
+    subscriptionStartsAt: isoToDateInput(
+      readApiScalar(item, 'subscriptionStartsAt', 'subscription_starts_at'),
+    ),
+    subscriptionEndsAt: isoToDateInput(
+      readApiScalar(item, 'subscriptionEndsAt', 'subscription_ends_at'),
+    ),
+  }
+}
+
+function productMetaFromCatalogItem(item: Record<string, unknown>): {
+  label: string
+  serviceLineCode: string | null
+} | null {
+  const id = typeof item.id === 'string' ? item.id : null
+  if (!id) return null
+  const label =
+    (typeof item.title === 'string' && item.title.trim()) ||
+    (typeof item.name === 'string' && item.name.trim()) ||
+    id
+  const serviceLineCode =
+    typeof item.service_line_code === 'string'
+      ? item.service_line_code
+      : typeof item.serviceLineCode === 'string'
+        ? item.serviceLineCode
+        : null
+  return { label, serviceLineCode }
+}
+
+/** Resolve product titles (and service line codes) from catalog when line API rows only have product ids. */
+export async function hydrateSimpleDocumentLineProductLabels(
+  lines: SimpleDocumentLineDraft[],
+): Promise<SimpleDocumentLineDraft[]> {
+  const ids = [...new Set(lines.map((line) => line.productId.trim()).filter(Boolean))]
+  if (!ids.length) return lines
+
+  const params = new URLSearchParams({
+    ids: ids.join(','),
+    page: '1',
+    pageSize: String(Math.min(100, Math.max(ids.length, 1))),
+  })
+  const call = await apiCall<{ items?: Array<Record<string, unknown>> }>(
+    `/api/catalog/products?${params.toString()}`,
+  )
+  if (!call.ok) return lines
+  const items = Array.isArray(call.result?.items) ? call.result.items : []
+  const byId = new Map<string, { label: string; serviceLineCode: string | null }>()
+  for (const item of items) {
+    const id = typeof item.id === 'string' ? item.id : null
+    if (!id) continue
+    const meta = productMetaFromCatalogItem(item)
+    if (meta) byId.set(id, meta)
+  }
+  if (!byId.size) return lines
+
+  return lines.map((line) => {
+    const meta = byId.get(line.productId.trim())
+    if (!meta) return line
+    const label = line.productLabel.trim()
+    const needsLabel = !label || label === line.productId.trim()
+    return {
+      ...line,
+      productLabel: needsLabel ? meta.label : line.productLabel,
+      serviceLineCode: line.serviceLineCode ?? meta.serviceLineCode,
+    }
+  })
+}
+
+function firstDocItem(result: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
+  if (!result) return null
+  if (Array.isArray(result.items) && result.items[0] && typeof result.items[0] === 'object') {
+    return result.items[0] as Record<string, unknown>
+  }
+  if ('id' in result && typeof result.id === 'string') return result
+  return null
+}
+
+/** Prefill quote create from an existing deal (header only — no lines). */
+export async function fetchSimpleQuotePrefillFromDeal(
+  dealId: string,
+): Promise<{ values: SimpleDocumentFormValues; dealTitle: string } | null> {
+  const id = dealId.trim()
+  if (!id) return null
+  const call = await apiCall<{
+    deal?: {
+      id?: string
+      title?: string | null
+      valueCurrency?: string | null
+      ownerUserId?: string | null
+    }
+    people?: Array<{ id?: string }>
+    companies?: Array<{ id?: string }>
+  }>(`/api/customers/deals/${encodeURIComponent(id)}`)
+  if (!call.ok || !call.result?.deal) return null
+
+  const deal = call.result.deal
+  const companyId =
+    (call.result.companies ?? [])
+      .map((entry) => (typeof entry.id === 'string' ? entry.id.trim() : ''))
+      .find((value) => value.length > 0) ?? ''
+  const personId =
+    (call.result.people ?? [])
+      .map((entry) => (typeof entry.id === 'string' ? entry.id.trim() : ''))
+      .find((value) => value.length > 0) ?? ''
+  const customerEntityId = companyId || personId
+  const currencyRaw =
+    typeof deal.valueCurrency === 'string' ? deal.valueCurrency.trim().toUpperCase() : ''
+  const currencyCode = /^[A-Z]{3}$/.test(currencyRaw)
+    ? currencyRaw
+    : defaultSimpleDocumentValues().currencyCode
+  const ownerUserId = typeof deal.ownerUserId === 'string' ? deal.ownerUserId : ''
+  const dealTitle = typeof deal.title === 'string' ? deal.title.trim() : ''
+
+  return {
+    dealTitle,
+    values: {
+      ...defaultSimpleDocumentValues(),
+      customerEntityId,
+      customerLabel: '',
+      ownerUserId,
+      ownerLabel: '',
+      currencyCode,
+      documentDate: new Date().toISOString().slice(0, 10),
+      documentNumber: '',
+      statusEntryId: '',
+      lines: defaultSimpleDocumentValues().lines,
+    },
+  }
+}
+
+/** Prefill order create from an existing quote (header + lines without line ids). */
+export async function fetchSimpleOrderPrefillFromQuote(
+  quoteId: string,
+): Promise<{ values: SimpleDocumentFormValues; quoteNumber: string } | null> {
+  const id = quoteId.trim()
+  if (!id) return null
+  const docCall = await apiCall<Record<string, unknown>>(`/api/sales/quotes?id=${encodeURIComponent(id)}`)
+  if (!docCall.ok) return null
+  const doc = firstDocItem(docCall.result)
+  if (!doc) return null
+
+  const snapshot =
+    doc.customerSnapshot && typeof doc.customerSnapshot === 'object'
+      ? (doc.customerSnapshot as Record<string, unknown>)
+      : null
+  const customer = snapshot?.customer as Record<string, unknown> | undefined
+  const customerEntityId = typeof doc.customerEntityId === 'string' ? doc.customerEntityId : ''
+  const customerLabel =
+    typeof customer?.displayName === 'string' && customer.displayName.trim()
+      ? customer.displayName.trim()
+      : ''
+
+  const linesCall = await apiCall<{ items?: Array<Record<string, unknown>> }>(
+    `/api/sales/quote-lines?quoteId=${encodeURIComponent(id)}&page=1&pageSize=100`,
+  )
+  const lineItems = Array.isArray(linesCall.result?.items) ? linesCall.result.items : []
+  const mappedLines: SimpleDocumentLineDraft[] = lineItems.length
+    ? lineItems.map((item) => mapSalesLineApiItemToDraft(item))
+    : defaultSimpleDocumentValues().lines
+  const lines = await hydrateSimpleDocumentLineProductLabels(mappedLines)
+
+  const quoteNumber = typeof doc.quoteNumber === 'string' ? doc.quoteNumber : ''
+  return {
+    quoteNumber,
+    values: {
+      ...defaultSimpleDocumentValues(),
+      customerEntityId,
+      customerLabel,
+      ownerUserId: typeof doc.ownerUserId === 'string' ? doc.ownerUserId : '',
+      ownerLabel: '',
+      currencyCode: typeof doc.currencyCode === 'string' ? doc.currencyCode : defaultSimpleDocumentValues().currencyCode,
+      documentDate: isoToDateInput(doc.validFrom) || new Date().toISOString().slice(0, 10),
+      documentNumber: '',
+      statusEntryId: '',
+      lines,
+    },
+  }
+}
+
 async function remoteSearchProducts(query: string): Promise<
   Array<{ value: string; label: string; serviceLineCode: string | null }>
 > {
@@ -407,7 +666,10 @@ function SimpleDocumentLinesTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold">
+          {t(`${i18nPrefix}.lines.title`, 'Items')}
+        </h3>
         <Button
           type="button"
           variant="outline"
@@ -420,16 +682,25 @@ function SimpleDocumentLinesTable({
           {t(`${i18nPrefix}.lines.add`, 'Add item')}
         </Button>
       </div>
-      <div className="overflow-hidden rounded border">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded border">
+        <table className="w-full table-fixed text-sm">
+          <colgroup>
+            <col className="w-[24%]" />
+            <col className="w-[10%]" />
+            <col className="w-[15%]" />
+            <col className="w-[10%]" />
+            <col className="w-[15%]" />
+            <col className="w-[18%]" />
+            <col className="w-[8%]" />
+          </colgroup>
           <thead className="bg-muted">
             <tr className="text-left">
               <th className="px-3 py-2 font-medium">{t(`${i18nPrefix}.lines.product`, 'Product')}</th>
-              <th className="px-3 py-2 font-medium w-24">{t(`${i18nPrefix}.lines.quantity`, 'Qty')}</th>
-              <th className="px-3 py-2 font-medium w-28">{t(`${i18nPrefix}.lines.unitPriceNet`, 'Net')}</th>
-              <th className="px-3 py-2 font-medium w-20">{t(`${i18nPrefix}.lines.taxRate`, 'Tax %')}</th>
-              <th className="px-3 py-2 font-medium w-28">{t(`${i18nPrefix}.lines.unitPriceGross`, 'Gross')}</th>
-              <th className="px-3 py-2 font-medium w-32 text-right">{t(`${i18nPrefix}.lines.lineTotal`, 'Total')}</th>
+              <th className="px-3 py-2 font-medium">{t(`${i18nPrefix}.lines.quantity`, 'Qty')}</th>
+              <th className="px-3 py-2 font-medium">{t(`${i18nPrefix}.lines.unitPriceNet`, 'Net')}</th>
+              <th className="px-3 py-2 font-medium">{t(`${i18nPrefix}.lines.taxRate`, 'Tax %')}</th>
+              <th className="px-3 py-2 font-medium">{t(`${i18nPrefix}.lines.unitPriceGross`, 'Gross')}</th>
+              <th className="px-3 py-2 font-medium text-right">{t(`${i18nPrefix}.lines.lineTotal`, 'Total')}</th>
               <th className="px-3 py-2 font-medium sr-only">{t(`${i18nPrefix}.lines.actions`, 'Actions')}</th>
             </tr>
           </thead>
@@ -503,7 +774,7 @@ function SimpleDocumentLineRow({
   return (
     <>
       <tr className="border-t align-top">
-        <td className="px-3 py-2 min-w-[14rem]">
+        <td className="px-3 py-2 min-w-0">
           <EntitySearchCombobox
             value={line.productId}
             onChange={(next) => {
@@ -538,40 +809,44 @@ function SimpleDocumentLineRow({
             createInNewTabAriaLabel={t(`${i18nPrefix}.lines.productCreateTab`, 'Open new product in a new tab')}
           />
         </td>
-        <td className="px-3 py-2">
+        <td className="px-3 py-2 min-w-0">
           <input
-            className={CRUD_FORM_TEXT_INPUT_CLASS}
+            className={`${CRUD_FORM_TEXT_INPUT_CLASS} w-full`}
             value={line.quantity}
             disabled={disabled}
+            inputMode="decimal"
             onChange={(event) => onUpdate({ quantity: event.target.value })}
           />
         </td>
-        <td className="px-3 py-2">
+        <td className="px-3 py-2 min-w-0">
           <input
-            className={CRUD_FORM_TEXT_INPUT_CLASS}
+            className={`${CRUD_FORM_TEXT_INPUT_CLASS} w-full`}
             value={line.unitPriceNet}
             disabled={disabled}
+            inputMode="decimal"
             onChange={(event) => onUpdate({ unitPriceNet: event.target.value })}
           />
         </td>
-        <td className="px-3 py-2">
+        <td className="px-3 py-2 min-w-0">
           <input
-            className={CRUD_FORM_TEXT_INPUT_CLASS}
+            className={`${CRUD_FORM_TEXT_INPUT_CLASS} w-full`}
             value={line.taxRate}
             disabled={disabled}
+            inputMode="decimal"
             onChange={(event) => onUpdate({ taxRate: event.target.value })}
           />
         </td>
-        <td className="px-3 py-2">
+        <td className="px-3 py-2 min-w-0">
           <input
-            className={CRUD_FORM_TEXT_INPUT_CLASS}
+            className={`${CRUD_FORM_TEXT_INPUT_CLASS} w-full`}
             value={line.unitPriceGross}
             disabled={disabled}
+            inputMode="decimal"
             placeholder={t(`${i18nPrefix}.lines.unitPriceGrossHint`, 'Auto')}
             onChange={(event) => onUpdate({ unitPriceGross: event.target.value })}
           />
         </td>
-        <td className="px-3 py-2 text-right">
+        <td className="px-3 py-2 text-right tabular-nums">
           <div className="space-y-0.5">
             <PriceWithCurrency amount={amounts.gross} currency={currencyCode} className="font-mono text-sm font-medium" />
             <div className="text-xs text-muted-foreground">
@@ -579,7 +854,7 @@ function SimpleDocumentLineRow({
             </div>
           </div>
         </td>
-        <td className="px-3 py-2 text-right">
+        <td className="px-2 py-2 text-center">
           <Button
             type="button"
             variant="ghost"
@@ -787,7 +1062,6 @@ export function buildSimpleDocumentFormGroups(
     },
     {
       id: 'lines',
-      title: t(`${i18nPrefix}.lines.title`, 'Lines'),
       column: 1,
       fields: ['lines'],
     },

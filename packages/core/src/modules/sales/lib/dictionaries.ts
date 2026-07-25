@@ -7,6 +7,7 @@ import {
 } from '@open-mercato/core/modules/dictionaries/lib/utils'
 
 export type SalesDictionaryKind =
+  | 'quote-status'
   | 'order-status'
   | 'order-line-status'
   | 'shipment-status'
@@ -23,6 +24,14 @@ type SalesDictionaryDefinition = {
 }
 
 const DEFINITIONS: Record<SalesDictionaryKind, SalesDictionaryDefinition> = {
+  'quote-status': {
+    key: 'sales.quote_status',
+    name: 'Sales quote statuses',
+    singular: 'Sales quote status',
+    description: 'Configurable set of statuses used by sales quotes.',
+    resourceKind: 'sales.quote-status',
+    commandPrefix: 'sales.quote-statuses',
+  },
   'order-status': {
     key: 'sales.order_status',
     name: 'Sales order statuses',
@@ -122,6 +131,17 @@ type SalesDictionarySeed = {
 }
 
 type SeedScope = { tenantId: string; organizationId: string }
+
+const QUOTE_STATUS_DEFAULTS: SalesDictionarySeed[] = [
+  { value: 'draft', label: 'Draft', color: '#94a3b8', icon: 'lucide:file-pen-line' },
+  { value: 'pending_approval', label: 'Pending Approval', color: '#f59e0b', icon: 'lucide:hourglass' },
+  { value: 'approved', label: 'Approved', color: '#16a34a', icon: 'lucide:check-circle' },
+  { value: 'rejected', label: 'Rejected', color: '#ef4444', icon: 'lucide:x-circle' },
+  { value: 'sent', label: 'Sent', color: '#0ea5e9', icon: 'lucide:send' },
+  { value: 'confirmed', label: 'Confirmed', color: '#2563eb', icon: 'lucide:badge-check' },
+  { value: 'expired', label: 'Expired', color: '#a855f7', icon: 'lucide:timer-off' },
+  { value: 'canceled', label: 'Canceled', color: '#ef4444', icon: 'lucide:x-circle' },
+]
 
 const ORDER_STATUS_DEFAULTS: SalesDictionarySeed[] = [
   { value: 'draft', label: 'Draft', color: '#94a3b8', icon: 'lucide:file-pen-line' },
@@ -245,10 +265,41 @@ async function seedSalesDictionary(
   }
 }
 
+const DEFAULTS_BY_KIND: Partial<Record<SalesDictionaryKind, SalesDictionarySeed[]>> = {
+  'quote-status': QUOTE_STATUS_DEFAULTS,
+  'order-status': ORDER_STATUS_DEFAULTS,
+  'order-line-status': ORDER_LINE_STATUS_DEFAULTS,
+  'shipment-status': SHIPMENT_STATUS_DEFAULTS,
+  'payment-status': PAYMENT_STATUS_DEFAULTS,
+  'adjustment-kind': ADJUSTMENT_KIND_DEFAULTS,
+}
+
+/** Ensure dictionary exists and seed missing default entries (idempotent). */
+export async function ensureSalesDictionaryWithDefaults(params: {
+  em: EntityManager
+  tenantId: string
+  organizationId: string
+  kind: SalesDictionaryKind
+}): Promise<Dictionary> {
+  const dictionary = await ensureSalesDictionary(params)
+  const defaults = DEFAULTS_BY_KIND[params.kind]
+  if (defaults?.length) {
+    await seedSalesDictionary(
+      params.em,
+      { tenantId: params.tenantId, organizationId: params.organizationId },
+      params.kind,
+      defaults,
+    )
+    await params.em.flush()
+  }
+  return dictionary
+}
+
 export async function seedSalesStatusDictionaries(
   em: EntityManager,
   scope: SeedScope
 ): Promise<void> {
+  await seedSalesDictionary(em, scope, 'quote-status', QUOTE_STATUS_DEFAULTS)
   await seedSalesDictionary(em, scope, 'order-status', ORDER_STATUS_DEFAULTS)
   await seedSalesDictionary(em, scope, 'order-line-status', ORDER_LINE_STATUS_DEFAULTS)
   await seedSalesDictionary(em, scope, 'shipment-status', SHIPMENT_STATUS_DEFAULTS)

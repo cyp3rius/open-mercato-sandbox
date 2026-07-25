@@ -94,6 +94,9 @@ describe('sales command registration', () => {
       label: '../statuses',
       path: '../statuses',
       expected: [
+        'sales.quote-statuses.create',
+        'sales.quote-statuses.update',
+        'sales.quote-statuses.delete',
         'sales.order-statuses.create',
         'sales.order-statuses.update',
         'sales.order-statuses.delete',

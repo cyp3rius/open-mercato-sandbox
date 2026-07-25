@@ -295,10 +295,8 @@ describe('CompanyPeopleSection', () => {
     })
   })
 
-  it('keeps the add-person section action configured after the first person is linked', () => {
-    const onActionChange = jest.fn()
-
-    renderWithProviders(
+  it('shows an in-tab add-person button when people are already linked', () => {
+    const { getByRole } = renderWithProviders(
       <CompanyPeopleSection
         companyId="company-123"
         initialPeople={[
@@ -310,15 +308,9 @@ describe('CompanyPeopleSection', () => {
         addActionLabel="Add person"
         emptyLabel="No linked people yet."
         emptyState={emptyState}
-        onActionChange={onActionChange}
       />,
     )
 
-    expect(onActionChange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        label: 'Add person',
-        onClick: expect.any(Function),
-      }),
-    )
+    expect(getByRole('button', { name: 'Add person' })).toBeTruthy()
   })
 })

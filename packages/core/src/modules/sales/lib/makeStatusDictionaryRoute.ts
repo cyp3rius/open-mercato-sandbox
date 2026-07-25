@@ -5,7 +5,7 @@ import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { Dictionary, DictionaryEntry } from '@open-mercato/core/modules/dictionaries/data/entities'
 import { statusDictionaryCreateSchema, statusDictionaryUpdateSchema } from '../data/validators'
-import { getSalesDictionaryDefinition, ensureSalesDictionary, type SalesDictionaryKind } from './dictionaries'
+import { getSalesDictionaryDefinition, ensureSalesDictionaryWithDefaults, type SalesDictionaryKind } from './dictionaries'
 import { buildAggregateSearchFilter, parseScopedCommandInput, resolveCrudRecordId } from '../api/utils'
 import {
   createPagedListResponseSchema,
@@ -91,7 +91,7 @@ export function makeStatusDictionaryRoute(config: StatusDictionaryRouteConfig) {
     }
 
     for (const orgId of candidateOrgIds) {
-      const dictionary = await ensureSalesDictionary({
+      const dictionary = await ensureSalesDictionaryWithDefaults({
         em,
         tenantId,
         organizationId: orgId,

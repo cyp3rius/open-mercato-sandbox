@@ -789,6 +789,14 @@ export function CaseProcedureStepExecutor({
                 createInNewTabHref={
                   block.allowCreate !== false ? selectEntityAdapter.createInNewTabHref : null
                 }
+                createInNewTabChoices={
+                  block.allowCreate !== false && selectEntityAdapter.createInNewTabChoices?.length
+                    ? selectEntityAdapter.createInNewTabChoices.map((choice) => ({
+                        href: choice.href,
+                        label: t(choice.labelKey, choice.labelFallback),
+                      }))
+                    : null
+                }
                 createInNewTabAriaLabel={t(
                   'cases.detail.procedure.selectEntityCreate',
                   'Create in a new tab',

@@ -273,7 +273,7 @@ function NotesSectionImpl<C = unknown>({
   viewerEmail,
   addActionLabel,
   emptyState,
-  onActionChange,
+  onActionChange: _onActionChange,
   translator,
   labelPrefix = 'customers.people.detail.notes',
   inlineLabelPrefix = 'customers.people.detail.inline',
@@ -509,21 +509,6 @@ function NotesSectionImpl<C = unknown>({
       return next
     })
   }, [writeMarkdownPreference])
-
-  React.useEffect(() => {
-    if (!onActionChange) return
-    if (!notes.length) {
-      onActionChange(null)
-      return
-    }
-    onActionChange({
-      label: addActionLabel,
-      onClick: focusComposer,
-      disabled: isSubmitting || isLoading || !hasEntity,
-      icon: <Plus className="mr-2 h-4 w-4" />,
-    })
-    return () => onActionChange(null)
-  }, [onActionChange, addActionLabel, focusComposer, hasEntity, isLoading, isSubmitting, notes.length])
 
   const adjustTextareaSize = React.useCallback((element: HTMLTextAreaElement | null) => {
     if (!element) return
@@ -873,6 +858,19 @@ function NotesSectionImpl<C = unknown>({
 
   return (
     <div className="mt-0 space-y-2">
+      {notes.length > 0 && !composerOpen ? (
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            size="sm"
+            onClick={focusComposer}
+            disabled={isSubmitting || isLoading || !hasEntity}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {addActionLabel}
+          </Button>
+        </div>
+      ) : null}
       <div
         className={[
           'overflow-hidden rounded-xl transition-all duration-300 ease-out',

@@ -128,6 +128,15 @@ export async function remoteSearchCustomerDealsForCaseCustomer(
 export type ProcedureEntityKindAdapter = {
   entityKind: ProcedureEntityKind
   createInNewTabHref: string
+  /**
+   * When set (e.g. customer → person | company), procedure UI shows a chooser
+   * before opening create. Labels are resolved by the executor via i18n.
+   */
+  createInNewTabChoices?: Array<{
+    href: string
+    labelKey: string
+    labelFallback: string
+  }>
   /** Case FK field to sync when selection is confirmed (null = metadata only). */
   syncCaseField: 'customerEntityId' | 'resourceId' | 'insurancePolicyId' | null
   onRemoteSearch: (
@@ -140,6 +149,18 @@ const ADAPTERS: Record<ProcedureEntityKind, ProcedureEntityKindAdapter> = {
   customer: {
     entityKind: 'customer',
     createInNewTabHref: '/backend/customers/people/create',
+    createInNewTabChoices: [
+      {
+        href: '/backend/customers/people/create',
+        labelKey: 'cases.detail.procedure.selectEntityCreatePerson',
+        labelFallback: 'Person',
+      },
+      {
+        href: '/backend/customers/companies/create',
+        labelKey: 'cases.detail.procedure.selectEntityCreateCompany',
+        labelFallback: 'Company',
+      },
+    ],
     syncCaseField: 'customerEntityId',
     onRemoteSearch: async (query) => remoteSearchCustomerEntities(query),
   },

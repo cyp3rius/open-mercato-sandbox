@@ -23,7 +23,12 @@ import {
 } from '@open-mercato/core/modules/dictionaries/components/DictionaryTable'
 import { raiseCrudError } from '@open-mercato/ui/backend/utils/serverErrors'
 
-type SalesStatusKind = 'order-statuses' | 'order-line-statuses' | 'shipment-statuses' | 'payment-statuses'
+type SalesStatusKind =
+  | 'quote-statuses'
+  | 'order-statuses'
+  | 'order-line-statuses'
+  | 'shipment-statuses'
+  | 'payment-statuses'
 
 type SectionDefinition = {
   kind: SalesStatusKind
@@ -52,6 +57,14 @@ export function StatusSettings() {
 
   const sections = React.useMemo<SectionDefinition[]>(() => [
     {
+      kind: 'quote-statuses',
+      title: translate('sales.config.statuses.quotes.title', 'Quote statuses'),
+      description: translate(
+        'sales.config.statuses.quotes.description',
+        'Configure the status values available for sales quotes.',
+      ),
+    },
+    {
       kind: 'order-statuses',
       title: translate('sales.config.statuses.orders.title', 'Order statuses'),
       description: translate('sales.config.statuses.orders.description', 'Configure the status values available for sales orders.'),
@@ -74,12 +87,14 @@ export function StatusSettings() {
   ], [translate])
 
   const [entriesByKind, setEntriesByKind] = React.useState<Record<SalesStatusKind, DictionaryTableEntry[]>>({
+    'quote-statuses': [],
     'order-statuses': [],
     'order-line-statuses': [],
     'shipment-statuses': [],
     'payment-statuses': [],
   })
   const [loadingKind, setLoadingKind] = React.useState<Record<SalesStatusKind, boolean>>({
+    'quote-statuses': false,
     'order-statuses': false,
     'order-line-statuses': false,
     'shipment-statuses': false,
@@ -91,6 +106,7 @@ export function StatusSettings() {
 
   const apiPaths = React.useMemo<Record<SalesStatusKind, string>>(
     () => ({
+      'quote-statuses': '/api/sales/quote-statuses',
       'order-statuses': '/api/sales/order-statuses',
       'order-line-statuses': '/api/sales/order-line-statuses',
       'shipment-statuses': '/api/sales/shipment-statuses',
@@ -135,6 +151,7 @@ export function StatusSettings() {
   }, [apiPaths, translate])
 
   React.useEffect(() => {
+    void loadEntries('quote-statuses')
     void loadEntries('order-statuses')
     void loadEntries('order-line-statuses')
     void loadEntries('shipment-statuses')

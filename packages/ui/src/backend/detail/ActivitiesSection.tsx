@@ -699,7 +699,7 @@ function ActivitiesSectionImpl<C = unknown>({
   dealId,
   addActionLabel,
   emptyState,
-  onActionChange,
+  onActionChange: _onActionChange,
   onLoadingChange,
   dealOptions,
   entityOptions,
@@ -1000,41 +1000,6 @@ function ActivitiesSectionImpl<C = unknown>({
     [closeDialog, dialogMode, editingActivityId, handleCreate, handleUpdate, t],
   )
 
-  React.useEffect(() => {
-    if (!onActionChange) return
-    if (activities.length === 0) {
-      onActionChange(null)
-      return () => {
-        onActionChange(null)
-      }
-    }
-    const disabled = resolveEntityForSubmission(null) === null || pendingAction !== null || isLoading
-    const action: SectionAction = {
-      label: (
-        <span className="inline-flex items-center gap-1.5">
-          <Plus className="h-4 w-4" />
-          {addActionLabel}
-        </span>
-      ),
-      onClick: () => {
-        if (!disabled) openCreateDialog()
-      },
-      disabled,
-    }
-    onActionChange(action)
-    return () => {
-      onActionChange(null)
-    }
-  }, [
-    activities.length,
-    addActionLabel,
-    isLoading,
-    onActionChange,
-    openCreateDialog,
-    pendingAction,
-    resolveEntityForSubmission,
-  ])
-
   const isFormPending =
     pendingAction?.kind === 'create' ||
     (pendingAction?.kind === 'update' && pendingAction.id === editingActivityId)
@@ -1093,6 +1058,21 @@ function ActivitiesSectionImpl<C = unknown>({
                   disabled: resolveEntityForSubmission(null) === null || pendingAction !== null,
                 }}
               />
+            ) : null}
+            {activities.length > 0 ? (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={openCreateDialog}
+                  disabled={
+                    resolveEntityForSubmission(null) === null || pendingAction !== null || isLoading
+                  }
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  {addActionLabel}
+                </Button>
+              </div>
             ) : null}
             {visibleActivities.length > 0
               ? visibleActivities.map((activity) => {

@@ -304,6 +304,8 @@
   "cases.detail.procedure.selectEntityPlaceholder": "Szukaj…",
   "cases.detail.procedure.selectEntitySearch": "Szukaj…",
   "cases.detail.procedure.selectEntityCreate": "Utwórz w nowej karcie",
+  "cases.detail.procedure.selectEntityCreatePerson": "Osoba",
+  "cases.detail.procedure.selectEntityCreateCompany": "Firma",
   "cases.detail.procedure.selectEntityConfirm": "Potwierdź wybór",
   "cases.detail.procedure.selectEntityChange": "Zmień",
   "cases.detail.procedure.selectEntitySaved": "Wybrano",

@@ -9,7 +9,9 @@ import {
   mergeEntitySearchOption,
   remoteSearchAuthUsers,
   remoteSearchCustomerEntities,
+  resolveCustomerEntityDisplayLabel,
   resolveResourceDisplayLabel,
+  resolveUserDisplayLabel,
 } from '../../procurement/lib/procurementEntitySearch'
 import {
   remoteSearchInsurancePoliciesForCaseCustomer,
@@ -108,14 +110,28 @@ export function buildCaseCreateFormFields(t: CaseFormTranslator): CrudField[] {
       layout: 'half',
       component: ({ value, setValue, disabled }) => {
         const ownerUserId = typeof value === 'string' ? value : ''
+        const [ownerLabel, setOwnerLabel] = React.useState(ownerUserId)
+        React.useEffect(() => {
+          let cancelled = false
+          if (!ownerUserId.trim()) {
+            setOwnerLabel('')
+            return
+          }
+          void resolveUserDisplayLabel(ownerUserId).then((label) => {
+            if (!cancelled) setOwnerLabel(label ?? ownerUserId)
+          })
+          return () => {
+            cancelled = true
+          }
+        }, [ownerUserId])
         return (
           <EntitySearchCombobox
             value={ownerUserId}
             onChange={setValue}
-            options={mergeEntitySearchOption([], ownerUserId, ownerUserId)}
+            options={mergeEntitySearchOption([], ownerUserId, ownerLabel || ownerUserId)}
             onRemoteSearch={async (query) => {
               const rows = await remoteSearchAuthUsers(query)
-              return mergeEntitySearchOption(rows, ownerUserId, ownerUserId)
+              return mergeEntitySearchOption(rows, ownerUserId, ownerLabel || ownerUserId)
             }}
             placeholder={t('cases.form.ownerPlaceholder', 'Choose an owner…')}
             searchPlaceholder={t('cases.form.ownerSearch', 'Search users…')}
@@ -141,6 +157,7 @@ export function buildCaseCreateFormFields(t: CaseFormTranslator): CrudField[] {
       layout: 'half',
       component: ({ value, setValue, setFormValue, disabled }) => {
         const str = typeof value === 'string' ? value : ''
+        const [customerLabel, setCustomerLabel] = React.useState(str)
         const prevCustomerRef = React.useRef<string | undefined>(undefined)
         React.useEffect(() => {
           if (prevCustomerRef.current === undefined) {
@@ -154,14 +171,27 @@ export function buildCaseCreateFormFields(t: CaseFormTranslator): CrudField[] {
           }
           prevCustomerRef.current = str
         }, [str, setFormValue])
+        React.useEffect(() => {
+          let cancelled = false
+          if (!str.trim()) {
+            setCustomerLabel('')
+            return
+          }
+          void resolveCustomerEntityDisplayLabel(str).then((label) => {
+            if (!cancelled) setCustomerLabel(label ?? str)
+          })
+          return () => {
+            cancelled = true
+          }
+        }, [str])
         return (
           <EntitySearchCombobox
             value={str}
             onChange={(next) => setValue(next)}
-            options={mergeEntitySearchOption([], str, str)}
+            options={mergeEntitySearchOption([], str, customerLabel || str)}
             onRemoteSearch={async (q) => {
               const rows = await remoteSearchCustomerEntities(q)
-              return mergeEntitySearchOption(rows, str, str)
+              return mergeEntitySearchOption(rows, str, customerLabel || str)
             }}
             placeholder={t('cases.form.customerSearch', 'Search customers…')}
             disabled={disabled}

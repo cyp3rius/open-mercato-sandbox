@@ -2,7 +2,8 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { ArrowUpRightSquare, Loader2, Pencil, Trash2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { ArrowUpRightSquare, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
@@ -261,6 +262,7 @@ function buildInitialValues(deal: NormalizedDeal): Partial<DealFormBaseValues & 
     })(),
     expectedCloseAt: deal.expectedCloseAt ?? null,
     description: deal.description ?? '',
+    ownerUserId: deal.ownerUserId ?? '',
     personIds: Array.isArray(deal.personIds) ? deal.personIds : [],
     companyIds: Array.isArray(deal.companyIds) ? deal.companyIds : [],
   }
@@ -305,6 +307,8 @@ export type DealsSectionProps = {
   onActionChange?: (action: SectionAction | null) => void
   onLoadingChange?: (isLoading: boolean) => void
   translator?: Translator
+  /** When set, Add navigates here instead of opening the in-page create dialog. */
+  createHref?: string | null
 }
 
 export function DealsSection({
@@ -312,16 +316,19 @@ export function DealsSection({
   addActionLabel,
   emptyLabel,
   emptyState,
-  onActionChange,
+  onActionChange: _onActionChange,
   onLoadingChange,
   translator,
+  createHref,
 }: DealsSectionProps) {
   const tHook = useT()
+  const router = useRouter()
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const fallbackTranslator = React.useMemo<Translator>(() => createTranslatorWithFallback(tHook), [tHook])
   const t: Translator = React.useMemo(() => translator ?? fallbackTranslator, [translator, fallbackTranslator])
   useCurrencyDictionary()
   const scopeVersion = useOrganizationScopeVersion()
+  const resolvedCreateHref = typeof createHref === 'string' && createHref.trim() ? createHref.trim() : null
   const statusDictionaryQuery = useCustomerDictionary('deal-statuses', scopeVersion)
   const statusDictionaryMap = statusDictionaryQuery.data?.map ?? null
   const customFieldResources = useCustomFieldDisplay(E.customers.customer_deal)
@@ -537,6 +544,10 @@ export function DealsSection({
 
   const openCreateDialog = React.useCallback(() => {
     if (!scope) return
+    if (resolvedCreateHref) {
+      router.push(resolvedCreateHref)
+      return
+    }
     setDialogMode('create')
     setEditingDealId(null)
     setInitialValues({
@@ -544,7 +555,7 @@ export function DealsSection({
       companyIds: scope.kind === 'company' ? [scope.entityId] : [],
     })
     setDialogOpen(true)
-  }, [scope])
+  }, [resolvedCreateHref, router, scope])
 
   const openEditDialog = React.useCallback(
     (deal: NormalizedDeal) => {
@@ -591,6 +602,7 @@ export function DealsSection({
           probability: typeof base.probability === 'number' ? base.probability : undefined,
           expectedCloseAt: base.expectedCloseAt ?? undefined,
           description: base.description ?? undefined,
+          ownerUserId: base.ownerUserId,
           personIds,
           companyIds,
         }
@@ -618,6 +630,7 @@ export function DealsSection({
             probability: base.probability ?? null,
             expectedCloseAt: base.expectedCloseAt ?? null,
             description: base.description ?? null,
+            ownerUserId: base.ownerUserId,
             personIds,
             companyIds,
             customValues: customValuesForState,
@@ -656,6 +669,7 @@ export function DealsSection({
           probability: typeof base.probability === 'number' ? base.probability : undefined,
           expectedCloseAt: base.expectedCloseAt ?? undefined,
           description: base.description ?? undefined,
+          ownerUserId: base.ownerUserId,
           personIds,
           companyIds,
         }
@@ -684,6 +698,7 @@ export function DealsSection({
                     probability: base.probability ?? null,
                     expectedCloseAt: base.expectedCloseAt ?? null,
                     description: base.description ?? null,
+                    ownerUserId: base.ownerUserId,
                     personIds,
                     people: personIds.map((id) => deal.people?.find((entry) => entry.id === id) ?? { id, label: '' }),
                     companyIds,
@@ -760,22 +775,6 @@ export function DealsSection({
     [closeDialog, dialogMode, editingDealId, handleCreate, handleUpdate, translate],
   )
 
-  React.useEffect(() => {
-    if (!onActionChange) return
-    const disabled = !scope || isLoading || pendingAction !== null
-    const action: SectionAction = {
-      label: addActionLabel,
-      onClick: () => {
-        if (!disabled) openCreateDialog()
-      },
-      disabled,
-    }
-    onActionChange(action)
-    return () => {
-      onActionChange(null)
-    }
-  }, [addActionLabel, isLoading, onActionChange, openCreateDialog, pendingAction, scope])
-
   const isFormPending =
     pendingAction?.kind === 'create' ||
     (pendingAction?.kind === 'update' && pendingAction.id === editingDealId)
@@ -811,6 +810,19 @@ export function DealsSection({
                 disabled: !scope || pendingAction !== null,
               }}
             />
+          ) : null}
+          {sortedDeals.length > 0 ? (
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                size="sm"
+                onClick={openCreateDialog}
+                disabled={!scope || isLoading || pendingAction !== null}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                {addActionLabel}
+              </Button>
+            </div>
           ) : null}
           <div className="space-y-4">
             {sortedDeals.map((deal) => {

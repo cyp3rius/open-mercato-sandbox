@@ -137,7 +137,7 @@ export function CompanyPeopleSection({
   emptyLabel,
   emptyState,
   onPeopleChange,
-  onActionChange,
+  onActionChange: _onActionChange,
   translator,
   onLoadingChange,
   onDataRefresh,
@@ -165,19 +165,6 @@ export function CompanyPeopleSection({
     },
     [runGuardedMutation],
   )
-
-  React.useEffect(() => {
-    const action: SectionAction = {
-      label: addActionLabel,
-      onClick: () => {
-        router.push(createPersonHref)
-      },
-    }
-    onActionChange?.(action)
-    return () => {
-      onActionChange?.(null)
-    }
-  }, [addActionLabel, createPersonHref, onActionChange, router])
 
   React.useEffect(() => {
     pendingPeopleChangeRef.current = false
@@ -409,6 +396,7 @@ export function CompanyPeopleSection({
       <div className="space-y-3">
         <div className="flex flex-wrap justify-end gap-2">
           {linkAction}
+          {addPersonAction}
         </div>
         <div className="rounded border bg-muted/20">
           {people.map((person) => (

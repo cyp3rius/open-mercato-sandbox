@@ -173,6 +173,7 @@ export async function POST(req: Request) {
       tenantId: quote.tenantId,
       organizationId: quote.organizationId,
       value: 'sent',
+      kind: 'quote-status',
     })
     quote.updatedAt = now
     em.persist(quote)

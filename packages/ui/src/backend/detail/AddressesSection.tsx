@@ -74,9 +74,9 @@ function generateTempId() {
 function AddressesSectionImpl<C = unknown>({
   entityId,
   emptyLabel,
-  addActionLabel,
+  addActionLabel: _addActionLabel,
   emptyState,
-  onActionChange,
+  onActionChange: _onActionChange,
   translator,
   onLoadingChange,
   dataAdapter,
@@ -287,31 +287,6 @@ function AddressesSectionImpl<C = unknown>({
     }))
   }, [addresses])
 
-  const [addAction, setAddAction] = React.useState<{
-    openCreateForm: () => void
-    addDisabled: boolean
-  } | null>(null)
-
-  const handleAddActionChange = React.useCallback(
-    (action: { openCreateForm: () => void; addDisabled: boolean } | null) => {
-      setAddAction(action)
-    },
-    [],
-  )
-
-  React.useEffect(() => {
-    if (!onActionChange) return
-    if (!addAction || addresses.length === 0) {
-      onActionChange(null)
-      return
-    }
-    onActionChange({
-      label: addActionLabel,
-      onClick: addAction.openCreateForm,
-      disabled: addAction.addDisabled,
-    })
-  }, [addAction, addActionLabel, addresses.length, onActionChange])
-
   return (
     <div className="mt-4">
       {isLoading ? (
@@ -330,8 +305,6 @@ function AddressesSectionImpl<C = unknown>({
           isSubmitting={isSubmitting}
           emptyLabel={emptyLabel}
           t={t}
-          hideAddButton
-          onAddActionChange={handleAddActionChange}
           emptyStateTitle={emptyState.title}
           emptyStateActionLabel={emptyState.actionLabel}
           labelPrefix={labelPrefix}

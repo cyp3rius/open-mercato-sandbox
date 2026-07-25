@@ -23,8 +23,6 @@ describe('DetailTabsLayout', () => {
         ]}
         activeTab="notes"
         onTabChange={handleTabChange}
-        sectionAction={null}
-        onSectionAction={() => {}}
         navAriaLabel="Customer detail sections"
       >
         <div>Tab content</div>
@@ -40,8 +38,9 @@ describe('DetailTabsLayout', () => {
     const tasksTab = getByRole('tab', { name: 'Tasks' })
 
     expect(notesTab).toHaveAttribute('type', 'button')
-    expect(notesTab.className).toContain('hover:bg-transparent')
     expect(tasksTab).toHaveAttribute('type', 'button')
+    expect(notesTab).toHaveAttribute('aria-selected', 'true')
+    expect(tasksTab).toHaveAttribute('aria-selected', 'false')
 
     fireEvent.click(tasksTab)
 

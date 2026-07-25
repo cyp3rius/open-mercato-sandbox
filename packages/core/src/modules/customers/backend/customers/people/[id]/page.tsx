@@ -20,8 +20,7 @@ import {
   NotesSection,
   type CommentSummary,
   InlineSelectEditor,
-  type SectionAction,
-} from '@open-mercato/ui/backend/detail'
+  } from '@open-mercato/ui/backend/detail'
 import {
   TagsSection,
   type TagOption,
@@ -57,6 +56,16 @@ import {
   remoteSearchAuthUsers,
   resolveUserDisplayLabel,
 } from '../../../../../procurement/lib/procurementEntitySearch'
+import {
+  buildCustomerDetailTabDefinitions,
+  resolveCustomerDetailTab,
+} from '../../../../components/detail/customerEntityDetailTabs'
+import { buildSimpleDealCreateHref } from '../../../../components/detail/customerEntityCreatePrefill'
+import { CustomerEntityOrdersTab } from '../../../../components/detail/CustomerEntityOrdersTab'
+import { CustomerEntityQuotesTab } from '../../../../components/detail/CustomerEntityQuotesTab'
+import { CustomerEntityCasesTab } from '../../../../components/detail/CustomerEntityCasesTab'
+import { CustomerEntityPoliciesTab } from '../../../../components/detail/CustomerEntityPoliciesTab'
+import { PersonResourcesSection } from '../../../../components/detail/PersonResourcesSection'
 
 type PersonOverview = {
   person: {
@@ -107,7 +116,7 @@ type PersonOverview = {
   } | null
 }
 
-type SectionKey = 'notes' | 'activities' | 'deals' | 'addresses' | 'tasks' | string
+type SectionKey = string
 
 type ProfileEditableField =
   | 'firstName'
@@ -130,33 +139,21 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
   const notesAdapter = React.useMemo(() => createCustomerNotesAdapter(detailTranslator), [detailTranslator])
   const router = useRouter()
   const searchParams = useSearchParams()
-  const initialTab = React.useMemo(() => {
-    const raw = searchParams?.get('tab')
-    if (raw === 'notes' || raw === 'activities' || raw === 'deals' || raw === 'addresses' || raw === 'tasks') {
-      return raw
-    }
-    return 'notes'
-  }, [searchParams])
+  const initialTab = React.useMemo(
+    () => resolveCustomerDetailTab(searchParams?.get('tab')),
+    [searchParams],
+  )
   const [data, setData] = React.useState<PersonOverview | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [activeTab, setActiveTab] = React.useState<SectionKey>(initialTab)
-  const [sectionAction, setSectionAction] = React.useState<SectionAction | null>(null)
   const [isDeleting, setIsDeleting] = React.useState(false)
   const [ownerLabel, setOwnerLabel] = React.useState<string | null>(null)
 
-  const handleSectionActionChange = React.useCallback((action: SectionAction | null) => {
-    setSectionAction(action)
-  }, [])
-
-  const handleSectionAction = React.useCallback(() => {
-    if (!sectionAction || sectionAction.disabled) return
-    sectionAction.onClick()
-  }, [sectionAction])
-
   React.useEffect(() => {
-    setSectionAction(null)
-  }, [activeTab])
+    setActiveTab(initialTab)
+  }, [initialTab])
+
   const validators = React.useMemo(() => ({
     email: (value: string) => {
       if (!value) return null
@@ -286,15 +283,14 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
   const injectedTabMap = React.useMemo(() => new Map(injectedTabs.map((tab) => [tab.id, tab.render])), [injectedTabs])
 
   const tabs = React.useMemo(
-    () => [
-      { id: 'notes' as const, label: t('customers.people.detail.tabs.notes') },
-      { id: 'activities' as const, label: t('customers.people.detail.tabs.activities') },
-      { id: 'deals' as const, label: t('customers.people.detail.tabs.deals') },
-      { id: 'addresses' as const, label: t('customers.people.detail.tabs.addresses') },
-      { id: 'tasks' as const, label: t('customers.people.detail.tabs.tasks') },
-      ...injectedTabs.map((tab) => ({ id: tab.id as SectionKey, label: tab.label })),
-    ],
-    [injectedTabs, t]
+    () =>
+      buildCustomerDetailTabDefinitions({
+        kind: 'person',
+        t,
+        i18nPrefix: 'customers.people.detail',
+        injectedTabs: injectedTabs.map((tab) => ({ id: tab.id, label: tab.label })),
+      }),
+    [injectedTabs, t],
   )
 
   const personName = React.useMemo(
@@ -305,6 +301,18 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
   const dealsScope = React.useMemo(
     () => (personId ? ({ kind: 'person', entityId: personId } as const) : null),
     [personId],
+  )
+
+  const dealCreateHref = React.useMemo(
+    () =>
+      personId
+        ? buildSimpleDealCreateHref({
+            customerEntityId: personId,
+            ownerUserId: data?.person?.ownerUserId ?? null,
+            kind: 'person',
+          })
+        : null,
+    [data?.person?.ownerUserId, personId],
   )
   const dealSelectOptions = React.useMemo(
     () =>
@@ -848,7 +856,7 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
   
     return (
       <Page>
-        <PageBody className="space-y-8">
+        <PageBody className="space-y-4">
           <PersonHighlights
             person={person}
             profile={profile}
@@ -960,21 +968,39 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
               )
             }}
           />
-  
-          <DetailTabsLayout
-            tabs={tabs}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            sectionAction={sectionAction}
-            onSectionAction={handleSectionAction}
-            navAriaLabel={t('customers.people.detail.tabs.label', 'Person detail sections')}
-            headerClassName="mb-1"
-            panelContentKey={activeTab}
-          >
-            {(() => {
-              const injected = injectedTabMap.get(activeTab)
-              if (injected) return injected()
-              if (activeTab === 'notes') {
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[7fr_3fr] lg:items-start">
+            <div className="min-w-0">
+              <DetailTabsLayout
+                tabs={tabs}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                navAriaLabel={t('customers.people.detail.tabs.label', 'Person detail sections')}
+                headerClassName="mb-1"
+                panelContentKey={activeTab}
+              >
+                {(() => {
+                  const injected = injectedTabMap.get(activeTab)
+                  if (injected) return injected()
+                  if (activeTab === 'details') {
+                    return (
+                      <div className="space-y-6">
+                        <div className="space-y-3">
+                          <h2 className="text-sm font-semibold">{t('customers.people.detail.sections.details')}</h2>
+                          <DetailFieldsSection
+                            fields={detailFields.filter((field) => field.key !== 'description')}
+                          />
+                          <InjectionSpot
+                            spotId="customers.person.detail:details"
+                            context={injectionContext}
+                            data={data}
+                            onDataChange={(next) => setData(next as PersonOverview)}
+                          />
+                        </div>
+                      </div>
+                    )
+                  }
+                  if (activeTab === 'notes') {
                 return (
                   <NotesSection
                     entityId={personId}
@@ -988,7 +1014,6 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
                       title: t('customers.people.detail.emptyState.notes.title'),
                       actionLabel: t('customers.people.detail.emptyState.notes.action'),
                     }}
-                    onActionChange={handleSectionActionChange}
                     translator={detailTranslator}
                     onLoadingChange={handleNotesLoadingChange}
                     dataAdapter={notesAdapter}
@@ -1012,7 +1037,6 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
                       title: t('customers.people.detail.emptyState.activities.title'),
                       actionLabel: t('customers.people.detail.emptyState.activities.action'),
                     }}
-                    onActionChange={handleSectionActionChange}
                     onLoadingChange={handleActivitiesLoadingChange}
                   />
                 )
@@ -1027,9 +1051,37 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
                       title: t('customers.people.detail.emptyState.deals.title'),
                       actionLabel: t('customers.people.detail.emptyState.deals.action'),
                     }}
-                    onActionChange={handleSectionActionChange}
                     onLoadingChange={handleDealsLoadingChange}
                     translator={detailTranslator}
+                    createHref={dealCreateHref}
+                  />
+                )
+              }
+              if (activeTab === 'quotes') {
+                return (
+                  <CustomerEntityQuotesTab
+                    customerEntityId={personId}
+                    ownerUserId={data.person.ownerUserId ?? null}
+                    kind="person"
+                    addActionLabel={t('customers.people.detail.actions.addQuote', 'Add quote')}
+                    emptyState={{
+                      title: t('customers.people.detail.emptyState.quotes.title', 'No quotes yet'),
+                      actionLabel: t('customers.people.detail.emptyState.quotes.action', 'Create a quote'),
+                    }}
+                  />
+                )
+              }
+              if (activeTab === 'orders') {
+                return (
+                  <CustomerEntityOrdersTab
+                    customerEntityId={personId}
+                    ownerUserId={data.person.ownerUserId ?? null}
+                    kind="person"
+                    addActionLabel={t('customers.people.detail.actions.addOrder', 'Add order')}
+                    emptyState={{
+                      title: t('customers.people.detail.emptyState.orders.title', 'No orders yet'),
+                      actionLabel: t('customers.people.detail.emptyState.orders.action', 'Create an order'),
+                    }}
                   />
                 )
               }
@@ -1043,7 +1095,6 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
                       title: t('customers.people.detail.emptyState.addresses.title'),
                       actionLabel: t('customers.people.detail.emptyState.addresses.action'),
                     }}
-                    onActionChange={handleSectionActionChange}
                     onLoadingChange={handleAddressesLoadingChange}
                     translator={detailTranslator}
                   />
@@ -1061,7 +1112,6 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
                       title: t('customers.people.detail.emptyState.tasks.title'),
                       actionLabel: t('customers.people.detail.emptyState.tasks.action'),
                     }}
-                    onActionChange={handleSectionActionChange}
                     onLoadingChange={handleTasksLoadingChange}
                     translator={detailTranslator}
                     entityName={personName}
@@ -1070,35 +1120,67 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
                   />
                 )
               }
+              if (activeTab === 'resources') {
+                return <PersonResourcesSection customerEntityId={personId} />
+              }
+              if (activeTab === 'cases') {
+                return (
+                  <CustomerEntityCasesTab
+                    customerEntityId={personId}
+                    ownerUserId={data.person.ownerUserId ?? null}
+                    kind="person"
+                    addActionLabel={t('customers.people.detail.actions.addCase', 'Add case')}
+                    emptyState={{
+                      title: t('customers.people.detail.emptyState.cases.title', 'No cases yet'),
+                      actionLabel: t('customers.people.detail.emptyState.cases.action', 'Create a case'),
+                    }}
+                  />
+                )
+              }
+              if (activeTab === 'policies') {
+                return (
+                  <CustomerEntityPoliciesTab
+                    customerEntityId={personId}
+                    ownerUserId={data.person.ownerUserId ?? null}
+                    kind="person"
+                    addActionLabel={t('customers.people.detail.actions.addPolicy', 'Add policy')}
+                    emptyState={{
+                      title: t('customers.people.detail.emptyState.policies.title', 'No policies yet'),
+                      actionLabel: t('customers.people.detail.emptyState.policies.action', 'Create a policy'),
+                    }}
+                  />
+                )
+              }
               return null
             })()}
-          </DetailTabsLayout>
-  
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <h2 className="text-sm font-semibold">{t('customers.people.detail.sections.details')}</h2>
-              <DetailFieldsSection fields={detailFields} />
-              <InjectionSpot
-                spotId="customers.person.detail:details"
-                context={injectionContext}
-                data={data}
-                onDataChange={(next) => setData(next as PersonOverview)}
-              />
+              </DetailTabsLayout>
             </div>
 
-            <CustomDataSection
-              entityIds={[E.customers.customer_entity, E.customers.customer_person_profile]}
-              values={data.customFields ?? {}}
-              onSubmit={handleCustomFieldsSubmit}
-              title={t('customers.people.detail.sections.customFields')}
-            />
-  
-            <TagsSection
-              entityId={data.person.id}
-              tags={data.tags}
-              onChange={handleTagsChange}
-              isSubmitting={false}
-            />
+            <aside className="min-w-0 space-y-4">
+              <div className="rounded-lg border bg-card px-4 py-3">
+                <CustomDataSection
+                  entityIds={[E.customers.customer_entity, E.customers.customer_person_profile]}
+                  values={data.customFields ?? {}}
+                  onSubmit={handleCustomFieldsSubmit}
+                  title={t('customers.people.detail.sections.customFields')}
+                />
+              </div>
+              <div className="rounded-lg border bg-card px-4 py-3 space-y-3">
+                <h2 className="text-sm font-semibold">{t('customers.people.form.groups.notes', 'Notes')}</h2>
+                <DetailFieldsSection
+                  fields={detailFields.filter((field) => field.key === 'description')}
+                  className="sm:grid-cols-1 xl:grid-cols-1"
+                />
+              </div>
+              <div className="rounded-lg border bg-card px-4 py-3">
+                <TagsSection
+                  entityId={data.person.id}
+                  tags={data.tags}
+                  onChange={handleTagsChange}
+                  isSubmitting={false}
+                />
+              </div>
+            </aside>
           </div>
 
         </PageBody>

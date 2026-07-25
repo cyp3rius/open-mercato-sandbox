@@ -4743,6 +4743,7 @@ const updateQuoteCommand: CommandHandler<
         tenantId: quote.tenantId,
         organizationId: quote.organizationId,
         value: "draft",
+        kind: "quote-status",
       });
     }
     if (shouldRecalculateTotals) {

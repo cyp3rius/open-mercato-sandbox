@@ -19,6 +19,12 @@ export type EntitySearchComboboxOption = {
   color?: string
 }
 
+/** When more than one create target exists (e.g. person vs company), show a chooser before opening a tab. */
+export type EntitySearchCreateChoice = {
+  href: string
+  label: string
+}
+
 export type EntitySearchComboboxProps = {
   value: string
   onChange: (next: string) => void
@@ -32,6 +38,12 @@ export type EntitySearchComboboxProps = {
   /** Opens in a new browser tab (e.g. create entity / settings). Hidden when null/undefined/empty. */
   createInNewTabHref?: string | null
   createInNewTabAriaLabel?: string
+  /**
+   * Optional create targets. When 2+ entries are provided, the + control opens a chooser
+   * (person / company, etc.) before opening a new tab. Takes precedence over a single href
+   * when non-empty.
+   */
+  createInNewTabChoices?: EntitySearchCreateChoice[] | null
   /** Shown on the trigger when `value` is set but the label is not yet in `options` (e.g. async title). */
   selectedDisplayOverride?: string
   resolveDisplayLabel?: (value: string) => string
@@ -51,6 +63,24 @@ function useDebouncedValue<T>(value: T, ms: number): T {
   return debounced
 }
 
+function normalizeCreateChoices(
+  choices: EntitySearchCreateChoice[] | null | undefined,
+  singleHref: string | null | undefined,
+): EntitySearchCreateChoice[] {
+  const fromChoices = Array.isArray(choices)
+    ? choices
+        .map((row) => ({
+          href: typeof row.href === 'string' ? row.href.trim() : '',
+          label: typeof row.label === 'string' ? row.label.trim() : '',
+        }))
+        .filter((row) => row.href.length > 0 && row.label.length > 0)
+    : []
+  if (fromChoices.length > 0) return fromChoices
+  const href = typeof singleHref === 'string' ? singleHref.trim() : ''
+  if (!href.length) return []
+  return [{ href, label: '' }]
+}
+
 export function EntitySearchCombobox({
   value,
   onChange,
@@ -62,6 +92,7 @@ export function EntitySearchCombobox({
   onRemoteSearch,
   createInNewTabHref,
   createInNewTabAriaLabel,
+  createInNewTabChoices,
   selectedDisplayOverride,
   resolveDisplayLabel,
   className,
@@ -69,6 +100,7 @@ export function EntitySearchCombobox({
   const t = useT()
   const isRemote = typeof onRemoteSearch === 'function'
   const [open, setOpen] = React.useState(false)
+  const [createChooserOpen, setCreateChooserOpen] = React.useState(false)
   const [query, setQuery] = React.useState('')
   const remoteDelay = query.trim().length === 0 ? 0 : 280
   const debouncedQuery = useDebouncedValue(query, isRemote ? remoteDelay : 0)
@@ -79,6 +111,13 @@ export function EntitySearchCombobox({
   const defaultEmpty = emptyText ?? t('ui.forms.entitySearch.empty', 'No results.')
   const addLabel =
     createInNewTabAriaLabel ?? t('ui.forms.entitySearch.addInNewTab', 'Add in a new tab')
+  const chooseCreateLabel = t('ui.forms.entitySearch.chooseCreateType', 'Choose what to create')
+
+  const createChoices = React.useMemo(
+    () => normalizeCreateChoices(createInNewTabChoices, createInNewTabHref),
+    [createInNewTabChoices, createInNewTabHref],
+  )
+  const needsCreateChooser = createChoices.length > 1
 
   const localRows = options
 
@@ -125,14 +164,18 @@ export function EntitySearchCombobox({
     if (next) setQuery('')
   }, [])
 
-  const showAdd =
-    typeof createInNewTabHref === 'string' && createInNewTabHref.trim().length > 0 && !disabled
+  const showAdd = createChoices.length > 0 && !disabled
+
+  const openCreateHref = React.useCallback((href: string) => {
+    const next = href.trim()
+    if (!next.length) return
+    window.open(next, '_blank', 'noopener,noreferrer')
+  }, [])
 
   const openCreate = React.useCallback(() => {
-    const href = typeof createInNewTabHref === 'string' ? createInNewTabHref.trim() : ''
-    if (!href.length) return
-    window.open(href, '_blank', 'noopener,noreferrer')
-  }, [createInNewTabHref])
+    const only = createChoices[0]
+    if (only) openCreateHref(only.href)
+  }, [createChoices, openCreateHref])
 
   return (
     <div className={cn('flex min-w-0 items-center gap-1.5', className)}>
@@ -237,18 +280,61 @@ export function EntitySearchCombobox({
         </PopoverContent>
       </Popover>
       {showAdd ? (
-        <IconButton
-          type="button"
-          variant="outline"
-          size="lg"
-          className="size-9 shrink-0"
-          aria-label={addLabel}
-          title={addLabel}
-          disabled={disabled}
-          onClick={openCreate}
-        >
-          <Plus className="size-4" />
-        </IconButton>
+        needsCreateChooser ? (
+          <Popover open={createChooserOpen} onOpenChange={setCreateChooserOpen}>
+            <PopoverTrigger asChild>
+              <IconButton
+                type="button"
+                variant="outline"
+                size="lg"
+                className="size-9 shrink-0"
+                aria-label={addLabel}
+                title={addLabel}
+                disabled={disabled}
+                aria-expanded={createChooserOpen}
+                aria-haspopup="menu"
+              >
+                <Plus className="size-4" />
+              </IconButton>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-1" align="end">
+              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                {chooseCreateLabel}
+              </div>
+              <div className="flex flex-col gap-0.5" role="menu">
+                {createChoices.map((choice) => (
+                  <Button
+                    key={choice.href}
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    role="menuitem"
+                    className="h-auto w-full justify-start px-2 py-1.5 font-normal"
+                    onClick={() => {
+                      setCreateChooserOpen(false)
+                      openCreateHref(choice.href)
+                    }}
+                  >
+                    {choice.label}
+                  </Button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <IconButton
+            type="button"
+            variant="outline"
+            size="lg"
+            className="size-9 shrink-0"
+            aria-label={addLabel}
+            title={addLabel}
+            disabled={disabled}
+            onClick={openCreate}
+          >
+            <Plus className="size-4" />
+          </IconButton>
+        )
       ) : null}
     </div>
   )

@@ -85,7 +85,12 @@ export type PersonResourcesSectionProps = {
 
 export function PersonResourcesSection({ customerEntityId, translate }: PersonResourcesSectionProps) {
   const tHook = useT()
-  const tr = translate ?? ((key: string, fallback?: string) => tHook(key, fallback))
+  const tr = React.useCallback(
+    (key: string, fallback?: string) => (translate ? translate(key, fallback) : tHook(key, fallback)),
+    [tHook, translate],
+  )
+  const trRef = React.useRef(tr)
+  trRef.current = tr
 
   const [filterText, setFilterText] = React.useState('')
   const [filterResourceType, setFilterResourceType] = React.useState('')
@@ -98,6 +103,7 @@ export function PersonResourcesSection({ customerEntityId, translate }: PersonRe
   const [pickerKey, setPickerKey] = React.useState(0)
 
   const loadLinked = React.useCallback(async () => {
+    const translateMessage = trRef.current
     setLoading(true)
     try {
       const params = new URLSearchParams({
@@ -108,7 +114,7 @@ export function PersonResourcesSection({ customerEntityId, translate }: PersonRe
       const res = await readApiResultOrThrow<{ items?: ResourceRow[] }>(
         `/api/resources/resources?${params.toString()}`,
         undefined,
-        { errorMessage: tr(`${I18N_PREFIX}.errorLoad`, 'Failed to load resources.') },
+        { errorMessage: translateMessage(`${I18N_PREFIX}.errorLoad`, 'Failed to load resources.') },
       )
       const nextItems = Array.isArray(res?.items) ? res.items : []
       setItems(nextItems)
@@ -120,7 +126,12 @@ export function PersonResourcesSection({ customerEntityId, translate }: PersonRe
           const linkRes = await readApiResultOrThrow<{ items?: AccessoryLinkItem[] }>(
             `/api/resources/resource-accessory-links?hostResourceId=${encodeURIComponent(vehicle.id)}`,
             undefined,
-            { errorMessage: tr(`${I18N_PREFIX}.errorLoadAccessoryLinks`, 'Failed to load vehicle accessories.') },
+            {
+              errorMessage: translateMessage(
+                `${I18N_PREFIX}.errorLoadAccessoryLinks`,
+                'Failed to load vehicle accessories.',
+              ),
+            },
           )
           for (const link of linkRes?.items ?? []) {
             if (typeof link.accessoryResourceId === 'string' && link.accessoryResourceId.length > 0) {
@@ -140,7 +151,7 @@ export function PersonResourcesSection({ customerEntityId, translate }: PersonRe
       } else {
         const extra = await fetchResourcesByIds(
           missingIds,
-          tr(`${I18N_PREFIX}.errorLoad`, 'Failed to load resources.'),
+          translateMessage(`${I18N_PREFIX}.errorLoad`, 'Failed to load resources.'),
         )
         setExtraAccessoryRows(extra)
       }
@@ -151,7 +162,7 @@ export function PersonResourcesSection({ customerEntityId, translate }: PersonRe
     } finally {
       setLoading(false)
     }
-  }, [customerEntityId, tr])
+  }, [customerEntityId])
 
   React.useEffect(() => {
     loadLinked().catch(() => {})
@@ -184,7 +195,12 @@ export function PersonResourcesSection({ customerEntityId, translate }: PersonRe
     const res = await readApiResultOrThrow<{ items?: Array<Record<string, unknown>> }>(
       `/api/resources/resource-types?${params.toString()}`,
       undefined,
-      { errorMessage: tr(`${I18N_PREFIX}.filters.errorLoadTypes`, 'Failed to load resource types.') },
+      {
+        errorMessage: trRef.current(
+          `${I18N_PREFIX}.filters.errorLoadTypes`,
+          'Failed to load resource types.',
+        ),
+      },
     )
     const rows = Array.isArray(res?.items) ? res.items : []
     return rows
@@ -202,7 +218,7 @@ export function PersonResourcesSection({ customerEntityId, translate }: PersonRe
         color: row.color,
         icon: row.icon,
       }))
-  }, [tr])
+  }, [])
 
   const hasActiveFilters = Boolean(
     filterText.trim() || filterResourceType.trim() || !onlyVehicleAccessories,

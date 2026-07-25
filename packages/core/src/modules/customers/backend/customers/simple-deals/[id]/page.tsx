@@ -8,13 +8,14 @@ import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
-import { apiCall, readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { updateCrud } from '@open-mercato/ui/backend/utils/crud'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
-import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
+import { ArrowRightLeft } from 'lucide-react'
 import { DealForm, type DealFormSubmitPayload } from '../../../../components/detail/DealForm'
 import { useCurrencyDictionary } from '../../../../components/detail/hooks/useCurrencyDictionary'
+import { buildSimpleQuoteCreateFromDealHref } from '../../../../components/detail/customerEntityCreatePrefill'
 
 const BASE_PATH = '/backend/customers/simple-deals'
 
@@ -31,6 +32,7 @@ type DealDetailPayload = {
     valueCurrency: string | null
     probability: number | null
     expectedCloseAt: string | null
+    ownerUserId?: string | null
     payload?: Record<string, unknown> | null
   }
   people: Array<{ id: string }>
@@ -43,13 +45,11 @@ export default function SimpleDealDetailPage({ params }: { params?: { id?: strin
   const router = useRouter()
   const id = typeof params?.id === 'string' ? params.id : ''
   const scopeVersion = useOrganizationScopeVersion()
-  const { confirm, ConfirmDialogElement } = useConfirmDialog()
   useCurrencyDictionary()
   const [data, setData] = React.useState<DealDetailPayload | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [saving, setSaving] = React.useState(false)
-  const [converting, setConverting] = React.useState(false)
   const [formKey, setFormKey] = React.useState(0)
 
   const load = React.useCallback(async () => {
@@ -90,6 +90,11 @@ export default function SimpleDealDetailPage({ params }: { params?: { id?: strin
       ? data.deal.payload.simpleQuoteId
       : null
 
+  const quoteCreateHref = React.useMemo(() => {
+    if (!data?.deal.id) return null
+    return buildSimpleQuoteCreateFromDealHref(data.deal.id)
+  }, [data?.deal.id])
+
   const handleSubmit = React.useCallback(
     async ({ base, custom }: DealFormSubmitPayload) => {
       if (!id || saving) return
@@ -107,6 +112,7 @@ export default function SimpleDealDetailPage({ params }: { params?: { id?: strin
           probability: typeof base.probability === 'number' ? base.probability : undefined,
           expectedCloseAt: base.expectedCloseAt ?? undefined,
           description: base.description ?? undefined,
+          ownerUserId: base.ownerUserId,
           personIds: Array.isArray(base.personIds) ? base.personIds : [],
           companyIds: Array.isArray(base.companyIds) ? base.companyIds : [],
         }
@@ -132,39 +138,20 @@ export default function SimpleDealDetailPage({ params }: { params?: { id?: strin
     [id, load, saving, t],
   )
 
-  const handleConvert = React.useCallback(async () => {
-    if (!id) return
-    const ok = await confirm({
-      title: t('customers.simpleDeals.actions.convertConfirm', 'Convert this deal to a quote?'),
-    })
-    if (!ok) return
-    setConverting(true)
-    try {
-      const call = await apiCall<{ quoteId?: string }>('/api/customers/deals/convert-to-quote', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ dealId: id }),
-      })
-      if (!call.ok || !call.result?.quoteId) {
-        flash(
-          t('customers.simpleDeals.errors.convertFailed', 'Failed to convert deal to quote.'),
-          'error',
-        )
-        return
-      }
-      flash(t('customers.simpleDeals.success.convert', 'Quote created from deal.'), 'success')
-      router.push(`/backend/sales/simple-quotes/${call.result.quoteId}`)
-    } catch (err) {
+  const handleConvert = React.useCallback(() => {
+    if (!quoteCreateHref) return
+    if (!data?.people.length && !data?.companies.length) {
       flash(
-        err instanceof Error
-          ? err.message
-          : t('customers.simpleDeals.errors.convertFailed', 'Failed to convert deal to quote.'),
+        t(
+          'customers.simpleDeals.errors.customerRequired',
+          'Link a person or company on the deal before converting to a quote.',
+        ),
         'error',
       )
-    } finally {
-      setConverting(false)
+      return
     }
-  }, [confirm, id, router, t])
+    router.push(quoteCreateHref)
+  }, [data?.companies.length, data?.people.length, quoteCreateHref, router, t])
 
   if (loading) {
     return (
@@ -221,11 +208,12 @@ export default function SimpleDealDetailPage({ params }: { params?: { id?: strin
               expectedCloseAt: data.deal.expectedCloseAt ?? undefined,
               personIds: data.people.map((person) => person.id),
               companyIds: data.companies.map((company) => company.id),
+              ownerUserId: data.deal.ownerUserId ?? '',
               customFields: data.customFields,
             }}
             onSubmit={handleSubmit}
             onCancel={() => router.push(BASE_PATH)}
-            isSubmitting={saving || converting}
+            isSubmitting={saving}
             submitLabel={t('customers.simpleDeals.actions.save', 'Save')}
             embedded={false}
             title={data.deal.title}
@@ -239,20 +227,28 @@ export default function SimpleDealDetailPage({ params }: { params?: { id?: strin
                       {t('customers.simpleDeals.actions.openQuote', 'Open quote')}
                     </Link>
                   </Button>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={converting || saving}
-                  onClick={() => void handleConvert()}
-                >
-                  {t('customers.simpleDeals.actions.convertToQuote', 'Convert to quote')}
-                </Button>
+                ) : quoteCreateHref && (data.people.length > 0 || data.companies.length > 0) ? (
+                  <Button asChild type="button" variant="outline" disabled={saving}>
+                    <Link href={quoteCreateHref}>
+                      <ArrowRightLeft className="mr-2 h-4 w-4" aria-hidden />
+                      {t('customers.simpleDeals.actions.convertToQuote', 'Convert to quote')}
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={saving || !quoteCreateHref}
+                    onClick={handleConvert}
+                  >
+                    <ArrowRightLeft className="mr-2 h-4 w-4" aria-hidden />
+                    {t('customers.simpleDeals.actions.convertToQuote', 'Convert to quote')}
+                  </Button>
+                )}
               </>
             )}
           />
         </PageBody>
-        {ConfirmDialogElement}
       </Page>
     </>
   )

@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { Loader2, Pencil, Trash2 } from 'lucide-react'
+import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { IconButton } from '@open-mercato/ui/primitives/icon-button'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -91,7 +91,7 @@ export function TasksSection({
   emptyLabel,
   addActionLabel,
   emptyState,
-  onActionChange,
+  onActionChange: _onActionChange,
   onLoadingChange,
   onDataRefresh,
   translator,
@@ -222,22 +222,6 @@ export function TasksSection({
     setDialogOpen(false)
     setEditingTask(null)
   }, [])
-
-  React.useEffect(() => {
-    if (!onActionChange) return
-    if (!entityId) {
-      onActionChange(null)
-      return
-    }
-    onActionChange({
-      label: addActionLabel,
-      onClick: openCreateDialog,
-      disabled: isMutating,
-    })
-    return () => {
-      onActionChange(null)
-    }
-  }, [addActionLabel, entityId, isMutating, onActionChange, openCreateDialog])
 
   React.useEffect(() => {
     if (!onLoadingChange) return
@@ -443,6 +427,17 @@ export function TasksSection({
 
         {!isInitialLoading && hasTasks ? (
           <div className="space-y-4">
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                size="sm"
+                onClick={openCreateDialog}
+                disabled={isMutating || !entityId}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                {addActionLabel}
+              </Button>
+            </div>
             {error ? (
               <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
                 {error}

@@ -15,7 +15,7 @@ import { apiCallOrThrow, readApiResultOrThrow } from '@open-mercato/ui/backend/u
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
-import { NotesSection, type SectionAction } from '@open-mercato/ui/backend/detail'
+import { NotesSection } from '@open-mercato/ui/backend/detail'
 import { ActivitiesSection } from '../../../../components/detail/ActivitiesSection'
 import { DealForm, type DealFormSubmitPayload } from '../../../../components/detail/DealForm'
 import {
@@ -119,7 +119,6 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
   const [isDeleting, setIsDeleting] = React.useState(false)
   const [reloadToken, setReloadToken] = React.useState(0)
   const [activeTab, setActiveTab] = React.useState<'notes' | 'activities'>('notes')
-  const [sectionAction, setSectionAction] = React.useState<SectionAction | null>(null)
   const handleNotesLoadingChange = React.useCallback(() => {}, [])
   const handleActivitiesLoadingChange = React.useCallback(() => {}, [])
   const focusDealField = React.useCallback(
@@ -223,6 +222,7 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
           probability: typeof base.probability === 'number' ? base.probability : undefined,
           expectedCloseAt: base.expectedCloseAt ?? undefined,
           description: base.description ?? undefined,
+          ownerUserId: base.ownerUserId,
           personIds: base.personIds && base.personIds.length ? base.personIds : undefined,
           companyIds: base.companyIds && base.companyIds.length ? base.companyIds : undefined,
         }
@@ -287,15 +287,6 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
       setIsDeleting(false)
     }
   }, [confirm, data, isDeleting, router, t])
-
-  React.useEffect(() => {
-    setSectionAction(null)
-  }, [activeTab])
-
-  const handleSectionAction = React.useCallback(() => {
-    if (!sectionAction || sectionAction.disabled) return
-    sectionAction.onClick()
-  }, [sectionAction])
 
   const dealOptions = React.useMemo(
     () =>
@@ -530,17 +521,6 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
                       </Button>
                     ))}
                   </div>
-                  {sectionAction ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={sectionAction.disabled}
-                      onClick={handleSectionAction}
-                    >
-                      {sectionAction.icon ?? null}
-                      {sectionAction.label}
-                    </Button>
-                  ) : null}
                 </div>
                 {activeTab === 'notes' ? (
                   <NotesSection
@@ -557,7 +537,6 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
                       title: t('customers.deals.detail.notesEmptyTitle', 'Keep everyone in the loop'),
                       actionLabel: t('customers.deals.detail.notesEmptyAction', 'Add a note'),
                     }}
-                    onActionChange={setSectionAction}
                     translator={detailTranslator}
                     onLoadingChange={handleNotesLoadingChange}
                     dataAdapter={notesAdapter}
@@ -580,7 +559,6 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
                       title: t('customers.deals.detail.activitiesEmptyTitle', 'No activities yet'),
                       actionLabel: t('customers.deals.detail.activitiesEmptyAction', 'Add an activity'),
                     }}
-                    onActionChange={setSectionAction}
                     onLoadingChange={handleActivitiesLoadingChange}
                   />
                 ) : null}
@@ -681,6 +659,7 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
                     probability: data.deal.probability ?? null,
                     expectedCloseAt: data.deal.expectedCloseAt ?? null,
                     description: data.deal.description ?? '',
+                    ownerUserId: data.deal.ownerUserId ?? '',
                     personIds: data.people.map((person) => person.id),
                     companyIds: data.companies.map((company) => company.id),
                     people: data.people.map((person) => ({ id: person.id, label: person.label })),
