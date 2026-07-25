@@ -399,6 +399,82 @@ async function parseJsonBody(req: IncomingMessage): Promise<unknown> {
   })
 }
 
+function summarizeJsonRpcMethod(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object') return undefined
+  const method = (body as { method?: unknown }).method
+  return typeof method === 'string' ? method : undefined
+}
+
+type McpRequestLog = {
+  setOutcome: (reason: string) => void
+  setRpcMethod: (method: string | undefined) => void
+}
+
+/**
+ * Log request start + single response line (status, duration, outcome).
+ * Does not log secrets (API key values).
+ */
+function attachMcpHttpAccessLog(
+  req: IncomingMessage,
+  res: ServerResponse,
+  pathname: string,
+): McpRequestLog {
+  const startedAt = Date.now()
+  let outcome: string | undefined
+  let rpcMethod: string | undefined
+  let logged = false
+
+  const hasApiKey = Boolean(
+    req.headers['x-api-key'] ||
+      (typeof req.headers.authorization === 'string' &&
+        req.headers.authorization.toLowerCase().startsWith('bearer ')),
+  )
+  const accept = typeof req.headers.accept === 'string' ? req.headers.accept : undefined
+  const contentType =
+    typeof req.headers['content-type'] === 'string' ? req.headers['content-type'] : undefined
+  const userAgent =
+    typeof req.headers['user-agent'] === 'string'
+      ? req.headers['user-agent'].slice(0, 80)
+      : undefined
+
+  console.error(
+    `[MCP HTTP] ← Request: ${req.method} ${pathname}` +
+      ` hasApiKey=${hasApiKey}` +
+      (accept ? ` accept=${accept}` : '') +
+      (contentType ? ` contentType=${contentType}` : '') +
+      (userAgent ? ` ua=${JSON.stringify(userAgent)}` : ''),
+  )
+
+  const logResponse = (event: 'finish' | 'close') => {
+    if (logged) return
+    logged = true
+    const aborted = event === 'close' && !res.writableEnded
+    const durationMs = Date.now() - startedAt
+    console.error(
+      `[MCP HTTP] → Response: ${req.method} ${pathname}` +
+        ` status=${res.statusCode}` +
+        ` durationMs=${durationMs}` +
+        (rpcMethod ? ` rpc=${rpcMethod}` : '') +
+        (outcome ? ` reason=${outcome}` : '') +
+        (aborted ? ' aborted=true' : ''),
+    )
+  }
+
+  res.on('finish', () => logResponse('finish'))
+  res.on('close', () => {
+    if (!res.writableEnded) logResponse('close')
+  })
+
+  return {
+    setOutcome: (reason) => {
+      outcome = reason
+    },
+    setRpcMethod: (method) => {
+      rpcMethod = method
+    },
+  }
+}
+
 /**
  * Run MCP server with HTTP transport (stateless mode).
  *
@@ -489,7 +565,7 @@ export async function runMcpHttpServer(options: McpHttpServerOptions): Promise<v
       return
     }
 
-    console.error(`[MCP HTTP] ← Request: ${req.method} ${url.pathname}`)
+    const accessLog = attachMcpHttpAccessLog(req, res, url.pathname)
 
     // Extract headers
     const headers: Record<string, string | undefined> = {}
@@ -500,6 +576,7 @@ export async function runMcpHttpServer(options: McpHttpServerOptions): Promise<v
     // Server-level authentication via database lookup
     const providedApiKey = extractApiKeyFromHeaders(headers)
     if (!providedApiKey) {
+      accessLog.setOutcome('missing_api_key')
       res.writeHead(401, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: 'API key required (x-api-key header)' }))
       return
@@ -509,6 +586,7 @@ export async function runMcpHttpServer(options: McpHttpServerOptions): Promise<v
     const em = container.resolve<EntityManager>('em')
     const apiKeyRecord = await findApiKeyBySecret(em, providedApiKey)
     if (!apiKeyRecord) {
+      accessLog.setOutcome('invalid_or_expired_api_key')
       res.writeHead(401, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: 'Invalid or expired API key' }))
       return
@@ -553,8 +631,11 @@ export async function runMcpHttpServer(options: McpHttpServerOptions): Promise<v
       // Handle the request
       if (req.method === 'POST') {
         const body = await parseJsonBody(req)
+        accessLog.setRpcMethod(summarizeJsonRpcMethod(body))
+        accessLog.setOutcome('transport_ok')
         await transport.handleRequest(req, res, body)
       } else {
+        accessLog.setOutcome('transport_ok')
         await transport.handleRequest(req, res)
       }
 
@@ -571,11 +652,15 @@ export async function runMcpHttpServer(options: McpHttpServerOptions): Promise<v
       if (!res.headersSent) {
         // Handle payload too large error
         if (error instanceof Error && error.message === 'Request payload too large') {
+          accessLog.setOutcome('payload_too_large')
           res.writeHead(413, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ error: 'Request payload too large (max 1MB)' }))
           return
         }
 
+        accessLog.setOutcome(
+          `internal_error:${error instanceof Error ? error.message : String(error)}`,
+        )
         res.writeHead(500, { 'Content-Type': 'application/json' })
         res.end(
           JSON.stringify({
@@ -586,6 +671,10 @@ export async function runMcpHttpServer(options: McpHttpServerOptions): Promise<v
             },
             id: null,
           })
+        )
+      } else {
+        accessLog.setOutcome(
+          `error_after_headers:${error instanceof Error ? error.message : String(error)}`,
         )
       }
     }
