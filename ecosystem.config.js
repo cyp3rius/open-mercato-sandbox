@@ -4,11 +4,12 @@
  * Prerequisites on server:
  *   1. cp apps/mercato/.env.production apps/mercato/.env
  *   2. yarn install && yarn build && yarn db:migrate
- *   3. pm2 start ecosystem.config.cjs
+ *   3. pm2 start ecosystem.config.js
  *
  * Commands:
  *   pm2 logs rsmoto-crm
- *   pm2 reload rsmoto-crm
+ *   pm2 logs rsmoto-mcp
+ *   pm2 reload ecosystem.config.js
  *   pm2 save && pm2 startup   # persist across reboot
  */
 const path = require('path')
@@ -34,6 +35,7 @@ if (!fs.existsSync(logsDir)) {
 }
 
 const fileEnv = dotenv.config({ path: envFile }).parsed ?? {}
+const mcpPort = fileEnv.OPEN_MERCATO_MCP_PORT || fileEnv.MCP_DEV_PORT || '3001'
 
 module.exports = {
   apps: [
@@ -60,6 +62,33 @@ module.exports = {
       },
       error_file: path.join(logsDir, 'rsmoto-crm-error.log'),
       out_file: path.join(logsDir, 'rsmoto-crm-out.log'),
+    },
+    {
+      name: 'rsmoto-mcp',
+      cwd: appDir,
+      script: mercatoBin,
+      args: `ai_assistant mcp:serve-http --port ${mcpPort}`,
+      interpreter: 'node',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '768M',
+      kill_timeout: 10000,
+      listen_timeout: 30000,
+      merge_logs: true,
+      time: true,
+      env: {
+        ...fileEnv,
+        NODE_ENV: 'production',
+        // nginx proxies /mcp → 127.0.0.1:3001; do not expose 3001 publicly
+        OPEN_MERCATO_MCP_HOST: fileEnv.OPEN_MERCATO_MCP_HOST || '127.0.0.1',
+        OPEN_MERCATO_MCP_PORT: mcpPort,
+        APP_URL: fileEnv.APP_URL || 'https://crm.rsmotoconcierge.pl',
+        NEXT_PUBLIC_APP_URL: fileEnv.NEXT_PUBLIC_APP_URL || fileEnv.APP_URL || 'https://crm.rsmotoconcierge.pl',
+      },
+      error_file: path.join(logsDir, 'rsmoto-mcp-error.log'),
+      out_file: path.join(logsDir, 'rsmoto-mcp-out.log'),
     },
   ],
 }
