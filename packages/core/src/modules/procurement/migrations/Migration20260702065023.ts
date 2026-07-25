@@ -3,22 +3,28 @@ import { Migration } from '@mikro-orm/migrations';
 export class Migration20260702065023 extends Migration {
 
   override async up(): Promise<void> {
-    this.addSql(`drop index "procurement_processes_handler_user_idx";`);
+    this.addSql(`drop index if exists "procurement_processes_handler_user_idx";`);
 
-    this.addSql(`alter table "procurement_process_line_items" alter column "quantity" type real using ("quantity"::real);`);
-    this.addSql(`alter table "procurement_process_line_items" add constraint "procurement_process_line_items_process_id_foreign" foreign key ("process_id") references "procurement_processes" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "procurement_process_line_items" alter column "quantity" type real using ("quantity"::real);`);
+    this.addSql(`alter table if exists "procurement_process_line_items" drop constraint if exists "procurement_process_line_items_process_id_foreign";`);
+    this.addSql(`alter table if exists "procurement_process_line_items" add constraint "procurement_process_line_items_process_id_foreign" foreign key ("process_id") references "procurement_processes" ("id") on update cascade;`);
 
-    this.addSql(`drop index "procurement_status_transitions_scope_from_to_uidx";`);
+    this.addSql(`drop index if exists "procurement_status_transitions_scope_from_to_uidx";`);
 
-    this.addSql(`create index "procurement_status_transitions_scope_from_to_uidx" on "procurement_process_status_transitions" ("tenant_id", "organization_id", "from_status_value", "to_status_value");`);
+    this.addSql(`create index if not exists "procurement_status_transitions_scope_from_to_uidx" on "procurement_process_status_transitions" ("tenant_id", "organization_id", "from_status_value", "to_status_value");`);
 
-    this.addSql(`alter table "procurement_process_suppliers" add constraint "procurement_process_suppliers_process_id_foreign" foreign key ("process_id") references "procurement_processes" ("id") on update cascade;`);
-    this.addSql(`alter table "procurement_process_suppliers" add constraint "procurement_process_suppliers_vendor_customer_entity_id_foreign" foreign key ("vendor_customer_entity_id") references "customer_entities" ("id") on update cascade on delete set null;`);
+    this.addSql(`alter table if exists "procurement_process_suppliers" drop constraint if exists "procurement_process_suppliers_process_id_foreign";`);
+    this.addSql(`alter table if exists "procurement_process_suppliers" drop constraint if exists "procurement_process_suppliers_vendor_customer_entity_id_foreign";`);
+    this.addSql(`alter table if exists "procurement_process_suppliers" add constraint "procurement_process_suppliers_process_id_foreign" foreign key ("process_id") references "procurement_processes" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "procurement_process_suppliers" add constraint "procurement_process_suppliers_vendor_customer_entity_id_foreign" foreign key ("vendor_customer_entity_id") references "customer_entities" ("id") on update cascade on delete set null;`);
 
-    this.addSql(`alter table "procurement_process_supplier_line_items" add constraint "procurement_process_supplier_line_items_supplier_id_foreign" foreign key ("supplier_id") references "procurement_process_suppliers" ("id") on update cascade;`);
-    this.addSql(`alter table "procurement_process_supplier_line_items" add constraint "procurement_process_supplier_line_items_line_item_id_foreign" foreign key ("line_item_id") references "procurement_process_line_items" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "procurement_process_supplier_line_items" drop constraint if exists "procurement_process_supplier_line_items_supplier_id_foreign";`);
+    this.addSql(`alter table if exists "procurement_process_supplier_line_items" drop constraint if exists "procurement_process_supplier_line_items_line_item_id_foreign";`);
+    this.addSql(`alter table if exists "procurement_process_supplier_line_items" add constraint "procurement_process_supplier_line_items_supplier_id_foreign" foreign key ("supplier_id") references "procurement_process_suppliers" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "procurement_process_supplier_line_items" add constraint "procurement_process_supplier_line_items_line_item_id_foreign" foreign key ("line_item_id") references "procurement_process_line_items" ("id") on update cascade;`);
 
-    this.addSql(`alter table "procurement_process_timeline_events" add constraint "procurement_process_timeline_events_process_id_foreign" foreign key ("process_id") references "procurement_processes" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "procurement_process_timeline_events" drop constraint if exists "procurement_process_timeline_events_process_id_foreign";`);
+    this.addSql(`alter table if exists "procurement_process_timeline_events" add constraint "procurement_process_timeline_events_process_id_foreign" foreign key ("process_id") references "procurement_processes" ("id") on update cascade;`);
   }
 
   override async down(): Promise<void> {
@@ -860,15 +866,15 @@ export class Migration20260702065023 extends Migration {
     this.addSql(`create index "workflow_instances_status_tenant_idx" on "workflow_instances" ("status", "tenant_id");`);
     this.addSql(`create index "workflow_instances_tenant_org_idx" on "workflow_instances" ("tenant_id", "organization_id");`);
 
-    this.addSql(`alter table "procurement_process_line_items" drop constraint "procurement_process_line_items_process_id_foreign";`);
+    this.addSql(`alter table if exists "procurement_process_line_items" drop constraint if exists "procurement_process_line_items_process_id_foreign";`);
 
-    this.addSql(`alter table "procurement_process_supplier_line_items" drop constraint "procurement_process_supplier_line_items_supplier_id_foreign";`);
-    this.addSql(`alter table "procurement_process_supplier_line_items" drop constraint "procurement_process_supplier_line_items_line_item_id_foreign";`);
+    this.addSql(`alter table if exists "procurement_process_supplier_line_items" drop constraint if exists "procurement_process_supplier_line_items_supplier_id_foreign";`);
+    this.addSql(`alter table if exists "procurement_process_supplier_line_items" drop constraint if exists "procurement_process_supplier_line_items_line_item_id_foreign";`);
 
-    this.addSql(`alter table "procurement_process_suppliers" drop constraint "procurement_process_suppliers_process_id_foreign";`);
-    this.addSql(`alter table "procurement_process_suppliers" drop constraint "procurement_process_suppliers_vendor_customer_entity_id_foreign";`);
+    this.addSql(`alter table if exists "procurement_process_suppliers" drop constraint if exists "procurement_process_suppliers_process_id_foreign";`);
+    this.addSql(`alter table if exists "procurement_process_suppliers" drop constraint if exists "procurement_process_suppliers_vendor_customer_entity_id_foreign";`);
 
-    this.addSql(`alter table "procurement_process_timeline_events" drop constraint "procurement_process_timeline_events_process_id_foreign";`);
+    this.addSql(`alter table if exists "procurement_process_timeline_events" drop constraint if exists "procurement_process_timeline_events_process_id_foreign";`);
 
     this.addSql(`alter table "procurement_process_line_items" alter column "quantity" type float8 using ("quantity"::float8);`);
 

@@ -7,8 +7,8 @@ export class Migration20260701084846 extends Migration {
 
     this.addSql(`drop index if exists "playbooks_slug_version_scope_uidx";`);
 
-    this.addSql(`alter table "playbooks_playbooks" alter column "context_tags" drop default;`);
-    this.addSql(`alter table "playbooks_playbooks" alter column "context_tags" type jsonb using ("context_tags"::jsonb);`);
+    this.addSql(`alter table if exists "playbooks_playbooks" alter column "context_tags" drop default;`);
+    this.addSql(`alter table if exists "playbooks_playbooks" alter column "context_tags" type jsonb using ("context_tags"::jsonb);`);
     this.addSql(`create index if not exists "playbooks_slug_idx" on "playbooks_playbooks" ("organization_id", "slug");`);
   }
 

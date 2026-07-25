@@ -3,39 +3,8 @@ import { Migration } from '@mikro-orm/migrations';
 export class Migration20260702065024 extends Migration {
 
   override async up(): Promise<void> {
-    this.addSql(`alter table "customer_activities" drop constraint "customer_activities_deal_id_foreign";`);
-
-    this.addSql(`alter table "customer_comments" drop constraint "customer_comments_deal_id_foreign";`);
-
-    this.addSql(`alter table "customer_deal_companies" drop constraint "customer_deal_companies_deal_id_foreign";`);
-
-    this.addSql(`alter table "customer_deal_people" drop constraint "customer_deal_people_deal_id_foreign";`);
-
-    this.addSql(`alter table "customer_activities" drop constraint "customer_activities_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_addresses" drop constraint "customer_addresses_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_comments" drop constraint "customer_comments_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_companies" drop constraint "customer_companies_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_deal_companies" drop constraint "customer_deal_companies_company_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_deal_people" drop constraint "customer_deal_people_person_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_interactions" drop constraint "customer_interactions_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_people" drop constraint "customer_people_company_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_people" drop constraint "customer_people_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_tag_assignments" drop constraint "customer_tag_assignments_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_todo_links" drop constraint "customer_todo_links_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_tag_assignments" drop constraint "customer_tag_assignments_tag_id_foreign";`);
-
-    this.addSql(`alter table "procurement_process_line_items" drop constraint "procurement_process_line_items_resource_id_foreign";`);
+    // Intentionally skip polluted customer_* FK drops from the generated snapshot.
+    this.addSql(`alter table if exists "procurement_process_line_items" drop constraint if exists "procurement_process_line_items_resource_id_foreign";`);
   }
 
   override async down(): Promise<void> {

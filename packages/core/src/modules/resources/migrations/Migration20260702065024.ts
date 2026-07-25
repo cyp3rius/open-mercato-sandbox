@@ -3,63 +3,42 @@ import { Migration } from '@mikro-orm/migrations';
 export class Migration20260702065024 extends Migration {
 
   override async up(): Promise<void> {
-    this.addSql(`alter table "customer_activities" drop constraint "customer_activities_deal_id_foreign";`);
+    // Intentionally skip polluted customer_* FK drops from the generated snapshot.
 
-    this.addSql(`alter table "customer_comments" drop constraint "customer_comments_deal_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_accessory_links" drop constraint if exists "resources_resource_accessory_links_host_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_accessory_links" drop constraint if exists "resources_resource_accessory_links_accessory_res_3730a_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_accessory_links" add constraint "resources_resource_accessory_links_host_resource_id_foreign" foreign key ("host_resource_id") references "resources_resources" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "resources_resource_accessory_links" add constraint "resources_resource_accessory_links_accessory_res_3730a_foreign" foreign key ("accessory_resource_id") references "resources_resources" ("id") on update cascade;`);
 
-    this.addSql(`alter table "customer_deal_companies" drop constraint "customer_deal_companies_deal_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_activities" drop constraint if exists "resources_resource_activities_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_activities" add constraint "resources_resource_activities_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade;`);
 
-    this.addSql(`alter table "customer_deal_people" drop constraint "customer_deal_people_deal_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_comments" drop constraint if exists "resources_resource_comments_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_comments" add constraint "resources_resource_comments_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade;`);
 
-    this.addSql(`alter table "customer_activities" drop constraint "customer_activities_entity_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_financing_profiles" alter column "vehicle_value_amount" type real using ("vehicle_value_amount"::real);`);
+    this.addSql(`alter table if exists "resources_resource_financing_profiles" alter column "installment_amount" type real using ("installment_amount"::real);`);
+    this.addSql(`alter table if exists "resources_resource_financing_profiles" alter column "created_at" drop default;`);
+    this.addSql(`alter table if exists "resources_resource_financing_profiles" alter column "created_at" type timestamptz using ("created_at"::timestamptz);`);
+    this.addSql(`alter table if exists "resources_resource_financing_profiles" alter column "updated_at" drop default;`);
+    this.addSql(`alter table if exists "resources_resource_financing_profiles" alter column "updated_at" type timestamptz using ("updated_at"::timestamptz);`);
+    this.addSql(`alter table if exists "resources_resource_financing_profiles" drop constraint if exists "resources_resource_financing_profiles_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_financing_profiles" add constraint "resources_resource_financing_profiles_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade;`);
 
-    this.addSql(`alter table "customer_addresses" drop constraint "customer_addresses_entity_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_gallery_items" alter column "created_at" drop default;`);
+    this.addSql(`alter table if exists "resources_resource_gallery_items" alter column "created_at" type timestamptz using ("created_at"::timestamptz);`);
+    this.addSql(`alter table if exists "resources_resource_gallery_items" alter column "updated_at" drop default;`);
+    this.addSql(`alter table if exists "resources_resource_gallery_items" alter column "updated_at" type timestamptz using ("updated_at"::timestamptz);`);
+    this.addSql(`alter table if exists "resources_resource_gallery_items" drop constraint if exists "resources_resource_gallery_items_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_gallery_items" add constraint "resources_resource_gallery_items_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade;`);
 
-    this.addSql(`alter table "customer_comments" drop constraint "customer_comments_entity_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_service_book_entries" drop constraint if exists "resources_resource_service_book_entries_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_service_book_entries" add constraint "resources_resource_service_book_entries_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade;`);
 
-    this.addSql(`alter table "customer_companies" drop constraint "customer_companies_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_deal_companies" drop constraint "customer_deal_companies_company_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_deal_people" drop constraint "customer_deal_people_person_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_interactions" drop constraint "customer_interactions_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_people" drop constraint "customer_people_company_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_people" drop constraint "customer_people_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_tag_assignments" drop constraint "customer_tag_assignments_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_todo_links" drop constraint "customer_todo_links_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_tag_assignments" drop constraint "customer_tag_assignments_tag_id_foreign";`);
-
-    this.addSql(`alter table "resources_resource_accessory_links" add constraint "resources_resource_accessory_links_host_resource_id_foreign" foreign key ("host_resource_id") references "resources_resources" ("id") on update cascade;`);
-    this.addSql(`alter table "resources_resource_accessory_links" add constraint "resources_resource_accessory_links_accessory_res_3730a_foreign" foreign key ("accessory_resource_id") references "resources_resources" ("id") on update cascade;`);
-
-    this.addSql(`alter table "resources_resource_activities" add constraint "resources_resource_activities_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade;`);
-
-    this.addSql(`alter table "resources_resource_comments" add constraint "resources_resource_comments_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade;`);
-
-    this.addSql(`alter table "resources_resource_financing_profiles" alter column "vehicle_value_amount" type real using ("vehicle_value_amount"::real);`);
-    this.addSql(`alter table "resources_resource_financing_profiles" alter column "installment_amount" type real using ("installment_amount"::real);`);
-    this.addSql(`alter table "resources_resource_financing_profiles" alter column "created_at" drop default;`);
-    this.addSql(`alter table "resources_resource_financing_profiles" alter column "created_at" type timestamptz using ("created_at"::timestamptz);`);
-    this.addSql(`alter table "resources_resource_financing_profiles" alter column "updated_at" drop default;`);
-    this.addSql(`alter table "resources_resource_financing_profiles" alter column "updated_at" type timestamptz using ("updated_at"::timestamptz);`);
-    this.addSql(`alter table "resources_resource_financing_profiles" add constraint "resources_resource_financing_profiles_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade;`);
-
-    this.addSql(`alter table "resources_resource_gallery_items" alter column "created_at" drop default;`);
-    this.addSql(`alter table "resources_resource_gallery_items" alter column "created_at" type timestamptz using ("created_at"::timestamptz);`);
-    this.addSql(`alter table "resources_resource_gallery_items" alter column "updated_at" drop default;`);
-    this.addSql(`alter table "resources_resource_gallery_items" alter column "updated_at" type timestamptz using ("updated_at"::timestamptz);`);
-    this.addSql(`alter table "resources_resource_gallery_items" add constraint "resources_resource_gallery_items_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade;`);
-
-    this.addSql(`alter table "resources_resource_service_book_entries" add constraint "resources_resource_service_book_entries_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade;`);
-
-    this.addSql(`alter table "resources_resource_tag_assignments" add constraint "resources_resource_tag_assignments_tag_id_foreign" foreign key ("tag_id") references "resources_resource_tags" ("id") on update cascade;`);
-    this.addSql(`alter table "resources_resource_tag_assignments" add constraint "resources_resource_tag_assignments_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "resources_resource_tag_assignments" drop constraint if exists "resources_resource_tag_assignments_tag_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_tag_assignments" drop constraint if exists "resources_resource_tag_assignments_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_tag_assignments" add constraint "resources_resource_tag_assignments_tag_id_foreign" foreign key ("tag_id") references "resources_resource_tags" ("id") on update cascade;`);
+    this.addSql(`alter table if exists "resources_resource_tag_assignments" add constraint "resources_resource_tag_assignments_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade;`);
   }
 
   override async down(): Promise<void> {
@@ -985,21 +964,21 @@ export class Migration20260702065024 extends Migration {
 
     this.addSql(`alter table "procurement_process_line_items" add constraint "procurement_process_line_items_resource_id_foreign" foreign key ("resource_id") references "resources_resources" ("id") on update cascade on delete set null;`);
 
-    this.addSql(`alter table "resources_resource_accessory_links" drop constraint "resources_resource_accessory_links_host_resource_id_foreign";`);
-    this.addSql(`alter table "resources_resource_accessory_links" drop constraint "resources_resource_accessory_links_accessory_res_3730a_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_accessory_links" drop constraint if exists "resources_resource_accessory_links_host_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_accessory_links" drop constraint if exists "resources_resource_accessory_links_accessory_res_3730a_foreign";`);
 
-    this.addSql(`alter table "resources_resource_activities" drop constraint "resources_resource_activities_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_activities" drop constraint if exists "resources_resource_activities_resource_id_foreign";`);
 
-    this.addSql(`alter table "resources_resource_comments" drop constraint "resources_resource_comments_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_comments" drop constraint if exists "resources_resource_comments_resource_id_foreign";`);
 
-    this.addSql(`alter table "resources_resource_financing_profiles" drop constraint "resources_resource_financing_profiles_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_financing_profiles" drop constraint if exists "resources_resource_financing_profiles_resource_id_foreign";`);
 
-    this.addSql(`alter table "resources_resource_gallery_items" drop constraint "resources_resource_gallery_items_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_gallery_items" drop constraint if exists "resources_resource_gallery_items_resource_id_foreign";`);
 
-    this.addSql(`alter table "resources_resource_service_book_entries" drop constraint "resources_resource_service_book_entries_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_service_book_entries" drop constraint if exists "resources_resource_service_book_entries_resource_id_foreign";`);
 
-    this.addSql(`alter table "resources_resource_tag_assignments" drop constraint "resources_resource_tag_assignments_tag_id_foreign";`);
-    this.addSql(`alter table "resources_resource_tag_assignments" drop constraint "resources_resource_tag_assignments_resource_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_tag_assignments" drop constraint if exists "resources_resource_tag_assignments_tag_id_foreign";`);
+    this.addSql(`alter table if exists "resources_resource_tag_assignments" drop constraint if exists "resources_resource_tag_assignments_resource_id_foreign";`);
 
     this.addSql(`alter table "resources_resource_financing_profiles" alter column "vehicle_value_amount" type float8 using ("vehicle_value_amount"::float8);`);
     this.addSql(`alter table "resources_resource_financing_profiles" alter column "installment_amount" type float8 using ("installment_amount"::float8);`);

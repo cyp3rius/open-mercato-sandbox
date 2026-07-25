@@ -3,40 +3,10 @@ import { Migration } from '@mikro-orm/migrations';
 export class Migration20260702065023 extends Migration {
 
   override async up(): Promise<void> {
-    this.addSql(`alter table "customer_activities" drop constraint "customer_activities_deal_id_foreign";`);
-
-    this.addSql(`alter table "customer_comments" drop constraint "customer_comments_deal_id_foreign";`);
-
-    this.addSql(`alter table "customer_deal_companies" drop constraint "customer_deal_companies_deal_id_foreign";`);
-
-    this.addSql(`alter table "customer_deal_people" drop constraint "customer_deal_people_deal_id_foreign";`);
-
-    this.addSql(`alter table "customer_activities" drop constraint "customer_activities_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_addresses" drop constraint "customer_addresses_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_comments" drop constraint "customer_comments_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_companies" drop constraint "customer_companies_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_deal_companies" drop constraint "customer_deal_companies_company_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_deal_people" drop constraint "customer_deal_people_person_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_interactions" drop constraint "customer_interactions_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_people" drop constraint "customer_people_company_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_people" drop constraint "customer_people_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_tag_assignments" drop constraint "customer_tag_assignments_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_todo_links" drop constraint "customer_todo_links_entity_id_foreign";`);
-
-    this.addSql(`alter table "customer_tag_assignments" drop constraint "customer_tag_assignments_tag_id_foreign";`);
-
-    this.addSql(`alter table "user_notification_preferences" drop constraint "user_notification_preferences_user_id_tenant_id_notificat_uniqu";`);
-    this.addSql(`alter table "user_notification_preferences" add constraint "user_notification_preferences_user_id_tenant_id_n_cf56f_unique" unique ("user_id", "tenant_id", "notification_type");`);
+    // Intentionally skip polluted customer_* FK drops from the generated snapshot.
+    this.addSql(`alter table if exists "user_notification_preferences" drop constraint if exists "user_notification_preferences_user_id_tenant_id_notificat_uniqu";`);
+    this.addSql(`alter table if exists "user_notification_preferences" drop constraint if exists "user_notification_preferences_user_id_tenant_id_n_cf56f_unique";`);
+    this.addSql(`alter table if exists "user_notification_preferences" add constraint "user_notification_preferences_user_id_tenant_id_n_cf56f_unique" unique ("user_id", "tenant_id", "notification_type");`);
   }
 
   override async down(): Promise<void> {
@@ -991,7 +961,7 @@ export class Migration20260702065023 extends Migration {
 
     this.addSql(`alter table "customer_todo_links" add constraint "customer_todo_links_entity_id_foreign" foreign key ("entity_id") references "customer_entities" ("id") on update cascade on delete no action;`);
 
-    this.addSql(`alter table "user_notification_preferences" drop constraint "user_notification_preferences_user_id_tenant_id_n_cf56f_unique";`);
+    this.addSql(`alter table if exists "user_notification_preferences" drop constraint if exists "user_notification_preferences_user_id_tenant_id_n_cf56f_unique";`);
     this.addSql(`alter table "user_notification_preferences" add constraint "user_notification_preferences_user_id_tenant_id_notificat_uniqu" unique ("user_id", "tenant_id", "notification_type");`);
   }
 
