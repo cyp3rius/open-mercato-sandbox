@@ -16,6 +16,18 @@ const events = [
     entity: 'membership',
     category: 'crud',
   },
+  {
+    id: 'partner_programs.incentive.accrued',
+    label: 'Partner incentive accrued',
+    entity: 'incentive',
+    category: 'custom',
+  },
+  {
+    id: 'partner_programs.incentive.payout_created',
+    label: 'Partner incentive payout created',
+    entity: 'incentive',
+    category: 'custom',
+  },
 ] as const
 
 export const eventsConfig = createModuleEvents({

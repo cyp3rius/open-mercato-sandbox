@@ -46,6 +46,8 @@ export default function PartnerProgramCreatePage() {
               name: values.name.trim(),
               description: values.description.trim() || null,
               isActive: values.isActive,
+              incentivePercent: Number(values.incentivePercent),
+              incentiveBase: values.incentiveBase === 'gross' ? 'gross' : 'net',
               tenantId,
               organizationId,
             }

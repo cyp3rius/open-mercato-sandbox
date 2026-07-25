@@ -788,9 +788,10 @@ function createApiRequestFn(
       url += separator + new URLSearchParams(queryParams).toString()
     }
 
-    // Build request body with context injection
+    // Build request body with context injection.
+    // DELETE is included: several CRUD routes (e.g. /api/entities/definitions) require a JSON body.
     let requestBody: Record<string, unknown> | undefined
-    if (['POST', 'PUT', 'PATCH'].includes(method.toUpperCase())) {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase()) && body) {
       requestBody = { ...body }
       if (ctx.tenantId) requestBody.tenantId = ctx.tenantId
       if (ctx.organizationId) requestBody.organizationId = ctx.organizationId

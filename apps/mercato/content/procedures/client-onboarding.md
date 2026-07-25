@@ -9,26 +9,26 @@ contextTags:
 defaultSlaDuration:
   amount: 2
   unit: days
+relatedProcedures:
+  - slug: sales-customer-meeting
+    title: Spotkanie z klientem (ścieżka sprzedaży)
+  - slug: client-service-intake
+    title: Wprowadzenie klienta do obsługi
+  - slug: client-guardian-care
+    title: Opieka opiekuna klienta
+authoringTodos:
+  - Rozróżnić ścieżkę abonamentu konsjerż vs jednorazowa sprzedaż, jeśli klient tego wymaga.
 ---
 
 # Onboarding nowego klienta
 
-Procedura przyjęcia nowego klienta do systemu.
+Przyjęcie nowego klienta: zbieramy dane, zakładamy kartotekę i — jeśli jest
+zainteresowanie konsjerżem — przechodzimy do wprowadzenia do obsługi.
 
-1. Kontakt z klientem — zbieramy nazwę oraz informację, czy to firma.
-2. Dla firm — dodatkowo pobieramy NIP.
-3. Wybieramy lub tworzymy rekord klienta (`select_entity`).
-4. Jeżeli klient jest zainteresowany usługą konsjerż — uruchamiamy proces konsjerż.
-
-## Powiązane procedury
-
-- `sales-customer-meeting` — pełna ścieżka od spotkania do wydania
-- `client-service-intake` — wprowadzenie do obsługi (pojazd, terminy, opiekun)
-- `client-guardian-care` — bieżąca opieka opiekuna
-
-## Luki (TODO)
-
-- **Abonament konsjerż vs jednorazowa sprzedaż** — warsztat nie rozróżnia ścieżek cenowych; obecnie „zainteresowany konsjerżem” uruchamia intake obsługi.
+1. Kontakt — nazwa oraz informacja, czy to firma
+2. Dla firm — dodatkowo NIP
+3. Wybór lub utworzenie klienta w systemie
+4. Przy zainteresowaniu konsjerżem — start wprowadzenia do obsługi
 
 ## Procedure
 

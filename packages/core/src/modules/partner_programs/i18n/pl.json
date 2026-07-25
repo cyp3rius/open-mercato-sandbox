@@ -38,6 +38,11 @@
       "back": "Programy",
       "name": "Nazwa",
       "description": "Opis",
+      "incentivePercent": "Incentive %",
+      "incentivePercentHint": "Procent od wartości zamówienia (netto lub brutto) naliczany partnerowi.",
+      "incentiveBase": "Liczone od",
+      "incentiveBaseNet": "Netto",
+      "incentiveBaseGross": "Brutto",
       "validFrom": "Ważny od",
       "validTo": "Ważny do",
       "isActive": "Aktywny",
@@ -53,7 +58,8 @@
         "load": "Nie udało się wczytać programu.",
         "save": "Nie udało się zapisać programu.",
         "nameRequired": "Nazwa jest wymagana.",
-        "scope": "Brak kontekstu organizacji."
+        "scope": "Brak kontekstu organizacji.",
+        "incentivePercentInvalid": "Procent incentive musi być w zakresie 0–100."
       },
       "flash": {
         "created": "Program utworzony.",
@@ -64,8 +70,10 @@
       "tab": "Partnerzy",
       "title": "Partnerzy w programie",
       "description": "Tylko rekordy CRM typu Partner mogą być dodane.",
-      "pickerLabel": "Firma partnerska",
-      "pickerPlaceholder": "Szukaj firm partnerskich…",
+      "pickerLabel": "Partner (osoba lub firma)",
+      "pickerPlaceholder": "Szukaj partnerów…",
+      "kindPerson": "Osoba",
+      "kindCompany": "Firma",
       "role": "Rola (opcjonalnie)",
       "add": "Dodaj partnera",
       "table": {
@@ -81,11 +89,85 @@
         "load": "Nie udało się wczytać partnerów.",
         "add": "Nie udało się dodać partnera.",
         "remove": "Nie udało się usunąć partnera.",
-        "pickPartner": "Wybierz firmę partnerską."
+        "pickPartner": "Wybierz partnera."
       },
       "messages": {
         "added": "Partner dodany.",
         "removed": "Partner usunięty."
+      }
+    },
+    "partnerTab": {
+      "tabLabel": "Programy partnerskie",
+      "loading": "Ładowanie…",
+      "memberships": {
+        "title": "Członkostwa w programach",
+        "description": "Programy, do których należy ten partner.",
+        "program": "Program",
+        "programPlaceholder": "Szukaj programów…",
+        "role": "Rola",
+        "roleOptional": "Opcjonalnie",
+        "add": "Dodaj",
+        "remove": "Usuń",
+        "removeConfirm": "Usunąć to członkostwo w programie?",
+        "openInNewTab": "Otwórz",
+        "dialogTitle": "Dodaj do programu",
+        "dialogDescription": "Wybierz program partnerski i opcjonalnie ustaw rolę.",
+        "dialogCancel": "Anuluj",
+        "empty": "Brak członkostw.",
+        "columns": {
+          "program": "Program",
+          "percent": "%",
+          "role": "Rola",
+          "joined": "Dołączył",
+          "actions": "Akcje"
+        }
+      },
+      "ledger": {
+        "title": "Rejestr prowizji",
+        "description": "Naliczenia z zamówień polecających oraz wypłaty.",
+        "empty": "Brak pozycji w rejestrze.",
+        "kindAccrual": "Naliczenie",
+        "kindPayout": "Wypłata",
+        "columns": {
+          "date": "Data",
+          "kind": "Typ",
+          "order": "Zamówienie",
+          "program": "Program",
+          "amount": "Kwota"
+        }
+      },
+      "balance": {
+        "title": "Saldo",
+        "description": "Sumy są pokazywane per waluta.",
+        "totalEarned": "Zebrane ogółem",
+        "payable": "Do wypłaty"
+      },
+      "payout": {
+        "currency": "Waluta",
+        "action": "Dokonaj wypłaty",
+        "confirmTitle": "Zaksięgować wypłatę {{amount}} {{currency}}?"
+      },
+      "messages": {
+        "membershipAdded": "Członkostwo dodane.",
+        "membershipRemoved": "Członkostwo usunięte.",
+        "payoutCreated": "Wypłata zaksięgowana."
+      },
+      "errors": {
+        "load": "Nie udało się wczytać incentive partnera.",
+        "noCustomer": "Brak kontekstu klienta.",
+        "pickProgram": "Wybierz program.",
+        "addMembership": "Nie udało się dodać członkostwa.",
+        "removeMembership": "Nie udało się usunąć członkostwa.",
+        "nothingToPay": "Brak kwoty do wypłaty w tej walucie.",
+        "payout": "Nie udało się utworzyć wypłaty."
+      }
+    },
+    "incentives": {
+      "errors": {
+        "load": "Nie udało się wczytać incentive.",
+        "loadBalance": "Nie udało się wczytać salda.",
+        "payout": "Nie udało się utworzyć wypłaty.",
+        "accrue": "Nie udało się naliczyć incentive."
       }
     },
     "search": {
@@ -100,6 +182,10 @@
       "memberships": {
         "create": "Dodanie partnera do programu",
         "delete": "Usunięcie partnera z programu"
+      },
+      "incentives": {
+        "accrue": "Naliczenie incentive partnera",
+        "payout": "Wypłata incentive partnera"
       }
     },
     "config": {
@@ -117,7 +203,8 @@
       "loadMembers": "Nie udało się wczytać członków.",
       "createMember": "Nie udało się dodać członka.",
       "deleteMember": "Nie udało się usunąć członka.",
-      "membershipIdRequired": "Wymagany identyfikator członkostwa."
+      "membershipIdRequired": "Wymagany identyfikator członkostwa.",
+      "customerEntityIdRequired": "Wymagane customerEntityId."
     }
   }
 }

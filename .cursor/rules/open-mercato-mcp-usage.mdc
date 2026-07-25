@@ -6,6 +6,7 @@ alwaysApply: true
 # Open Mercato MCP — usage policy
 
 Server: `user-open-mercato-local` / `open-mercato` (`context_whoami`, `search`, `execute`, `playbooks_*`).
+Remote (example): `user-open-mercato-rsmoto` / `open-mercato-rsmoto`.
 
 ## Rule
 
@@ -16,3 +17,14 @@ Server: `user-open-mercato-local` / `open-mercato` (`context_whoami`, `search`, 
 - Do **not** invent MCP usage from proximity (open `.env`, CRM mention, or default “proactive MCP” habits).
 
 When in doubt: ask once, or proceed without MCP.
+
+## Local → remote promotion (MUST)
+
+Before **any** state-changing action on remote MCP (`open-mercato-rsmoto` / `user-open-mercato-rsmoto`) — playbooks, cases, customers, `execute` writes, etc.:
+
+1. Dry-run / validate on **local** MCP (when supported).
+2. Execute the **same action on local** MCP.
+3. If local is unavailable or fails → **stop and report**; do not continue to remote.
+4. After local success → **wait** for the user to confirm OK before repeating on remote.
+
+Read-only remote inspection (whoami / list / get without mutation) is allowed when the user only asked to inspect remote. Details: `.ai/skills/remote-crm-mcp/SKILL.md`.

@@ -364,6 +364,12 @@ export class SalesOrder {
   @Property({ name: 'owner_user_id', type: 'uuid', nullable: true })
   ownerUserId?: string | null
 
+  @Property({ name: 'referring_partner_entity_id', type: 'uuid', nullable: true })
+  referringPartnerEntityId?: string | null
+
+  @Property({ name: 'referring_partner_program_id', type: 'uuid', nullable: true })
+  referringPartnerProgramId?: string | null
+
   @Property({ name: 'customer_contact_id', type: 'uuid', nullable: true })
   customerContactId?: string | null
 
@@ -877,6 +883,12 @@ export class SalesQuote {
   @Property({ name: 'owner_user_id', type: 'uuid', nullable: true })
   ownerUserId?: string | null
 
+  @Property({ name: 'referring_partner_entity_id', type: 'uuid', nullable: true })
+  referringPartnerEntityId?: string | null
+
+  @Property({ name: 'referring_partner_program_id', type: 'uuid', nullable: true })
+  referringPartnerProgramId?: string | null
+
   @Property({ name: 'customer_contact_id', type: 'uuid', nullable: true })
   customerContactId?: string | null
 
@@ -1056,6 +1068,12 @@ export class SalesQuoteLine {
 
   @Property({ name: 'product_variant_id', type: 'uuid', nullable: true })
   productVariantId?: string | null
+
+  @Property({ name: 'subscription_starts_at', type: Date, nullable: true })
+  subscriptionStartsAt?: Date | null
+
+  @Property({ name: 'subscription_ends_at', type: Date, nullable: true })
+  subscriptionEndsAt?: Date | null
 
   @Property({ name: 'catalog_snapshot', type: 'jsonb', nullable: true })
   catalogSnapshot?: Record<string, unknown> | null

@@ -223,6 +223,10 @@ export function makeSalesLineRoute(config: SalesLineRouteConfig) {
         ]
         const returnedQuantity = F['returned_quantity']
         if (typeof returnedQuantity === 'string') fields.push(returnedQuantity)
+        const subscriptionStartsAt = F['subscription_starts_at']
+        if (typeof subscriptionStartsAt === 'string') fields.push(subscriptionStartsAt)
+        const subscriptionEndsAt = F['subscription_ends_at']
+        if (typeof subscriptionEndsAt === 'string') fields.push(subscriptionEndsAt)
         return fields
       })(),
       sortFieldMap: {

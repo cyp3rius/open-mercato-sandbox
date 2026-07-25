@@ -35,6 +35,10 @@ export default function CreateDealPage() {
           probability: typeof base.probability === 'number' ? base.probability : undefined,
           expectedCloseAt: base.expectedCloseAt ?? undefined,
           description: base.description ?? undefined,
+          ownerUserId: base.ownerUserId,
+          referringPartnerEntityId: base.referringPartnerEntityId?.trim()
+            ? base.referringPartnerEntityId.trim()
+            : null,
           personIds: Array.isArray(base.personIds) && base.personIds.length ? base.personIds : undefined,
           companyIds: Array.isArray(base.companyIds) && base.companyIds.length ? base.companyIds : undefined,
         }

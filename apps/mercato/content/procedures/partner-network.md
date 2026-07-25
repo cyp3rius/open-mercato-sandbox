@@ -8,26 +8,19 @@ contextTags:
 defaultSlaDuration:
   amount: 5
   unit: days
+relatedProcedures:
+  - slug: assign-partner-job
+    title: Skierowanie zlecenia do partnera
+authoringTodos:
+  - Docelowo dedykowany typ / katalog partnera zamiast firmy-klienta.
+  - Ustalić KPI współpracy (wolumen, marża, SLA partnera).
 ---
 
 # Budowa i utrzymanie sieci partnerów
 
-Proces wewnętrzny — lista partnerów, negocjacja rabatów, dane o współpracy.
-Skierowanie konkretnego zlecenia do partnera: `assign-partner-job`.
-
-Partner jest zapisywany jako `customer` (firma) — brak dedykowanego `entityKind` partnera w DSL.
-
-## Z notatek
-
-- Tworzymy listę partnerów: adresy, telefony, osoby
-- Negocjujemy rabaty dla naszych klientów
-- Potem wiemy, gdzie kogo przypisać
-- Zbieramy dane o biznesie z partnerami (ilości zamówień itd.)
-
-## Luki (TODO)
-
-- **Encja partnera** — używamy `customer` (firma) do czasu dedykowanego typu / katalogu.
-- **Metryki biznesowe** — jakie KPI zbieramy (wolumen, marża, SLA partnera).
+Budujemy i utrzymujemy listę partnerów: kontakty, warunki i rabaty dla klientów
+oraz dane o współpracy. Skierowanie konkretnego zlecenia odbywa się osobną
+procedurą.
 
 ## Procedure
 
@@ -62,7 +55,6 @@ Partner jest zapisywany jako `customer` (firma) — brak dedykowanego `entityKin
   actionCode: other
   otherInstructions: |
     Odnotuj wolumen współpracy z partnerem (ilości zamówień itd.).
-    TODO: ustalić docelowe pole / raport.
 
 - id: end
   kind: end

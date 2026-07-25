@@ -25,6 +25,11 @@ import { CATALOG_SUBSCRIPTION_SERVICE_LINE_CODE } from '@open-mercato/core/modul
 import { DocumentTotals } from '../documents/DocumentTotals'
 import { PriceWithCurrency } from '../PriceWithCurrency'
 import type { SimpleDocumentKind } from './SimpleDocumentsTable'
+import {
+  resolveReferringPartnerFromDealApi,
+  resolveReferringPartnerFromQuoteDoc,
+} from './referringPartnerPrefill'
+import { ReferringPartnerProgramField } from './ReferringPartnerProgramField'
 
 export type SimpleDocumentLineDraft = {
   key: string
@@ -45,6 +50,9 @@ export type SimpleDocumentFormValues = {
   customerLabel: string
   ownerUserId: string
   ownerLabel: string
+  referringPartnerEntityId: string
+  referringPartnerLabel: string
+  referringPartnerProgramId: string
   statusEntryId: string
   currencyCode: string
   documentDate: string
@@ -77,6 +85,9 @@ export function defaultSimpleDocumentValues(): SimpleDocumentFormValues {
     customerLabel: '',
     ownerUserId: '',
     ownerLabel: '',
+    referringPartnerEntityId: '',
+    referringPartnerLabel: '',
+    referringPartnerProgramId: '',
     statusEntryId: '',
     currencyCode: 'PLN',
     documentDate: new Date().toISOString().slice(0, 10),
@@ -307,9 +318,11 @@ export async function fetchSimpleQuotePrefillFromDeal(
       title?: string | null
       valueCurrency?: string | null
       ownerUserId?: string | null
+      referringPartnerEntityId?: string | null
     }
     people?: Array<{ id?: string }>
     companies?: Array<{ id?: string }>
+    referringPartner?: { id?: string; label?: string } | null
   }>(`/api/customers/deals/${encodeURIComponent(id)}`)
   if (!call.ok || !call.result?.deal) return null
 
@@ -329,6 +342,9 @@ export async function fetchSimpleQuotePrefillFromDeal(
     ? currencyRaw
     : defaultSimpleDocumentValues().currencyCode
   const ownerUserId = typeof deal.ownerUserId === 'string' ? deal.ownerUserId : ''
+  const { referringPartnerEntityId, referringPartnerLabel } = resolveReferringPartnerFromDealApi(
+    call.result,
+  )
   const dealTitle = typeof deal.title === 'string' ? deal.title.trim() : ''
 
   return {
@@ -339,6 +355,8 @@ export async function fetchSimpleQuotePrefillFromDeal(
       customerLabel: '',
       ownerUserId,
       ownerLabel: '',
+      referringPartnerEntityId,
+      referringPartnerLabel,
       currencyCode,
       documentDate: new Date().toISOString().slice(0, 10),
       documentNumber: '',
@@ -380,6 +398,7 @@ export async function fetchSimpleOrderPrefillFromQuote(
   const lines = await hydrateSimpleDocumentLineProductLabels(mappedLines)
 
   const quoteNumber = typeof doc.quoteNumber === 'string' ? doc.quoteNumber : ''
+  const referringPartnerEntityId = resolveReferringPartnerFromQuoteDoc(doc)
   return {
     quoteNumber,
     values: {
@@ -388,6 +407,10 @@ export async function fetchSimpleOrderPrefillFromQuote(
       customerLabel,
       ownerUserId: typeof doc.ownerUserId === 'string' ? doc.ownerUserId : '',
       ownerLabel: '',
+      referringPartnerEntityId,
+      referringPartnerLabel: '',
+      referringPartnerProgramId:
+        typeof doc.referringPartnerProgramId === 'string' ? doc.referringPartnerProgramId : '',
       currencyCode: typeof doc.currencyCode === 'string' ? doc.currencyCode : defaultSimpleDocumentValues().currencyCode,
       documentDate: isoToDateInput(doc.validFrom) || new Date().toISOString().slice(0, 10),
       documentNumber: '',
@@ -421,6 +444,61 @@ async function remoteSearchProducts(query: string): Promise<
       return { value: id, label, serviceLineCode }
     })
     .filter((entry): entry is { value: string; label: string; serviceLineCode: string | null } => !!entry)
+}
+
+function partnerListQueryString(search?: string): string {
+  const params = new URLSearchParams({
+    page: '1',
+    pageSize: '50',
+    crmRecordTypes: 'partner,referrer',
+  })
+  const q = typeof search === 'string' ? search.trim() : ''
+  if (q.length) params.set('search', q)
+  return params.toString()
+}
+
+function pickPartnerDisplayName(row: Record<string, unknown>): string {
+  const dn = row.display_name ?? row.displayName
+  if (typeof dn === 'string' && dn.trim().length) return dn.trim()
+  const pe = row.primary_email ?? row.primaryEmail
+  if (typeof pe === 'string' && pe.trim().length) return pe.trim()
+  return typeof row.id === 'string' ? row.id : ''
+}
+
+async function remoteSearchReferringPartners(
+  query: string,
+  parts: { personPrefix: string; companyPrefix: string },
+): Promise<Array<{ value: string; label: string }>> {
+  const qs = partnerListQueryString(query)
+  const [peopleCall, companiesCall] = await Promise.all([
+    apiCall<{ items?: Array<Record<string, unknown>> }>(`/api/customers/people?${qs}`),
+    apiCall<{ items?: Array<Record<string, unknown>> }>(`/api/customers/companies?${qs}`),
+  ])
+  const out: Array<{ value: string; label: string }> = []
+  if (peopleCall.ok && Array.isArray(peopleCall.result?.items)) {
+    for (const row of peopleCall.result.items) {
+      const id = typeof row.id === 'string' ? row.id : ''
+      if (!id.length) continue
+      const label = pickPartnerDisplayName(row)
+      out.push({
+        value: id,
+        label: `${parts.personPrefix}: ${label.length ? label : id}`,
+      })
+    }
+  }
+  if (companiesCall.ok && Array.isArray(companiesCall.result?.items)) {
+    for (const row of companiesCall.result.items) {
+      const id = typeof row.id === 'string' ? row.id : ''
+      if (!id.length) continue
+      const label = pickPartnerDisplayName(row)
+      out.push({
+        value: id,
+        label: `${parts.companyPrefix}: ${label.length ? label : id}`,
+      })
+    }
+  }
+  out.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+  return out
 }
 
 function lineAmounts(line: SimpleDocumentLineDraft): { net: number; gross: number; tax: number } {
@@ -964,6 +1042,65 @@ export function buildSimpleDocumentFormFields(args: {
               )
             },
           },
+          {
+            id: 'referringPartnerEntityId',
+            type: 'custom' as const,
+            label: t(`${i18nPrefix}.fields.referringPartner`, 'Referring party'),
+            layout: 'half' as const,
+            component: ({
+              value,
+              setValue,
+              setFormValue,
+              disabled,
+              values,
+            }: {
+              value: unknown
+              setValue: (next: unknown) => void
+              setFormValue?: (id: string, next: unknown) => void
+              disabled?: boolean
+              values?: Record<string, unknown>
+            }) => {
+              const str = typeof value === 'string' ? value : ''
+              const partnerLabel =
+                typeof values?.referringPartnerLabel === 'string' &&
+                values.referringPartnerLabel.trim().length
+                  ? values.referringPartnerLabel
+                  : str
+              const personPrefix = t(`${i18nPrefix}.fields.referringPartnerPerson`, 'Person')
+              const companyPrefix = t(`${i18nPrefix}.fields.referringPartnerCompany`, 'Company')
+              return (
+                <div className="space-y-2">
+                  <EntitySearchCombobox
+                    value={str}
+                    onChange={(next) => {
+                      setValue(next)
+                      setFormValue?.('referringPartnerLabel', '')
+                      setFormValue?.('referringPartnerProgramId', '')
+                    }}
+                    options={mergeEntitySearchOption([], str, partnerLabel)}
+                    onRemoteSearch={(query) =>
+                      remoteSearchReferringPartners(query, { personPrefix, companyPrefix })
+                    }
+                    placeholder={t(
+                      `${i18nPrefix}.fields.referringPartnerSearch`,
+                      'Search partners…',
+                    )}
+                    disabled={disabled}
+                  />
+                  {kind === 'order' ? (
+                    <ReferringPartnerProgramField
+                      value={values?.referringPartnerProgramId ?? ''}
+                      setValue={(next) => setFormValue?.('referringPartnerProgramId', next)}
+                      partnerEntityId={str}
+                      disabled={disabled}
+                      i18nPrefix={i18nPrefix}
+                      t={t}
+                    />
+                  ) : null}
+                </div>
+              )
+            },
+          },
         ]
       : []),
     {
@@ -1053,7 +1190,9 @@ export function buildSimpleDocumentFormGroups(
       column: 1,
       fields: [
         'customerEntityId',
-        ...(kind === 'quote' || kind === 'order' ? (['ownerUserId'] as const) : []),
+        ...(kind === 'quote' || kind === 'order'
+          ? (['ownerUserId', 'referringPartnerEntityId'] as const)
+          : []),
         'statusEntryId',
         'currencyCode',
         'documentDate',

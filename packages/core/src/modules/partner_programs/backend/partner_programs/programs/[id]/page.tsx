@@ -18,6 +18,8 @@ import { CRUD_FORM_TEXT_INPUT_CLASS, CRUD_FORM_TEXTAREA_CLASS } from '@open-merc
 import { EntitySearchCombobox, type EntitySearchComboboxOption } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { useGuardedMutation } from '@open-mercato/ui/backend/injection/useGuardedMutation'
+import type { PartnerIncentiveBase } from '../../../../components/PartnerIncentiveBaseRadioGroup'
+import { PartnerIncentiveCombinedField } from '../../../../components/PartnerIncentiveCombinedField'
 
 type ProgramRecord = {
   id: string
@@ -26,6 +28,10 @@ type ProgramRecord = {
   validFrom?: string | null
   validTo?: string | null
   isActive?: boolean
+  incentivePercent?: string | number | null
+  incentive_percent?: string | number | null
+  incentiveBase?: string | null
+  incentive_base?: string | null
 }
 
 type MembershipRow = {
@@ -54,6 +60,8 @@ export default function PartnerProgramDetailPage({ params }: { params?: { id?: s
   const [validFrom, setValidFrom] = React.useState('')
   const [validTo, setValidTo] = React.useState('')
   const [isActive, setIsActive] = React.useState(true)
+  const [incentivePercent, setIncentivePercent] = React.useState('0')
+  const [incentiveBase, setIncentiveBase] = React.useState<PartnerIncentiveBase>('net')
   const [loaded, setLoaded] = React.useState(false)
   const [canEdit, setCanEdit] = React.useState(false)
   const [canMembers, setCanMembers] = React.useState(false)
@@ -102,6 +110,10 @@ export default function PartnerProgramDetailPage({ params }: { params?: { id?: s
     setValidFrom(toDatetimeLocalValue(record.validFrom))
     setValidTo(toDatetimeLocalValue(record.validTo))
     setIsActive(record.isActive !== false)
+    const percentRaw = record.incentivePercent ?? record.incentive_percent ?? '0'
+    setIncentivePercent(String(percentRaw))
+    const baseRaw = record.incentiveBase ?? record.incentive_base ?? 'net'
+    setIncentiveBase(baseRaw === 'gross' ? 'gross' : 'net')
     setLoaded(true)
   }, [programId, t])
 
@@ -117,16 +129,26 @@ export default function PartnerProgramDetailPage({ params }: { params?: { id?: s
     const ids = items.map((m) => m.customerEntityId).filter(Boolean)
     if (ids.length === 0) return
     const params = new URLSearchParams({ page: '1', pageSize: '100', ids: ids.join(',') })
-    const companies = await readApiResultOrThrow<{ items?: Array<{ id?: string; display_name?: string }> }>(
-      `/api/customers/companies?${params.toString()}`,
-      undefined,
-      { fallback: { items: [] } },
-    )
+    const [companies, people] = await Promise.all([
+      readApiResultOrThrow<{ items?: Array<{ id?: string; display_name?: string; displayName?: string }> }>(
+        `/api/customers/companies?${params.toString()}`,
+        undefined,
+        { fallback: { items: [] } },
+      ),
+      readApiResultOrThrow<{ items?: Array<{ id?: string; display_name?: string; displayName?: string }> }>(
+        `/api/customers/people?${params.toString()}`,
+        undefined,
+        { fallback: { items: [] } },
+      ),
+    ])
     const map: Record<string, string> = {}
-    for (const row of companies.items ?? []) {
-      if (typeof row.id === 'string' && typeof row.display_name === 'string') {
-        map[row.id] = row.display_name
-      }
+    for (const row of [...(companies.items ?? []), ...(people.items ?? [])]) {
+      if (typeof row.id !== 'string') continue
+      const label =
+        (typeof row.display_name === 'string' && row.display_name) ||
+        (typeof row.displayName === 'string' && row.displayName) ||
+        row.id
+      map[row.id] = label
     }
     setMemberLabels((prev) => ({ ...prev, ...map }))
   }, [programId, t])
@@ -159,19 +181,42 @@ export default function PartnerProgramDetailPage({ params }: { params?: { id?: s
         crmRecordTypes: 'partner',
       })
       if (query.trim()) params.set('search', query.trim())
-      const payload = await readApiResultOrThrow<{ items?: Array<{ id?: string; display_name?: string }> }>(
-        `/api/customers/companies?${params.toString()}`,
-        undefined,
-        { fallback: { items: [] } },
-      )
-      return (payload.items ?? [])
-        .filter((row) => typeof row.id === 'string')
-        .map((row) => ({
-          value: String(row.id),
-          label: typeof row.display_name === 'string' ? row.display_name : String(row.id),
-        }))
+      const qs = params.toString()
+      const [companies, people] = await Promise.all([
+        readApiResultOrThrow<{ items?: Array<{ id?: string; display_name?: string; displayName?: string }> }>(
+          `/api/customers/companies?${qs}`,
+          undefined,
+          { fallback: { items: [] } },
+        ),
+        readApiResultOrThrow<{ items?: Array<{ id?: string; display_name?: string; displayName?: string }> }>(
+          `/api/customers/people?${qs}`,
+          undefined,
+          { fallback: { items: [] } },
+        ),
+      ])
+      const personPrefix = t('partner_programs.partners.kindPerson', 'Person')
+      const companyPrefix = t('partner_programs.partners.kindCompany', 'Company')
+      const out: EntitySearchComboboxOption[] = []
+      for (const row of people.items ?? []) {
+        if (typeof row.id !== 'string') continue
+        const label =
+          (typeof row.display_name === 'string' && row.display_name) ||
+          (typeof row.displayName === 'string' && row.displayName) ||
+          row.id
+        out.push({ value: row.id, label: `${personPrefix}: ${label}` })
+      }
+      for (const row of companies.items ?? []) {
+        if (typeof row.id !== 'string') continue
+        const label =
+          (typeof row.display_name === 'string' && row.display_name) ||
+          (typeof row.displayName === 'string' && row.displayName) ||
+          row.id
+        out.push({ value: row.id, label: `${companyPrefix}: ${label}` })
+      }
+      out.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+      return out
     },
-    [],
+    [t],
   )
 
   const handleSaveDetails = React.useCallback(
@@ -181,11 +226,24 @@ export default function PartnerProgramDetailPage({ params }: { params?: { id?: s
         flash(t('partner_programs.form.errors.nameRequired', 'Name is required.'), 'error')
         return
       }
+      const percent = Number(incentivePercent)
+      if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+        flash(
+          t(
+            'partner_programs.form.errors.incentivePercentInvalid',
+            'Incentive percent must be between 0 and 100.',
+          ),
+          'error',
+        )
+        return
+      }
       const body: Record<string, unknown> = {
         id: programId,
         name: name.trim(),
         description: description.trim() || null,
         isActive,
+        incentivePercent: percent,
+        incentiveBase,
       }
       if (validFrom.trim()) body.validFrom = new Date(validFrom).toISOString()
       else body.validFrom = null
@@ -201,7 +259,7 @@ export default function PartnerProgramDetailPage({ params }: { params?: { id?: s
         flash(message, 'error')
       }
     },
-    [description, isActive, name, programId, t, validFrom, validTo],
+    [description, incentiveBase, incentivePercent, isActive, name, programId, t, validFrom, validTo],
   )
 
   const handleDeleteProgram = React.useCallback(async () => {
@@ -226,7 +284,7 @@ export default function PartnerProgramDetailPage({ params }: { params?: { id?: s
 
   const handleAddMember = React.useCallback(async () => {
     if (!programId || !pickCustomerId.trim()) {
-      flash(t('partner_programs.partners.errors.pickPartner', 'Select a partner company.'), 'error')
+      flash(t('partner_programs.partners.errors.pickPartner', 'Select a partner.'), 'error')
       return
     }
     setAdding(true)
@@ -346,7 +404,24 @@ export default function PartnerProgramDetailPage({ params }: { params?: { id?: s
                   rows={4}
                 />
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2 md:col-span-1">
+                  <PartnerIncentiveCombinedField
+                    percent={incentivePercent}
+                    onPercentChange={setIncentivePercent}
+                    base={incentiveBase}
+                    onBaseChange={setIncentiveBase}
+                    disabled={!canEdit}
+                    percentLabel={t('partner_programs.form.incentivePercent', 'Incentive %')}
+                    baseLabel={t('partner_programs.form.incentiveBase', 'Calculate from')}
+                    netLabel={t('partner_programs.form.incentiveBaseNet', 'Net')}
+                    grossLabel={t('partner_programs.form.incentiveBaseGross', 'Gross')}
+                    hint={t(
+                      'partner_programs.form.incentivePercentHint',
+                      'Percent of referring order grand total credited to the partner.',
+                    )}
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="ppd-vf">{t('partner_programs.form.validFrom', 'Valid from')}</Label>
                   <Input
@@ -396,13 +471,13 @@ export default function PartnerProgramDetailPage({ params }: { params?: { id?: s
             {canMembers ? (
               <div className="space-y-3 rounded-lg border border-border p-4">
                 <div className="space-y-2">
-                  <Label>{t('partner_programs.partners.pickerLabel', 'Partner company')}</Label>
+                  <Label>{t('partner_programs.partners.pickerLabel', 'Partner (person or company)')}</Label>
                   <EntitySearchCombobox
                     className="w-full"
                     value={pickCustomerId}
                     onChange={setPickCustomerId}
                     options={[]}
-                    placeholder={t('partner_programs.partners.pickerPlaceholder', 'Search partner companies…')}
+                    placeholder={t('partner_programs.partners.pickerPlaceholder', 'Search partners…')}
                     onRemoteSearch={searchPartners}
                     selectedDisplayOverride={
                       pickCustomerId && memberLabels[pickCustomerId] ? memberLabels[pickCustomerId] : undefined

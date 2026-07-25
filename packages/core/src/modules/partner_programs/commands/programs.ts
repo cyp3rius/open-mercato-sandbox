@@ -33,6 +33,8 @@ type ProgramSnapshot = {
   validFrom: string | null
   validTo: string | null
   isActive: boolean
+  incentivePercent: string
+  incentiveBase: string
   metadata: Record<string, unknown> | null
   createdAt: string
   updatedAt: string
@@ -50,6 +52,8 @@ function toSnapshot(row: PartnerProgram): ProgramSnapshot {
     validFrom: row.validFrom ? row.validFrom.toISOString() : null,
     validTo: row.validTo ? row.validTo.toISOString() : null,
     isActive: row.isActive,
+    incentivePercent: row.incentivePercent ?? '0',
+    incentiveBase: row.incentiveBase === 'gross' ? 'gross' : 'net',
     metadata: (row.metadata as Record<string, unknown> | null | undefined) ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -83,6 +87,8 @@ const createProgramCommand: CommandHandler<PartnerProgramCreateInput, { programI
       validFrom: parsed.validFrom ?? null,
       validTo: parsed.validTo ?? null,
       isActive: parsed.isActive ?? true,
+      incentivePercent: String(parsed.incentivePercent ?? 0),
+      incentiveBase: parsed.incentiveBase === 'gross' ? 'gross' : 'net',
       metadata: parsed.metadata ?? null,
       createdAt: now,
       updatedAt: now,
@@ -169,11 +175,19 @@ const updateProgramCommand: CommandHandler<PartnerProgramUpdateInput, { programI
       'validFrom',
       'validTo',
       'isActive',
+      'incentivePercent',
+      'incentiveBase',
       'metadata',
     ])
     for (const [key, change] of Object.entries(changes)) {
       if (change.to !== undefined) {
-        ;(record as unknown as Record<string, unknown>)[key] = change.to
+        if (key === 'incentivePercent') {
+          record.incentivePercent = String(change.to)
+        } else if (key === 'incentiveBase') {
+          record.incentiveBase = change.to === 'gross' ? 'gross' : 'net'
+        } else {
+          ;(record as unknown as Record<string, unknown>)[key] = change.to
+        }
       }
     }
     record.updatedAt = new Date()
@@ -221,6 +235,8 @@ const updateProgramCommand: CommandHandler<PartnerProgramUpdateInput, { programI
     row.validFrom = before.validFrom ? new Date(before.validFrom) : null
     row.validTo = before.validTo ? new Date(before.validTo) : null
     row.isActive = before.isActive
+    row.incentivePercent = before.incentivePercent ?? '0'
+    row.incentiveBase = before.incentiveBase === 'gross' ? 'gross' : 'net'
     row.metadata = before.metadata
     row.updatedAt = new Date()
     await em.flush()
@@ -303,6 +319,8 @@ const deleteProgramCommand: CommandHandler<{ id: string }, { programId: string }
         validFrom: before.validFrom ? new Date(before.validFrom) : null,
         validTo: before.validTo ? new Date(before.validTo) : null,
         isActive: before.isActive,
+        incentivePercent: before.incentivePercent ?? '0',
+        incentiveBase: before.incentiveBase === 'gross' ? 'gross' : 'net',
         metadata: before.metadata,
         deletedAt: null,
         createdAt: new Date(),
@@ -315,6 +333,8 @@ const deleteProgramCommand: CommandHandler<{ id: string }, { programId: string }
       row.validFrom = before.validFrom ? new Date(before.validFrom) : null
       row.validTo = before.validTo ? new Date(before.validTo) : null
       row.isActive = before.isActive
+      row.incentivePercent = before.incentivePercent ?? '0'
+      row.incentiveBase = before.incentiveBase === 'gross' ? 'gross' : 'net'
       row.metadata = before.metadata
       row.deletedAt = null
       row.updatedAt = new Date()

@@ -10,30 +10,23 @@ contextTags:
 defaultSlaDuration:
   amount: 1
   unit: days
+relatedProcedures:
+  - slug: link-insurance-policy
+    title: Powiązanie polisy ubezpieczeniowej
+authoringTodos:
+  - Uzupełnić checklistę na miejscu zdarzenia.
+  - Ustalić wymagane dokumenty i zdjęcia.
+  - Ustalić, kogo powiadamiać (opiekun, ubezpieczyciel, policja) i SLA odpowiedzi.
 ---
 
 # Postępowanie przy szkodzie / kolizji
 
-Wytyczne dla klientów — wspomniane w notatkach warsztatowych jako przykład customer-facing procedure.
-Powiązanie polisy → wspólny leaf `link-insurance-policy`.
+Wytyczne dla klienta przy zgłoszeniu szkody lub kolizji: powiadomienie opiekuna,
+zebranie informacji o zdarzeniu, przekazanie instrukcji i powiązanie polisy,
+jeśli jest.
 
-## Z notatek
-
-Dla klientów czasem mamy wytyczne postępowania, np.:
-
-- przy zgłoszeniu szkody
-- postępowanie w przypadku kolizji
-
-## Luki (TODO)
-
-Warsztat **nie zawiera** kroków szczegółowych. Poniżej szkielet do uzupełnienia z klientem / opiekunami:
-
-- kolejność działań na miejscu zdarzenia
-- dokumenty / zdjęcia wymagane do szkody
-- kogo powiadomić (opiekun, ubezpieczyciel, policja)
-- SLA odpowiedzi opiekuna
-
-Do czasu uzupełnienia kroki oznaczone TODO nie powinny być traktowane jako ostateczna instrukcja dla klienta.
+Treść instrukcji dla klienta wymaga jeszcze uzupełnienia — do czasu akceptacji
+nie wysyłaj finalnej checklisty.
 
 ## Procedure
 
@@ -56,7 +49,7 @@ Do czasu uzupełnienia kroki oznaczone TODO nie powinny być traktowane jako ost
 
 - id: notify-guardian
   kind: action
-  label: TODO — powiadom opiekuna
+  label: Powiadom opiekuna
   actionVariant: notify
   actionCode: notify
   notifyChannel: message
@@ -66,19 +59,19 @@ Do czasu uzupełnienia kroki oznaczone TODO nie powinny być traktowane jako ost
 
 - id: collect-incident-facts
   kind: action
-  label: TODO — zbierz informacje o zdarzeniu
+  label: Zbierz informacje o zdarzeniu
   actionVariant: task
   actionCode: task
-  taskTitle: TODO — zbierz od klienta fakty zdarzenia, zdjęcia i dokumenty (do uzupełnienia checklisty)
+  taskTitle: Zbierz od klienta fakty zdarzenia, zdjęcia i dokumenty
 
 - id: guide-customer
   kind: action
-  label: TODO — przekaż wytyczne klientowi
+  label: Przekaż wytyczne klientowi
   actionVariant: other
   actionCode: other
   otherInstructions: |
-    TODO: wstaw docelową checklistę dla klienta (szkoda / kolizja).
-    Na razie nie wysyłaj finalnej instrukcji customer-facing bez akceptacji treści.
+    Przekaż klientowi ustalone wytyczne postępowania.
+    Do czasu akceptacji finalnej checklisty nie wysyłaj jej jako obowiązującej instrukcji.
 
 - id: run-link-policy
   kind: invoke_procedure

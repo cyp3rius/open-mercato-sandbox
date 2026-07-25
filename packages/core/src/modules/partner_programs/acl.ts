@@ -13,6 +13,11 @@ export const features = [
     title: 'Manage partner program memberships',
     module: 'partner_programs',
   },
+  {
+    id: 'partner_programs.manage_payouts',
+    title: 'Manage partner incentive payouts',
+    module: 'partner_programs',
+  },
 ]
 
 export default features

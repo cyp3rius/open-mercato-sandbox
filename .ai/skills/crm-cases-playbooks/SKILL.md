@@ -47,9 +47,13 @@ spec.findEndpoints('to-markdown')
 
 1. `context_whoami`
 2. Cases: `cases_find` → `cases_get` → transition/assign tools; resolve customers via `customers_find` / `customers_ensure_*`
-3. Procedures: generate MD → review outside UI → import (idempotent by org+slug; same slug → new version on content change)
+3. Procedures: generate MD → review outside UI → **local** dry-run → **local** import → wait for user OK → only then remote (see `remote-crm-mcp` promotion gate)
 4. Export before editing elsewhere; re-import keeps stable local `id`s → UUID v5
 5. Batch: import `{ documents: [...] }`; export `{ ids }` / `{ slugs }`
+
+## Local → remote (MUST)
+
+Never run a state-changing action on remote MCP without: local dry-run/validate (when available) → local execute → user confirmation. If local is unavailable, stop and report. Applies to playbooks, cases, customers, and any other MCP write — see `remote-crm-mcp` promotion gate.
 
 ## Execute sketch (fallback)
 

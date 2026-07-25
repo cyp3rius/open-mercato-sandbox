@@ -2415,7 +2415,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
   const grid = twoColumn
     ? 'grid grid-cols-1 lg:grid-cols-[7fr_3fr] gap-4'
     : usesFourColLayout
-      ? 'grid grid-cols-1 gap-4 md:grid-cols-4'
+      ? 'grid grid-cols-1 gap-4 md:grid-cols-12'
       : usesResponsiveLayout
         ? 'grid grid-cols-1 gap-4 md:grid-cols-6'
         : 'grid grid-cols-1 gap-4'
@@ -2425,11 +2425,13 @@ export function CrudForm<TValues extends Record<string, unknown>>({
     if (usesFourColLayout) {
       switch (layout) {
         case 'half':
-          return 'md:col-span-2'
-        case 'quarter':
-          return 'md:col-span-1'
-        default:
+          return 'md:col-span-6'
+        case 'third':
           return 'md:col-span-4'
+        case 'quarter':
+          return 'md:col-span-3'
+        default:
+          return 'md:col-span-12'
       }
     }
     switch (layout) {
@@ -2451,11 +2453,13 @@ export function CrudForm<TValues extends Record<string, unknown>>({
       if (usesFourFieldGroup) {
         switch (layout) {
           case 'half':
-            return 'md:col-span-2'
-          case 'quarter':
-            return 'md:col-span-1'
-          default:
+            return 'md:col-span-6'
+          case 'third':
             return 'md:col-span-4'
+          case 'quarter':
+            return 'md:col-span-3'
+          default:
+            return 'md:col-span-12'
         }
       }
       switch (layout) {
@@ -2468,7 +2472,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
       }
     }
     const gridClass = usesFourFieldGroup
-      ? 'grid grid-cols-1 gap-4 md:grid-cols-4'
+      ? 'grid grid-cols-1 gap-4 md:grid-cols-12'
       : usesResponsive
         ? 'grid grid-cols-1 gap-4 md:grid-cols-6'
         : 'grid grid-cols-1 gap-4'

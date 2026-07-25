@@ -16,6 +16,9 @@ import { ArrowRightLeft } from 'lucide-react'
 import { DealForm, type DealFormSubmitPayload } from '../../../../components/detail/DealForm'
 import { useCurrencyDictionary } from '../../../../components/detail/hooks/useCurrencyDictionary'
 import { buildSimpleQuoteCreateFromDealHref } from '../../../../components/detail/customerEntityCreatePrefill'
+import {
+  type DealReferringPartnerAssociation,
+} from '../../../../components/detail/DealReferringPartnerPreview'
 
 const BASE_PATH = '/backend/customers/simple-deals'
 
@@ -33,11 +36,13 @@ type DealDetailPayload = {
     probability: number | null
     expectedCloseAt: string | null
     ownerUserId?: string | null
+    referringPartnerEntityId?: string | null
     payload?: Record<string, unknown> | null
   }
   people: Array<{ id: string }>
   companies: Array<{ id: string }>
   customFields: Record<string, unknown>
+  referringPartner: DealReferringPartnerAssociation | null
 }
 
 export default function SimpleDealDetailPage({ params }: { params?: { id?: string } }) {
@@ -113,6 +118,9 @@ export default function SimpleDealDetailPage({ params }: { params?: { id?: strin
           expectedCloseAt: base.expectedCloseAt ?? undefined,
           description: base.description ?? undefined,
           ownerUserId: base.ownerUserId,
+          referringPartnerEntityId: base.referringPartnerEntityId?.trim()
+            ? base.referringPartnerEntityId.trim()
+            : null,
           personIds: Array.isArray(base.personIds) ? base.personIds : [],
           companyIds: Array.isArray(base.companyIds) ? base.companyIds : [],
         }
@@ -190,7 +198,7 @@ export default function SimpleDealDetailPage({ params }: { params?: { id?: strin
         ]}
       />
       <Page>
-        <PageBody>
+        <PageBody className="space-y-4">
           <DealForm
             key={formKey}
             mode="edit"
@@ -209,6 +217,8 @@ export default function SimpleDealDetailPage({ params }: { params?: { id?: strin
               personIds: data.people.map((person) => person.id),
               companyIds: data.companies.map((company) => company.id),
               ownerUserId: data.deal.ownerUserId ?? '',
+              referringPartnerEntityId: data.deal.referringPartnerEntityId ?? '',
+              referringPartnerLabel: data.referringPartner?.label ?? '',
               customFields: data.customFields,
             }}
             onSubmit={handleSubmit}

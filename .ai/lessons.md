@@ -578,3 +578,13 @@ Centralize shared command utilities like undo extraction in `packages/shared/src
 **Rule**: When authoring procedures, always scan the batch for repeated multi-step clusters and extract them as leaf playbooks wired via `invoke_procedure`. Keep single standalone `select_entity` entry picks inline. Remember call-stack resume: invoke must be last in its list/branch; parent continues after nested `end`.
 
 **Applies to**: `apps/mercato/content/procedures/`, `.ai/skills/procedure-authoring/SKILL.md`.
+
+## Local MCP before remote MCP writes
+
+**Context**: Agents may push playbooks/CRM mutations straight to remote MCP (`open-mercato-rsmoto`) without validating on local.
+
+**Problem**: Remote gets broken or unreviewed data; no chance for the user to verify on local first.
+
+**Rule**: Before **any** state-changing action on remote MCP (playbooks, cases, customers, `execute` writes, etc.): (1) dry-run/validate on local when supported, (2) execute the same action on local, (3) if local is unavailable or fails — stop and report, never continue to remote, (4) after local success — wait for explicit user confirmation before remote. Read-only remote inspection may skip this only when the user asked solely to inspect remote.
+
+**Applies to**: `.ai/skills/remote-crm-mcp/SKILL.md`, `.ai/skills/procedure-authoring/SKILL.md`, `.ai/skills/crm-cases-playbooks/SKILL.md`, `.cursor/rules/open-mercato-mcp-usage.mdc`.

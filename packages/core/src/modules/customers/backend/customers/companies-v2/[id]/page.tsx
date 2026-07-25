@@ -317,13 +317,23 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
     return Array.from(byId.values())
   }, [legacyDetailTabWidgets, umesDetailTabWidgets])
 
+  const crmRecordType = data?.company?.crmRecordType ?? 'customer'
+
   const injectedTabs = React.useMemo(
     () =>
       (mergedDetailTabWidgets ?? [])
         .filter((widget) => (widget.placement?.kind ?? 'tab') === 'tab')
+        .filter((widget) => {
+          if (widget.widgetId !== 'partner_programs.injection.partner-incentives') return true
+          return crmRecordType === 'partner'
+        })
         .map((widget) => {
           const tabId = widget.placement?.groupId ?? widget.widgetId
-          const label = widget.placement?.groupLabel ?? widget.module.metadata.title
+          const labelKey = widget.placement?.groupLabel ?? widget.module.metadata.title
+          const label =
+            typeof labelKey === 'string' && labelKey.includes('.')
+              ? t(labelKey, widget.module.metadata.title)
+              : labelKey
           const priority = typeof widget.placement?.priority === 'number' ? widget.placement.priority : 0
           const render = () => (
             <widget.module.Widget
@@ -335,7 +345,7 @@ export default function CompanyDetailV2Page({ params }: { params?: { id?: string
           return { id: tabId, label, priority, render }
         })
         .sort((a, b) => b.priority - a.priority),
-    [data, mergedDetailTabWidgets, injectionContext],
+    [crmRecordType, data, mergedDetailTabWidgets, injectionContext, t],
   )
 
   const injectedTabMap = React.useMemo(() => new Map(injectedTabs.map((tab) => [tab.id, tab.render])), [injectedTabs])

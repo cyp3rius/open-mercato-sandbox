@@ -38,6 +38,11 @@
       "back": "Programs",
       "name": "Name",
       "description": "Description",
+      "incentivePercent": "Incentive %",
+      "incentivePercentHint": "Percent of referring order grand total credited to the partner.",
+      "incentiveBase": "Calculate from",
+      "incentiveBaseNet": "Net",
+      "incentiveBaseGross": "Gross",
       "validFrom": "Valid from",
       "validTo": "Valid to",
       "isActive": "Active",
@@ -53,7 +58,8 @@
         "load": "Failed to load program.",
         "save": "Failed to save program.",
         "nameRequired": "Name is required.",
-        "scope": "Organization context is missing."
+        "scope": "Organization context is missing.",
+        "incentivePercentInvalid": "Incentive percent must be between 0 and 100."
       },
       "flash": {
         "created": "Program created.",
@@ -64,8 +70,10 @@
       "tab": "Partners",
       "title": "Program partners",
       "description": "Only CRM records with type Partner can be added.",
-      "pickerLabel": "Partner company",
-      "pickerPlaceholder": "Search partner companies…",
+      "pickerLabel": "Partner (person or company)",
+      "pickerPlaceholder": "Search partners…",
+      "kindPerson": "Person",
+      "kindCompany": "Company",
       "role": "Role (optional)",
       "add": "Add partner",
       "table": {
@@ -81,11 +89,85 @@
         "load": "Failed to load partners.",
         "add": "Failed to add partner.",
         "remove": "Failed to remove partner.",
-        "pickPartner": "Select a partner company."
+        "pickPartner": "Select a partner."
       },
       "messages": {
         "added": "Partner added.",
         "removed": "Partner removed."
+      }
+    },
+    "partnerTab": {
+      "tabLabel": "Partner programs",
+      "loading": "Loading…",
+      "memberships": {
+        "title": "Program memberships",
+        "description": "Programs this partner belongs to.",
+        "program": "Program",
+        "programPlaceholder": "Search programs…",
+        "role": "Role",
+        "roleOptional": "Optional",
+        "add": "Add",
+        "remove": "Remove",
+        "removeConfirm": "Remove this program membership?",
+        "openInNewTab": "Open",
+        "dialogTitle": "Add to program",
+        "dialogDescription": "Select a partner program and optionally set a role.",
+        "dialogCancel": "Cancel",
+        "empty": "No memberships yet.",
+        "columns": {
+          "program": "Program",
+          "percent": "%",
+          "role": "Role",
+          "joined": "Joined",
+          "actions": "Actions"
+        }
+      },
+      "ledger": {
+        "title": "Commission ledger",
+        "description": "Accruals from referring orders and payouts.",
+        "empty": "No ledger entries yet.",
+        "kindAccrual": "Accrual",
+        "kindPayout": "Payout",
+        "columns": {
+          "date": "Date",
+          "kind": "Kind",
+          "order": "Order",
+          "program": "Program",
+          "amount": "Amount"
+        }
+      },
+      "balance": {
+        "title": "Balance",
+        "description": "Totals are shown per currency.",
+        "totalEarned": "Total earned",
+        "payable": "Payable"
+      },
+      "payout": {
+        "currency": "Currency",
+        "action": "Record payout",
+        "confirmTitle": "Record payout of {{amount}} {{currency}}?"
+      },
+      "messages": {
+        "membershipAdded": "Membership added.",
+        "membershipRemoved": "Membership removed.",
+        "payoutCreated": "Payout recorded."
+      },
+      "errors": {
+        "load": "Failed to load partner incentives.",
+        "noCustomer": "Customer context is missing.",
+        "pickProgram": "Select a program.",
+        "addMembership": "Failed to add membership.",
+        "removeMembership": "Failed to remove membership.",
+        "nothingToPay": "Nothing to pay out for this currency.",
+        "payout": "Failed to create payout."
+      }
+    },
+    "incentives": {
+      "errors": {
+        "load": "Failed to load incentives.",
+        "loadBalance": "Failed to load balance.",
+        "payout": "Failed to create payout.",
+        "accrue": "Failed to accrue incentive."
       }
     },
     "search": {
@@ -100,6 +182,10 @@
       "memberships": {
         "create": "Add partner program member",
         "delete": "Remove partner program member"
+      },
+      "incentives": {
+        "accrue": "Accrue partner incentive",
+        "payout": "Record partner incentive payout"
       }
     },
     "config": {
@@ -117,7 +203,8 @@
       "loadMembers": "Failed to load members.",
       "createMember": "Failed to add member.",
       "deleteMember": "Failed to remove member.",
-      "membershipIdRequired": "Membership id is required."
+      "membershipIdRequired": "Membership id is required.",
+      "customerEntityIdRequired": "customerEntityId is required."
     }
   }
 }

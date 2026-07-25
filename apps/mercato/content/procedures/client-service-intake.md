@@ -10,35 +10,33 @@ contextTags:
 defaultSlaDuration:
   amount: 2
   unit: days
+relatedProcedures:
+  - slug: link-insurance-policy
+    title: Powiązanie polisy ubezpieczeniowej
+  - slug: client-guardian-care
+    title: Opieka opiekuna klienta
+authoringTodos:
+  - Ustalić, które dane pojazdu są polami rekordu, a które notatką w sprawie.
+  - Doprecyzować automatyczne przypomnienia o serwisach i myciu (częstotliwość / SLA).
+  - Przygotować treść powitalnego kontaktu (mail / telefon).
 ---
 
 # Wprowadzenie klienta do obsługi
 
-Proces po wydaniu / rozpoczęciu współpracy — zapis wytycznych, danych pojazdu i uruchomienie opieki.
+Po wydaniu lub rozpoczęciu współpracy zapisujemy zasady obsługi, dane samochodu
+i uruchamiamy opiekę.
 
-Współdzielone kroki:
-
-- polisa → `link-insurance-policy`
-- opieka → `client-guardian-care`
-
-## Co zapisać (z notatek)
+## Co zapisać
 
 - Wytyczne obsługi klienta
 - Dane samochodu: specyfikacja, opony, polisa
 - Forma finansowania i czas obsługi
-- Koniec finansowania / parametry leasingu: czas, okres, cena samochodu, cena leasingu
+- Koniec finansowania / parametry leasingu (czas, okres, cena samochodu, cena leasingu)
 - Zdjęcia samochodu
 - Dodatkowe akcesoria (np. folia), jeśli były
-- Monitoring terminów serwisowych: samochód, folie, ceramika, przeglądy
-- Folie, ceramiki i inne akcesoria wymagają serwisu — trzeba o tym pamiętać
-- Mycie samochodu według odpowiednich cykli — przypominać, sugerować, umawiać myjnie
-- Przedstawienie opiekuna, formy zleceń serwisowych, postępowania, numery telefonów
-
-## Luki (TODO)
-
-- **Model danych pojazdu / resource** — które pola idą do resource, a które do notatek sprawy.
-- **Automatyczne przypomnienia** (serwisy, mycie) — w notatkach jest potrzeba, brak reguł SLA/recurrence.
-- **Szablon maila / wątku kontaktowego** — klient kontaktuje się zwykle wątkiem mailowym lub telefonem; brak gotowej treści powitalnej.
+- Terminy serwisowe: samochód, folie, ceramika, przeglądy
+- Przypomnienia o serwisie akcesoriów oraz o myciu według ustalonych cykli
+- Przedstawienie opiekuna, formy zleceń, postępowania i numerów telefonów
 
 ## Procedure
 
@@ -54,7 +52,7 @@ Współdzielone kroki:
 
 - id: pick-vehicle
   kind: select_entity
-  label: Wybierz lub utwórz pojazd (resource)
+  label: Wybierz lub utwórz pojazd
   entityKind: resource
   required: true
   allowCreate: true
@@ -72,10 +70,10 @@ Współdzielone kroki:
   actionVariant: other
   actionCode: other
   otherInstructions: |
-    Na rekordzie pojazdu (resource) uzupełnij:
+    Uzupełnij dane pojazdu:
     - specyfikacja
     - opony
-    - odniesienie do polisy (powiązanie encji — kolejny krok)
+    - odniesienie do polisy (powiązanie w kolejnym kroku, jeśli dotyczy)
     - forma finansowania i czas obsługi
     - koniec finansowania / parametry leasingu (czas, okres, cena samochodu, cena leasingu)
     - zdjęcia samochodu

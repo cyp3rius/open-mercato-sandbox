@@ -152,19 +152,23 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
           setLoading(false)
           return
         }
-        const [ownerLabel, customerLabel] = await Promise.all([
+        const [ownerLabel, customerLabel, partnerLabel] = await Promise.all([
           fromDeal.values.ownerUserId
             ? resolveUserDisplayLabel(fromDeal.values.ownerUserId)
             : Promise.resolve(null),
           fromDeal.values.customerEntityId
             ? resolveCustomerEntityDisplayLabel(fromDeal.values.customerEntityId)
             : Promise.resolve(null),
+          fromDeal.values.referringPartnerEntityId && !fromDeal.values.referringPartnerLabel
+            ? resolveCustomerEntityDisplayLabel(fromDeal.values.referringPartnerEntityId)
+            : Promise.resolve(fromDeal.values.referringPartnerLabel || null),
         ])
         setPrefillDealTitle(fromDeal.dealTitle)
         setInitialValues({
           ...fromDeal.values,
           customerLabel: customerLabel ?? '',
           ownerLabel: ownerLabel ?? '',
+          referringPartnerLabel: partnerLabel ?? fromDeal.values.referringPartnerLabel ?? '',
         })
         setFormKey((key) => key + 1)
         return
@@ -192,11 +196,18 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
           (fromQuote.values.customerEntityId
             ? ((await resolveCustomerEntityDisplayLabel(fromQuote.values.customerEntityId)) ?? '')
             : '')
+        const referringPartnerLabel =
+          fromQuote.values.referringPartnerLabel ||
+          (fromQuote.values.referringPartnerEntityId
+            ? ((await resolveCustomerEntityDisplayLabel(fromQuote.values.referringPartnerEntityId)) ??
+              '')
+            : '')
         setPrefillQuoteNumber(fromQuote.quoteNumber)
         setInitialValues({
           ...fromQuote.values,
           customerLabel,
           ownerLabel,
+          referringPartnerLabel,
         })
         setFormKey((key) => key + 1)
         return
@@ -343,6 +354,14 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
       const ownerLabel = ownerUserId
         ? ((await resolveUserDisplayLabel(ownerUserId)) ?? ownerUserId)
         : ''
+      const referringPartnerEntityId =
+        typeof doc.referringPartnerEntityId === 'string' ? doc.referringPartnerEntityId : ''
+      const referringPartnerProgramId =
+        typeof doc.referringPartnerProgramId === 'string' ? doc.referringPartnerProgramId : ''
+      const referringPartnerLabel = referringPartnerEntityId
+        ? ((await resolveCustomerEntityDisplayLabel(referringPartnerEntityId)) ??
+          referringPartnerEntityId)
+        : ''
 
       const linesCall = await apiCall<{ items?: Array<Record<string, unknown>> }>(
         `/api/sales/${linesResource}?${parentFk}=${documentId}&page=1&pageSize=100`,
@@ -358,6 +377,9 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
         customerLabel,
         ownerUserId,
         ownerLabel,
+        referringPartnerEntityId,
+        referringPartnerLabel,
+        referringPartnerProgramId,
         statusEntryId: typeof doc.statusEntryId === 'string' ? doc.statusEntryId : '',
         currencyCode: typeof doc.currencyCode === 'string' ? doc.currencyCode : 'EUR',
         documentNumber:
@@ -500,6 +522,43 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
         header.placedAt = datePickerToIsoStart(values.documentDate)
         if (values.documentNumber.trim()) header.orderNumber = values.documentNumber.trim()
         header.ownerUserId = values.ownerUserId.trim() ? values.ownerUserId.trim() : null
+        header.referringPartnerEntityId = values.referringPartnerEntityId.trim()
+          ? values.referringPartnerEntityId.trim()
+          : null
+        let programId = values.referringPartnerProgramId.trim()
+          ? values.referringPartnerProgramId.trim()
+          : null
+        if (header.referringPartnerEntityId) {
+          const memCall = await apiCall<{
+            items?: Array<{ programId?: string | null }>
+          }>(
+            `/api/partner_programs/memberships?customerEntityId=${encodeURIComponent(String(header.referringPartnerEntityId))}`,
+          )
+          const memItems = Array.isArray(memCall.result?.items) ? memCall.result.items : []
+          const programIds = memItems
+            .map((row) => (typeof row.programId === 'string' ? row.programId.trim() : ''))
+            .filter(Boolean)
+          if (programIds.length === 1) {
+            programId = programIds[0]
+          }
+          if (!programId || (programIds.length > 0 && !programIds.includes(programId))) {
+            throw createCrudFormError(
+              t(
+                `${i18nPrefix}.errors.referringPartnerProgramRequired`,
+                'Select a partner program, or clear the referring party.',
+              ),
+              {
+                referringPartnerEntityId: t(
+                  `${i18nPrefix}.errors.referringPartnerProgramRequired`,
+                  'Select a partner program, or clear the referring party.',
+                ),
+              },
+            )
+          }
+        } else {
+          programId = null
+        }
+        header.referringPartnerProgramId = programId
         if (mode === 'create' && prefillSourceOfferId) {
           header.metadata = { sourceOfferId: prefillSourceOfferId }
           header.comments = prefillQuoteNumber
@@ -510,6 +569,12 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
         header.validFrom = datePickerToIsoStart(values.documentDate)
         if (values.documentNumber.trim()) header.quoteNumber = values.documentNumber.trim()
         header.ownerUserId = values.ownerUserId.trim() ? values.ownerUserId.trim() : null
+        header.referringPartnerEntityId = values.referringPartnerEntityId.trim()
+          ? values.referringPartnerEntityId.trim()
+          : null
+        header.referringPartnerProgramId = values.referringPartnerProgramId.trim()
+          ? values.referringPartnerProgramId.trim()
+          : null
         if (mode === 'create' && prefillSourceDealId) {
           header.metadata = { sourceDealId: prefillSourceDealId }
           header.comments = prefillDealTitle.trim()

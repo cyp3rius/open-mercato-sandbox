@@ -15,6 +15,12 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
+import {
+  DictionaryValue,
+  type DictionaryMap,
+  createDictionaryMap,
+  normalizeDictionaryEntries,
+} from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
 
 export type SimpleDocumentKind = 'order' | 'quote'
 
@@ -60,12 +66,14 @@ export function SimpleDocumentsTable({ kind }: { kind: SimpleDocumentKind }) {
   const [loading, setLoading] = React.useState(false)
   const [canManage, setCanManage] = React.useState(false)
   const [reloadToken, setReloadToken] = React.useState(0)
+  const [statusMap, setStatusMap] = React.useState<DictionaryMap>({})
 
   const resource = kind === 'order' ? 'orders' : 'quotes'
   const basePath = kind === 'order' ? '/backend/sales/simple-orders' : '/backend/sales/simple-quotes'
   const i18nPrefix = kind === 'order' ? 'sales.simpleOrders' : 'sales.simpleQuotes'
   const manageFeature = kind === 'order' ? 'sales.simple_orders.manage' : 'sales.simple_quotes.manage'
   const tableId = kind === 'order' ? 'sales.simpleOrders.list' : 'sales.simpleQuotes.list'
+  const statusApiPath = kind === 'order' ? '/api/sales/order-statuses' : '/api/sales/quote-statuses'
   const detailHref = React.useCallback((id: string) => `${basePath}/${encodeURIComponent(id)}`, [basePath])
 
   React.useEffect(() => {
@@ -85,6 +93,30 @@ export function SimpleDocumentsTable({ kind }: { kind: SimpleDocumentKind }) {
       cancelled = true
     }
   }, [manageFeature])
+
+  React.useEffect(() => {
+    let cancelled = false
+    async function loadStatusMap() {
+      try {
+        const params = new URLSearchParams({ page: '1', pageSize: '100' })
+        const response = await apiCall<{ items?: Array<Record<string, unknown>> }>(
+          `${statusApiPath}?${params.toString()}`,
+          undefined,
+          { fallback: { items: [] } },
+        )
+        if (cancelled) return
+        const entries = normalizeDictionaryEntries(response.result?.items ?? [])
+        setStatusMap(createDictionaryMap(entries))
+      } catch (err) {
+        console.error('simple.documents.statuses.load', err)
+        if (!cancelled) setStatusMap({})
+      }
+    }
+    void loadStatusMap()
+    return () => {
+      cancelled = true
+    }
+  }, [scopeVersion, statusApiPath])
 
   const load = React.useCallback(async () => {
     setLoading(true)
@@ -157,6 +189,12 @@ export function SimpleDocumentsTable({ kind }: { kind: SimpleDocumentKind }) {
   const columns = React.useMemo<ColumnDef<SimpleDocumentRow>[]>(
     () => [
       {
+        accessorKey: 'date',
+        header: t(`${i18nPrefix}.columns.date`, 'Date'),
+        cell: ({ row }) =>
+          row.original.date ? new Date(row.original.date).toLocaleDateString() : '—',
+      },
+      {
         accessorKey: 'number',
         header: t(`${i18nPrefix}.columns.number`, 'Number'),
         cell: ({ row }) => (
@@ -173,18 +211,26 @@ export function SimpleDocumentsTable({ kind }: { kind: SimpleDocumentKind }) {
       {
         accessorKey: 'status',
         header: t(`${i18nPrefix}.columns.status`, 'Status'),
-        cell: ({ row }) => row.original.status ?? '—',
+        cell: ({ row }) => {
+          const status = row.original.status
+          if (!status) return '—'
+          return (
+            <DictionaryValue
+              value={status}
+              map={statusMap}
+              fallback={<span className="text-sm text-muted-foreground">{status}</span>}
+              className="text-sm"
+              iconWrapperClassName="inline-flex h-5 w-5 items-center justify-center rounded bg-muted text-muted-foreground"
+              iconClassName="h-3.5 w-3.5"
+              colorClassName="h-3 w-3 rounded-full border border-border/70"
+            />
+          )
+        },
       },
       {
         accessorKey: 'currency',
         header: t(`${i18nPrefix}.columns.currency`, 'Currency'),
         cell: ({ row }) => row.original.currency ?? '—',
-      },
-      {
-        accessorKey: 'date',
-        header: t(`${i18nPrefix}.columns.date`, 'Date'),
-        cell: ({ row }) =>
-          row.original.date ? new Date(row.original.date).toLocaleDateString() : '—',
       },
       {
         accessorKey: 'totalGross',
@@ -195,7 +241,7 @@ export function SimpleDocumentsTable({ kind }: { kind: SimpleDocumentKind }) {
             : '—',
       },
     ],
-    [detailHref, i18nPrefix, t],
+    [detailHref, i18nPrefix, statusMap, t],
   )
 
   return (

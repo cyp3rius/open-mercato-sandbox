@@ -26,42 +26,6 @@ export const injectionTable: ModuleInjectionTable = {
     widgetId: 'catalog.injection.product-bulk-delete',
     priority: 40,
   },
-  'customers.person.detail:tabs': [
-    {
-      widgetId: 'catalog.injection.customer-offerings',
-      kind: 'tab',
-      groupId: 'catalog-offerings',
-      groupLabel: 'catalog.customerOfferings.tabLabel',
-      priority: 35,
-    },
-  ],
-  'customers.company.detail:tabs': [
-    {
-      widgetId: 'catalog.injection.customer-offerings',
-      kind: 'tab',
-      groupId: 'catalog-offerings',
-      groupLabel: 'catalog.customerOfferings.tabLabel',
-      priority: 35,
-    },
-  ],
-  'detail:customers.person:tabs': [
-    {
-      widgetId: 'catalog.injection.customer-offerings',
-      kind: 'tab',
-      groupId: 'catalog-offerings',
-      groupLabel: 'catalog.customerOfferings.tabLabel',
-      priority: 35,
-    },
-  ],
-  'detail:customers.company:tabs': [
-    {
-      widgetId: 'catalog.injection.customer-offerings',
-      kind: 'tab',
-      groupId: 'catalog-offerings',
-      groupLabel: 'catalog.customerOfferings.tabLabel',
-      priority: 35,
-    },
-  ],
 }
 
 export default injectionTable

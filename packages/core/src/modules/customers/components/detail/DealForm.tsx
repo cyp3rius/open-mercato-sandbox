@@ -18,9 +18,11 @@ import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySear
 import {
   mergeEntitySearchOption,
   remoteSearchAuthUsers,
+  resolveCustomerEntityDisplayLabel,
   resolveUserDisplayLabel,
 } from '@open-mercato/core/modules/procurement/lib/procurementEntitySearch'
 import { normalizeCustomFieldSubmitValue } from './customFieldUtils'
+import { remoteSearchReferringPartners } from '../../lib/remoteSearchReferringPartners'
 
 export type DealFormBaseValues = {
   title: string
@@ -34,6 +36,8 @@ export type DealFormBaseValues = {
   expectedCloseAt?: string | null
   description?: string | null
   ownerUserId: string
+  referringPartnerEntityId?: string | null
+  referringPartnerLabel?: string | null
   personIds?: string[]
   companyIds?: string[]
 }
@@ -169,6 +173,11 @@ const schema = z.object({
     .trim()
     .min(1, 'customers.form.ownerRequired')
     .uuid('customers.form.ownerRequired'),
+  referringPartnerEntityId: z.preprocess(
+    (v) => (typeof v === 'string' && !v.trim() ? undefined : v),
+    z.string().uuid().optional().nullable(),
+  ),
+  referringPartnerLabel: z.string().optional().nullable(),
   personIds: z.array(z.string().trim().min(1)).optional(),
   companyIds: z.array(z.string().trim().min(1)).optional(),
 }).passthrough()
@@ -696,10 +705,57 @@ export function DealForm({
       },
     } as CrudField,
     {
+      id: 'referringPartnerEntityId',
+      label: t('customers.deals.form.referringPartner', 'Referring party'),
+      type: 'custom',
+      layout: 'half',
+      component: ({ value, setValue, setFormValue, disabled: fieldDisabled, values }) => {
+        const partnerId = typeof value === 'string' ? value : ''
+        const partnerLabel =
+          typeof values?.referringPartnerLabel === 'string' && values.referringPartnerLabel.trim().length
+            ? values.referringPartnerLabel
+            : partnerId
+        const personPrefix = t('customers.deals.form.referringPartnerPerson', 'Person')
+        const companyPrefix = t('customers.deals.form.referringPartnerCompany', 'Company')
+        React.useEffect(() => {
+          let cancelled = false
+          if (!partnerId.trim()) return
+          if (
+            typeof values?.referringPartnerLabel === 'string' &&
+            values.referringPartnerLabel.trim().length
+          ) {
+            return
+          }
+          void resolveCustomerEntityDisplayLabel(partnerId).then((label) => {
+            if (!cancelled && label) setFormValue?.('referringPartnerLabel', label)
+          })
+          return () => {
+            cancelled = true
+          }
+        }, [partnerId, setFormValue, values?.referringPartnerLabel])
+        return (
+          <EntitySearchCombobox
+            value={partnerId}
+            onChange={(next) => {
+              setValue(next)
+              setFormValue?.('referringPartnerLabel', '')
+            }}
+            options={mergeEntitySearchOption([], partnerId, partnerLabel || partnerId)}
+            onRemoteSearch={(query) =>
+              remoteSearchReferringPartners(query, { personPrefix, companyPrefix })
+            }
+            placeholder={t('customers.deals.form.referringPartnerSearch', 'Search partners…')}
+            searchPlaceholder={t('customers.deals.form.referringPartnerSearch', 'Search partners…')}
+            disabled={fieldDisabled || disabled}
+          />
+        )
+      },
+    } as CrudField,
+    {
       id: 'status',
       label: t('customers.people.detail.deals.fields.status', 'Status'),
       type: 'custom',
-      layout: 'half',
+      layout: 'third',
       component: ({ value, setValue }) => (
         <DictionarySelectField
           kind="deal-statuses"
@@ -714,7 +770,7 @@ export function DealForm({
       id: 'pipelineId',
       label: t('customers.people.detail.deals.fields.pipeline', 'Pipeline'),
       type: 'custom',
-      layout: 'half',
+      layout: 'third',
       component: ({ value, setValue }) => (
         <select
           className="w-full rounded border px-2 py-1.5 text-sm"
@@ -736,7 +792,7 @@ export function DealForm({
       id: 'pipelineStageId',
       label: t('customers.people.detail.deals.fields.pipelineStage', 'Pipeline stage'),
       type: 'custom',
-      layout: 'half',
+      layout: 'third',
       component: ({ value, setValue }) => (
         <select
           className="w-full rounded border px-2 py-1.5 text-sm"
@@ -755,13 +811,13 @@ export function DealForm({
       id: 'valueAmount',
       label: t('customers.people.detail.deals.fields.valueAmount', 'Amount'),
       type: 'number',
-      layout: 'half',
+      layout: 'quarter',
     },
     {
       id: 'valueCurrency',
       label: t('customers.people.detail.deals.fields.valueCurrency', 'Currency'),
       type: 'custom',
-      layout: 'half',
+      layout: 'quarter',
       component: ({ value, setValue }) => (
         <div className="space-y-1">
           <DictionaryEntrySelect
@@ -786,13 +842,13 @@ export function DealForm({
       id: 'probability',
       label: t('customers.people.detail.deals.fields.probability', 'Probability (%)'),
       type: 'number',
-      layout: 'half',
+      layout: 'quarter',
     },
     {
       id: 'expectedCloseAt',
       label: t('customers.people.detail.deals.fields.expectedCloseAt', 'Expected close'),
       type: 'date',
-      layout: 'half',
+      layout: 'quarter',
     },
     {
       id: 'description',
@@ -847,7 +903,19 @@ export function DealForm({
       id: 'details',
       title: t('customers.people.detail.deals.form.details', 'Deal details'),
       column: 1,
-      fields: ['title', 'ownerUserId', 'status', 'pipelineId', 'pipelineStageId', 'valueAmount', 'valueCurrency', 'probability', 'expectedCloseAt', 'description'],
+      fields: [
+        'title',
+        'ownerUserId',
+        'referringPartnerEntityId',
+        'status',
+        'pipelineId',
+        'pipelineStageId',
+        'valueAmount',
+        'valueCurrency',
+        'probability',
+        'expectedCloseAt',
+        'description',
+      ],
     },
     {
       id: 'associations',
@@ -902,6 +970,14 @@ export function DealForm({
       description: initialValues?.description ?? '',
       ownerUserId:
         typeof initialValues?.ownerUserId === 'string' ? initialValues.ownerUserId : '',
+      referringPartnerEntityId:
+        typeof initialValues?.referringPartnerEntityId === 'string'
+          ? initialValues.referringPartnerEntityId
+          : '',
+      referringPartnerLabel:
+        typeof initialValues?.referringPartnerLabel === 'string'
+          ? initialValues.referringPartnerLabel
+          : '',
       personIds: sanitizeIdList(initialValues?.personIds ?? resolveIdsFromSource(initialValues?.people)),
       companyIds: sanitizeIdList(initialValues?.companyIds ?? resolveIdsFromSource(initialValues?.companies)),
       ...Object.fromEntries(
@@ -943,6 +1019,11 @@ export function DealForm({
             ? parsed.data.description
             : undefined,
           ownerUserId: parsed.data.ownerUserId,
+          referringPartnerEntityId: parsed.data.referringPartnerEntityId ?? null,
+          referringPartnerLabel:
+            typeof parsed.data.referringPartnerLabel === 'string'
+              ? parsed.data.referringPartnerLabel
+              : null,
           personIds,
           companyIds,
         }

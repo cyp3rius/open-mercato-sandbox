@@ -19,7 +19,6 @@ import { NotesSection } from '@open-mercato/ui/backend/detail'
 import { ActivitiesSection } from '../../../../components/detail/ActivitiesSection'
 import { DealForm, type DealFormSubmitPayload } from '../../../../components/detail/DealForm'
 import {
-  DealReferringPartnerPreview,
   type DealReferringPartnerAssociation,
 } from '../../../../components/detail/DealReferringPartnerPreview'
 import { useCustomerDictionary } from '../../../../components/detail/hooks/useCustomerDictionary'
@@ -51,6 +50,7 @@ type DealDetailPayload = {
     probability: number | null
     expectedCloseAt: string | null
     ownerUserId: string | null
+    referringPartnerEntityId?: string | null
     source: string | null
     organizationId: string | null
     tenantId: string | null
@@ -223,6 +223,9 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
           expectedCloseAt: base.expectedCloseAt ?? undefined,
           description: base.description ?? undefined,
           ownerUserId: base.ownerUserId,
+          referringPartnerEntityId: base.referringPartnerEntityId?.trim()
+            ? base.referringPartnerEntityId.trim()
+            : null,
           personIds: base.personIds && base.personIds.length ? base.personIds : undefined,
           companyIds: base.companyIds && base.companyIds.length ? base.companyIds : undefined,
         }
@@ -564,17 +567,6 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
                 ) : null}
               </div>
 
-              {data.referringPartner ? (
-                <div className="rounded-lg border bg-card p-4">
-                  <div className="mb-3 space-y-1">
-                    <h3 className="text-sm font-semibold text-foreground">
-                      {t('customers.deals.detail.referringPartnerSection', 'Referring party')}
-                    </h3>
-                  </div>
-                  <DealReferringPartnerPreview partner={data.referringPartner} />
-                </div>
-              ) : null}
-
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-lg border bg-card p-4">
                   <div className="mb-3 space-y-1">
@@ -660,6 +652,8 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
                     expectedCloseAt: data.deal.expectedCloseAt ?? null,
                     description: data.deal.description ?? '',
                     ownerUserId: data.deal.ownerUserId ?? '',
+                    referringPartnerEntityId: data.deal.referringPartnerEntityId ?? '',
+                    referringPartnerLabel: data.referringPartner?.label ?? '',
                     personIds: data.people.map((person) => person.id),
                     companyIds: data.companies.map((company) => company.id),
                     people: data.people.map((person) => ({ id: person.id, label: person.label })),

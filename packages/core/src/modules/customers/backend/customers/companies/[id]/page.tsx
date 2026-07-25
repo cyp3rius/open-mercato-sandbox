@@ -308,7 +308,11 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
         .filter((widget) => (widget.placement?.kind ?? 'tab') === 'tab')
         .map((widget) => {
           const id = widget.placement?.groupId ?? widget.widgetId
-          const label = widget.placement?.groupLabel ?? widget.module.metadata.title
+          const labelKey = widget.placement?.groupLabel ?? widget.module.metadata.title
+          const label =
+            typeof labelKey === 'string' && labelKey.includes('.')
+              ? t(labelKey, widget.module.metadata.title)
+              : labelKey
           const priority = typeof widget.placement?.priority === 'number' ? widget.placement.priority : 0
           const render = () => (
             <widget.module.Widget
@@ -320,7 +324,7 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
           return { id, label, priority, render }
         })
         .sort((a, b) => b.priority - a.priority),
-    [data, injectedTabWidgets, injectionContext],
+    [data, injectedTabWidgets, injectionContext, t],
   )
   const injectedTabMap = React.useMemo(() => new Map(injectedTabs.map((tab) => [tab.id, tab.render])), [injectedTabs])
 

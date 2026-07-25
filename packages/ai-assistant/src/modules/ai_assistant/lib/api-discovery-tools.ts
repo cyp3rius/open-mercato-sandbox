@@ -178,7 +178,7 @@ Confirm with user before POST/PUT/DELETE operations.`,
 
         // Build body with context
         let requestBody: Record<string, unknown> | undefined
-        if (['POST', 'PUT', 'PATCH'].includes(method)) {
+        if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && body) {
           requestBody = { ...body }
           if (ctx.tenantId) requestBody.tenantId = ctx.tenantId
           if (ctx.organizationId) requestBody.organizationId = ctx.organizationId

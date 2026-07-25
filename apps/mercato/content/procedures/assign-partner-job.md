@@ -8,23 +8,17 @@ contextTags:
 defaultSlaDuration:
   amount: 1
   unit: days
+relatedProcedures:
+  - slug: partner-network
+    title: Budowa i utrzymanie sieci partnerów
+authoringTodos:
+  - Po pojawieniu się typu partnera w CRM zaktualizować wybór rekordu.
 ---
 
 # Skierowanie zlecenia do partnera
 
-Leaf używany gdy opiekun (lub inny proces) przekazuje pracę partnerowi z sieci.
-Utrzymanie samej listy partnerów: `partner-network`.
-
-Partner = rekord `customer` (firma) z listy; brak dedykowanego `entityKind` partnera.
-
-## Z notatek
-
-- Mamy listę partnerów (adresy, telefony, osoby, rabaty)
-- Wiemy, gdzie kogo przypisać
-
-## Luki (TODO)
-
-- **Dedykowany typ partnera** — na razie `customer`; po pojawieniu się encji partnera zaktualizować `entityKind`.
+Gdy praca ma trafić do partnera z sieci: wybieramy partnera i odnotowujemy
+zlecenie. Listę partnerów utrzymujemy w osobnej procedurze.
 
 ## Procedure
 
@@ -45,7 +39,7 @@ Partner = rekord `customer` (firma) z listy; brak dedykowanego `entityKind` part
   actionCode: other
   otherInstructions: |
     Odnotuj zakres zlecenia, rabat dla klienta i uzgodniony termin.
-    Brak partnera na liście → najpierw procedura partner-network.
+    Brak partnera na liście — najpierw uzupełnij sieć partnerów.
 
 - id: end
   kind: end

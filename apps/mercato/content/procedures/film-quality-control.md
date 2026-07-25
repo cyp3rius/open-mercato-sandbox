@@ -9,24 +9,18 @@ contextTags:
 defaultSlaDuration:
   amount: 1
   unit: days
+relatedProcedures:
+  - slug: service-peer-quality-check
+    title: Kontrola jakości (weryfikacja drugiej osoby)
+authoringTodos:
+  - Dopisać checklistę jakości folii (bąble, krawędzie, gwarancja…).
+  - Analogiczne procedury dla ceramiki, detailingu, zmiany koloru + ta sama kontrola jakości.
 ---
 
 # Kontrola jakości aplikacji folii
 
-Przykład wewnętrznej procedury nadzoru nad serwisem z notatek warsztatowych.
-Weryfikacja drugiej osoby → wspólny leaf `service-peer-quality-check`.
-
-## Z notatek
-
-- Sprawujemy nadzór nad serwisem — jak sami nie zadbamy, ciężko oczekiwać tego od innych
-- Partnerom / pracownikom / podwykonawcom trzeba napisać zakresy i wytyczne
-- Przy foliowaniu samochodów: sprawdzamy po sobie — jeden aplikuje, drugi sprawdza i potwierdza
-- Monitoring procesów jest potrzebny — kontrola jakości
-
-## Luki (TODO)
-
-- **Checklista jakości folii** — konkretne punkty (bąble, krawędzie, gwarancja) nie były w notatkach.
-- **Inne usługi** (ceramika, detailing, zmiana koloru) — osobne procedury prac + ten sam `service-peer-quality-check`.
+Nadzór nad foliowaniem: przekazujemy wytyczne wykonawcy, aplikujemy folię,
+a druga osoba sprawdza i potwierdza jakość.
 
 ## Procedure
 

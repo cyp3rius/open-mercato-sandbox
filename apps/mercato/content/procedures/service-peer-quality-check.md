@@ -8,16 +8,18 @@ contextTags:
 defaultSlaDuration:
   amount: 1
   unit: days
+relatedProcedures:
+  - slug: film-quality-control
+    title: Kontrola jakości aplikacji folii
+authoringTodos:
+  - Dopisać checklistę jakości per typ usługi (folie, ceramika, detailing…).
 ---
 
 # Kontrola jakości (weryfikacja drugiej osoby)
 
-Wspólny leaf z notatek warsztatowych: jeden wykonuje, drugi sprawdza i potwierdza.
-Do wywołania po zakończeniu prac (folie, ceramika, detailing itd.).
-
-## Luki (TODO)
-
-- **Checklista per usługa** — punkty kontroli zależą od typu prac; ten leaf jest uniwersalną pętlą weryfikacji.
+Po wykonaniu pracy druga osoba sprawdza efekt i potwierdza jakość.
+Przy uwagach — poprawki i ponowna kontrola.
+Stosowane po pracach takich jak folie, ceramika czy detailing.
 
 ## Procedure
 

@@ -9,39 +9,29 @@ contextTags:
 defaultSlaDuration:
   amount: 7
   unit: days
+relatedProcedures:
+  - slug: assign-partner-job
+    title: Skierowanie zlecenia do partnera
+  - slug: partner-network
+    title: Budowa i utrzymanie sieci partnerów
+authoringTodos:
+  - Ustalić częstotliwość cyklicznego przeglądu opieki (recurrence).
+  - Potwierdzić, gdzie lądują faktury i refaktury.
+  - Ustalić domyślny kanał kontaktu (telefon vs e-mail).
 ---
 
 # Opieka opiekuna klienta
 
-Bieżąca odpowiedzialność opiekuna po wprowadzeniu klienta do obsługi.
-
-Skierowanie do partnera → `assign-partner-job` (lista partnerów: `partner-network`).
-
-## Obowiązki (z notatek)
-
-Opiekun musi zadbać o terminowość:
-
-- monitorować przebieg
-- kontaktować się z klientem
-- sprawdzać potrzeby
-- reagować na pytania i potrzeby
-- zapisywać zdarzenia
+Bieżąca opieka po wprowadzeniu klienta do obsługi. Opiekun dba o terminowość:
+przebieg, kontakt, potrzeby, odpowiedzi na pytania oraz historię współpracy.
 
 Dodatkowo:
 
-- zapisywać w kalendarzu
-- zbierać FV — ile co kosztowało
-- fakturować / refakturować
-- przypisywać rabat
-- zapisywać historię z klientem (czego szukał, co sprawdzał)
+- zapisy w kalendarzu
+- zbieranie faktur i rozliczeń (w tym refaktury i rabaty)
+- historia: czego klient szukał, co sprawdzał, ustalenia
 
-Kontakt klienta: zwykle utworzony wątek mailowy, najczęściej telefon.
-
-## Luki (TODO)
-
-- **Recurrence / cykliczne uruchamianie** — opieka jest ciągła; warsztat nie definiuje częstotliwości przeglądu (np. co tydzień).
-- **Integracja fakturowania** — brak wskazania, czy FV idą do sales/accounting, czy tylko jako załączniki.
-- **Kanał kontaktu domyślny** — telefon vs e-mail; poniżej krok zadaniowy bez automatycznego notify.
+Klient zwykle kontaktuje się wątkiem mailowym, najczęściej telefonuje.
 
 ## Procedure
 
@@ -90,7 +80,6 @@ Kontakt klienta: zwykle utworzony wątek mailowy, najczęściej telefon.
   actionCode: other
   otherInstructions: |
     Zbierz faktury (ile co kosztowało), fakturuj / refakturuj, przypisz rabat jeśli dotyczy.
-    TODO: potwierdzić docelowy moduł rozliczeń (brak entityKind dla FV w select_entity).
 
 - id: log-history
   kind: action

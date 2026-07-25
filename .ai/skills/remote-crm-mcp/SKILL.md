@@ -9,6 +9,20 @@ description: >-
 
 # Remote CRM MCP (HTTP)
 
+## Local → remote promotion gate (MUST)
+
+Applies to **every action** intended for a remote MCP server (e.g. Cursor `user-open-mercato-rsmoto` / `open-mercato-rsmoto`) — not only playbooks import. Includes: playbooks compile/import/export writes, cases create/transition/assign, customers ensure/create/update, `execute` mutations, and any other CRM write via MCP tools.
+
+**Always** run the same intent on **local** MCP first, in this form:
+
+1. **Dry-run / validate on local** when the tool supports it (e.g. `playbooks_import_markdown` with `dryRun: true`). If no dry-run exists, still run the equivalent check on local first (compile, list, get, or a reversible local write).
+2. **Execute the real action on local MCP** (same payload/intent, not dry-run).
+3. If local MCP is **unavailable** or the local step **fails**: **stop**. Report the problem. Do **not** call remote MCP.
+4. After a **successful local** action: **stop and wait**. Do **not** run the same action on remote until the user explicitly confirms local is OK and asks for remote.
+5. Only then: dry-run (if supported) + execute on remote, with `context_whoami` on the remote first.
+
+Never skip the local step to “save time” when remote is the destination. Read-only discovery on remote (`context_whoami`, list/get that do not mutate) may proceed without local promotion when the user asked only to inspect remote — but **any write or state-changing call** must follow this gate.
+
 ## When to use
 
 **Opt-in only.** Call Open Mercato MCP from chat **only** when the user explicitly asks to manage Open Mercato (CRM/data/operations) from the conversation. Do not use MCP for ordinary coding, specs, or repo work — even if the server is connected.

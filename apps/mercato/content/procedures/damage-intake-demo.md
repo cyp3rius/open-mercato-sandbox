@@ -8,16 +8,15 @@ contextTags:
 defaultSlaDuration:
   amount: 3
   unit: days
+relatedProcedures: []
+authoringTodos:
+  - Demo only — use for import/export pipeline checks.
 ---
 
 # Damage intake (demo)
 
-Demo procedure for the MD → playbooks apply pipeline. Review this document with
-the client, then apply with:
-
-```bash
-yarn mercato playbooks apply --tenant <tenantId> --org <organizationId> --file apps/mercato/content/procedures/damage-intake-demo.md
-```
+Przykładowa procedura przyjęcia szkody: kontakt z klientem, decyzja o eskalacji
+do specjalisty albo zamknięcie z notatką.
 
 ## Procedure
 

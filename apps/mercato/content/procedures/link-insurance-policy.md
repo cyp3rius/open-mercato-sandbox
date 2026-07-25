@@ -8,11 +8,18 @@ contextTags:
 defaultSlaDuration:
   amount: 1
   unit: days
+relatedProcedures:
+  - slug: client-service-intake
+    title: Wprowadzenie klienta do obsługi
+  - slug: customer-damage-collision
+    title: Postępowanie przy szkodzie / kolizji
+authoringTodos: []
 ---
 
 # Powiązanie polisy ubezpieczeniowej
 
-Wspólny leaf używany przy intake obsługi oraz przy szkodzie / kolizji.
+Jeśli klient ma polisę, powiąż ją ze sprawą. Używane przy wprowadzeniu do obsługi
+oraz przy szkodzie lub kolizji.
 
 ## Procedure
 

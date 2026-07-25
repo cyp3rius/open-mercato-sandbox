@@ -69,6 +69,7 @@ import {
   CustomerEntity,
   CustomerPersonProfile,
 } from "../../customers/data/entities";
+import { assertCustomerIsReferringParty } from "../../customers/lib/referringParty";
 import {
   quoteCreateSchema,
   quoteLineCreateSchema,
@@ -202,6 +203,8 @@ type QuoteGraphSnapshot = {
     status: string | null;
     customerEntityId: string | null;
     ownerUserId: string | null;
+    referringPartnerEntityId: string | null;
+    referringPartnerProgramId: string | null;
     customerContactId: string | null;
     customerSnapshot: Record<string, unknown> | null;
     billingAddressId: string | null;
@@ -308,6 +311,8 @@ type OrderGraphSnapshot = {
     paymentStatus: string | null;
     customerEntityId: string | null;
     ownerUserId: string | null;
+    referringPartnerEntityId: string | null;
+    referringPartnerProgramId: string | null;
     customerContactId: string | null;
     customerSnapshot: Record<string, unknown> | null;
     billingAddressId: string | null;
@@ -458,6 +463,8 @@ export const documentUpdateSchema = z
     id: z.string().uuid(),
     customerEntityId: z.string().uuid().nullable().optional(),
     ownerUserId: z.string().uuid().nullable().optional(),
+    referringPartnerEntityId: z.string().uuid().nullable().optional(),
+    referringPartnerProgramId: z.string().uuid().nullable().optional(),
     customerContactId: z.string().uuid().nullable().optional(),
     customerSnapshot: z.record(z.string(), z.unknown()).nullable().optional(),
     metadata: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -501,6 +508,9 @@ export const documentUpdateSchema = z
       input.shippingAddressId !== undefined ||
       input.billingAddressId !== undefined ||
       input.customerEntityId !== undefined ||
+      input.ownerUserId !== undefined ||
+      input.referringPartnerEntityId !== undefined ||
+      input.referringPartnerProgramId !== undefined ||
       input.customerContactId !== undefined ||
       input.customerSnapshot !== undefined ||
       input.metadata !== undefined ||
@@ -533,6 +543,31 @@ type DocumentAdjustmentCreateInput =
 function cloneJson<T>(value: T): T {
   if (value === null || value === undefined) return value;
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+async function resolveReferringPartnerEntityId(
+  em: EntityManager,
+  organizationId: string,
+  tenantId: string,
+  referringPartnerEntityId?: string | null,
+): Promise<string | null> {
+  const id =
+    typeof referringPartnerEntityId === "string"
+      ? referringPartnerEntityId.trim()
+      : "";
+  if (!id.length) return null;
+  await assertCustomerIsReferringParty(em, id, organizationId, tenantId);
+  return id;
+}
+
+function resolveReferringPartnerProgramId(
+  referringPartnerProgramId?: string | null,
+): string | null {
+  const id =
+    typeof referringPartnerProgramId === "string"
+      ? referringPartnerProgramId.trim()
+      : "";
+  return id.length ? id : null;
 }
 
 async function resolveCustomerSnapshot(
@@ -883,6 +918,29 @@ async function applyDocumentUpdate({
       (entity as SalesQuote).ownerUserId = input.ownerUserId ?? null;
     } else {
       (entity as SalesOrder).ownerUserId = input.ownerUserId ?? null;
+    }
+  }
+  if (input.referringPartnerEntityId !== undefined) {
+    const resolved = await resolveReferringPartnerEntityId(
+      em,
+      organizationId,
+      tenantId,
+      input.referringPartnerEntityId,
+    );
+    if (kind === "quote") {
+      (entity as SalesQuote).referringPartnerEntityId = resolved;
+    } else {
+      (entity as SalesOrder).referringPartnerEntityId = resolved;
+    }
+  }
+  if (input.referringPartnerProgramId !== undefined) {
+    const resolvedProgramId = resolveReferringPartnerProgramId(
+      input.referringPartnerProgramId,
+    );
+    if (kind === "quote") {
+      (entity as SalesQuote).referringPartnerProgramId = resolvedProgramId;
+    } else {
+      (entity as SalesOrder).referringPartnerProgramId = resolvedProgramId;
     }
   }
 
@@ -1311,6 +1369,8 @@ async function loadQuoteSnapshot(
       status: quote.status ?? null,
       customerEntityId: quote.customerEntityId ?? null,
       ownerUserId: quote.ownerUserId ?? null,
+      referringPartnerEntityId: quote.referringPartnerEntityId ?? null,
+      referringPartnerProgramId: quote.referringPartnerProgramId ?? null,
       customerContactId: quote.customerContactId ?? null,
       customerSnapshot: quote.customerSnapshot
         ? cloneJson(quote.customerSnapshot)
@@ -1397,6 +1457,12 @@ async function loadQuoteSnapshot(
       customFieldSetId: line.customFieldSetId ?? null,
       customFields: lineCustomFields[line.id]
         ? cloneJson(lineCustomFields[line.id])
+        : null,
+      subscriptionStartsAt: line.subscriptionStartsAt
+        ? line.subscriptionStartsAt.toISOString()
+        : null,
+      subscriptionEndsAt: line.subscriptionEndsAt
+        ? line.subscriptionEndsAt.toISOString()
         : null,
     })),
     adjustments: adjustments.map((adj) => ({
@@ -1584,6 +1650,8 @@ async function loadOrderSnapshot(
       paymentStatus: order.paymentStatus ?? null,
       customerEntityId: order.customerEntityId ?? null,
       ownerUserId: order.ownerUserId ?? null,
+      referringPartnerEntityId: order.referringPartnerEntityId ?? null,
+      referringPartnerProgramId: order.referringPartnerProgramId ?? null,
       customerContactId: order.customerContactId ?? null,
       customerSnapshot: order.customerSnapshot
         ? cloneJson(order.customerSnapshot)
@@ -2519,6 +2587,8 @@ function mapQuoteLineEntityToSnapshot(line: SalesQuoteLine): SalesLineSnapshot {
     promotionCode: line.promotionCode ?? null,
     metadata: line.metadata ? cloneJson(line.metadata) : null,
     customFieldSetId: line.customFieldSetId ?? null,
+    subscriptionStartsAt: line.subscriptionStartsAt ?? null,
+    subscriptionEndsAt: line.subscriptionEndsAt ?? null,
   };
 }
 
@@ -3333,9 +3403,13 @@ function buildDocumentUpdateChangeKeys(kind: SalesDocumentKind, input: DocumentU
   if (kind === "order") {
     if (input.orderNumber !== undefined) keys.add("orderNumber");
     if (input.ownerUserId !== undefined) keys.add("ownerUserId");
+    if (input.referringPartnerEntityId !== undefined) keys.add("referringPartnerEntityId");
+    if (input.referringPartnerProgramId !== undefined) keys.add("referringPartnerProgramId");
   } else {
     if (input.quoteNumber !== undefined) keys.add("quoteNumber");
     if (input.ownerUserId !== undefined) keys.add("ownerUserId");
+    if (input.referringPartnerEntityId !== undefined) keys.add("referringPartnerEntityId");
+    if (input.referringPartnerProgramId !== undefined) keys.add("referringPartnerProgramId");
   }
   if (input.statusEntryId !== undefined) {
     keys.add("statusEntryId");
@@ -3467,6 +3541,8 @@ function applyQuoteSnapshot(
   quote.status = snapshot.status ?? null;
   quote.customerEntityId = snapshot.customerEntityId ?? null;
   quote.ownerUserId = snapshot.ownerUserId ?? null;
+  quote.referringPartnerEntityId = snapshot.referringPartnerEntityId ?? null;
+  quote.referringPartnerProgramId = snapshot.referringPartnerProgramId ?? null;
   quote.customerContactId = snapshot.customerContactId ?? null;
   quote.customerSnapshot = snapshot.customerSnapshot
     ? cloneJson(snapshot.customerSnapshot)
@@ -3529,6 +3605,8 @@ function applyOrderSnapshot(
   order.paymentStatus = snapshot.paymentStatus ?? null;
   order.customerEntityId = snapshot.customerEntityId ?? null;
   order.ownerUserId = snapshot.ownerUserId ?? null;
+  order.referringPartnerEntityId = snapshot.referringPartnerEntityId ?? null;
+  order.referringPartnerProgramId = snapshot.referringPartnerProgramId ?? null;
   order.customerContactId = snapshot.customerContactId ?? null;
   order.customerSnapshot = snapshot.customerSnapshot
     ? cloneJson(snapshot.customerSnapshot)
@@ -3604,6 +3682,8 @@ async function restoreQuoteGraph(
       status: snapshot.quote.status ?? null,
       customerEntityId: snapshot.quote.customerEntityId ?? null,
       ownerUserId: snapshot.quote.ownerUserId ?? null,
+      referringPartnerEntityId: snapshot.quote.referringPartnerEntityId ?? null,
+      referringPartnerProgramId: snapshot.quote.referringPartnerProgramId ?? null,
       customerContactId: snapshot.quote.customerContactId ?? null,
       customerSnapshot: snapshot.quote.customerSnapshot
         ? cloneJson(snapshot.quote.customerSnapshot)
@@ -3899,6 +3979,8 @@ async function restoreOrderGraph(
       paymentStatus: snapshot.order.paymentStatus ?? null,
       customerEntityId: snapshot.order.customerEntityId ?? null,
       ownerUserId: snapshot.order.ownerUserId ?? null,
+      referringPartnerEntityId: snapshot.order.referringPartnerEntityId ?? null,
+      referringPartnerProgramId: snapshot.order.referringPartnerProgramId ?? null,
       customerContactId: snapshot.order.customerContactId ?? null,
       customerSnapshot: snapshot.order.customerSnapshot
         ? cloneJson(snapshot.order.customerSnapshot)
@@ -4251,6 +4333,15 @@ const createQuoteCommand: CommandHandler<
     }
     ensureQuoteScope(ctx, parsed.organizationId, parsed.tenantId);
     const em = (ctx.container.resolve("em") as EntityManager).fork();
+    const referringPartnerEntityId = await resolveReferringPartnerEntityId(
+      em,
+      parsed.organizationId,
+      parsed.tenantId,
+      parsed.referringPartnerEntityId,
+    );
+    const referringPartnerProgramId = resolveReferringPartnerProgramId(
+      parsed.referringPartnerProgramId,
+    );
     const {
       customerSnapshot: resolvedCustomerSnapshot,
       billingAddressSnapshot: resolvedBillingSnapshot,
@@ -4273,6 +4364,8 @@ const createQuoteCommand: CommandHandler<
       status: quoteStatus,
       customerEntityId: parsed.customerEntityId ?? null,
       ownerUserId: parsed.ownerUserId ?? null,
+      referringPartnerEntityId,
+      referringPartnerProgramId,
       customerContactId: parsed.customerContactId ?? null,
       customerSnapshot: resolvedCustomerSnapshot
         ? cloneJson(resolvedCustomerSnapshot)
@@ -5140,6 +5233,15 @@ const createOrderCommand: CommandHandler<
     }
     ensureOrderScope(ctx, parsed.organizationId, parsed.tenantId);
     const em = (ctx.container.resolve("em") as EntityManager).fork();
+    const referringPartnerEntityId = await resolveReferringPartnerEntityId(
+      em,
+      parsed.organizationId,
+      parsed.tenantId,
+      parsed.referringPartnerEntityId,
+    );
+    const referringPartnerProgramId = resolveReferringPartnerProgramId(
+      parsed.referringPartnerProgramId,
+    );
     const [status, fulfillmentStatus, paymentStatus] = await Promise.all([
       resolveDictionaryEntryValue(em, parsed.statusEntryId ?? null),
       resolveDictionaryEntryValue(em, parsed.fulfillmentStatusEntryId ?? null),
@@ -5170,6 +5272,8 @@ const createOrderCommand: CommandHandler<
       paymentStatus,
       customerEntityId: parsed.customerEntityId ?? null,
       ownerUserId: parsed.ownerUserId ?? null,
+      referringPartnerEntityId,
+      referringPartnerProgramId,
       customerContactId: parsed.customerContactId ?? null,
       customerSnapshot: resolvedCustomerSnapshot
         ? cloneJson(resolvedCustomerSnapshot)
@@ -5761,6 +5865,8 @@ const convertQuoteToOrderCommand: CommandHandler<
       paymentStatus: null,
       customerEntityId: snapshot.quote.customerEntityId ?? null,
       ownerUserId: snapshot.quote.ownerUserId ?? null,
+      referringPartnerEntityId: snapshot.quote.referringPartnerEntityId ?? null,
+      referringPartnerProgramId: snapshot.quote.referringPartnerProgramId ?? null,
       customerContactId: snapshot.quote.customerContactId ?? null,
       customerSnapshot: snapshot.quote.customerSnapshot
         ? cloneJson(snapshot.quote.customerSnapshot)
@@ -6779,6 +6885,14 @@ const quoteLineUpsertCommand: CommandHandler<
         parsed.customFields && typeof parsed.customFields === "object"
           ? cloneJson(parsed.customFields)
           : ((existingSnapshot as any)?.customFields ?? null),
+      subscriptionStartsAt:
+        parsed.subscriptionStartsAt !== undefined
+          ? parsed.subscriptionStartsAt
+          : ((existingSnapshot as any)?.subscriptionStartsAt ?? null),
+      subscriptionEndsAt:
+        parsed.subscriptionEndsAt !== undefined
+          ? parsed.subscriptionEndsAt
+          : ((existingSnapshot as any)?.subscriptionEndsAt ?? null),
     };
     (updatedSnapshot as any).statusEntryId = statusEntryId;
     (updatedSnapshot as any).catalogSnapshot =
@@ -6804,6 +6918,8 @@ const quoteLineUpsertCommand: CommandHandler<
       statusEntryId: (line as any).statusEntryId ?? null,
       catalogSnapshot: (line as any).catalogSnapshot ?? null,
       promotionSnapshot: (line as any).promotionSnapshot ?? null,
+      subscriptionStartsAt: (line as any).subscriptionStartsAt ?? null,
+      subscriptionEndsAt: (line as any).subscriptionEndsAt ?? null,
       organizationId: quote.organizationId,
       tenantId: quote.tenantId,
       quoteId: quote.id,

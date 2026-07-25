@@ -1,3 +1,3 @@
 export const integrationMeta = {
-  dependsOnModules: ['partner_programs', 'customers'],
+  dependsOnModules: ['partner_programs', 'customers', 'sales'],
 }

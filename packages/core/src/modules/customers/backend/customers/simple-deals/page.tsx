@@ -15,9 +15,12 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
+import { DictionaryValue } from '../../../lib/dictionaries'
+import { useCustomerDictionary } from '../../../components/detail/hooks/useCustomerDictionary'
 
 type DealRow = {
   id: string
+  createdAt?: string | null
   title: string
   status?: string | null
   pipelineStage?: string | null
@@ -33,6 +36,8 @@ export default function SimpleDealsListPage() {
   const router = useRouter()
   const scopeVersion = useOrganizationScopeVersion()
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
+  const statusDictionaryQuery = useCustomerDictionary('deal-statuses', scopeVersion)
+  const statusDictionaryMap = statusDictionaryQuery.data?.map ?? {}
   const [rows, setRows] = React.useState<DealRow[]>([])
   const [page, setPage] = React.useState(1)
   const [total, setTotal] = React.useState(0)
@@ -88,6 +93,12 @@ export default function SimpleDealsListPage() {
           withDataTableNamespaces(
             {
               id: typeof item.id === 'string' ? item.id : '',
+              createdAt:
+                typeof item.createdAt === 'string'
+                  ? item.createdAt
+                  : typeof item.created_at === 'string'
+                    ? item.created_at
+                    : null,
               title: typeof item.title === 'string' ? item.title : '—',
               status: typeof item.status === 'string' ? item.status : null,
               pipelineStage: typeof item.pipelineStage === 'string' ? item.pipelineStage : null,
@@ -114,6 +125,12 @@ export default function SimpleDealsListPage() {
   const columns = React.useMemo<ColumnDef<DealRow>[]>(
     () => [
       {
+        accessorKey: 'createdAt',
+        header: t('customers.simpleDeals.columns.createdAt', 'Created'),
+        cell: ({ row }) =>
+          row.original.createdAt ? new Date(row.original.createdAt).toLocaleDateString() : '—',
+      },
+      {
         accessorKey: 'title',
         header: t('customers.simpleDeals.columns.title', 'Title'),
         cell: ({ row }) => (
@@ -125,7 +142,21 @@ export default function SimpleDealsListPage() {
       {
         accessorKey: 'status',
         header: t('customers.simpleDeals.columns.status', 'Status'),
-        cell: ({ row }) => row.original.status ?? '—',
+        cell: ({ row }) => {
+          const status = row.original.status
+          if (!status) return '—'
+          return (
+            <DictionaryValue
+              value={status}
+              map={statusDictionaryMap}
+              fallback={<span className="text-sm text-muted-foreground">{status}</span>}
+              className="text-sm"
+              iconWrapperClassName="inline-flex h-5 w-5 items-center justify-center rounded bg-muted text-muted-foreground"
+              iconClassName="h-3.5 w-3.5"
+              colorClassName="h-3 w-3 rounded-full border border-border/70"
+            />
+          )
+        },
       },
       {
         accessorKey: 'pipelineStage',
@@ -141,7 +172,7 @@ export default function SimpleDealsListPage() {
             : '—',
       },
     ],
-    [detailHref, t],
+    [detailHref, statusDictionaryMap, t],
   )
 
   return (

@@ -9,17 +9,23 @@ contextTags:
 defaultSlaDuration:
   amount: 7
   unit: days
+relatedProcedures:
+  - slug: client-service-intake
+    title: Wprowadzenie klienta do obsługi
+authoringTodos:
+  - Ustalić kryteria i statusy „wprowadzenia na bęben”.
+  - Doprecyzować granicę między ofertą a zamówieniem.
+  - Uzgodnić terminy (SLA) per etap, jeśli mają być inne niż domyślne.
 ---
 
 # Spotkanie z klientem (ścieżka sprzedaży)
 
-Pierwszy proces z warsztatu CRM — od spotkania do wydania.
+Od pierwszego spotkania do wydania — rozmowa, analiza, oferta, zamówienie
+i przekazanie do obsługi.
 
-Rekordy CRM przez `select_entity`: klient, deal (bęben), opcjonalnie oferta, zamówienie.
+## Oferta
 
-## Oferta (kontekst produktowy)
-
-Źródło: notatki warsztatowe. Nie jest to osobna procedura — katalog produktów, które mogą pojawić się w briefingu / prezentacji:
+Produkty i usługi, które mogą pojawić się w briefingu lub prezentacji:
 
 - Finansowanie (leasingi, kredyty, pożyczki, finansówki itd.)
 - Ubezpieczenia
@@ -33,21 +39,15 @@ Rekordy CRM przez `select_entity`: klient, deal (bęben), opcjonalnie oferta, za
 - Custom rentals (rozwiązanie dla ciekawych motoryzacji)
 - Zabezpieczenia antywłamaniowe / antykradzieżowe
 
-## Przebieg (z notatek)
+## Przebieg
 
 1. Spotkanie z klientem
 2. Briefing, konsultacja
-3. Analiza — wprowadzenie na bęben (deal)
-4. Prezentacja, przedstawienie możliwości → realizacja (opcjonalnie oferta)
-5. Zamówienie | oczekiwanie
+3. Analiza — wprowadzenie na bęben
+4. Prezentacja możliwości → realizacja
+5. Zamówienie lub oczekiwanie
 6. Wydanie
-7. Po wydaniu — wprowadzenie klienta do obsługi (osobna procedura)
-
-## Luki (TODO)
-
-- **Kryteria „wprowadzenia na bęben”** — warsztat nie precyzuje pól / statusów pipeline.
-- **Realizacja vs zamówienie** — granica między ofertą a zamówieniem wymaga doprecyzowania z klientem.
-- **SLA per etap** — w notatkach brak konkretnych terminów; poniżej domyślne SLA playbooka.
+7. Po wydaniu — wprowadzenie klienta do obsługi
 
 ## Procedure
 
@@ -98,7 +98,7 @@ Rekordy CRM przez `select_entity`: klient, deal (bęben), opcjonalnie oferta, za
 
 - id: need-quote
   kind: condition
-  label: Czy przygotować ofertę (quote)?
+  label: Czy przygotować ofertę?
   conditionMode: manual
   yes:
     - id: pick-or-create-quote

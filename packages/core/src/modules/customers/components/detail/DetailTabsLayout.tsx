@@ -7,6 +7,7 @@ import { cn } from '@open-mercato/shared/lib/utils'
 export type DetailTabDefinition<TId extends string = string> = {
   id: TId
   label: React.ReactNode
+  icon?: React.ReactNode
 }
 
 type DetailTabsLayoutProps<TId extends string = string> = {
@@ -67,7 +68,10 @@ export function DetailTabsLayout<TId extends string = string>({
                   : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
               )}
             >
-              {tab.label}
+              <span className="inline-flex items-center gap-1.5">
+                {tab.icon}
+                {tab.label}
+              </span>
             </Button>
           ))}
         </nav>
