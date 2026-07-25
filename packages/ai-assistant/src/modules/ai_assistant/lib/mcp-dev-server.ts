@@ -409,11 +409,46 @@ export async function runMcpDevServer(): Promise<void> {
       log(`Authenticated request (${req.method})`)
     }
 
+    // Stateless Streamable HTTP: POST only. 405 on GET/DELETE so clients (e.g. Cursor) skip
+    // optional SSE instead of hanging on an empty stream after initialize.
+    if (req.method === 'GET' || req.method === 'DELETE') {
+      res.writeHead(405, {
+        'Content-Type': 'application/json',
+        Allow: 'POST',
+      })
+      res.end(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          error: {
+            code: -32000,
+            message: 'Method not allowed. Stateless MCP HTTP accepts POST only.',
+          },
+          id: null,
+        }),
+      )
+      return
+    }
+
+    if (req.method !== 'POST') {
+      res.writeHead(405, {
+        'Content-Type': 'application/json',
+        Allow: 'POST',
+      })
+      res.end(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Method not allowed.' },
+          id: null,
+        }),
+      )
+      return
+    }
+
     try {
       // Create stateless transport
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
-        enableJsonResponse: req.method === 'POST',
+        enableJsonResponse: true,
       })
 
       // Create server with pre-authenticated context (no session tokens needed)
@@ -422,13 +457,8 @@ export async function runMcpDevServer(): Promise<void> {
       // Connect server to transport
       await mcpServer.connect(transport)
 
-      // Handle the request
-      if (req.method === 'POST') {
-        const body = await parseJsonBody(req)
-        await transport.handleRequest(req, res, body)
-      } else {
-        await transport.handleRequest(req, res)
-      }
+      const body = await parseJsonBody(req)
+      await transport.handleRequest(req, res, body)
 
       // Cleanup after response finishes
       res.on('finish', () => {

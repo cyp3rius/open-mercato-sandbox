@@ -596,6 +596,44 @@ export async function runMcpHttpServer(options: McpHttpServerOptions): Promise<v
       console.error(`[MCP HTTP] Server-level auth passed (${req.method}) - API key: ${apiKeyRecord.keyPrefix}...`)
     }
 
+    // Stateless Streamable HTTP: only POST carries JSON-RPC. Cursor opens GET for optional
+    // server→client SSE; an empty hung stream keeps the client in "loading" and blocks tools/list.
+    // Spec allows 405 = server does not offer a standalone GET SSE endpoint.
+    if (req.method === 'GET' || req.method === 'DELETE') {
+      accessLog.setOutcome('stateless_no_sse')
+      res.writeHead(405, {
+        'Content-Type': 'application/json',
+        Allow: 'POST',
+      })
+      res.end(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          error: {
+            code: -32000,
+            message: 'Method not allowed. Stateless MCP HTTP accepts POST only.',
+          },
+          id: null,
+        }),
+      )
+      return
+    }
+
+    if (req.method !== 'POST') {
+      accessLog.setOutcome('method_not_allowed')
+      res.writeHead(405, {
+        'Content-Type': 'application/json',
+        Allow: 'POST',
+      })
+      res.end(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Method not allowed.' },
+          id: null,
+        }),
+      )
+      return
+    }
+
     // Create base tool context using API key's tenant/org scope
     // Session tokens can override with user-specific permissions
     const toolContext: McpToolContext = {
@@ -612,7 +650,7 @@ export async function runMcpHttpServer(options: McpHttpServerOptions): Promise<v
       // Create stateless transport (no session ID generator = stateless)
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
-        enableJsonResponse: req.method === 'POST',
+        enableJsonResponse: true,
       })
 
       // Create new server for this request
@@ -628,16 +666,10 @@ export async function runMcpHttpServer(options: McpHttpServerOptions): Promise<v
       // Connect server to transport
       await mcpServer.connect(transport)
 
-      // Handle the request
-      if (req.method === 'POST') {
-        const body = await parseJsonBody(req)
-        accessLog.setRpcMethod(summarizeJsonRpcMethod(body))
-        accessLog.setOutcome('transport_ok')
-        await transport.handleRequest(req, res, body)
-      } else {
-        accessLog.setOutcome('transport_ok')
-        await transport.handleRequest(req, res)
-      }
+      const body = await parseJsonBody(req)
+      accessLog.setRpcMethod(summarizeJsonRpcMethod(body))
+      accessLog.setOutcome('transport_ok')
+      await transport.handleRequest(req, res, body)
 
       // Cleanup after response finishes
       res.on('finish', () => {
