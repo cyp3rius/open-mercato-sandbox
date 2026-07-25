@@ -56,9 +56,9 @@ export function caseCreateFormSchema() {
     insurancePolicyId: optionalRelationIdField(),
     ownerUserId: z.string().uuid({ message: 'cases.form.errors.ownerRequired' }),
     recurrenceEnabled: z.boolean(),
-    recurrenceIntervalAmount: z.number().int().positive().nullish(),
+    recurrenceIntervalAmount: z.number().int().positive().nullable(),
     recurrenceIntervalUnit: z.enum(['', 'hours', 'days', 'weeks', 'months']),
-    recurrenceCreateLeadTimeAmount: z.number().int().positive().nullish(),
+    recurrenceCreateLeadTimeAmount: z.number().int().positive().nullable(),
     recurrenceCreateLeadTimeUnit: z.enum(['', 'hours', 'days', 'weeks', 'months']),
   }).superRefine((values, context) => {
     if (

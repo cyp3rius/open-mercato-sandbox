@@ -640,8 +640,6 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
             tabs={tabs}
             activeTab={activeTab}
             onTabChange={setActiveTab}
-            sectionAction={null}
-            onSectionAction={() => {}}
             navAriaLabel={t('resources.resources.tabs.label', 'Resource sections')}
             panelContentKey={activeTab}
             className="space-y-6"
@@ -672,8 +670,6 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
                   tabs={detailTabs}
                   activeTab={activeDetailTab}
                   onTabChange={setActiveDetailTab}
-                  sectionAction={sectionAction}
-                  onSectionAction={() => sectionAction?.onClick()}
                   navAriaLabel={t(
                     'resources.resources.detail.subTabs.nav',
                     'Notes and activities',

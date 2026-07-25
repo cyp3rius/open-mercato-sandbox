@@ -167,7 +167,7 @@ async function maybeNotifyActionInApp(
   const recipientUserId = run.procedureOwnerUserId?.trim() || caseRow.ownerUserId?.trim() || ''
   if (!recipientUserId.length) return
   const linkHref = `/backend/cases/${encodeURIComponent(caseRow.id)}`
-  await notifyPersonalFromType(ctx, {
+  await notifyPersonalFromType(ctx.container, {
     notificationType: 'cases.procedure.action_notify',
     types: notificationTypes,
     recipientUserId,
@@ -713,8 +713,7 @@ const sendNotifyPlaybookStepCommand: CommandHandler<
 
     const commandBus = ctx.container.resolve('commandBus') as CommandBus
     const target = block.notifyTarget ?? 'owner'
-    const rawChannel = typeof block.notifyChannel === 'string' ? block.notifyChannel : ''
-    const channel = rawChannel === 'whatsapp' ? 'message' : rawChannel
+    const channel = typeof block.notifyChannel === 'string' ? block.notifyChannel : ''
     const sendViaEmail = channel === 'email'
 
     if (channel === 'in_app') {

@@ -853,8 +853,6 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
               tabs={caseTabs}
               activeTab={tab}
               onTabChange={setTab}
-              sectionAction={null}
-              onSectionAction={() => {}}
               navAriaLabel={t('cases.detail.tabs.nav', 'Case sections')}
               panelContentKey={tab}
             >
@@ -1397,7 +1395,7 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
                       )}
                       onRemoteSearch={async (q) => {
                         const rows = await remoteSearchResourcesForCaseCustomer(
-                          caseRow.customerEntityId,
+                          caseRow.customerEntityId ?? undefined,
                           q,
                         )
                         return mergeEntitySearchOption(
@@ -1458,7 +1456,7 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
                       )}
                       onRemoteSearch={async (q) => {
                         const rows = await remoteSearchProcurementProcessesForCaseCustomer(
-                          caseRow.customerEntityId,
+                          caseRow.customerEntityId ?? undefined,
                           q,
                         )
                         return mergeEntitySearchOption(
@@ -1519,7 +1517,7 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
                       )}
                       onRemoteSearch={async (q) => {
                         const rows = await remoteSearchInsurancePoliciesForCaseCustomer(
-                          caseRow.customerEntityId,
+                          caseRow.customerEntityId ?? undefined,
                           q,
                         )
                         return mergeEntitySearchOption(

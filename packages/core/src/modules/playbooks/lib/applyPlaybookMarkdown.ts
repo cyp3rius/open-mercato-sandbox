@@ -59,10 +59,11 @@ export async function applyPlaybookMarkdown(params: {
       },
       ctx: params.ctx,
     })
+    const created = result as { playbookId?: string } | undefined
     return {
       action: 'created',
       slug: payload.slug,
-      playbookId: result?.playbookId ?? null,
+      playbookId: typeof created?.playbookId === 'string' ? created.playbookId : null,
       payload,
     }
   }
@@ -102,11 +103,12 @@ export async function applyPlaybookMarkdown(params: {
     },
     ctx: params.ctx,
   })
+  const updated = result as { playbookId?: string } | undefined
 
   return {
     action: 'updated',
     slug: payload.slug,
-    playbookId: result?.playbookId ?? existing.id,
+    playbookId: typeof updated?.playbookId === 'string' ? updated.playbookId : existing.id,
     payload,
   }
 }

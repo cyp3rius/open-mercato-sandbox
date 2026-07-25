@@ -177,7 +177,7 @@ export async function runRemotePlaybooksMcpServer(options?: {
     tools: tools.map((tool) => ({
       name: tool.name,
       description: tool.description,
-      inputSchema: zodToJsonSchema(tool.inputSchema as z.ZodTypeAny) as Record<string, unknown>,
+      inputSchema: zodToJsonSchema(tool.inputSchema as any) as Record<string, unknown>,
     })),
   }))
 

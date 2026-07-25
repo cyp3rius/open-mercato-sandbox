@@ -11,7 +11,7 @@ export type PlaybookContentSnapshot = {
   recommendedOwnerUserIds: string[]
   defaultSlaDuration: ProcedureDuration | null
   procedureDefinition: ProcedureBlock[]
-  audience: string
+  audience: 'internal' | 'customer_facing' | 'both'
   publishedAtIso: string | null
 }
 

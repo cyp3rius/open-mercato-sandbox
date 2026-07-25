@@ -2108,8 +2108,6 @@ export default function ProcurementProcessDetailPage({ params }: { params?: { id
               ]}
               activeTab={activeTab}
               onTabChange={handleTabChange}
-              sectionAction={null}
-              onSectionAction={() => {}}
               navAriaLabel={t('procurement.processes.detail.tabs.nav', 'Process sections')}
               panelContentKey={activeTab}
             >

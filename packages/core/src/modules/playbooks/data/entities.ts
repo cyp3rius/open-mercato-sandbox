@@ -37,7 +37,7 @@ export class Playbook {
   procedureDefinition?: ProcedureBlock[] | null
 
   @Property({ type: 'text' })
-  audience: string = 'internal'
+  audience: 'internal' | 'customer_facing' | 'both' = 'internal'
 
   @Property({ type: 'int', default: 0 })
   version: number = 0

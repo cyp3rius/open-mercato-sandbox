@@ -211,6 +211,8 @@ type SnapshotEntity = {
   thumbnail_url?: string;
   taxRate?: number | null;
   taxRateId?: string;
+  serviceLineCode?: string;
+  service_line_code?: string;
 };
 
 type SalesLineDialogProps = {

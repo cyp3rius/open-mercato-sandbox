@@ -54,7 +54,7 @@ function toMarkdownPayload(row: Playbook) {
     slug: row.slug,
     title: row.title,
     body: row.body,
-    audience: row.audience,
+    audience: row.audience as 'internal' | 'customer_facing' | 'both' | null | undefined,
     contextTags: row.contextTags ?? [],
     defaultSlaDuration: row.defaultSlaDuration ?? null,
     recommendedOwnerUserIds: row.recommendedOwnerUserIds ?? [],
