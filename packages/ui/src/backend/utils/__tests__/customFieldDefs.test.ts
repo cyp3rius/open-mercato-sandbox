@@ -1,4 +1,4 @@
-import { fetchCustomFieldDefs, normalizeEntityIds } from '../customFieldDefs'
+import { fetchCustomFieldDefs, fieldsetAppliesToResourceType, normalizeEntityIds } from '../customFieldDefs'
 
 const createFetchStub = (payload: unknown) => {
   const json = jest.fn().mockResolvedValue(payload)
@@ -21,5 +21,21 @@ describe('customFieldDefs utilities', () => {
     const defs = await fetchCustomFieldDefs(['entity.one'], stub as unknown as typeof fetch)
     expect(stub).toHaveBeenCalledWith('/api/entities/definitions?entityId=entity.one', expect.any(Object))
     expect(defs.map((d) => d.key)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('applies vehicle fieldset when resolved fieldset code matches scoped fieldset', () => {
+    const internalTypeId = '11111111-1111-4111-8111-111111111111'
+    const taxiTypeId = '22222222-2222-4222-8222-222222222222'
+    const fieldset = {
+      code: 'resources_resource_vehicle',
+      resourceTypeIds: [internalTypeId],
+    }
+
+    expect(fieldsetAppliesToResourceType(fieldset, taxiTypeId)).toBe(false)
+    expect(
+      fieldsetAppliesToResourceType(fieldset, taxiTypeId, {
+        resolvedFieldsetCode: 'resources_resource_vehicle',
+      }),
+    ).toBe(true)
   })
 })

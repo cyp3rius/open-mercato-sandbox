@@ -116,9 +116,48 @@ async function ensureResourceFieldsetConfig(em: EntityManager, scope: ResourcesS
       updatedAt: now,
     })
   }
+
+  const currentRaw =
+    config.configJson && typeof config.configJson === 'object'
+      ? (config.configJson as { fieldsets?: unknown[]; singleFieldsetPerRecord?: boolean })
+      : null
+  const existingFieldsets = Array.isArray(currentRaw?.fieldsets) ? currentRaw.fieldsets : []
+  const byCode = new Map<string, Record<string, unknown>>()
+  for (const entry of existingFieldsets) {
+    if (!entry || typeof entry !== 'object') continue
+    const code = typeof (entry as { code?: unknown }).code === 'string'
+      ? (entry as { code: string }).code.trim()
+      : ''
+    if (!code || byCode.has(code)) continue
+    byCode.set(code, { ...(entry as Record<string, unknown>) })
+  }
+  for (const seed of RESOURCES_RESOURCE_FIELDSETS) {
+    const existing = byCode.get(seed.code)
+    if (existing) continue
+    byCode.set(seed.code, {
+      code: seed.code,
+      label: seed.label,
+      description: seed.description,
+      groups: seed.groups.map((group) => ({ code: group.code, title: group.title })),
+    })
+  }
+
+  const orderedCodes = [
+    ...RESOURCES_RESOURCE_FIELDSETS.map((seed) => seed.code),
+    ...Array.from(byCode.keys()).filter(
+      (code) => !RESOURCES_RESOURCE_FIELDSETS.some((seed) => seed.code === code),
+    ),
+  ]
+  const fieldsets = orderedCodes
+    .map((code) => byCode.get(code))
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+
   config.configJson = {
-    fieldsets: RESOURCES_RESOURCE_FIELDSETS,
-    singleFieldsetPerRecord: true,
+    fieldsets,
+    singleFieldsetPerRecord:
+      typeof currentRaw?.singleFieldsetPerRecord === 'boolean'
+        ? currentRaw.singleFieldsetPerRecord
+        : true,
   }
   config.isActive = true
   config.updatedAt = now

@@ -16,6 +16,7 @@ import { UpgradeActionBanner } from './upgrades/UpgradeActionBanner'
 import { PartialIndexBanner } from './indexes/PartialIndexBanner'
 import { useLocale, useT } from '@open-mercato/shared/lib/i18n/context'
 import { slugifySidebarId } from '@open-mercato/shared/modules/navigation/sidebarPreferences'
+import { isSidebarNavItemActive } from './utils/dailyWorkNav'
 import type { SectionNavGroup } from './section-page/types'
 import { InjectionSpot } from './injection/InjectionSpot'
 import type { InjectionMenuItem } from '@open-mercato/shared/modules/widgets/injection'
@@ -1292,7 +1293,7 @@ export function AppShell({ productName, logoSrc, email, groups, rightHeaderSlot,
                                         className={`flex flex-col gap-1 ${!compact ? 'ml-2 border-l border-border/60 pl-2' : 'items-center'}`}
                                       >
                                         {childItems.map((c) => {
-                                          const childActive = pathname?.startsWith(c.href)
+                                          const childActive = isSidebarNavItemActive(pathname ?? '', c.href, childItems)
                                           const childBase = compact ? 'w-10 h-8 justify-center' : 'px-2 py-1 gap-2'
                                           return (
                                             <Link
@@ -1356,7 +1357,7 @@ export function AppShell({ productName, logoSrc, email, groups, rightHeaderSlot,
                                     {showChildren ? (
                                       <div className={`flex flex-col ${compact ? 'items-center' : ''} gap-1 ${!compact ? 'pl-4' : ''}`}>
                                         {childItems.map((c) => {
-                                          const childActive = pathname?.startsWith(c.href)
+                                          const childActive = isSidebarNavItemActive(pathname ?? '', c.href, childItems)
                                           const childBase = compact ? 'w-10 h-8 justify-center' : 'px-2 py-1 gap-2'
                                           return (
                                             <Link

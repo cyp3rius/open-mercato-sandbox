@@ -207,6 +207,7 @@ const crud = makeCrudRoute({
       }
       return filters
     },
+    decorateCustomFields: { entityIds: [E.resources.resources_resource] },
   },
   hooks: {
     afterList: async (payload, ctx) => {
@@ -305,6 +306,7 @@ const crud = makeCrudRoute({
         }
       })
     },
+    decorateCustomFields: { entityIds: [E.resources.resources_resource] },
   },
   actions: {
     create: {

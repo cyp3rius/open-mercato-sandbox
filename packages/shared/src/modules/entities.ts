@@ -18,17 +18,8 @@ export type EntityExtension = {
   description?: string
 }
 
-export type CustomFieldKind =
-  | 'text'
-  | 'multiline'
-  | 'integer'
-  | 'float'
-  | 'boolean'
-  | 'select'
-  | 'currency'
-  | 'relation'
-  | 'attachment'
-  | 'dictionary'
+export type { CustomFieldKind } from './entities/kinds'
+import type { CustomFieldKind } from './entities/kinds'
 
 export type CustomFieldDefinition = {
   id?: string // stable id; generated if omitted

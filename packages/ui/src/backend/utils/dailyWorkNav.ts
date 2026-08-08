@@ -114,3 +114,10 @@ export function findBestSidebarNavMatch<T extends { href: string }>(path: string
   if (matches.length === 0) return undefined
   return matches.reduce((a, b) => (a.href.length >= b.href.length ? a : b))
 }
+
+/** Active when this item is the longest href match among siblings (module hub roots defer to deeper routes). */
+export function isSidebarNavItemActive(path: string, itemHref: string, siblings: { href: string }[]): boolean {
+  if (!itemHref.trim()) return false
+  const best = findBestSidebarNavMatch(path, siblings)
+  return best ? normalizeSidebarHref(best.href) === normalizeSidebarHref(itemHref) : false
+}

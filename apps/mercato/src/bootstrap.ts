@@ -30,7 +30,8 @@ registerAppDictionaryLoader(async (locale: Locale): Promise<Record<string, unkno
 
 // Generated imports (static - works with bundlers)
 import { modules } from '@/.mercato/generated/modules.generated'
-import { entities } from '@/.mercato/generated/entities.generated'
+import { entities as generatedEntities } from '@/.mercato/generated/entities.generated'
+import * as TaxiFleetOrmEntities from './modules/taxi_fleet/data/entities'
 import { diRegistrars } from '@/.mercato/generated/di.generated'
 import { E } from '@/.mercato/generated/entities.ids.generated'
 import { entityFieldsRegistry } from '@/.mercato/generated/entity-fields-registry'
@@ -68,6 +69,19 @@ runBootstrapRegistrations()
 
 // Bootstrap factory from shared package
 import { createBootstrap, isBootstrapped } from '@open-mercato/shared/lib/bootstrap'
+
+function mergeTaxiFleetOrmEntities(entities: unknown[]): unknown[] {
+  const withoutTaxiFleet = entities.filter(
+    (entity) => typeof entity !== 'function' || !entity.name?.startsWith('TaxiFleet'),
+  )
+  const taxiFleetEntities = Object.values(TaxiFleetOrmEntities).filter(
+    (value): value is new () => unknown =>
+      typeof value === 'function' && value.name.startsWith('TaxiFleet'),
+  )
+  return [...withoutTaxiFleet, ...taxiFleetEntities]
+}
+
+const entities = mergeTaxiFleetOrmEntities(generatedEntities)
 
 // Create bootstrap function with app's generated data
 export const bootstrap = createBootstrap({
