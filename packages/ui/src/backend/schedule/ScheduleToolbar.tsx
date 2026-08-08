@@ -37,6 +37,8 @@ export type ScheduleToolbarProps = {
   onViewChange: (view: ScheduleViewMode) => void
   onRangeChange: (range: ScheduleRange) => void
   onTimezoneChange?: (timezone: string) => void
+  showTimezone?: boolean
+  viewModes?: ScheduleViewMode[]
   className?: string
 }
 
@@ -47,9 +49,16 @@ export function ScheduleToolbar({
   onViewChange,
   onRangeChange,
   onTimezoneChange,
+  showTimezone = true,
+  viewModes,
   className,
 }: ScheduleToolbarProps) {
   const t = useT()
+  const visibleViewOptions = React.useMemo(() => {
+    if (!viewModes?.length) return VIEW_OPTIONS
+    const allowed = new Set(viewModes)
+    return VIEW_OPTIONS.filter((option) => allowed.has(option.id))
+  }, [viewModes])
   const rangeLength = React.useMemo(
     () => Math.max(1, differenceInCalendarDays(range.end, range.start) + 1),
     [range.end, range.start],
@@ -113,7 +122,7 @@ export function ScheduleToolbar({
   return (
     <div className={cn('flex flex-col gap-3 rounded-xl border bg-card p-4 md:flex-row md:items-center md:justify-between', className)}>
       <div className="flex flex-wrap items-center gap-2">
-        {VIEW_OPTIONS.map((option) => (
+        {visibleViewOptions.map((option) => (
           <Button
             key={option.id}
             variant={view === option.id ? 'default' : 'outline'}
@@ -162,16 +171,18 @@ export function ScheduleToolbar({
             className="h-8 w-full sm:w-[140px]"
           />
         </label>
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{t('schedule.range.timezone', 'Timezone')}</span>
-          <Input
-            type="text"
-            value={timezone ?? ''}
-            onChange={(event) => onTimezoneChange?.(event.target.value)}
-            className="h-8 w-full sm:w-[180px]"
-            placeholder={t('schedule.range.timezone.placeholder', 'UTC')}
-          />
-        </label>
+        {showTimezone ? (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>{t('schedule.range.timezone', 'Timezone')}</span>
+            <Input
+              type="text"
+              value={timezone ?? ''}
+              onChange={(event) => onTimezoneChange?.(event.target.value)}
+              className="h-8 w-full sm:w-[180px]"
+              placeholder={t('schedule.range.timezone.placeholder', 'UTC')}
+            />
+          </label>
+        ) : null}
       </div>
     </div>
   )

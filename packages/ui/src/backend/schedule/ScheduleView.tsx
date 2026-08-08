@@ -83,7 +83,11 @@ export type ScheduleViewProps = {
   onItemClick?: (item: ScheduleItem) => void
   onSlotClick?: (slot: ScheduleSlot) => void
   onTimezoneChange?: (timezone: string) => void
+  showTimezone?: boolean
+  viewModes?: ScheduleViewMode[]
   className?: string
+  /** When provided, replaces the default event cell content. */
+  renderEvent?: (item: ScheduleItem) => React.ReactNode
 }
 
 export function ScheduleView({
@@ -96,7 +100,10 @@ export function ScheduleView({
   onItemClick,
   onSlotClick,
   onTimezoneChange,
+  showTimezone = true,
+  viewModes,
   className,
+  renderEvent,
 }: ScheduleViewProps) {
   const agendaLength = React.useMemo(
     () => Math.max(1, differenceInCalendarDays(range.end, range.start) + 1),
@@ -138,6 +145,10 @@ export function ScheduleView({
 
   return (
     <div className={rootClassName}>
+      <style>{`
+        .schedule-view .rbc-event { overflow: visible; }
+        .schedule-view .rbc-event-content { height: 100%; }
+      `}</style>
       <ScheduleToolbar
         view={view}
         range={range}
@@ -145,6 +156,8 @@ export function ScheduleView({
         onRangeChange={onRangeChange}
         onViewChange={onViewChange}
         onTimezoneChange={onTimezoneChange}
+        showTimezone={showTimezone}
+        viewModes={viewModes}
       />
       <div className="schedule-calendar mt-4 rounded-xl border bg-card p-3">
         <Calendar
@@ -171,6 +184,9 @@ export function ScheduleView({
           components={{
             event: ({ event }: { event: CalendarEvent }) => {
               const resource = event.resource
+              if (renderEvent) {
+                return <>{renderEvent(resource)}</>
+              }
               const hasLink = Boolean(resource.linkLabel) && typeof onItemClick === 'function'
               return (
                 <div className="flex items-center justify-between gap-2">

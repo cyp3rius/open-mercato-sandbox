@@ -24,6 +24,11 @@ export const MERCATO_SIDEBAR_DEDUPE_HREFS: readonly string[] = [
   '/backend/insurance-desk/leads',
   '/backend/insurance-desk/policies',
   '/backend/insurance-desk/insurers',
+  '/backend/taxi-fleet',
+  '/backend/taxi-fleet/assignments',
+  '/backend/taxi-fleet/trips',
+  '/backend/taxi-fleet/settlements',
+  '/backend/taxi-fleet/drivers',
   '/backend/accounting',
   '/backend/customers/simple-deals',
   '/backend/sales/simple-orders',
@@ -138,6 +143,18 @@ export function buildMercatoDailyWorkStructuredGroup(
     .map(pick)
     .filter((x): x is SidebarNavItem => x !== null)
 
+  const fleetChildren = (
+    [
+      '/backend/taxi-fleet',
+      '/backend/taxi-fleet/assignments',
+      '/backend/taxi-fleet/trips',
+      '/backend/taxi-fleet/settlements',
+      '/backend/taxi-fleet/drivers',
+    ] as const
+  )
+    .map(pick)
+    .filter((x): x is SidebarNavItem => x !== null)
+
   const accounting = pick('/backend/accounting')
 
   const items: SidebarNavItem[] = [dash]
@@ -204,6 +221,19 @@ export function buildMercatoDailyWorkStructuredGroup(
       enabled: true,
       pageContext: 'main',
       children: insuranceChildren,
+    })
+  }
+
+  if (fleetChildren.length) {
+    items.push({
+      id: 'mercato-section-fleet',
+      variant: 'section',
+      href: '',
+      title: translate('backend.nav.section.fleet', 'Fleet'),
+      defaultTitle: 'Fleet',
+      enabled: true,
+      pageContext: 'main',
+      children: fleetChildren,
     })
   }
 
