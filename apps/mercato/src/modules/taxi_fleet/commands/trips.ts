@@ -30,6 +30,8 @@ import {
   runTripStatusEnterActions,
 } from '../lib/tripStatusTransitions'
 import { ensureOrganizationScope, ensureTenantScope, numericToString } from './shared'
+import { assertDriverTripShift } from '../lib/assertDriverTripShift'
+import { assertNoTripOverlap } from '../lib/assertNoTripOverlap'
 
 async function assertDriverScopedTeamMember(
   ctx: Parameters<CommandHandler<TripCreateInput, { tripId: string }>['execute']>[1],
@@ -67,16 +69,49 @@ const createTripCommand: CommandHandler<TripCreateInput, { tripId: string }> = {
         customerEntityId: parsed.customerEntityId,
       },
       { tenantId: parsed.tenantId, organizationId: parsed.organizationId },
-      { required: true },
+      { required: parsed.tripType === 'client' },
     )
     const initialStatus = normalizeTripStatus(parsed.status ?? 'new')
     const now = new Date()
+
+    let resourceId = parsed.resourceId
+    let assignmentId = parsed.assignmentId ?? null
+    if (actor?.role === 'driver') {
+      const requireOpenShift = initialStatus === 'in_progress'
+      const shiftMatch = await assertDriverTripShift({
+        em,
+        tenantId: parsed.tenantId,
+        organizationId: parsed.organizationId,
+        teamMemberId,
+        startedAt: parsed.startedAt ?? (requireOpenShift ? now : null),
+        endedAt: parsed.endedAt ?? null,
+        requireOpenShift,
+        translate,
+        now,
+      })
+      resourceId = shiftMatch.resourceId
+      assignmentId = shiftMatch.assignmentId
+    }
+
+    if (teamMemberId && parsed.startedAt) {
+      await assertNoTripOverlap({
+        em,
+        tenantId: parsed.tenantId,
+        organizationId: parsed.organizationId,
+        teamMemberId,
+        startedAt: parsed.startedAt,
+        endedAt: parsed.endedAt ?? null,
+        translate,
+        now,
+      })
+    }
+
     const record = em.create(TaxiFleetTrip, {
       tenantId: parsed.tenantId,
       organizationId: parsed.organizationId,
       teamMemberId,
-      resourceId: parsed.resourceId,
-      assignmentId: parsed.assignmentId ?? null,
+      resourceId,
+      assignmentId,
       tripType: parsed.tripType,
       startedAt: parsed.startedAt ?? null,
       endedAt: parsed.endedAt ?? null,
@@ -162,6 +197,24 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
     if (parsed.status !== undefined) {
       await applyTripStatusChange(ctx, row, parsed.status)
     }
+
+    const timesOrMemberTouched =
+      parsed.startedAt !== undefined ||
+      parsed.endedAt !== undefined ||
+      parsed.teamMemberId !== undefined
+    if (timesOrMemberTouched && row.teamMemberId && row.startedAt) {
+      await assertNoTripOverlap({
+        em,
+        tenantId: row.tenantId,
+        organizationId: row.organizationId,
+        teamMemberId: row.teamMemberId,
+        startedAt: row.startedAt,
+        endedAt: row.endedAt ?? null,
+        excludeTripId: row.id,
+        translate,
+      })
+    }
+
     await em.flush()
     await emitTripAssignedIfNeeded(ctx, row, previousTeamMemberId)
     return { tripId: row.id }

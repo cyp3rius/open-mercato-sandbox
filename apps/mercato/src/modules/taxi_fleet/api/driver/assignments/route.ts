@@ -9,6 +9,7 @@ import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetDailyAssignment } from '@/modules/taxi_fleet/data/entities'
 import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
+import { resolveDriverResourceLabelInfos } from '@/modules/taxi_fleet/lib/resolveDriverResourceLabel'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['taxi_fleet.driver'] },
@@ -55,15 +56,25 @@ export async function GET(req: Request) {
       undefined,
       { tenantId: driver.teamMember.tenantId, organizationId: driver.teamMember.organizationId },
     )
+    const labels = await resolveDriverResourceLabelInfos(
+      em,
+      items.map((row) => row.resourceId),
+      { tenantId: driver.teamMember.tenantId, organizationId: driver.teamMember.organizationId },
+    )
     return NextResponse.json({
-      items: items.map((row) => ({
-        id: row.id,
-        resourceId: row.resourceId,
-        assignmentDate: row.assignmentDate,
-        status: row.status,
-        shiftStart: row.shiftStart?.toISOString() ?? null,
-        shiftEnd: row.shiftEnd?.toISOString() ?? null,
-      })),
+      items: items.map((row) => {
+        const info = labels.get(row.resourceId)
+        return {
+          id: row.id,
+          resourceId: row.resourceId,
+          resourceLabel: info?.label ?? null,
+          resourcePlate: info?.plate ?? null,
+          assignmentDate: row.assignmentDate,
+          status: row.status,
+          shiftStart: row.shiftStart?.toISOString() ?? null,
+          shiftEnd: row.shiftEnd?.toISOString() ?? null,
+        }
+      }),
     })
   } catch (err) {
     if (err instanceof CrudHttpError) return NextResponse.json(err.body, { status: err.status })

@@ -1,0 +1,13 @@
+import type { DriverOutboxItem } from '../driverOffline/outbox'
+
+describe('driver outbox contract', () => {
+  it('supports required mutation types for offline sync', () => {
+    const types: DriverOutboxItem['type'][] = [
+      'assignment.shift',
+      'trip.create',
+      'trip.update',
+      'location.batch',
+    ]
+    expect(new Set(types).size).toBe(4)
+  })
+})

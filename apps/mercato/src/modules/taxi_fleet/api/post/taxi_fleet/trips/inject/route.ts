@@ -8,8 +8,16 @@ import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { parseScopedCommandInput } from '@open-mercato/shared/lib/api/scoped'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
-import { tripInjectSchema, type TripInjectInput } from '../../../../../data/validators'
+import {
+  tripInjectLegacyEnvelopeSchema,
+  tripInjectSchema,
+  type TripInjectInput,
+} from '../../../../../data/validators'
 import { STRAPI_TAXI_REQUEST_SOURCE } from '../../../../../lib/strapiTaxiRequestMapper'
+import {
+  isLegacyTripInjectEnvelope,
+  toNativeTripInjectInputFromLegacyPayload,
+} from '../../../../../lib/tripInjectNative'
 
 export const metadata = {
   path: '/taxi_fleet/trips/inject',
@@ -18,18 +26,6 @@ export const metadata = {
     requireFeatures: ['taxi_fleet.trips.inject'],
   },
 }
-
-const strapiPayloadSchema = z.record(z.string(), z.unknown())
-
-const injectBodySchema = z
-  .object({
-    organizationId: z.string().uuid(),
-    tenantId: z.string().uuid(),
-    externalId: z.string().trim().min(1).max(191),
-    source: z.string().trim().min(1).max(120).optional(),
-    payload: strapiPayloadSchema,
-  })
-  .strict()
 
 const injectResponseSchema = z.object({
   id: z.string().uuid(),
@@ -56,24 +52,30 @@ async function buildContext(
   return { ctx, translate }
 }
 
+function normalizeInjectBody(rawBody: unknown): Record<string, unknown> {
+  if (isLegacyTripInjectEnvelope(rawBody)) {
+    const envelope = tripInjectLegacyEnvelopeSchema.parse(rawBody)
+    return toNativeTripInjectInputFromLegacyPayload({
+      organizationId: envelope.organizationId,
+      tenantId: envelope.tenantId,
+      externalId: envelope.externalId,
+      source: envelope.source?.trim() || STRAPI_TAXI_REQUEST_SOURCE,
+      payload: envelope.payload,
+    })
+  }
+  if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
+    return {}
+  }
+  return rawBody as Record<string, unknown>
+}
+
 export async function POST(req: Request) {
   try {
     const { ctx, translate } = await buildContext(req)
     const rawBody = await req.json().catch(() => ({}))
-    const body = injectBodySchema.parse(rawBody)
+    const nativeBody = normalizeInjectBody(rawBody)
 
-    const injectInput = parseScopedCommandInput(
-      tripInjectSchema,
-      {
-        organizationId: body.organizationId,
-        tenantId: body.tenantId,
-        externalId: body.externalId,
-        source: body.source?.trim() || STRAPI_TAXI_REQUEST_SOURCE,
-        payload: body.payload,
-      },
-      ctx,
-      translate,
-    ) as TripInjectInput
+    const injectInput = parseScopedCommandInput(tripInjectSchema, nativeBody, ctx, translate) as TripInjectInput
 
     const commandBus = ctx.container.resolve('commandBus') as CommandBus
     const { result } = await commandBus.execute<typeof injectInput, { tripId: string; created: boolean }>(
@@ -92,7 +94,7 @@ export async function POST(req: Request) {
       {
         id: tripId,
         created: result?.created === true,
-        requestId: body.externalId,
+        requestId: injectInput.externalId,
       },
       { status: result?.created ? 201 : 200 },
     )
@@ -112,22 +114,16 @@ export async function POST(req: Request) {
   }
 }
 
-const injectOpenBody = z.object({
-  organizationId: z.string().uuid(),
-  tenantId: z.string().uuid(),
-  externalId: z.string(),
-  source: z.string().optional(),
-  payload: strapiPayloadSchema,
-})
+const injectOpenBody = tripInjectSchema
 
 export const openApi: OpenApiRouteDoc = {
   tag: 'Taxi fleet',
-  summary: 'Inject trip from Strapi taxi request',
+  summary: 'Inject trip (native or legacy transporter payload)',
   methods: {
     POST: {
       summary: 'Inject trip',
       description:
-        'Accepts a Strapi `taxi-requests` payload (or calculator booking payload), maps it to an unscheduled fleet trip (`teamMemberId` / `resourceId` null, status `draft`), resolves CRM customer from contact, and stores the full Strapi snapshot in `metadata`. Idempotent by `externalId` (Strapi `requestId`). Authenticate with an API key granted `taxi_fleet.trips.inject`.',
+        'Dual-mode inject. Native body: trip fields plus either CRM customer UUID (`customerPersonId` / `customerCompanyId` / `customerEntityId`) or plain contact fields (creates/ensures CRM customer). Legacy transporter envelope `{ externalId, payload }` (e.g. Strapi) is adapted to the native contract. Idempotent by `externalId` (`metadata.requestId`). Creates an unscheduled fleet trip (`teamMemberId` / `resourceId` null, status `new`). Requires `taxi_fleet.trips.inject`.',
       requestBody: {
         contentType: 'application/json',
         schema: injectOpenBody,

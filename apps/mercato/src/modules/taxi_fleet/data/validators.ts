@@ -8,7 +8,7 @@ const optionalUuid = z.string().uuid().optional().nullable()
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 
 export const assignmentStatusSchema = z.enum(['planned', 'confirmed', 'completed', 'cancelled'])
-export const tripTypeSchema = z.enum(['client', 'private', 'empty', 'event', 'other'])
+export const tripTypeSchema = z.enum(['client', 'private', 'internal', 'empty', 'event', 'other'])
 export const tripStatusSchema = z.string().trim().min(1).max(64)
 export const tripCancelSourceSchema = z.enum(['customer', 'operator', 'driver'])
 export const tripPaymentMethodSchema = z.enum(['paypal', 'cash', 'transfer', 'other'])
@@ -60,13 +60,148 @@ export const assignmentUpdateSchema = z.object({
 
 export const assignmentDeleteSchema = z.object({ id: uuid })
 
-export const tripInjectSchema = z.object({
-  tenantId: uuid,
-  organizationId: uuid,
-  externalId: z.string().trim().min(1).max(191),
-  source: z.string().trim().min(1).max(120).optional(),
-  payload: z.record(z.string(), z.unknown()),
+export const assignmentShiftActionSchema = z.enum(['start', 'end'])
+
+export const assignmentShiftSchema = z.object({
+  id: uuid,
+  action: assignmentShiftActionSchema,
+  clientMutationId: z.string().trim().min(1).max(191).optional(),
 })
+
+export const driverLocationPingSchema = z.object({
+  recordedAt: z.coerce.date(),
+  lat: z.number().min(-90).max(90),
+  lon: z.number().min(-180).max(180),
+  accuracyM: z.number().min(0).max(100000).optional().nullable(),
+  speedMps: z.number().min(0).max(200).optional().nullable(),
+  heading: z.number().min(0).max(360).optional().nullable(),
+  assignmentId: optionalUuid,
+  tripId: optionalUuid,
+})
+
+export const driverLocationBatchSchema = z.object({
+  pings: z.array(driverLocationPingSchema).min(1).max(50),
+  clientMutationId: z.string().trim().min(1).max(191).optional(),
+})
+
+export const tripInjectPaymentTypeSchema = z.enum(['electronic', 'cash', 'card', 'transfer', 'other'])
+export const tripInjectContactTypeSchema = z.enum(['private', 'company'])
+export const tripInjectServiceTypeSchema = z.enum(['airport', 'local'])
+
+const tripInjectTimeSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{1,2}:\d{2}$/, 'Expected HH:mm')
+
+export const tripInjectSchema = z
+  .object({
+    tenantId: uuid,
+    organizationId: uuid,
+    externalId: z.string().trim().min(1).max(191),
+    source: z.string().trim().min(1).max(120).optional(),
+    fromAddress: z.string().trim().min(1).max(500),
+    toAddress: z.string().trim().min(1).max(500),
+    waypointAddresses: z.string().max(5000).optional().nullable(),
+    startedAt: z.coerce.date().optional(),
+    endedAt: z.coerce.date().optional().nullable(),
+    tripDate: dateOnly.optional(),
+    tripTime: tripInjectTimeSchema.optional(),
+    distanceKm: z.coerce.number().optional().nullable(),
+    durationText: z.string().trim().max(120).optional().nullable(),
+    revenueAmount: z.coerce.number().optional().nullable(),
+    currencyCode: z.string().trim().min(3).max(3).optional().default('PLN'),
+    paymentType: tripInjectPaymentTypeSchema.optional().default('cash'),
+    serviceType: tripInjectServiceTypeSchema.optional().default('local'),
+    passengers: z.coerce.number().int().min(1).optional(),
+    handLuggage: z.coerce.number().int().min(0).optional(),
+    holdLuggage: z.coerce.number().int().min(0).optional(),
+    childSeats: z.coerce.number().int().min(0).optional(),
+    boosterSeats: z.coerce.number().int().min(0).optional(),
+    isAirportPickup: z.boolean().optional(),
+    flightNumber: z.string().trim().max(64).optional().nullable(),
+    meetAndGreet: z.boolean().optional(),
+    englishSpeakingDriver: z.boolean().optional(),
+    vehicleCategory: z.string().trim().max(120).optional().nullable(),
+    basePrice: z.coerce.number().optional().nullable(),
+    referralCode: z.string().trim().max(120).optional().nullable(),
+    quoteSnapshot: z.record(z.string(), z.unknown()).optional().nullable(),
+    locale: z.string().trim().max(16).optional().nullable(),
+    enquiryStatus: z.string().trim().max(64).optional().nullable(),
+    customerPersonId: optionalUuid,
+    customerCompanyId: optionalUuid,
+    customerEntityId: optionalUuid,
+    contactName: z.string().trim().max(200).optional(),
+    contactPhone: z.string().trim().max(50).optional(),
+    contactEmail: z.string().trim().max(320).optional(),
+    contactType: tripInjectContactTypeSchema.optional().default('private'),
+    companyName: z.string().trim().max(200).optional().nullable(),
+    companyTaxId: z.string().trim().max(40).optional().nullable(),
+    transporterPayload: z.record(z.string(), z.unknown()).optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    const hasPerson = Boolean(data.customerPersonId)
+    const hasCompany = Boolean(data.customerCompanyId)
+    const hasEntity = Boolean(data.customerEntityId)
+    const hasDefinedCustomer = hasPerson || hasCompany || hasEntity
+
+    if (hasPerson && hasCompany) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'taxi_fleet.trips.errors.customerConflict',
+        path: ['customerEntityId'],
+      })
+    }
+
+    if (!data.startedAt && !(data.tripDate && data.tripTime)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'taxi_fleet.trips.inject.error.scheduleRequired',
+        path: ['startedAt'],
+      })
+    }
+
+    if (hasDefinedCustomer) return
+
+    const contactName = data.contactName?.trim() ?? ''
+    const contactPhone = data.contactPhone?.trim() ?? ''
+    const contactEmail = data.contactEmail?.trim() ?? ''
+    if (!contactName) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'taxi_fleet.trips.inject.error.contactRequired',
+        path: ['contactName'],
+      })
+    }
+    if (!contactPhone && !contactEmail) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'taxi_fleet.trips.inject.error.contactChannelRequired',
+        path: ['contactPhone'],
+      })
+    }
+
+    if ((data.contactType ?? 'private') === 'company') {
+      const companyName = data.companyName?.trim() ?? ''
+      if (!companyName) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'taxi_fleet.trips.inject.error.companyNameRequired',
+          path: ['companyName'],
+        })
+      }
+    }
+  })
+
+/** Legacy transporter envelope: `{ externalId, payload: {...} }`. */
+export const tripInjectLegacyEnvelopeSchema = z
+  .object({
+    organizationId: uuid,
+    tenantId: uuid,
+    externalId: z.string().trim().min(1).max(191),
+    source: z.string().trim().min(1).max(120).optional(),
+    payload: z.record(z.string(), z.unknown()),
+  })
+  .strict()
 
 export const tripCreateSchema = z
   .object({
@@ -101,7 +236,7 @@ export const tripCreateSchema = z
         path: ['customerEntityId'],
       })
     }
-    if (!hasPerson && !hasCompany && !hasEntity) {
+    if (data.tripType === 'client' && !hasPerson && !hasCompany && !hasEntity) {
       ctx.addIssue({
         code: 'custom',
         message: 'taxi_fleet.trips.errors.customerRequired',
@@ -322,6 +457,8 @@ export type DriverProfileCreateInput = z.infer<typeof driverProfileCreateSchema>
 export type DriverProfileUpdateInput = z.infer<typeof driverProfileUpdateSchema>
 export type AssignmentCreateInput = z.infer<typeof assignmentCreateSchema>
 export type AssignmentUpdateInput = z.infer<typeof assignmentUpdateSchema>
+export type AssignmentShiftInput = z.infer<typeof assignmentShiftSchema>
+export type DriverLocationBatchInput = z.infer<typeof driverLocationBatchSchema>
 export type TripInjectInput = z.infer<typeof tripInjectSchema>
 export type TripCreateInput = z.infer<typeof tripCreateSchema>
 export type TripUpdateInput = z.infer<typeof tripUpdateSchema>

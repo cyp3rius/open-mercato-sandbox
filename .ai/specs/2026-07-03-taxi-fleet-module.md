@@ -81,7 +81,24 @@ When operator creates/receives a trip with `started_at` / `ended_at`:
 | POST | `/api/taxi_fleet/trips/{id}/approve` | Operator approval |
 | CRUD | `/api/taxi_fleet/financial-entries` | Paragony/faktury (wpływy) i koszty kierowcy |
 | CRUD | `/api/taxi_fleet/settlements` | Per driver profile week |
-| Driver JWT | `/api/taxi_fleet/driver/*` | Mobile app |
+| Driver JWT | `/api/taxi_fleet/driver/*` | Mobile driver surface (staff JWT + `taxi_fleet.driver`) |
+| POST | `/api/taxi_fleet/driver/assignments/{id}/shift` | Clock in/out (`start`/`end`); idempotent when already in target state |
+| GET/POST | `/api/taxi_fleet/driver/location` | Own latest ping / batch ingest (requires open shift) |
+| GET | `/api/taxi_fleet/location/latest?teamMemberId=` | Operator last-known location chip (`taxi_fleet.view`) |
+
+### Driver mobile surface (`/driver`)
+
+- Staff JWT login at `/driver/login` (`requireFeature=taxi_fleet.driver`; role name is not required); not customer portal, not `/backend` AppShell.
+- Driver UI defaults to **Polish** locale (`pl` cookie via `/api/auth/locale` on first `/driver` visit) and shows RS Moto Taxi brand mark (`/driver/logo-rs-moto-taxi.svg`).
+- **Mobile-first / in-car phone UX:** large thumb targets (≥56px primary actions), `viewport-fit=cover` + safe-area insets, portrait PWA, glanceable status chips, single dominant CTA per screen.
+- **Trip create rules:** open shift → live + past; off shift → past only. Past trip `startedAt`/`endedAt` must fall within a **past or current** shift window (`shiftStart`…`shiftEnd` or open → now). Server enforces via `assertDriverTripShift` on driver `trips.create` and binds `assignmentId`/`resourceId` from the matching shift.
+- **Trip gate:** list/create available without clock-in (past trips from earlier shifts). Live start requires open shift. Schedule (`/driver/assignments`) always available. Soft clock-in CTA when today’s assignment exists but shift not started.
+- Provisioning: Role with feature `taxi_fleet.driver` (seeded default role name `driver` in module setup); ops must link user ↔ `StaffTeamMember.userId`, create driver profile, set `externalAppEnabled: true`. Login gates on the feature, not the role name.
+- Home: today’s assignment, clock in/out, trip shortcuts; trips list/create/detail; assignments read list.
+- PWA: `public/driver/manifest.webmanifest` + `public/driver-sw.js` (scope `/driver`); install prompt in DriverShell.
+- Offline: IndexedDB cache for me/trips + mutation outbox (shift, trip create/update, location batches); flush on reconnect.
+- Tracking: geolocation only while shift is open (`shiftStart` set, `shiftEnd` null); browser/PWA foreground limits apply (no true OS background GPS in MVP).
+- Entity: `taxi_fleet_location_pings` for stored pings.
 
 ## UI (Phase 1)
 
@@ -91,9 +108,11 @@ When operator creates/receives a trip with `started_at` / `ended_at`:
 | `/backend/config/taxi-fleet` | Ustawienia modułu — typ zasobu pojazdów, wypłata, PayPal, kalendarz, maile do klienta |
 | `/backend/taxi-fleet/drivers` | Profiles linked to staff; DataTable list + create page |
 | `/backend/taxi-fleet/drivers/create` | Create driver profile (CrudForm) |
+| `/backend/taxi-fleet/drivers/[id]` | Driver detail; last-known location when external app enabled |
 | `/backend/taxi-fleet/assignments` | Planowanie kursów — kalendarz przydziałów i przejazdów |
 | `/backend/taxi-fleet/trips`, `/trips/[id]` | List + detail with driver suggestions |
 | `/backend/taxi-fleet/settlements` | Per-profile weekly settlements |
+| `/driver`, `/driver/login`, `/driver/trips`, `/driver/assignments` | Mobile driver PWA surface |
 
 ## Events
 
@@ -118,6 +137,9 @@ When operator creates/receives a trip with `started_at` / `ended_at`:
 Preferencje użytkownika: `/backend/profile/notifications` (`NotificationPreferencesEditor`).
 
 ## Changelog
+
+### 2026-08-08
+- Driver mobile surface `/driver`: staff JWT login, shift clock-in/out, trip reporting, PWA + offline outbox, shift-scoped location pings, operator last-known location chip; role `driver` ensured in setup.
 
 ### 2026-07-17
 - Wycena: dopłaty procentowe `NIGHT` + `HOLIDAY` w trybie **stack** (łącznie +40% od `basePrice`); minimalne wyprzedzenie zamówienia **24 h** (UI create); max pasażerów **8**.
@@ -153,6 +175,8 @@ Preferencje użytkownika: `/backend/profile/notifications` (`NotificationPrefere
 - TC-TAXI-003: trip driver suggestions return profiled drivers
 - TC-TAXI-004: driver trip submit + operator approve
 - TC-TAXI-005: weekly settlement per driver profile
+- TC-TAXI-006: driver shift start/end + location ingest rejects without open shift
+- TC-TAXI-007: offline outbox flush for trip create after reconnect (manual/PWA smoke)
 
 ## Changelog
 
@@ -174,6 +198,17 @@ Preferencje użytkownika: `/backend/profile/notifications` (`NotificationPrefere
 
 ### 2026-07-13
 - Tworzenie profilu kierowcy w dialogu na liście (`DriverProfileCreateDialog`); strona `/drivers/create` usunięta; szczegóły profilu bez zmian.
+
+### 2026-08-11
+- Driver PWA trips: past (2-step route→commercial) and live (local draft until complete; optional online `in_progress` sync). Waypoints + editable km via route APIs. Offline: IDB live drafts + receipt blobs; outbox uploads attachment then `trip.create`/`trip.update`. Shell banner for active live trip. Wake Lock / visibility best-effort GPS while live is open.
+- Scheduled trips in driver app: while `scheduled`, only price + distance are editable; **Start** overwrites `startedAt` and moves to `in_progress`; **End** overwrites `endedAt` and moves to `completed` without changing other fields. Shell banner also opens server `in_progress` trips.
+- Driver trip create: on open shift → live + past; off shift → past only. Past times must fit a past/current shift window; API binds assignment/vehicle from that shift.
+- Trip time windows must not overlap another non-cancelled trip for the same driver (create/update; open `in_progress` treated as until now). Driver app pre-checks via trip list/cache; server enforces in trip commands.
+- Driver active shift shows assigned vehicle (`resourceLabel` on `/api/taxi_fleet/driver/me` and assignments); trip registration attaches that vehicle (`resourceId`/`assignmentId`).
+- Vehicle labels include license plate (`cf_vehicle_plate`); `/api/resources/resources?search=` matches name or plate (space-insensitive).
+
+### 2026-08-09
+- Driver app: new trip form accepts optional receipt number and/or photo (`POST /api/taxi_fleet/driver/attachments`); stored on trip metadata and, when revenue + customer are present, as income `taxi_fleet_financial_entries`.
 
 ### 2026-07-03 (h)
 - Przejazdy, profile kierowców i rozliczenia: pełny CRUD (DataTable + CrudForm create/detail) zgodny z konwencjami platformy.

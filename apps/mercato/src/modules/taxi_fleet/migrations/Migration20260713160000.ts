@@ -3,7 +3,7 @@ import { Migration } from '@mikro-orm/migrations'
 export class Migration20260713160000 extends Migration {
   override async up(): Promise<void> {
     this.addSql(`
-      create table "taxi_fleet_organization_settings" (
+      create table if not exists "taxi_fleet_organization_settings" (
         "id" uuid not null default gen_random_uuid(),
         "tenant_id" uuid not null,
         "organization_id" uuid not null,
@@ -16,12 +16,11 @@ export class Migration20260713160000 extends Migration {
       );
     `)
     this.addSql(`
-      alter table "taxi_fleet_organization_settings"
-      add constraint "taxi_fleet_organization_settings_tenant_id_organization_id_unique"
-      unique ("tenant_id", "organization_id");
+      create unique index if not exists "taxi_fleet_organization_settings_tenant_org_uidx"
+      on "taxi_fleet_organization_settings" ("tenant_id", "organization_id");
     `)
     this.addSql(`
-      create index "taxi_fleet_organization_settings_scope_idx"
+      create index if not exists "taxi_fleet_organization_settings_scope_idx"
       on "taxi_fleet_organization_settings" ("tenant_id", "organization_id");
     `)
   }

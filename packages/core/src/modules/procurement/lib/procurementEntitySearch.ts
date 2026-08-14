@@ -268,11 +268,46 @@ export async function resolveQuoteDisplayLabel(id: string): Promise<string | nul
 /** Primary title for a resource — matches `mapApiResource` / resources DataTable name column. */
 export function formatResourceApiRowLabel(row: Record<string, unknown>): string {
   const id = typeof row.id === 'string' ? row.id : ''
-  if (typeof row.name === 'string') {
-    const trimmed = row.name.trim()
-    if (trimmed.length) return trimmed
-  }
+  const name =
+    typeof row.name === 'string' && row.name.trim().length
+      ? row.name.trim()
+      : typeof row.title === 'string' && row.title.trim().length
+        ? row.title.trim()
+        : ''
+  const plate = readResourceVehiclePlate(row)
+  if (name && plate) return `${name} · ${plate}`
+  if (name) return name
+  if (plate) return plate
   return id
+}
+
+function readResourceVehiclePlate(row: Record<string, unknown>): string | null {
+  const candidates = [
+    row.cf_vehicle_plate,
+    row['cf:vehicle_plate'],
+    row.vehicle_plate,
+  ]
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  const customFields = row.customFields
+  if (customFields && typeof customFields === 'object' && !Array.isArray(customFields)) {
+    const map = customFields as Record<string, unknown>
+    for (const key of ['vehicle_plate', 'cf_vehicle_plate']) {
+      const value = map[key]
+      if (typeof value === 'string' && value.trim()) return value.trim()
+    }
+  }
+  if (Array.isArray(customFields)) {
+    for (const entry of customFields) {
+      if (!entry || typeof entry !== 'object') continue
+      const item = entry as Record<string, unknown>
+      const key = typeof item.key === 'string' ? item.key.replace(/^cf_/, '') : ''
+      if (key !== 'vehicle_plate') continue
+      if (typeof item.value === 'string' && item.value.trim()) return item.value.trim()
+    }
+  }
+  return null
 }
 
 export async function resolveResourceDisplayLabel(id: string): Promise<string | null> {

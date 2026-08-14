@@ -9,6 +9,7 @@ import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetDailyAssignment } from '@/modules/taxi_fleet/data/entities'
 import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
+import { resolveDriverResourceLabelInfo } from '@/modules/taxi_fleet/lib/resolveDriverResourceLabel'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['taxi_fleet.driver'] },
@@ -48,6 +49,16 @@ export async function GET(req: Request) {
       undefined,
       { tenantId: driver.teamMember.tenantId, organizationId: driver.teamMember.organizationId },
     )
+    const scope = {
+      tenantId: driver.teamMember.tenantId,
+      organizationId: driver.teamMember.organizationId,
+    }
+    const resourceInfo = assignment
+      ? await resolveDriverResourceLabelInfo(em, assignment.resourceId, scope)
+      : null
+    const defaultResourceInfo = driver.profile?.defaultResourceId
+      ? await resolveDriverResourceLabelInfo(em, driver.profile.defaultResourceId, scope)
+      : null
     return NextResponse.json({
       member: {
         id: driver.teamMember.id,
@@ -59,6 +70,8 @@ export async function GET(req: Request) {
             id: driver.profile.id,
             payoutPercent: driver.profile.payoutPercent,
             defaultResourceId: driver.profile.defaultResourceId ?? null,
+            defaultResourceLabel: defaultResourceInfo?.label ?? null,
+            defaultResourcePlate: defaultResourceInfo?.plate ?? null,
             externalAppEnabled: driver.profile.externalAppEnabled,
           }
         : null,
@@ -66,6 +79,8 @@ export async function GET(req: Request) {
         ? {
             id: assignment.id,
             resourceId: assignment.resourceId,
+            resourceLabel: resourceInfo?.label ?? null,
+            resourcePlate: resourceInfo?.plate ?? null,
             assignmentDate: assignment.assignmentDate,
             status: assignment.status,
             shiftStart: assignment.shiftStart?.toISOString() ?? null,

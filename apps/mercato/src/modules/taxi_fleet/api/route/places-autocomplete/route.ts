@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
-import { getOpenRouteServiceApiKey, orsGeocodeAutocomplete, type RouteLocale } from '@/modules/taxi_fleet/lib/route/openRouteService'
+import { getOpenRouteServiceApiKey, resolvePlaceAutocompleteFeatures, type RouteLocale } from '@/modules/taxi_fleet/lib/route/openRouteService'
 import {
   mapOrsFeaturesToSuggestions,
   readCachedPlaceSuggestions,
@@ -44,12 +44,12 @@ export async function GET(req: Request) {
       return NextResponse.json({ suggestions: cached })
     }
 
-    const { ok, data } = await orsGeocodeAutocomplete(parsed.input, locale, req.signal)
+    const { ok, features } = await resolvePlaceAutocompleteFeatures(parsed.input, locale, req.signal)
     if (!ok) {
       throw new CrudHttpError(502, { error: 'Geocoding service error', suggestions: [] })
     }
 
-    const suggestions = mapOrsFeaturesToSuggestions(data.features ?? [], locale, airportOnly)
+    const suggestions = mapOrsFeaturesToSuggestions(features, locale, airportOnly)
     writeCachedPlaceSuggestions(parsed.input, locale, airportOnly, suggestions)
 
     return NextResponse.json({ suggestions })

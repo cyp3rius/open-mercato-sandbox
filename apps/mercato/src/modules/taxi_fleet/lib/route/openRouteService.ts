@@ -113,6 +113,7 @@ export async function orsGeocodeSearch(
   text: string,
   locale: RouteLocale,
   signal?: AbortSignal,
+  size = 1,
 ): Promise<{ ok: boolean; status: number; data: OrsGeocodeResponse }> {
   return orsGet<OrsGeocodeResponse>(
     '/geocode/search',
@@ -120,10 +121,74 @@ export async function orsGeocodeSearch(
       text,
       'boundary.country': 'PL',
       lang: orsLang(locale),
-      size: '1',
+      size: String(Math.min(Math.max(size, 1), 20)),
     },
     signal,
   )
+}
+
+/** True when the query ends with a house / apartment number (e.g. "… 46", "… 12A", "… 3/4"). */
+export function inputIncludesHouseNumber(text: string): boolean {
+  return /(?:^|\s)\d+[A-Za-z]?(?:\/\d+[A-Za-z]?)?\s*$/.test(text.trim())
+}
+
+function featureDedupeKey(feature: OrsGeocodeFeature): string {
+  const id = featureId(feature)
+  if (id) return id
+  const label = featureLabel(feature) ?? ''
+  const coords = featureCoordinates(feature)
+  if (coords) return `${label}|${coords[0]},${coords[1]}`
+  return label
+}
+
+function mergeGeocodeFeatures(
+  primary: OrsGeocodeFeature[],
+  secondary: OrsGeocodeFeature[],
+): OrsGeocodeFeature[] {
+  const out: OrsGeocodeFeature[] = []
+  const seen = new Set<string>()
+  for (const feature of [...primary, ...secondary]) {
+    const key = featureDedupeKey(feature)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    out.push(feature)
+  }
+  return out
+}
+
+/**
+ * Place suggestions for typeahead.
+ * ORS/Pelias `/autocomplete` often misses queries with house numbers; `/search` handles those better.
+ */
+export async function resolvePlaceAutocompleteFeatures(
+  text: string,
+  locale: RouteLocale,
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; features: OrsGeocodeFeature[] }> {
+  const trimmed = text.trim()
+  if (!trimmed) return { ok: true, features: [] }
+
+  const withHouseNumber = inputIncludesHouseNumber(trimmed)
+  const autocomplete = await orsGeocodeAutocomplete(trimmed, locale, signal)
+  const autocompleteFeatures = autocomplete.ok ? autocomplete.data.features ?? [] : []
+
+  if (!withHouseNumber && autocompleteFeatures.length > 0) {
+    return { ok: true, features: autocompleteFeatures }
+  }
+
+  const search = await orsGeocodeSearch(trimmed, locale, signal, 10)
+  const searchFeatures = search.ok ? search.data.features ?? [] : []
+
+  if (!autocomplete.ok && !search.ok) {
+    return { ok: false, features: [] }
+  }
+
+  // Prefer search hits when a house number is present (exact address matching).
+  const features = withHouseNumber
+    ? mergeGeocodeFeatures(searchFeatures, autocompleteFeatures)
+    : mergeGeocodeFeatures(autocompleteFeatures, searchFeatures)
+
+  return { ok: true, features }
 }
 
 export interface PlaceCoordinates {

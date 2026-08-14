@@ -8,12 +8,15 @@ import { TaxiFleetDailyAssignment } from '../data/entities'
 import {
   assignmentCreateSchema,
   assignmentDeleteSchema,
+  assignmentShiftSchema,
   assignmentUpdateSchema,
   type AssignmentCreateInput,
+  type AssignmentShiftInput,
   type AssignmentUpdateInput,
 } from '../data/validators'
 import { findAssignmentConflict } from '../lib/assignmentValidation'
 import { assertTeamMemberHasDriverProfile } from '../lib/driverProfileGuard'
+import { resolveDriverContext } from '../lib/driverContext'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
 
 const createAssignmentCommand: CommandHandler<AssignmentCreateInput, { assignmentId: string }> = {
@@ -140,6 +143,85 @@ const deleteAssignmentCommand: CommandHandler<{ id: string }, { ok: true }> = {
   },
 }
 
+const shiftAssignmentCommand: CommandHandler<
+  AssignmentShiftInput,
+  { assignmentId: string; shiftStart: string | null; shiftEnd: string | null; status: string }
+> = {
+  id: 'taxi_fleet.assignments.shift',
+  async execute(input, ctx) {
+    const parsed = assignmentShiftSchema.parse(input)
+    const { translate } = await resolveTranslations()
+    const driver = await resolveDriverContext(ctx, translate, { requireExternalApp: true })
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const row = await findOneWithDecryption(em, TaxiFleetDailyAssignment, {
+      id: parsed.id,
+      deletedAt: null,
+    })
+    if (!row) throw new CrudHttpError(404, { error: translate('taxi_fleet.errors.notFound', 'Not found') })
+    ensureTenantScope(ctx, row.tenantId)
+    ensureOrganizationScope(ctx, row.organizationId)
+    if (row.teamMemberId !== driver.teamMemberId) {
+      throw new CrudHttpError(403, {
+        error: translate('taxi_fleet.errors.assignmentNotOwned', 'Assignment does not belong to this driver.'),
+      })
+    }
+    if (row.status === 'cancelled') {
+      throw new CrudHttpError(400, {
+        error: translate('taxi_fleet.errors.assignmentCancelled', 'Cannot clock in/out a cancelled assignment.'),
+      })
+    }
+
+    const today = new Date().toISOString().slice(0, 10)
+    if (row.assignmentDate !== today) {
+      throw new CrudHttpError(400, {
+        error: translate('taxi_fleet.errors.assignmentNotToday', 'Clock in/out is only allowed for today’s assignment.'),
+      })
+    }
+
+    const now = new Date()
+    let mutated = false
+    if (parsed.action === 'start') {
+      if (!row.shiftStart) {
+        row.shiftStart = now
+        if (row.status === 'planned') row.status = 'confirmed'
+        mutated = true
+      }
+    } else {
+      if (!row.shiftStart) {
+        throw new CrudHttpError(400, {
+          error: translate('taxi_fleet.errors.shiftNotStarted', 'Start the shift before ending it.'),
+          code: 'SHIFT_NOT_STARTED',
+        })
+      }
+      if (!row.shiftEnd) {
+        row.shiftEnd = now
+        row.status = 'completed'
+        mutated = true
+      }
+    }
+    if (mutated) {
+      row.updatedAt = now
+      await em.flush()
+      const eventBus = ctx.container.resolve('eventBus') as {
+        emitEvent: (event: string, data: unknown) => Promise<void>
+      }
+      await eventBus.emitEvent('taxi_fleet.assignment.updated', {
+        id: row.id,
+        tenantId: row.tenantId,
+        organizationId: row.organizationId,
+        shiftAction: parsed.action,
+      })
+    }
+    return {
+      assignmentId: row.id,
+      shiftStart: row.shiftStart?.toISOString() ?? null,
+      shiftEnd: row.shiftEnd?.toISOString() ?? null,
+      status: row.status,
+    }
+  },
+}
+
 registerCommand(createAssignmentCommand)
 registerCommand(updateAssignmentCommand)
 registerCommand(deleteAssignmentCommand)
+registerCommand(shiftAssignmentCommand)

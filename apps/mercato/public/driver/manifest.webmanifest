@@ -1,0 +1,20 @@
+{
+  "name": "RS Moto Taxi — Kierowca",
+  "short_name": "RS Moto",
+  "description": "Aplikacja kierowcy RS Moto Taxi — zmiana i rejestracja kursów",
+  "start_url": "/driver",
+  "scope": "/driver",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "lang": "pl",
+  "background_color": "#f1f5f9",
+  "theme_color": "#020407",
+  "icons": [
+    {
+      "src": "/driver/logo-rs-moto-taxi.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

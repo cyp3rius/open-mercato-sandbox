@@ -4,15 +4,14 @@ import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { TaxiFleetTrip } from '../data/entities'
 import { tripInjectSchema, type TripInjectInput } from '../data/validators'
-import {
-  buildTripNotesFromStrapi,
-  buildTripScheduleFromStrapi,
-  mapStrapiPayloadToTaxiRequest,
-  STRAPI_TAXI_REQUEST_SOURCE,
-  tripRequestDetailsFromStrapiMapped,
-} from '../lib/strapiTaxiRequestMapper'
 import { resolveTripInjectCustomer } from '../lib/resolveTripInjectCustomer'
 import { buildTripRequestMetadata } from '../lib/tripRequestForm'
+import {
+  buildTripNotesFromInjectInput,
+  buildTripScheduleFromInjectInput,
+  tripRequestDetailsFromInjectInput,
+} from '../lib/tripInjectNative'
+import { STRAPI_TAXI_REQUEST_SOURCE } from '../lib/strapiTaxiRequestMapper'
 import { resolveReferringPartnerEntityId } from '../../insurance_desk/lib/resolveReferringPartner'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
 
@@ -52,31 +51,25 @@ const injectTripCommand: CommandHandler<TripInjectInput, { tripId: string; creat
       return { tripId: existing.id, created: false }
     }
 
-    const mapped = mapStrapiPayloadToTaxiRequest(parsed.payload)
-    if (!mapped.requestId.length) {
-      mapped.requestId = parsed.externalId
-    }
-    if (!mapped.fromAddress || !mapped.toAddress || !mapped.tripDate || !mapped.tripTime) {
+    let startedAt: Date
+    let endedAt: Date
+    try {
+      ;({ startedAt, endedAt } = buildTripScheduleFromInjectInput(parsed))
+    } catch {
       throw new CrudHttpError(400, {
-        error: translate('taxi_fleet.trips.inject.error.invalidPayload', 'Invalid Strapi taxi request payload.'),
-      })
-    }
-    if (!mapped.contactName || !mapped.contactEmail || !mapped.contactPhone) {
-      throw new CrudHttpError(400, {
-        error: translate('taxi_fleet.trips.inject.error.invalidContact', 'Contact details are required.'),
+        error: translate('taxi_fleet.trips.inject.error.invalidSchedule', 'Invalid trip schedule.'),
       })
     }
 
-    const { startedAt, endedAt } = buildTripScheduleFromStrapi(mapped)
     const source = parsed.source?.trim() || STRAPI_TAXI_REQUEST_SOURCE
 
     let referringPartnerEntityId: string | null = null
-    if (mapped.referralCode) {
+    if (parsed.referralCode?.trim()) {
       referringPartnerEntityId = await resolveReferringPartnerEntityId(ctx, translate, {
         organizationId: parsed.organizationId,
         tenantId: parsed.tenantId,
-        referralCode: mapped.referralCode,
-        ownerDisplayName: mapped.referralCode,
+        referralCode: parsed.referralCode.trim(),
+        ownerDisplayName: parsed.referralCode.trim(),
         source,
       })
     }
@@ -84,13 +77,12 @@ const injectTripCommand: CommandHandler<TripInjectInput, { tripId: string; creat
     const customer = await resolveTripInjectCustomer(ctx, translate, {
       organizationId: parsed.organizationId,
       tenantId: parsed.tenantId,
-      mapped,
+      input: parsed,
       source,
     })
 
-    const tripRequestMetadata = buildTripRequestMetadata(
-      tripRequestDetailsFromStrapiMapped(mapped, referringPartnerEntityId),
-    )
+    const tripRequestDetails = tripRequestDetailsFromInjectInput(parsed, referringPartnerEntityId)
+    const tripRequestMetadata = buildTripRequestMetadata(tripRequestDetails)
 
     const now = new Date()
     const record = em.create(TaxiFleetTrip, {
@@ -102,20 +94,20 @@ const injectTripCommand: CommandHandler<TripInjectInput, { tripId: string; creat
       tripType: 'client',
       startedAt,
       endedAt,
-      distanceKm: mapped.distanceKm > 0 ? String(mapped.distanceKm) : null,
-      revenueAmount: mapped.totalPrice != null ? String(mapped.totalPrice) : null,
-      currencyCode: 'PLN',
+      distanceKm: parsed.distanceKm != null && parsed.distanceKm > 0 ? String(parsed.distanceKm) : null,
+      revenueAmount: parsed.revenueAmount != null ? String(parsed.revenueAmount) : null,
+      currencyCode: parsed.currencyCode ?? 'PLN',
       customerPersonId: customer.customerPersonId,
       customerCompanyId: customer.customerCompanyId,
       status: 'new',
-      notes: buildTripNotesFromStrapi(mapped),
+      notes: buildTripNotesFromInjectInput(parsed),
       metadata: {
         source,
         requestId: parsed.externalId,
-        enquiryStatus: mapped.enquiryStatus,
-        locale: mapped.locale,
-        strapi: mapped.strapiPayload,
-        quoteSnapshot: mapped.quoteSnapshot,
+        enquiryStatus: parsed.enquiryStatus ?? 'new',
+        locale: parsed.locale ?? 'pl',
+        ...(parsed.transporterPayload ? { strapi: parsed.transporterPayload } : {}),
+        ...(parsed.quoteSnapshot ? { quoteSnapshot: parsed.quoteSnapshot } : {}),
         ...tripRequestMetadata,
       },
       createdAt: now,

@@ -2,6 +2,10 @@
 
 import * as React from 'react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import {
+  formatVehicleResourceLabel,
+  readVehiclePlateFromResourceRow,
+} from '../lib/vehicleResourceLabel'
 
 type ResourceItem = {
   id?: string
@@ -11,6 +15,7 @@ type ResourceItem = {
   appearance_color?: string | null
   resourceTypeId?: string | null
   resource_type_id?: string | null
+  [key: string]: unknown
 }
 
 type ResourceTypeItem = {
@@ -82,12 +87,14 @@ export function useResourceLabels(resourceIds: string[]) {
       items.forEach((item) => {
         const id = typeof item.id === 'string' ? item.id : null
         if (!id) return
-        const label =
-          typeof item.name === 'string'
-            ? item.name
-            : typeof item.title === 'string'
-              ? item.title
+        const name =
+          typeof item.name === 'string' && item.name.trim()
+            ? item.name.trim()
+            : typeof item.title === 'string' && item.title.trim()
+              ? item.title.trim()
               : null
+        const plate = readVehiclePlateFromResourceRow(item)
+        const label = formatVehicleResourceLabel(name, plate)
         if (label) nextLabels[id] = label
         const color = readAppearanceColor(item)
         if (color) {

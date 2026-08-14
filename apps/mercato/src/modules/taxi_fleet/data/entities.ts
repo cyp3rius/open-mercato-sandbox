@@ -134,7 +134,7 @@ export class TaxiFleetTrip {
   assignmentId?: string | null
 
   @Property({ name: 'trip_type', type: 'text' })
-  tripType!: 'client' | 'private' | 'empty' | 'event' | 'other'
+  tripType!: 'client' | 'private' | 'internal' | 'empty' | 'event' | 'other'
 
   @Property({ name: 'started_at', type: Date, nullable: true })
   startedAt?: Date | null
@@ -348,4 +348,52 @@ export class TaxiFleetWeeklySettlement {
 
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
+}
+
+@Entity({ tableName: 'taxi_fleet_location_pings' })
+@Index({ name: 'taxi_fleet_location_pings_member_recorded_idx', properties: ['teamMemberId', 'recordedAt'] })
+@Index({ name: 'taxi_fleet_location_pings_assignment_recorded_idx', properties: ['assignmentId', 'recordedAt'] })
+@Index({ name: 'taxi_fleet_location_pings_scope_idx', properties: ['tenantId', 'organizationId'] })
+export class TaxiFleetLocationPing {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'team_member_id', type: 'uuid' })
+  teamMemberId!: string
+
+  @Property({ name: 'assignment_id', type: 'uuid', nullable: true })
+  assignmentId?: string | null
+
+  @Property({ name: 'trip_id', type: 'uuid', nullable: true })
+  tripId?: string | null
+
+  @Property({ name: 'recorded_at', type: Date })
+  recordedAt!: Date
+
+  @Property({ type: 'float' })
+  lat!: number
+
+  @Property({ type: 'float' })
+  lon!: number
+
+  @Property({ name: 'accuracy_m', type: 'float', nullable: true })
+  accuracyM?: number | null
+
+  @Property({ name: 'speed_mps', type: 'float', nullable: true })
+  speedMps?: number | null
+
+  @Property({ type: 'float', nullable: true })
+  heading?: number | null
+
+  @Property({ type: 'text', default: 'browser' })
+  source: string = 'browser'
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
 }

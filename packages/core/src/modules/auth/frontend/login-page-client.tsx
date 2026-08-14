@@ -211,7 +211,8 @@ export default function LoginPageClient({ logoSrc, logoAlt, brandName }: LoginPa
     try {
       const form = new FormData(e.currentTarget)
       if (requiredRoles.length) form.set('requireRole', requiredRoles.join(','))
-      const res = await fetch('/api/auth/login', { method: 'POST', body: form })
+      if (requiredFeatures.length) form.set('requireFeature', requiredFeatures.join(','))
+      const res = await fetch('/api/auth/login', { method: 'POST', body: form, headers: { Accept: 'application/json' } })
       if (res.redirected) {
         clearAllOperations()
         // NextResponse.redirect from API
@@ -300,7 +301,14 @@ export default function LoginPageClient({ logoSrc, logoAlt, brandName }: LoginPa
         </CardHeader>
         <CardContent>
           <LoginFormSection>
-            <form className="grid gap-3" onSubmit={onSubmit} noValidate data-auth-ready={formReady ? '1' : '0'}>
+            <form
+              method="post"
+              action="/login"
+              className="grid gap-3"
+              onSubmit={onSubmit}
+              noValidate
+              data-auth-ready={formReady ? '1' : '0'}
+            >
               {tenantId ? (
                 <input type="hidden" name="tenantId" value={tenantId} />
               ) : null}

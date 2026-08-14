@@ -257,6 +257,15 @@ For a worktree-friendly dev runtime with a dedicated ephemeral PostgreSQL databa
 yarn dev:ephemeral
 ```
 
+For a lower-memory local session (app only — no package watchers, no MCP companion, workers and scheduler disabled), run:
+
+```bash
+yarn build:packages   # once, or after editing packages/*
+yarn dev:light
+```
+
+Use full `yarn dev` when you need hot rebuild across `packages/*`, queue workers, scheduler, or the optional MCP side process. If Next.js memory grows after a long browsing session, restart the process or clear `apps/mercato/.mercato/next`.
+
 Navigate to `http://localhost:3000/backend` and sign in with the default credentials printed by `yarn initialize`.
 
 Full installation guide (including prerequisites, Docker setup, and cloud deployment): [docs.openmercato.com/installation/setup](https://docs.openmercato.com/installation/setup)

@@ -314,7 +314,8 @@ Third-party module developers depend on stable platform APIs. Any change to a **
 ## Key Commands
 
 ```bash
-yarn dev                  # Start development server
+yarn dev                  # Start development server (full stack)
+yarn dev:light            # Low-memory app-only dev (no watchers/MCP/workers/scheduler)
 yarn build                # Build everything
 yarn build:packages       # Build packages only
 yarn lint                 # Lint all packages

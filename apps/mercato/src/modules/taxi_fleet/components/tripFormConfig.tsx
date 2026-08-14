@@ -198,8 +198,8 @@ export function tripFormSchema(
     .object({
       teamMemberId: requireDriver ? z.string().uuid() : z.string(),
       resourceId: z.string().uuid(),
-      customerEntityId: z.string().uuid(),
-      tripType: z.enum(['client', 'private', 'empty', 'event', 'other']),
+      customerEntityId: z.union([z.string().uuid(), z.literal('')]).optional(),
+      tripType: z.enum(['client', 'private', 'internal', 'empty', 'event', 'other']),
       startedAtLocal: z.string().min(1),
       endedAtLocal: z.string().min(1),
       revenueAmount: z.string().optional(),
@@ -239,6 +239,14 @@ export function tripFormSchema(
             path: ['startedAtLocal'],
           })
         }
+      }
+
+      if (data.tripType === 'client' && !data.customerEntityId) {
+        ctx.addIssue({
+          code: 'custom',
+          message: t('taxi_fleet.trips.form.errors.customerRequired', 'Customer is required for client trips.'),
+          path: ['customerEntityId'],
+        })
       }
 
       const passengers = Math.max(1, Number(data.passengers) || 1)
@@ -585,7 +593,7 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
       id: 'customerEntityId',
       type: 'custom',
       label: t('taxi_fleet.trips.customer', 'Customer'),
-      required: true,
+      required: false,
       layout: 'full',
       component: ({ value, setValue, disabled, readOnly: fieldReadOnly }) => (
         <TripCustomerField
@@ -844,7 +852,7 @@ export function tripFormValuesToPayload(
     organizationId: scope.organizationId,
     teamMemberId: values.teamMemberId,
     resourceId: values.resourceId,
-    customerEntityId: values.customerEntityId,
+    ...(values.customerEntityId ? { customerEntityId: values.customerEntityId } : {}),
     tripType: values.tripType,
     startedAt: startedAt.toISOString(),
     endedAt: endedAt.toISOString(),
@@ -865,7 +873,7 @@ export function tripFormValuesToUpdatePayload(id: string, values: TripFormValues
     id,
     teamMemberId: values.teamMemberId,
     resourceId: values.resourceId,
-    customerEntityId: values.customerEntityId,
+    ...(values.customerEntityId ? { customerEntityId: values.customerEntityId } : {}),
     tripType: values.tripType,
     startedAt: startedAt.toISOString(),
     endedAt: endedAt.toISOString(),

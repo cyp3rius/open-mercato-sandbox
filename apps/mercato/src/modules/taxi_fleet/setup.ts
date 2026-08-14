@@ -1,8 +1,29 @@
+import type { EntityManager } from '@mikro-orm/postgresql'
 import type { ModuleSetupConfig } from '@open-mercato/shared/modules/setup'
+import { Role } from '@open-mercato/core/modules/auth/data/entities'
 import { syncTaxiVehicleCustomFieldScope } from './lib/vehicleResourceTypes'
 
+const DRIVER_ROLE_NAME = 'driver'
+
+async function ensureDriverRole(em: EntityManager, tenantId: string): Promise<void> {
+  const existing = await em.findOne(Role, { name: DRIVER_ROLE_NAME, tenantId })
+  if (existing) return
+  const globalRole = await em.findOne(Role, { name: DRIVER_ROLE_NAME, tenantId: null })
+  if (globalRole) {
+    globalRole.tenantId = tenantId
+    em.persist(globalRole)
+    return
+  }
+  em.persist(em.create(Role, { name: DRIVER_ROLE_NAME, tenantId, createdAt: new Date() }))
+}
+
 export const setup: ModuleSetupConfig = {
+  async onTenantCreated({ em, tenantId }) {
+    await ensureDriverRole(em as EntityManager, tenantId)
+  },
+
   seedDefaults: async (ctx) => {
+    await ensureDriverRole(ctx.em as EntityManager, ctx.tenantId)
     await syncTaxiVehicleCustomFieldScope(ctx.em, {
       tenantId: ctx.tenantId,
       organizationId: ctx.organizationId,

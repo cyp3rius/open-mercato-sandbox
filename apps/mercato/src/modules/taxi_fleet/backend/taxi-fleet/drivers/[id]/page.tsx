@@ -15,6 +15,7 @@ import { useFleetDriverDirectory } from '../../../../components/useFleetDriverDi
 import { useResourceLabels } from '../../../../components/useResourceLabels'
 import { useTaxiFleetPermissions } from '../../../../components/useTaxiFleetPermissions'
 import { DriverProfileBasicsPanel } from '../../../../components/driver/DriverProfileBasicsPanel'
+import { DriverLastKnownLocationChip } from '../../../../components/driver/DriverLastKnownLocationChip'
 import { DriverTripsTab } from '../../../../components/driver/DriverTripsTab'
 import { DriverAllocationsTab } from '../../../../components/driver/DriverAllocationsTab'
 import { DriverSettlementsTab } from '../../../../components/driver/DriverSettlementsTab'
@@ -174,7 +175,7 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
                 ) : null}
               </DetailTabsLayout>
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 space-y-3">
               <DriverProfileBasicsPanel
                 profileId={row.id}
                 initialValues={initialValues}
@@ -189,6 +190,7 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
                   void reloadDirectory()
                 }}
               />
+              {row.externalAppEnabled ? <DriverLastKnownLocationChip teamMemberId={row.teamMemberId} /> : null}
             </div>
           </div>
         </PageBody>

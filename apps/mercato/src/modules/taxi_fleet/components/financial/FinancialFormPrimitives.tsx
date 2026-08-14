@@ -9,7 +9,9 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Label } from '@open-mercato/ui/primitives/label'
 
-export const TAXI_FLEET_FINANCIAL_ENTRY_ENTITY_ID = 'taxi_fleet:financial_entry'
+import { TAXI_FLEET_FINANCIAL_ENTRY_ENTITY_ID } from '../../lib/financialEntryEntity'
+
+export { TAXI_FLEET_FINANCIAL_ENTRY_ENTITY_ID }
 
 type FormFieldLabelProps = {
   label: string

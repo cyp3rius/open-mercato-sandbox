@@ -20,7 +20,15 @@ function getEntityIdList(): string[] {
 }
 
 export default async function handle(payload: Payload, ctx: { resolve: <T = any>(name: string) => T }) {
-  const entityIds = getEntityIdList()
+  let entityIds: string[] = []
+  try {
+    entityIds = getEntityIdList()
+  } catch (err) {
+    console.warn('[query_index] coverage warmup skipped (entity ids unavailable)', {
+      error: err instanceof Error ? err.message : err,
+    })
+    return
+  }
   if (!entityIds.length) return
   const tenantId = payload?.tenantId ?? null
   let eventBus: EventBus | null = null
@@ -32,22 +40,24 @@ export default async function handle(payload: Payload, ctx: { resolve: <T = any>
   if (!eventBus) return
 
   const now = Date.now()
-  const scheduled: Promise<unknown>[] = []
+  // Schedule refreshes sequentially to avoid unbounded fan-out / stack pressure on login.
   for (const entityType of entityIds) {
     const key = scopeKey(entityType, tenantId)
     const last = lastWarmupAt.get(key) ?? 0
     if (now - last < WARMUP_THROTTLE_MS) continue
     lastWarmupAt.set(key, now)
-    scheduled.push(
-      eventBus.emitEvent('query_index.coverage.refresh', {
+    try {
+      await eventBus.emitEvent('query_index.coverage.refresh', {
         entityType,
         tenantId,
         organizationId: null,
         delayMs: 0,
-      }).catch(() => undefined)
-    )
-  }
-  if (scheduled.length) {
-    await Promise.allSettled(scheduled)
+      })
+    } catch (err) {
+      console.warn('[query_index] coverage refresh emit failed', {
+        entityType,
+        error: err instanceof Error ? err.message : err,
+      })
+    }
   }
 }
