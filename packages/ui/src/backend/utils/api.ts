@@ -40,6 +40,7 @@ export function redirectToSessionRefresh() {
   const current = window.location.pathname + window.location.search
   // Avoid redirect loops if already on an auth/session route
   if (window.location.pathname.startsWith('/api/auth')) return
+  if (isStaffLoginPath(window.location.pathname)) return
   // Portal routes have their own customer auth — never redirect to staff login
   if (/\/[^/]+\/portal(\/|$)/.test(window.location.pathname)) return
   try {
@@ -62,6 +63,29 @@ export class ForbiddenError extends Error {
 
 let DEFAULT_FORBIDDEN_ROLES: string[] = ['admin']
 
+function isStaffLoginPath(pathname: string): boolean {
+  if (pathname === '/login' || pathname.startsWith('/login/')) return true
+  if (pathname === '/driver/login' || pathname.startsWith('/driver/login/')) return true
+  return false
+}
+
+function resolveRequestUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input
+  if (input instanceof URL) return input.href
+  if (typeof Request !== 'undefined' && input instanceof Request) return input.url
+  return String(input)
+}
+
+function isAuthLoginRequest(input: RequestInfo | URL): boolean {
+  try {
+    const raw = resolveRequestUrl(input)
+    const pathname = raw.startsWith('http') ? new URL(raw).pathname : (raw.split('?')[0] ?? raw)
+    return pathname === '/api/auth/login' || pathname.endsWith('/api/auth/login')
+  } catch {
+    return false
+  }
+}
+
 export function setAuthRedirectConfig(cfg: { defaultForbiddenRoles?: readonly string[] }) {
   if (cfg?.defaultForbiddenRoles && cfg.defaultForbiddenRoles.length) {
     DEFAULT_FORBIDDEN_ROLES = [...cfg.defaultForbiddenRoles].map(String)
@@ -70,7 +94,7 @@ export function setAuthRedirectConfig(cfg: { defaultForbiddenRoles?: readonly st
 
 export function redirectToForbiddenLogin(options?: { requiredRoles?: string[] | null; requiredFeatures?: string[] | null }) {
   if (typeof window === 'undefined') return
-  if (window.location.pathname.startsWith('/login')) return
+  if (isStaffLoginPath(window.location.pathname)) return
   // Portal routes have their own customer auth — never redirect to staff login
   if (/\/[^/]+\/portal(\/|$)/.test(window.location.pathname)) return
   try {
@@ -117,12 +141,13 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   const disableForbiddenRedirect = readRedirectOverride(requestHeaders, 'x-om-forbidden-redirect')
   const res = await baseFetch(input, mergedInit)
   const pathname = typeof window !== 'undefined' ? window.location.pathname : ''
-  const onLoginPage = pathname.startsWith('/login')
+  const onLoginPage = isStaffLoginPath(pathname)
   const onPortalRoute = /\/[^/]+\/portal(\/|$)/.test(pathname)
+  const loginRequest = isAuthLoginRequest(input)
   if (res.status === 401) {
     // Trigger same redirect flow as protected pages
-    // Skip for staff login page and all portal routes (portal has its own auth)
-    if (!onLoginPage && !onPortalRoute && !disableUnauthorizedRedirect) {
+    // Skip for staff login page, login API calls, and all portal routes (portal has its own auth)
+    if (!onLoginPage && !onPortalRoute && !disableUnauthorizedRedirect && !loginRequest) {
       redirectToSessionRefresh()
       // Throw a typed error for callers that might still handle it
       throw new UnauthorizedError(await res.text().catch(() => 'Unauthorized'))
@@ -145,7 +170,7 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
       payload = aclData
     }
     // Only redirect if not already on login page or a portal route
-    if (!onLoginPage && !onPortalRoute && !disableForbiddenRedirect) {
+    if (!onLoginPage && !onPortalRoute && !disableForbiddenRedirect && !loginRequest) {
       const target =
         typeof input === 'string'
           ? input

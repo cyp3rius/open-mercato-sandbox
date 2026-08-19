@@ -6,16 +6,30 @@ import type { TranslateFn } from '@open-mercato/shared/lib/i18n/context'
 import type { CrudField, CrudFormGroup } from '@open-mercato/ui/backend/CrudForm'
 import { LookupSelect, type LookupSelectItem } from '@open-mercato/ui/backend/inputs/LookupSelect'
 import type { FleetDriverProfile } from './useFleetDriverDirectory'
+import { formatWeekRange } from '../lib/weekUtils'
 
 export type SettlementFormValues = {
   teamMemberId: string
   weekStart: string
   status: string
+  revenueGross: string
+  revenueNet: string
+  costsGross: string
+  costsNet: string
   totalRevenue: string
   totalCosts: string
   netAmount: string
   payoutPercent: string
   payoutAmount: string
+  computedDistanceKm: string
+  totalDistanceKm: string
+  cashExpected: string
+  cashCollected: string
+  bonusAmount: string
+  compensationAmount: string
+  airportA4Amount: string
+  transferAmount: string
+  totalAmount: string
 }
 
 export type SettlementGenerateFormValues = {
@@ -153,7 +167,7 @@ export function buildSettlementGenerateDialogFields(
     fields.push({
       id: 'weekStart',
       type: 'custom',
-      label: t('taxi_fleet.settlements.weekStart', 'Week starting'),
+      label: t('taxi_fleet.settlements.week', 'Week'),
       layout: 'full',
       component: () => (
         <p className="text-sm text-muted-foreground">
@@ -168,7 +182,7 @@ export function buildSettlementGenerateDialogFields(
     fields.push({
       id: 'weekStart',
       type: 'custom',
-      label: t('taxi_fleet.settlements.weekStart', 'Week starting'),
+      label: t('taxi_fleet.settlements.week', 'Week'),
       layout: 'full',
       component: () => (
         <p className="text-sm text-muted-foreground">{t('common.loading', 'Loading…')}</p>
@@ -181,7 +195,7 @@ export function buildSettlementGenerateDialogFields(
     fields.push({
       id: 'weekStart',
       type: 'custom',
-      label: t('taxi_fleet.settlements.weekStart', 'Week starting'),
+      label: t('taxi_fleet.settlements.week', 'Week'),
       layout: 'full',
       component: () => (
         <p className="text-sm text-muted-foreground">
@@ -195,51 +209,80 @@ export function buildSettlementGenerateDialogFields(
   fields.push({
     id: 'weekStart',
     type: 'select',
-    label: t('taxi_fleet.settlements.weekStart', 'Week starting'),
+    label: t('taxi_fleet.settlements.week', 'Week'),
     description: t('taxi_fleet.settlements.generateWeekHint', 'Select the Monday that starts the settlement week (ISO).'),
     required: true,
     layout: 'full',
     options: options.availableWeeks.map((weekStart) => ({
       value: weekStart,
-      label: weekStart,
+      label: formatWeekRange(weekStart),
     })),
   })
 
   return fields
 }
 
-export function buildSettlementDetailGroups(t: TranslateFn): CrudFormGroup[] {
+export function buildSettlementBasicsGroups(): CrudFormGroup[] {
   return [
     {
       id: 'basics',
-      title: t('taxi_fleet.settlements.form.groups.basics', 'Basics'),
-      column: 1,
-      fields: ['teamMemberId', 'weekStart', 'status'],
-    },
-    {
-      id: 'amounts',
-      title: t('taxi_fleet.settlements.form.groups.amounts', 'Amounts'),
       column: 2,
-      fields: ['totalRevenue', 'totalCosts', 'netAmount', 'payoutPercent', 'payoutAmount'],
+      bare: true,
+      fields: ['teamMemberId', 'weekStart', 'status'],
     },
   ]
 }
 
-export function buildSettlementDetailFields(
+export function buildSettlementAdjustmentsGroups(): CrudFormGroup[] {
+  return buildSettlementCorrectionsGroups()
+}
+
+export function buildSettlementCorrectionsGroups(): CrudFormGroup[] {
+  return [
+    {
+      id: 'corrections',
+      column: 1,
+      fields: ['compensationAmount', 'bonusAmount'],
+    },
+  ]
+}
+
+export function buildSettlementCashGroups(): CrudFormGroup[] {
+  return [
+    {
+      id: 'cash',
+      column: 1,
+      fields: ['cashCollected', 'airportA4Amount'],
+    },
+  ]
+}
+
+export function buildSettlementDetailGroups(t: TranslateFn): CrudFormGroup[] {
+  return buildSettlementBasicsGroups()
+}
+
+function settlementStatusOptions(t: TranslateFn) {
+  return ['draft', 'submitted', 'approved', 'paid'].map((status) => ({
+    value: status,
+    label: t(`taxi_fleet.settlements.statuses.${status}`, status),
+  }))
+}
+
+function formatSettlementMoney(value: number): string {
+  return `${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PLN`
+}
+
+export function buildSettlementBasicsFields(
   t: TranslateFn,
   readOnly: boolean,
   resolveDriverName: (teamMemberId: string) => string,
 ): CrudField[] {
-  const statusOptions = ['draft', 'submitted', 'approved', 'paid'].map((status) => ({
-    value: status,
-    label: t(`taxi_fleet.settlements.statuses.${status}`, status),
-  }))
   return [
     {
       id: 'teamMemberId',
       type: 'custom',
       label: t('taxi_fleet.settlements.driver', 'Driver'),
-      layout: 'full',
+      layout: 'half',
       readOnly: true,
       component: ({ value }) => {
         const memberId = typeof value === 'string' ? value : ''
@@ -258,54 +301,84 @@ export function buildSettlementDetailFields(
     },
     {
       id: 'weekStart',
-      type: 'text',
-      label: t('taxi_fleet.settlements.weekStart', 'Week starting'),
-      layout: 'full',
+      type: 'custom',
+      label: t('taxi_fleet.settlements.week', 'Week'),
+      layout: 'half',
       readOnly: true,
+      component: ({ value }) => (
+        <span className="text-sm font-medium tabular-nums">{formatWeekRange(String(value ?? ''))}</span>
+      ),
     },
     {
       id: 'status',
       type: 'select',
       label: t('taxi_fleet.settlements.status', 'Status'),
-      layout: 'half',
-      options: statusOptions,
+      layout: 'full',
+      options: settlementStatusOptions(t),
       readOnly,
     },
+  ]
+}
+
+export function buildSettlementAdjustmentsFields(t: TranslateFn, readOnly: boolean): CrudField[] {
+  return buildSettlementCorrectionsFields(t, readOnly)
+}
+
+export function buildSettlementCorrectionsFields(t: TranslateFn, readOnly: boolean): CrudField[] {
+  return [
     {
-      id: 'totalRevenue',
-      type: 'text',
-      label: t('taxi_fleet.settlements.totalRevenue', 'Total revenue'),
+      id: 'compensationAmount',
+      type: 'number',
+      label: t('taxi_fleet.settlements.compensationAmount', 'Compensations'),
       layout: 'half',
-      readOnly: true,
+      readOnly,
+      min: 0,
+      step: 0.01,
     },
     {
-      id: 'totalCosts',
-      type: 'text',
-      label: t('taxi_fleet.settlements.totalCosts', 'Total costs'),
+      id: 'bonusAmount',
+      type: 'number',
+      label: t('taxi_fleet.settlements.bonusAmount', 'Bonuses'),
       layout: 'half',
-      readOnly: true,
+      readOnly,
+      min: 0,
+      step: 0.01,
+    },
+  ]
+}
+
+export function buildSettlementCashFields(t: TranslateFn, readOnly: boolean): CrudField[] {
+  return [
+    {
+      id: 'cashCollected',
+      type: 'number',
+      label: t('taxi_fleet.settlements.cashSummary.transferredInput', 'Cash handed to central'),
+      layout: 'half',
+      readOnly,
+      min: 0,
+      step: 0.01,
     },
     {
-      id: 'netAmount',
-      type: 'text',
-      label: t('taxi_fleet.settlements.netAmount', 'Net amount'),
+      id: 'airportA4Amount',
+      type: 'number',
+      label: t('taxi_fleet.settlements.airportA4Amount', 'Airport + A4'),
       layout: 'half',
-      readOnly: true,
+      readOnly,
+      min: 0,
+      step: 0.01,
     },
-    {
-      id: 'payoutPercent',
-      type: 'text',
-      label: t('taxi_fleet.drivers.payoutPercent', 'Payout %'),
-      layout: 'half',
-      readOnly: true,
-    },
-    {
-      id: 'payoutAmount',
-      type: 'text',
-      label: t('taxi_fleet.settlements.payout', 'Payout'),
-      layout: 'half',
-      readOnly: true,
-    },
+  ]
+}
+
+/** @deprecated Use buildSettlementBasicsFields or buildSettlementAdjustmentsFields */
+export function buildSettlementDetailFields(
+  t: TranslateFn,
+  readOnly: boolean,
+  resolveDriverName: (teamMemberId: string) => string,
+): CrudField[] {
+  return [
+    ...buildSettlementBasicsFields(t, readOnly, resolveDriverName),
+    ...buildSettlementAdjustmentsFields(t, readOnly),
   ]
 }
 
@@ -314,10 +387,23 @@ export function defaultSettlementDetailValues(): SettlementFormValues {
     teamMemberId: '',
     weekStart: '',
     status: 'draft',
+    revenueGross: '0',
+    revenueNet: '0',
+    costsGross: '0',
+    costsNet: '0',
     totalRevenue: '0',
     totalCosts: '0',
     netAmount: '0',
     payoutPercent: '0',
     payoutAmount: '0',
+    computedDistanceKm: '0',
+    totalDistanceKm: '0',
+    cashExpected: '0',
+    cashCollected: '0',
+    bonusAmount: '0',
+    compensationAmount: '0',
+    airportA4Amount: '0',
+    transferAmount: '0',
+    totalAmount: '0',
   }
 }

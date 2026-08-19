@@ -82,6 +82,8 @@ export default function DriverLoginPage() {
           'content-type': 'application/x-www-form-urlencoded',
           accept: 'application/json',
           'x-mercato-login-response': 'json',
+          'x-om-unauthorized-redirect': '0',
+          'x-om-forbidden-redirect': '0',
         },
         body,
         credentials: 'same-origin',

@@ -63,6 +63,7 @@ const crud = makeCrudRoute({
       'customer_person_id',
       'customer_company_id',
       'amount',
+      'vat_rate_percent',
       'currency_code',
       'document_number',
       'occurred_at',

@@ -11,7 +11,15 @@ import {
   type FinancialEntryCreateInput,
   type FinancialEntryUpdateInput,
 } from '../data/validators'
-import { assertFinancialEntryDriver, resolveFinancialEntryCustomer } from '../lib/financialEntryCustomer'
+import { normalizeExpenseVatRatePercent } from '../lib/expenseVat'
+import {
+  assertFinancialEntryDriver,
+  resolveFinancialEntryCustomer,
+} from '../lib/financialEntryCustomer'
+import {
+  recalculateWeeklySettlementsForFinancialEntry,
+  resolveFinancialEntryWeekStart,
+} from '../lib/settlementWeekScope'
 import { ensureOrganizationScope, ensureTenantScope, numericToString } from './shared'
 
 const createFinancialEntryCommand: CommandHandler<FinancialEntryCreateInput, { entryId: string }> = {
@@ -48,6 +56,11 @@ const createFinancialEntryCommand: CommandHandler<FinancialEntryCreateInput, { e
       customerPersonId: customer.customerPersonId,
       customerCompanyId: customer.customerCompanyId,
       amount: numericToString(parsed.amount),
+      vatRatePercent: numericToString(
+        parsed.kind === 'expense'
+          ? normalizeExpenseVatRatePercent(parsed.vatRatePercent)
+          : normalizeExpenseVatRatePercent(23),
+      ),
       currencyCode: parsed.currencyCode ?? 'PLN',
       documentNumber: parsed.documentNumber ?? null,
       occurredAt: parsed.occurredAt,
@@ -58,6 +71,7 @@ const createFinancialEntryCommand: CommandHandler<FinancialEntryCreateInput, { e
       deletedAt: null,
     })
     await em.persistAndFlush(record)
+    await recalculateWeeklySettlementsForFinancialEntry(em, record)
     const eventBus = ctx.container.resolve('eventBus') as { emitEvent: (event: string, data: unknown) => Promise<void> }
     await eventBus.emitEvent('taxi_fleet.financial_entry.created', {
       id: record.id,
@@ -86,6 +100,8 @@ const updateFinancialEntryCommand: CommandHandler<FinancialEntryUpdateInput, { e
     ensureTenantScope(ctx, row.tenantId)
     ensureOrganizationScope(ctx, row.organizationId)
 
+    const previousWeekStart = resolveFinancialEntryWeekStart(row.occurredAt)
+
     const customer = await resolveFinancialEntryCustomer(em, {
       tenantId: row.tenantId,
       organizationId: row.organizationId,
@@ -111,6 +127,9 @@ const updateFinancialEntryCommand: CommandHandler<FinancialEntryUpdateInput, { e
       row.customerCompanyId = customer.customerCompanyId
     }
     if (parsed.amount !== undefined) row.amount = numericToString(parsed.amount)
+    if (parsed.vatRatePercent !== undefined && row.kind === 'expense') {
+      row.vatRatePercent = numericToString(normalizeExpenseVatRatePercent(parsed.vatRatePercent))
+    }
     if (parsed.currencyCode !== undefined) row.currencyCode = parsed.currencyCode
     if (parsed.documentNumber !== undefined) row.documentNumber = parsed.documentNumber
     if (parsed.occurredAt !== undefined) row.occurredAt = parsed.occurredAt
@@ -118,6 +137,7 @@ const updateFinancialEntryCommand: CommandHandler<FinancialEntryUpdateInput, { e
     if (parsed.notes !== undefined) row.notes = parsed.notes
     row.updatedAt = new Date()
     await em.flush()
+    await recalculateWeeklySettlementsForFinancialEntry(em, row, previousWeekStart)
     return { entryId: row.id }
   },
 }
@@ -132,8 +152,10 @@ const deleteFinancialEntryCommand: CommandHandler<{ id: string }, { ok: true }> 
     if (!row) throw new CrudHttpError(404, { error: 'Not found' })
     ensureTenantScope(ctx, row.tenantId)
     ensureOrganizationScope(ctx, row.organizationId)
+    const previousWeekStart = resolveFinancialEntryWeekStart(row.occurredAt)
     row.deletedAt = new Date()
     await em.flush()
+    await recalculateWeeklySettlementsForFinancialEntry(em, row, previousWeekStart)
     return { ok: true }
   },
 }

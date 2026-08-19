@@ -20,6 +20,7 @@ import { formatMoneyDisplay, formatSignedMoneyDisplay } from '@open-mercato/shar
 import { TAXI_FLEET_BASE } from '../../backend/taxi-fleet/paths'
 import { useTaxiFleetLabels } from '../useTaxiFleetLabels'
 import { SettlementGenerateDialog } from '../SettlementGenerateDialog'
+import { formatWeekRange } from '../../lib/weekUtils'
 import {
   DriverFinancialEntryDialog,
   type FinancialEntryRow,
@@ -198,7 +199,7 @@ export function DriverSettlementsTab({
       {
         accessorKey: 'weekStart',
         header: t('taxi_fleet.settlements.week', 'Week'),
-        cell: ({ row }) => row.original.weekStart,
+        cell: ({ row }) => formatWeekRange(row.original.weekStart),
       },
       {
         accessorKey: 'status',

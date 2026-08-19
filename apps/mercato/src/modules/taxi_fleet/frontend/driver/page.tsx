@@ -3,7 +3,7 @@
 import React from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { CalendarDays, CarFront, Clock3, Plus } from 'lucide-react'
+import { CalendarDays, CarFront, Clock3, Fuel, Plus } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -225,6 +225,10 @@ export default function DriverHomePage() {
               <CalendarDays className="size-4" aria-hidden />
               {t('taxi_fleet.driverApp.home.viewSchedule', 'View schedule')}
             </Link>
+            <Link href="/driver/expenses/new" className={`${driverSecondaryActionClass} gap-2`}>
+              <Fuel className="size-4" aria-hidden />
+              {t('taxi_fleet.driverApp.home.reportExpense', 'Register a cost')}
+            </Link>
           </>
         ) : null}
 
@@ -269,6 +273,10 @@ export default function DriverHomePage() {
             <Button type="button" className={driverSecondaryActionClass} onClick={previewTripsWithoutClockIn}>
               {t('taxi_fleet.driverApp.home.previewTrips', 'Preview trips only')}
             </Button>
+            <Link href="/driver/expenses/new" className={`${driverSecondaryActionClass} gap-2`}>
+              <Fuel className="size-4" aria-hidden />
+              {t('taxi_fleet.driverApp.home.reportExpense', 'Register a cost')}
+            </Link>
             {hasDriverTripsBypass() ? (
               <p className="px-1 text-center text-xs text-[#99A1B7]">
                 {t(
@@ -311,6 +319,10 @@ export default function DriverHomePage() {
             <Link href="/driver/trips/new" className={`${driverPrimaryActionClass} gap-2`}>
               <Plus className="size-4" aria-hidden />
               {t('taxi_fleet.driverApp.home.reportTrip', 'Register a trip')}
+            </Link>
+            <Link href="/driver/expenses/new" className={`${driverSecondaryActionClass} gap-2`}>
+              <Fuel className="size-4" aria-hidden />
+              {t('taxi_fleet.driverApp.home.reportExpense', 'Register a cost')}
             </Link>
             <Button
               type="button"
@@ -358,6 +370,10 @@ export default function DriverHomePage() {
             <Link href="/driver/trips" className={`${driverSecondaryActionClass} gap-2`}>
               <CarFront className="size-4" aria-hidden />
               {t('taxi_fleet.driverApp.home.viewTrips', 'View trips')}
+            </Link>
+            <Link href="/driver/expenses/new" className={`${driverSecondaryActionClass} gap-2`}>
+              <Fuel className="size-4" aria-hidden />
+              {t('taxi_fleet.driverApp.home.reportExpense', 'Register a cost')}
             </Link>
             <Link href="/driver/assignments" className={`${driverSecondaryActionClass} gap-2`}>
               <CalendarDays className="size-4" aria-hidden />

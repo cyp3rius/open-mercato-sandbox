@@ -110,6 +110,46 @@ describe('apiFetch', () => {
     expect(flash).not.toHaveBeenCalled()
   })
 
+  it('does not redirect on driver login page and returns 401 payload', async () => {
+    window.history.pushState({}, '', '/driver/login')
+    const response = createMockResponse(401, {
+      ok: false,
+      error: 'Invalid email or password',
+    })
+    ;(window as unknown as Record<string, unknown>).__omOriginalFetch = jest.fn(async () => response)
+
+    const result = await apiFetch('/api/auth/login', { method: 'POST' })
+    expect(result).toBe(response)
+    expect(flash).not.toHaveBeenCalled()
+  })
+
+  it('does not redirect on driver login page and returns 403 payload', async () => {
+    window.history.pushState({}, '', '/driver/login')
+    const response = createMockResponse(403, {
+      ok: false,
+      error: 'Not authorized for this area',
+      requiredFeatures: ['taxi_fleet.driver'],
+    })
+    ;(window as unknown as Record<string, unknown>).__omOriginalFetch = jest.fn(async () => response)
+
+    const result = await apiFetch('/api/auth/login', { method: 'POST' })
+    expect(result).toBe(response)
+    expect(flash).not.toHaveBeenCalled()
+  })
+
+  it('does not redirect on auth login API 401 even off login page', async () => {
+    window.history.pushState({}, '', '/backend')
+    const response = createMockResponse(401, {
+      ok: false,
+      error: 'Invalid email or password',
+    })
+    ;(window as unknown as Record<string, unknown>).__omOriginalFetch = jest.fn(async () => response)
+
+    const result = await apiFetch('/api/auth/login', { method: 'POST' })
+    expect(result).toBe(response)
+    expect(flash).not.toHaveBeenCalled()
+  })
+
   it('throws UnauthorizedError for 401 responses by default', async () => {
     ;(window as unknown as Record<string, unknown>).__omOriginalFetch = jest.fn(async () =>
       createMockResponse(401, { error: 'Unauthorized' }),

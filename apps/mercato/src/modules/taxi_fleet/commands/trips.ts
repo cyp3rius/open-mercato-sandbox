@@ -32,6 +32,10 @@ import {
 import { ensureOrganizationScope, ensureTenantScope, numericToString } from './shared'
 import { assertDriverTripShift } from '../lib/assertDriverTripShift'
 import { assertNoTripOverlap } from '../lib/assertNoTripOverlap'
+import {
+  recalculateWeeklySettlementsForTrip,
+  resolveTripWeekStart,
+} from '../lib/settlementWeekScope'
 
 async function assertDriverScopedTeamMember(
   ctx: Parameters<CommandHandler<TripCreateInput, { tripId: string }>['execute']>[1],
@@ -113,6 +117,7 @@ const createTripCommand: CommandHandler<TripCreateInput, { tripId: string }> = {
       resourceId,
       assignmentId,
       tripType: parsed.tripType,
+      platform: parsed.platform ?? null,
       startedAt: parsed.startedAt ?? null,
       endedAt: parsed.endedAt ?? null,
       odometerStart: parsed.odometerStart == null ? null : numericToString(parsed.odometerStart),
@@ -134,6 +139,7 @@ const createTripCommand: CommandHandler<TripCreateInput, { tripId: string }> = {
     if (record.teamMemberId) {
       await emitTripAssignedIfNeeded(ctx, record, null)
     }
+    await recalculateWeeklySettlementsForTrip(em, record)
     return { tripId: record.id }
   },
 }
@@ -151,6 +157,7 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
 
     const { translate } = await resolveTranslations()
     const previousTeamMemberId = row.teamMemberId ?? null
+    const previousWeekStart = resolveTripWeekStart(row)
     if (parsed.teamMemberId !== undefined) {
       const actor = await resolveFleetBackendActor(ctx)
       const nextTeamMemberId = actor?.role === 'driver' ? actor.teamMemberId : parsed.teamMemberId
@@ -167,6 +174,7 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
     if (parsed.resourceId !== undefined) row.resourceId = parsed.resourceId
     if (parsed.assignmentId !== undefined) row.assignmentId = parsed.assignmentId
     if (parsed.tripType !== undefined) row.tripType = parsed.tripType
+    if (parsed.platform !== undefined) row.platform = parsed.platform ?? null
     if (parsed.startedAt !== undefined) row.startedAt = parsed.startedAt
     if (parsed.endedAt !== undefined) row.endedAt = parsed.endedAt
     if (parsed.odometerStart !== undefined) row.odometerStart = parsed.odometerStart == null ? null : numericToString(parsed.odometerStart)
@@ -217,6 +225,7 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
 
     await em.flush()
     await emitTripAssignedIfNeeded(ctx, row, previousTeamMemberId)
+    await recalculateWeeklySettlementsForTrip(em, row, previousWeekStart)
     return { tripId: row.id }
   },
 }
@@ -232,8 +241,10 @@ const deleteTripCommand: CommandHandler<{ id: string }, { ok: true }> = {
     ensureTenantScope(ctx, row.tenantId)
     ensureOrganizationScope(ctx, row.organizationId)
     await assertDriverScopedTeamMember(ctx, row.teamMemberId ?? '')
+    const previousWeekStart = resolveTripWeekStart(row)
     row.deletedAt = new Date()
     await em.flush()
+    await recalculateWeeklySettlementsForTrip(em, row, previousWeekStart)
     return { ok: true }
   },
 }
@@ -268,6 +279,7 @@ const rejectTripCommand: CommandHandler<{ id: string; notes?: string | null }, {
       cancelReason: parsed.notes ?? null,
     })
     await em.flush()
+    await recalculateWeeklySettlementsForTrip(em, row)
     return { tripId: row.id }
   },
 }
@@ -293,6 +305,7 @@ const cancelTripCommand: CommandHandler<TripCancelInput, { tripId: string }> = {
       cancelReason: parsed.reason ?? null,
     })
     await em.flush()
+    await recalculateWeeklySettlementsForTrip(em, row)
     return { tripId: row.id }
   },
 }
@@ -313,6 +326,7 @@ const markTripPaidCommand: CommandHandler<TripMarkPaidInput, { tripId: string }>
     row.metadata = metadata
     await applyTripStatusChange(ctx, row, 'paid', { paymentMethod: parsed.paymentMethod })
     await em.flush()
+    await recalculateWeeklySettlementsForTrip(em, row)
     return { tripId: row.id }
   },
 }
@@ -343,6 +357,7 @@ const completeTripCommand: CommandHandler<{ id: string }, { tripId: string }> = 
     ensureOrganizationScope(ctx, row.organizationId)
     await applyTripStatusChange(ctx, row, 'completed')
     await em.flush()
+    await recalculateWeeklySettlementsForTrip(em, row)
     return { tripId: row.id }
   },
 }

@@ -15,9 +15,11 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { TAXI_FLEET_BASE } from '../paths'
 import { useFleetDriverDirectory } from '../../../components/useFleetDriverDirectory'
-import { useTaxiFleetLabels } from '../../../components/useTaxiFleetLabels'
 import { useTaxiFleetPermissions } from '../../../components/useTaxiFleetPermissions'
 import { SettlementGenerateDialog } from '../../../components/SettlementGenerateDialog'
+import { SettlementStatusBadge } from '../../../components/SettlementStatusBadge'
+import { formatSettlementMoney } from '../../../lib/settlementPayoutDisplay'
+import { formatWeekRange } from '../../../lib/weekUtils'
 
 const PAGE_SIZE = 20
 
@@ -26,8 +28,8 @@ type SettlementRow = {
   teamMemberId: string
   weekStart: string
   status: string
-  payoutAmount: string
-  netAmount: string
+  revenueNet?: string
+  costsNet?: string
 }
 
 type ListResponse = { items: SettlementRow[]; totalPages: number; total?: number }
@@ -37,7 +39,6 @@ export default function TaxiFleetSettlementsPage() {
   const router = useRouter()
   const scopeVersion = useOrganizationScopeVersion()
   const { resolveName } = useFleetDriverDirectory()
-  const { resolveSettlementStatusLabel } = useTaxiFleetLabels()
   const { canManageSettlements } = useTaxiFleetPermissions()
   const [rows, setRows] = React.useState<SettlementRow[]>([])
   const [page, setPage] = React.useState(1)
@@ -95,8 +96,8 @@ export default function TaxiFleetSettlementsPage() {
         accessorKey: 'weekStart',
         header: t('taxi_fleet.settlements.week', 'Week'),
         cell: ({ row }) => (
-          <Link href={detailHref(row.original.id)} className="font-medium hover:underline">
-            {row.original.weekStart}
+          <Link href={detailHref(row.original.id)} className="font-medium hover:underline tabular-nums">
+            {formatWeekRange(row.original.weekStart)}
           </Link>
         ),
       },
@@ -108,19 +109,27 @@ export default function TaxiFleetSettlementsPage() {
       {
         accessorKey: 'status',
         header: t('taxi_fleet.settlements.status', 'Status'),
-        cell: ({ row }) => resolveSettlementStatusLabel(row.original.status),
+        cell: ({ row }) => <SettlementStatusBadge status={row.original.status} />,
       },
-      { accessorKey: 'payoutAmount', header: t('taxi_fleet.settlements.payout', 'Payout') },
-      { accessorKey: 'netAmount', header: t('taxi_fleet.settlements.netAmount', 'Net amount') },
+      {
+        accessorKey: 'revenueNet',
+        header: t('taxi_fleet.settlements.revenueNet', 'Revenue net'),
+        cell: ({ row }) => formatSettlementMoney(row.original.revenueNet),
+      },
+      {
+        accessorKey: 'costsNet',
+        header: t('taxi_fleet.settlements.costsNet', 'Costs net'),
+        cell: ({ row }) => formatSettlementMoney(row.original.costsNet),
+      },
     ],
-    [resolveName, resolveSettlementStatusLabel, t],
+    [resolveName, t],
   )
 
   return (
     <Page>
       <PageBody>
         <DataTable<SettlementRow>
-          title={t('taxi_fleet.settlements.list.title', 'Settlements')}
+          title={t('taxi_fleet.settlements.weeklyList.title', 'Weekly settlements')}
           refreshButton={{
             label: t('taxi_fleet.settlements.list.actions.refresh', 'Refresh'),
             onRefresh: () => {

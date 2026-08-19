@@ -6,6 +6,7 @@ export const metadata = {
   pageGroupKey: 'backend.nav.section.fleet',
   pageGroup: 'Fleet',
   navFlat: false,
+  navHidden: true,
   breadcrumb: [
     { label: 'Dashboard', labelKey: 'taxi_fleet.hub.dashboardTitle', href: '/backend/taxi-fleet' },
     { label: 'Settlements', labelKey: 'taxi_fleet.settlements.list.title', href: '/backend/taxi-fleet/settlements' },

@@ -38,6 +38,7 @@ export function buildDriverTripPayload(input: {
 
   const base: Record<string, unknown> = {
     tripType: input.commercial.tripType,
+    platform: input.commercial.platform,
     startedAt: input.route.startedAt,
     endedAt: input.route.endedAt || null,
     distanceKm: input.route.distanceKm,

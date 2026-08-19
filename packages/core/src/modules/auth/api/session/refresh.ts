@@ -36,6 +36,16 @@ function sanitizeRedirect(param: string | null, baseUrl: string): string {
   return '/'
 }
 
+function staffLoginUrlForRedirect(redirectTo: string): string {
+  if (redirectTo === '/driver/login' || redirectTo.startsWith('/driver/login?')) {
+    return '/driver/login'
+  }
+  if (redirectTo.startsWith('/driver')) {
+    return `/driver/login?redirect=${encodeURIComponent(redirectTo)}`
+  }
+  return `/login?redirect=${encodeURIComponent(redirectTo)}`
+}
+
 function clearStaffAuthCookies(response: NextResponse) {
   response.cookies.set('auth_token', '', {
     httpOnly: true,
@@ -61,7 +71,7 @@ export async function GET(req: Request) {
   const token = parseCookie(req, 'session_token')
   if (!token) {
     return clearStaffAuthCookies(
-      NextResponse.redirect(toAbsoluteUrl(req, '/login?redirect=' + encodeURIComponent(redirectTo)))
+      NextResponse.redirect(toAbsoluteUrl(req, staffLoginUrlForRedirect(redirectTo)))
     )
   }
   const c = await createRequestContainer()
@@ -69,7 +79,7 @@ export async function GET(req: Request) {
   const ctx = await auth.refreshFromSessionToken(token)
   if (!ctx) {
     return clearStaffAuthCookies(
-      NextResponse.redirect(toAbsoluteUrl(req, '/login?redirect=' + encodeURIComponent(redirectTo)))
+      NextResponse.redirect(toAbsoluteUrl(req, staffLoginUrlForRedirect(redirectTo)))
     )
   }
   const { user, roles } = ctx

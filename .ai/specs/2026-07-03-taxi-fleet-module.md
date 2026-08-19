@@ -46,8 +46,36 @@ Per status: konfigurowalne `label`, `icon`, `color` (hex) oraz `onEnterActions` 
 
 ### Settlements
 
-- Generated and displayed **per driver profile** (`team_member_id` + profile settings e.g. `payout_percent`).
+Two settlement **types**:
+
+| Type | Entity | Scope | Visibility |
+|------|--------|-------|------------|
+| **Weekly** | `taxi_fleet_weekly_settlements` | Per driver profile, ISO week (`week_start` = Monday) | Operator backend; future read-only in driver PWA |
+| **Monthly** | `taxi_fleet_monthly_settlements` | Fleet/org, calendar month (`month_start` = YYYY-MM-01) | Operator backend only |
+
+- Weekly: generated and displayed **per driver profile** (`team_member_id` + profile settings e.g. `payout_percent`).
+- Monthly: **rollup of weekly settlements** whose `week_start` falls in the calendar month; not a replacement for weeklies. Operator generates via `POST /api/taxi_fleet/monthly-settlements/generate`, can recalculate from linked weeklies.
 - UI shows staff display name, not raw UUID.
+
+#### Monthly reconciliation roadmap (Phase 2 — RS Moto ops checklist)
+
+Monthly settlement MVP aggregates weekly totals + driver breakdown. Future operator-only panels (from fleet Excel/mail workflow):
+
+1. Fiscal cash register vs Excel
+2. Fuel vs Excel
+3. Card terminal transactions vs Excel (date-range windows, e.g. 6.07–2.08.2026)
+4. Driver settlement verification
+5. Fleet revenue & profit (revenue minus drivers, fuel, invoices — parking, service, wash)
+6. Non-cash / bank-transfer trips vs issued invoices (partners: Bruno, Iwo, Wolff, Grzędzielski, Toyota Dobrygowski, Czerwiec, Witkowski, Sport Factory, …)
+7. GetTransfer courses vs transfers; running balance
+8. Per-driver revenue minus fuel (earned wage) + km driven
+9. Cash in register for full month (weeks may straddle months)
+10. Uber payouts vs bank transfers (rolling windows, e.g. 8.07–4.08)
+11. Bolt payouts vs bank transfers
+12. Mariusz payout total (On + Gośka)
+13. Card inflows vs terminal transactions (carry forward over/under between months)
+
+Store reconciliation notes and external-source totals in `snapshot_json` or dedicated monthly reconciliation sub-records as each panel is implemented.
 
 ### Trip driver suggestions
 
@@ -61,8 +89,10 @@ When operator creates/receives a trip with `started_at` / `ended_at`:
 
 - `taxi_fleet_driver_profiles` — `team_member_id`, `payout_percent`, `default_resource_id`, `external_app_enabled`
 - `taxi_fleet_daily_assignments` — date, `team_member_id`, `resource_id`, shift, status
-- `taxi_fleet_trips`, `taxi_fleet_trip_cost_lines`, `taxi_fleet_financial_entries` (paragony/faktury + koszty), `taxi_fleet_weekly_settlements`
+- `taxi_fleet_trips`, `taxi_fleet_trip_cost_lines`, `taxi_fleet_financial_entries` (paragony/faktury + koszty), `taxi_fleet_weekly_settlements`, `taxi_fleet_monthly_settlements`
 - Każdy przejazd wymaga powiązania z klientem CRM (`customer_person_id` lub `customer_company_id`); w API można przekazać `customerEntityId`.
+- Opcjonalna **platforma** kursu: `platform` = `uber` | `bolt` | `free` | null (domyślnie brak). Free to nazwa platformy, nie „darmowy kurs”.
+- Koszty kierowcy (`financial_entries` expense): kwota **brutto**; `vat_rate_percent` domyślnie 23 (netto w rozliczeniu = brutto/1,23), kierowca może wybrać 8% w PWA.
 
 ## API (Phase 1)
 
@@ -81,7 +111,10 @@ When operator creates/receives a trip with `started_at` / `ended_at`:
 | POST | `/api/taxi_fleet/trips/{id}/approve` | Operator approval |
 | CRUD | `/api/taxi_fleet/financial-entries` | Paragony/faktury (wpływy) i koszty kierowcy |
 | CRUD | `/api/taxi_fleet/settlements` | Per driver profile week |
+| GET/PUT | `/api/taxi_fleet/monthly-settlements` | Fleet monthly rollup list + update |
+| POST | `/api/taxi_fleet/monthly-settlements/generate` | Generate monthly from weeklies in calendar month |
 | Driver JWT | `/api/taxi_fleet/driver/*` | Mobile driver surface (staff JWT + `taxi_fleet.driver`) |
+| GET/POST | `/api/taxi_fleet/driver/expenses` | Own expense ledger (`financial_entries` kind=expense); used by driver PWA |
 | POST | `/api/taxi_fleet/driver/assignments/{id}/shift` | Clock in/out (`start`/`end`); idempotent when already in target state |
 | GET/POST | `/api/taxi_fleet/driver/location` | Own latest ping / batch ingest (requires open shift) |
 | GET | `/api/taxi_fleet/location/latest?teamMemberId=` | Operator last-known location chip (`taxi_fleet.view`) |
@@ -94,9 +127,10 @@ When operator creates/receives a trip with `started_at` / `ended_at`:
 - **Trip create rules:** open shift → live + past; off shift → past only. Past trip `startedAt`/`endedAt` must fall within a **past or current** shift window (`shiftStart`…`shiftEnd` or open → now). Server enforces via `assertDriverTripShift` on driver `trips.create` and binds `assignmentId`/`resourceId` from the matching shift.
 - **Trip gate:** list/create available without clock-in (past trips from earlier shifts). Live start requires open shift. Schedule (`/driver/assignments`) always available. Soft clock-in CTA when today’s assignment exists but shift not started.
 - Provisioning: Role with feature `taxi_fleet.driver` (seeded default role name `driver` in module setup); ops must link user ↔ `StaffTeamMember.userId`, create driver profile, set `externalAppEnabled: true`. Login gates on the feature, not the role name.
-- Home: today’s assignment, clock in/out, trip shortcuts; trips list/create/detail; assignments read list.
+- Home: today’s assignment, clock in/out, trip and **cost** shortcuts; trips list/create/detail; expenses list/create; assignments read list.
 - PWA: `public/driver/manifest.webmanifest` + `public/driver-sw.js` (scope `/driver`); install prompt in DriverShell.
-- Offline: IndexedDB cache for me/trips + mutation outbox (shift, trip create/update, location batches); flush on reconnect.
+- Offline: IndexedDB cache for me/trips/expenses + mutation outbox (shift, trip create/update, **expense.create**, location batches); flush on reconnect.
+- **Brak rozliczeń w PWA** (MVP): kierowca nie generuje ani nie składa tygodniówki w aplikacji. Operator — backend `/backend/taxi-fleet/settlements`. W przyszłości: podgląd zatwierdzonego rozliczenia; później uzupełnianie kursów/kosztów przed zamknięciem tygodnia.
 - Tracking: geolocation only while shift is open (`shiftStart` set, `shiftEnd` null); browser/PWA foreground limits apply (no true OS background GPS in MVP).
 - Entity: `taxi_fleet_location_pings` for stored pings.
 
@@ -112,7 +146,8 @@ When operator creates/receives a trip with `started_at` / `ended_at`:
 | `/backend/taxi-fleet/assignments` | Planowanie kursów — kalendarz przydziałów i przejazdów |
 | `/backend/taxi-fleet/trips`, `/trips/[id]` | List + detail with driver suggestions |
 | `/backend/taxi-fleet/settlements` | Per-profile weekly settlements |
-| `/driver`, `/driver/login`, `/driver/trips`, `/driver/assignments` | Mobile driver PWA surface |
+| `/backend/taxi-fleet/monthly-settlements` | Fleet monthly rollup from weeklies |
+| `/driver`, `/driver/login`, `/driver/trips`, `/driver/expenses`, `/driver/assignments` | Mobile driver PWA surface |
 
 ## Events
 
@@ -198,6 +233,17 @@ Preferencje użytkownika: `/backend/profile/notifications` (`NotificationPrefere
 
 ### 2026-07-13
 - Tworzenie profilu kierowcy w dialogu na liście (`DriverProfileCreateDialog`); strona `/drivers/create` usunięta; szczegóły profilu bez zmian.
+
+### 2026-08-19 (b)
+- **Settlement types:** weekly (`taxi_fleet_weekly_settlements`, per driver, visible to operator; future driver PWA) vs monthly (`taxi_fleet_monthly_settlements`, fleet rollup, operator-only). Monthly aggregates weeklies whose Monday falls in the calendar month; generate/recalculate API + backend list/detail UI with driver breakdown and linked weeklies. Phase 2 roadmap: fleet reconciliation checklist (fiscal register, fuel, terminal, Uber/Bolt vs transfers, profit, partner invoices, GetTransfer, cash register month total).
+
+### 2026-08-19
+- Driver PWA costs: `/driver/expenses` list + create form (type, amount, when, receipt, notes). Writes `taxi_fleet_financial_entries` (`kind=expense`) via `GET/POST /api/taxi_fleet/driver/expenses`. Offline outbox `expense.create`. Fuel registered here is the cost side of the weekly zł/km indicator.
+- Weekly settlement distance: `computed_distance_km` / `total_distance_km` on `taxi_fleet_weekly_settlements`; generator sums driver trip `distance_km` for the ISO week (excl. cancelled). Snapshot stores per-trip km + missing flags. Settlement detail highlights trips without km, inline save, manual total override, recalculate from trips.
+- Trip **platform** (`taxi_fleet_trips.platform`, nullable): `uber` | `bolt` | `free` (Free is a platform name, not “free ride”). Default unset; picker in backend trip form and driver PWA trip create.
+- Expense **VAT** (`financial_entries.vat_rate_percent`): gross amount on entry; default 23% (net = gross/1.23 in settlement calculator). Driver can choose 8% when registering a cost in PWA.
+- **Full settlement draft (canvas):** revenue from completed trips (`revenue_gross`/`revenue_net`, VAT 8%), costs from expenses (`costs_gross`/`costs_net`), breakdown by platform×payment in `snapshot_json.revenueBreakdown`, fuel/revenue zł/km indicators, operator fields (`cash_expected`, `cash_collected`, bonus, compensations, airport+A4, `transfer_amount`).
+- **No driver settlement UI in PWA** for now. `POST /api/taxi_fleet/driver/settlements/submit` remains for future use; operator generates/approves in backend. Future: read-only approved settlement in PWA; later driver can supplement trips/costs before week close.
 
 ### 2026-08-11
 - Driver PWA trips: past (2-step route→commercial) and live (local draft until complete; optional online `in_progress` sync). Waypoints + editable km via route APIs. Offline: IDB live drafts + receipt blobs; outbox uploads attachment then `trip.create`/`trip.update`. Shell banner for active live trip. Wake Lock / visibility best-effort GPS while live is open.

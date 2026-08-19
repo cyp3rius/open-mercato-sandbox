@@ -59,6 +59,36 @@ const customerEmailsSchema = z.object({
   trip_cancelled: localizedCustomerEmailTemplateSchema,
 })
 
+const optionalIndicatorBoundSchema = z.preprocess(
+  (value) => {
+    if (value === '' || value === null || value === undefined) return null
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  },
+  z.number().min(0).nullable(),
+)
+
+export const settlementIndicatorRangeSchema = z.object({
+  min: optionalIndicatorBoundSchema.default(null),
+  max: optionalIndicatorBoundSchema.default(null),
+})
+
+export type SettlementIndicatorRangeSettings = z.infer<typeof settlementIndicatorRangeSchema>
+
+export const settlementIndicatorRangesSchema = z.object({
+  fuelPerKm: settlementIndicatorRangeSchema.default({ min: null, max: null }),
+  revenuePerKm: settlementIndicatorRangeSchema.default({ min: null, max: null }),
+})
+
+export type SettlementIndicatorRangesSettings = z.infer<typeof settlementIndicatorRangesSchema>
+
+export function defaultSettlementIndicatorRanges(): SettlementIndicatorRangesSettings {
+  return {
+    fuelPerKm: { min: null, max: null },
+    revenuePerKm: { min: null, max: null },
+  }
+}
+
 export const taxiFleetPricingSettingsSchema = pricingConfigSchema
 
 export const taxiFleetSettingsSchema = z.object({
@@ -70,6 +100,7 @@ export const taxiFleetSettingsSchema = z.object({
   paypal: taxiFleetPaypalSettingsSchema,
   calendar: taxiFleetCalendarSettingsSchema,
   customerEmails: customerEmailsSchema,
+  settlementIndicatorRanges: settlementIndicatorRangesSchema.default(defaultSettlementIndicatorRanges()),
 })
 
 export type TaxiFleetSettings = z.infer<typeof taxiFleetSettingsSchema>
@@ -167,6 +198,7 @@ export function defaultTaxiFleetSettings(): TaxiFleetSettings {
       defaultDurationMinutes: 60,
     },
     customerEmails: defaultCustomerEmailTemplates,
+    settlementIndicatorRanges: defaultSettlementIndicatorRanges(),
   })
 }
 
@@ -182,6 +214,9 @@ export function parseTaxiFleetSettingsJson(raw: unknown): TaxiFleetSettings {
   const record = raw as Record<string, unknown>
   const customerEmailsRaw = asRecord(record.customerEmails)
   const pricingRaw = record.pricing
+  const indicatorRangesRaw = asRecord(record.settlementIndicatorRanges)
+  const fuelRangeRaw = asRecord(indicatorRangesRaw.fuelPerKm)
+  const revenueRangeRaw = asRecord(indicatorRangesRaw.revenuePerKm)
   return taxiFleetSettingsSchema.parse({
     ...base,
     ...record,
@@ -197,6 +232,10 @@ export function parseTaxiFleetSettingsJson(raw: unknown): TaxiFleetSettings {
       trip_approved: { ...base.customerEmails.trip_approved, ...asRecord(customerEmailsRaw.trip_approved) },
       trip_paid: { ...base.customerEmails.trip_paid, ...asRecord(customerEmailsRaw.trip_paid) },
       trip_cancelled: { ...base.customerEmails.trip_cancelled, ...asRecord(customerEmailsRaw.trip_cancelled) },
+    },
+    settlementIndicatorRanges: {
+      fuelPerKm: { ...base.settlementIndicatorRanges.fuelPerKm, ...fuelRangeRaw },
+      revenuePerKm: { ...base.settlementIndicatorRanges.revenuePerKm, ...revenueRangeRaw },
     },
   })
 }

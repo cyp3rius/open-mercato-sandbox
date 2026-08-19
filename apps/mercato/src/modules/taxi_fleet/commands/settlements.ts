@@ -1,6 +1,5 @@
 import { registerCommand, type CommandHandler } from '@open-mercato/shared/lib/commands'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { requireId } from '@open-mercato/shared/lib/commands/helpers'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
@@ -13,9 +12,22 @@ import {
   type SettlementSubmitInput,
   type SettlementUpdateInput,
 } from '../data/validators'
-import { calculateWeeklySettlement } from '../lib/settlementCalculator'
+import { formatDistanceKm } from '../lib/settlementTripDistance'
+import {
+  parseSettlementCostExclusions,
+  type SettlementCostExclusion,
+} from '../lib/settlementCostExclusions'
 import { assertTeamMemberHasDriverProfile } from '../lib/driverProfileGuard'
 import { resolveDriverContext } from '../lib/driverContext'
+import {
+  applyWeeklySettlementRecalculation,
+  isSettlementClosureUpdate,
+  isSettlementStatusOnlyUpdate,
+  recomputeSettlementTransfer,
+  syncSettlementPayoutPercentFromDriverProfile,
+} from '../lib/settlementRecalculation'
+import { isWeeklySettlementLocked } from '../lib/settlementLock'
+import { isAllowedWeeklySettlementStatusTransition } from '../lib/settlementStatusTransitions'
 import { ensureOrganizationScope, ensureTenantScope, numericToString } from './shared'
 
 async function emitSettlementEvent(
@@ -32,6 +44,35 @@ async function emitSettlementEvent(
     weekStart: row.weekStart,
     status: row.status,
   })
+}
+
+function mergeSettlementCostExclusions(
+  row: TaxiFleetWeeklySettlement,
+  items: Array<{ financialEntryId: string; comment: string }>,
+): SettlementCostExclusion[] {
+  const existingExclusions = parseSettlementCostExclusions(row.snapshotJson)
+  return items.map((item) => {
+    const previous = existingExclusions.find((entry) => entry.financialEntryId === item.financialEntryId)
+    return {
+      financialEntryId: item.financialEntryId,
+      comment: item.comment.trim(),
+      excludedAt: previous?.excludedAt ?? new Date().toISOString(),
+    }
+  })
+}
+
+function applySettlementStatusChange(
+  row: TaxiFleetWeeklySettlement,
+  status: SettlementUpdateInput['status'],
+  ctx: Parameters<CommandHandler<SettlementUpdateInput, { settlementId: string }>['execute']>[1],
+): void {
+  if (status === undefined) return
+  row.status = status
+  if (status === 'approved') {
+    row.approvedAt = new Date()
+    row.approvedByUserId = ctx.auth?.sub ?? null
+  }
+  if (status === 'submitted') row.submittedAt = new Date()
 }
 
 const generateSettlementCommand: CommandHandler<SettlementGenerateInput, { settlementId: string }> = {
@@ -59,19 +100,11 @@ const generateSettlementCommand: CommandHandler<SettlementGenerateInput, { settl
       throw new CrudHttpError(409, { error: translate('taxi_fleet.errors.settlementExists', 'Settlement already exists for this week.') })
     }
     const { translate } = await resolveTranslations()
-    const profile = await assertTeamMemberHasDriverProfile(em, {
+    await assertTeamMemberHasDriverProfile(em, {
       tenantId: parsed.tenantId,
       organizationId: parsed.organizationId,
       teamMemberId: parsed.teamMemberId,
       translate,
-    })
-    const payoutPercent = Number(profile.payoutPercent)
-    const totals = await calculateWeeklySettlement(em, {
-      tenantId: parsed.tenantId,
-      organizationId: parsed.organizationId,
-      teamMemberId: parsed.teamMemberId,
-      weekStart: parsed.weekStart,
-      payoutPercent,
     })
     const now = new Date()
     const record = em.create(TaxiFleetWeeklySettlement, {
@@ -79,18 +112,22 @@ const generateSettlementCommand: CommandHandler<SettlementGenerateInput, { settl
       organizationId: parsed.organizationId,
       teamMemberId: parsed.teamMemberId,
       weekStart: parsed.weekStart,
-      totalRevenue: numericToString(totals.totalRevenue),
-      totalCosts: numericToString(totals.totalCosts),
-      netAmount: numericToString(totals.netAmount),
-      payoutPercent: numericToString(payoutPercent),
-      payoutAmount: numericToString(totals.payoutAmount),
+      payoutPercent: '0',
+      cashCollected: '0',
+      bonusAmount: '0',
+      compensationAmount: '0',
+      airportA4Amount: '0',
       status: 'draft',
-      snapshotJson: { tripIds: totals.tripIds },
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
     })
-    await em.persistAndFlush(record)
+    em.persist(record)
+    await syncSettlementPayoutPercentFromDriverProfile(em, record)
+    await applyWeeklySettlementRecalculation(em, record)
+    record.cashCollected = record.cashExpected
+    recomputeSettlementTransfer(record)
+    await em.flush()
     return { settlementId: record.id }
   },
 }
@@ -104,15 +141,69 @@ const updateSettlementCommand: CommandHandler<SettlementUpdateInput, { settlemen
     if (!row) throw new CrudHttpError(404, { error: 'Not found' })
     ensureTenantScope(ctx, row.tenantId)
     ensureOrganizationScope(ctx, row.organizationId)
+
     const previousStatus = row.status
-    if (parsed.status !== undefined) {
-      row.status = parsed.status
-      if (parsed.status === 'approved') {
-        row.approvedAt = new Date()
-        row.approvedByUserId = ctx.auth?.sub ?? null
+    const closureUpdate = isSettlementClosureUpdate(parsed)
+    const statusOnly = isSettlementStatusOnlyUpdate(parsed)
+
+    if (parsed.status !== undefined && parsed.status !== row.status) {
+      if (!isAllowedWeeklySettlementStatusTransition(row.status, parsed.status)) {
+        const { translate } = await resolveTranslations()
+        throw new CrudHttpError(409, {
+          error: translate(
+            'taxi_fleet.errors.settlementStatusTransition',
+            'This status change is not allowed.',
+          ),
+        })
       }
-      if (parsed.status === 'submitted') row.submittedAt = new Date()
     }
+
+    if (closureUpdate) {
+      if (row.status !== 'approved') {
+        const { translate } = await resolveTranslations()
+        throw new CrudHttpError(409, {
+          error: translate(
+            'taxi_fleet.errors.settlementCloseNotApproved',
+            'Only approved settlements can be closed and paid out.',
+          ),
+        })
+      }
+      row.closureType = parsed.closureType ?? null
+      row.closureAmount = numericToString(parsed.closureAmount)
+      row.closedAt = new Date()
+      applySettlementStatusChange(row, 'paid', ctx)
+    } else if (!statusOnly && isWeeklySettlementLocked(row.status)) {
+      const { translate } = await resolveTranslations()
+      throw new CrudHttpError(409, {
+        error: translate(
+          'taxi_fleet.errors.settlementLocked',
+          'Approved settlements cannot be modified. Change the status first if you need to edit amounts or costs.',
+        ),
+      })
+    } else if (statusOnly) {
+      applySettlementStatusChange(row, parsed.status, ctx)
+    } else {
+      if (parsed.totalDistanceKm !== undefined) {
+        row.totalDistanceKm = formatDistanceKm(parsed.totalDistanceKm)
+      }
+      if (parsed.cashCollected !== undefined) row.cashCollected = numericToString(parsed.cashCollected)
+      if (parsed.bonusAmount !== undefined) row.bonusAmount = numericToString(parsed.bonusAmount)
+      if (parsed.compensationAmount !== undefined) row.compensationAmount = numericToString(parsed.compensationAmount)
+      if (parsed.airportA4Amount !== undefined) row.airportA4Amount = numericToString(parsed.airportA4Amount)
+
+      await syncSettlementPayoutPercentFromDriverProfile(em, row)
+
+      const excludedCosts =
+        parsed.excludedCosts !== undefined ? mergeSettlementCostExclusions(row, parsed.excludedCosts) : undefined
+
+      await applyWeeklySettlementRecalculation(em, row, {
+        syncTotalDistance: parsed.recalculateSettlement === true || parsed.recalculateDistance === true,
+        excludedCosts,
+      })
+
+      applySettlementStatusChange(row, parsed.status, ctx)
+    }
+
     await em.flush()
     if (previousStatus !== 'submitted' && row.status === 'submitted') {
       await emitSettlementEvent(ctx, 'taxi_fleet.settlement.submitted', row)
@@ -152,6 +243,10 @@ const submitSettlementCommand: CommandHandler<
       row = await findOneWithDecryption(em, TaxiFleetWeeklySettlement, { id: generated.settlementId })
       if (!row) throw new CrudHttpError(404, { error: 'Not found' })
     }
+
+    await syncSettlementPayoutPercentFromDriverProfile(em, row)
+    await applyWeeklySettlementRecalculation(em, row)
+
     row.status = 'submitted'
     row.submittedAt = new Date()
     await em.flush()

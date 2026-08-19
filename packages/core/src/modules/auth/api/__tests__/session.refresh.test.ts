@@ -36,6 +36,16 @@ describe('/api/auth/session/refresh', () => {
     expect(setCookie).toContain('session_token=;')
   })
 
+  it('GET redirects driver routes to driver login', async () => {
+    const response = await GET(
+      new Request('http://localhost/api/auth/session/refresh?redirect=%2Fdriver%2Flogin'),
+    )
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toContain('/driver/login')
+    expect(response.headers.get('location')).not.toContain('/login?redirect=%2Fdriver%2Flogin')
+  })
+
   it('POST clears cookies when refresh token is invalid', async () => {
     refreshFromSessionToken.mockResolvedValue(null)
 

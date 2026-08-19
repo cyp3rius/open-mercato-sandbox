@@ -41,12 +41,14 @@ import { TripStatusField } from './TripStatusField'
 import { readQuoteSnapshotFromMetadata } from '../lib/pricing/tripFormQuote'
 import { buildTripRequestFormFields, pickTripRequestDetails } from './tripRequestFormFields'
 import { isTripDetailFieldEditable } from '../lib/tripDetailWorkflow'
+import { TAXI_FLEET_TRIP_PLATFORMS } from '../lib/tripPlatforms'
 
 export type TripFormValues = {
   teamMemberId: string
   resourceId: string
   customerEntityId: string
   tripType: string
+  platform: string
   startedAtLocal: string
   endedAtLocal: string
   revenueAmount: string
@@ -114,6 +116,7 @@ export function defaultTripFormValues(reference = new Date()): TripFormValues {
     resourceId: '',
     customerEntityId: '',
     tripType: 'client',
+    platform: '',
     startedAtLocal,
     endedAtLocal,
     revenueAmount: '',
@@ -350,6 +353,7 @@ const ASSIGNMENT_FIELD_IDS = [
   'startedAtLocal',
   'endedAtLocal',
   'tripType',
+  'platform',
 ]
 const CUSTOMER_FIELD_IDS = [
   'customerEntityId',
@@ -586,6 +590,19 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
       layout: 'half',
       options: tripTypeOptions,
     },
+    {
+      id: 'platform',
+      type: 'select',
+      label: t('taxi_fleet.trips.platform', 'Platform'),
+      layout: 'half',
+      options: [
+        { value: '', label: t('taxi_fleet.trips.platforms.none', 'None') },
+        ...TAXI_FLEET_TRIP_PLATFORMS.map((platform) => ({
+          value: platform,
+          label: t(`taxi_fleet.trips.platforms.${platform}`, platform),
+        })),
+      ],
+    },
   )
 
   const customerFields: CrudField[] = [
@@ -767,6 +784,7 @@ export function mapTripRowToFormValues(row: {
   customerPersonId?: string | null
   customerCompanyId?: string | null
   tripType: string
+  platform?: string | null
   startedAt?: string | null
   endedAt?: string | null
   revenueAmount?: string | null
@@ -792,6 +810,7 @@ export function mapTripRowToFormValues(row: {
       customerCompanyId: row.customerCompanyId ?? null,
     }) ?? '',
     tripType: row.tripType,
+    platform: row.platform ?? '',
     startedAtLocal: row.startedAt ? normalizeDateTimeLocalInput(isoToDateTimeLocalValue(row.startedAt)) : '',
     endedAtLocal: row.endedAt ? normalizeDateTimeLocalInput(isoToDateTimeLocalValue(row.endedAt)) : '',
     revenueAmount: row.revenueAmount ?? quotedTotal ?? request.basePrice ?? '',
@@ -854,6 +873,7 @@ export function tripFormValuesToPayload(
     resourceId: values.resourceId,
     ...(values.customerEntityId ? { customerEntityId: values.customerEntityId } : {}),
     tripType: values.tripType,
+    platform: values.platform?.trim() ? values.platform : null,
     startedAt: startedAt.toISOString(),
     endedAt: endedAt.toISOString(),
     distanceKm: extras.distanceKm,
@@ -875,6 +895,7 @@ export function tripFormValuesToUpdatePayload(id: string, values: TripFormValues
     resourceId: values.resourceId,
     ...(values.customerEntityId ? { customerEntityId: values.customerEntityId } : {}),
     tripType: values.tripType,
+    platform: values.platform?.trim() ? values.platform : null,
     startedAt: startedAt.toISOString(),
     endedAt: endedAt.toISOString(),
     distanceKm: extras.distanceKm ?? null,

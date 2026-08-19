@@ -6,6 +6,7 @@ import { parseNumericValue, sanitizePercentTypingInput } from '@open-mercato/sha
 import { DriverCustomerField } from './DriverCustomerField'
 import { DriverReceiptFields } from './DriverReceiptFields'
 import { DriverTripTypePicker } from './DriverTripTypePicker'
+import { DriverPlatformPicker } from './DriverPlatformPicker'
 import {
   driverFieldClass,
   driverLabelClass,
@@ -13,9 +14,11 @@ import {
   driverSectionTitleClass,
 } from './driverUi'
 import type { TaxiFleetTripType } from '../useTaxiFleetLabels'
+import type { TaxiFleetTripPlatform } from '../../lib/tripPlatforms'
 
 export type DriverCommercialValue = {
   tripType: TaxiFleetTripType
+  platform: TaxiFleetTripPlatform | null
   customerEntityId: string
   customerLabel: string
   revenueAmount: string
@@ -67,6 +70,12 @@ export function DriverCommercialStep({
               : {}),
           })
         }
+      />
+
+      <DriverPlatformPicker
+        value={value.platform}
+        disabled={disabled}
+        onChange={(platform) => onChange({ ...value, platform })}
       />
 
       {value.tripType === 'client' ? (

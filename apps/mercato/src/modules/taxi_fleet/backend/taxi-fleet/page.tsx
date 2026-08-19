@@ -25,14 +25,25 @@ export default function TaxiFleetHubPage() {
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <FleetHubLinkSection
-              titleKey="taxi_fleet.settlements.title"
-              titleFallback="Settlements"
+              titleKey="taxi_fleet.settlements.weeklyTitle"
+              titleFallback="Weekly settlements"
               descriptionKey="taxi_fleet.hub.settlementsHelp"
               descriptionFallback="Weekly driver settlements and payouts."
-              href={`${TAXI_FLEET_BASE}/settlements`}
+              href={`${TAXI_FLEET_BASE}/settlements-overview/weekly`}
               actionKey="taxi_fleet.hub.settlements.open"
-              actionFallback="Open settlements"
+              actionFallback="Open weekly settlements"
             />
+            <FleetHubLinkSection
+              titleKey="taxi_fleet.monthlySettlements.title"
+              titleFallback="Monthly settlements"
+              descriptionKey="taxi_fleet.hub.monthlySettlementsHelp"
+              descriptionFallback="Fleet monthly rollup from weekly settlements."
+              href={`${TAXI_FLEET_BASE}/settlements-overview/monthly`}
+              actionKey="taxi_fleet.hub.monthlySettlements.open"
+              actionFallback="Open monthly settlements"
+            />
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
             <FleetHubLinkSection
               titleKey="taxi_fleet.drivers.title"
               titleFallback="Driver profiles"

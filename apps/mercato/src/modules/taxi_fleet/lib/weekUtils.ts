@@ -13,6 +13,11 @@ export function getWeekEnd(weekStart: string): string {
   return end.toISOString().slice(0, 10)
 }
 
+export function formatWeekRange(weekStart: string | null | undefined): string {
+  if (!weekStart || !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) return '—'
+  return `${weekStart} – ${getWeekEnd(weekStart)}`
+}
+
 export function isDateInWeek(dateStr: string, weekStart: string): boolean {
   const weekEnd = getWeekEnd(weekStart)
   return dateStr >= weekStart && dateStr <= weekEnd
@@ -32,6 +37,26 @@ export function isMonday(dateStr: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false
   const date = new Date(`${dateStr}T12:00:00`)
   return date.getDay() === 1
+}
+
+export function isMonthStart(dateStr: string): boolean {
+  return /^\d{4}-\d{2}-01$/.test(dateStr)
+}
+
+export function listRecentMonthStarts(monthsBack = 24): string[] {
+  const months: string[] = []
+  let cursor = getMonthStart(new Date())
+  for (let index = 0; index < monthsBack; index += 1) {
+    months.push(cursor)
+    const date = new Date(`${cursor}T12:00:00`)
+    date.setMonth(date.getMonth() - 1)
+    cursor = getMonthStart(date)
+  }
+  return months
+}
+
+export function listUnsettledMonths(existingMonthStarts: Set<string>, monthsBack = 24): string[] {
+  return listRecentMonthStarts(monthsBack).filter((monthStart) => !existingMonthStarts.has(monthStart))
 }
 
 export function listUnsettledMondays(existingWeekStarts: Set<string>, weeksBack = 52): string[] {

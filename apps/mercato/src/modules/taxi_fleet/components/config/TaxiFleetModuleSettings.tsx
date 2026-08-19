@@ -16,6 +16,7 @@ import {
   defaultTaxiFleetSettings,
   normalizeTaxiFleetSettingsResponse,
   type LocalizedCustomerEmailTemplate,
+  type SettlementIndicatorRangeSettings,
   type TaxiFleetSettingsResponse,
 } from '../../lib/taxiFleetSettings'
 import { ResourceTypeSearchField } from '../ResourceTypeSearchField'
@@ -104,6 +105,63 @@ function BilingualTemplateFields({
       {field('introEn', labels.introEn, true)}
       {field('footerNotePl', labels.footerPl, true)}
       {field('footerNoteEn', labels.footerEn, true)}
+    </div>
+  )
+}
+
+function SettlementIndicatorRangeFields({
+  label,
+  value,
+  onChange,
+  disabled,
+  minLabel,
+  maxLabel,
+}: {
+  label: string
+  value: SettlementIndicatorRangeSettings
+  onChange: (next: SettlementIndicatorRangeSettings) => void
+  disabled?: boolean
+  minLabel: string
+  maxLabel: string
+}) {
+  const patchBound = (key: 'min' | 'max', raw: string) => {
+    const trimmed = raw.trim()
+    const parsed = trimmed === '' ? null : Number(trimmed)
+    onChange({
+      ...value,
+      [key]: parsed != null && Number.isFinite(parsed) ? parsed : null,
+    })
+  }
+
+  return (
+    <div className="space-y-2 rounded border border-border bg-muted/20 p-3">
+      <p className="text-sm font-medium">{label}</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1">
+          <Label className="text-sm font-medium">{minLabel}</Label>
+          <input
+            type="number"
+            min={0}
+            step="0.001"
+            disabled={disabled}
+            value={value.min ?? ''}
+            className={CRUD_FORM_TEXT_INPUT_CLASS}
+            onChange={(event) => patchBound('min', event.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-sm font-medium">{maxLabel}</Label>
+          <input
+            type="number"
+            min={0}
+            step="0.001"
+            disabled={disabled}
+            value={value.max ?? ''}
+            className={CRUD_FORM_TEXT_INPUT_CLASS}
+            onChange={(event) => patchBound('max', event.target.value)}
+          />
+        </div>
+      </div>
     </div>
   )
 }
@@ -230,7 +288,56 @@ export function TaxiFleetModuleSettings() {
               }
               disabled={saving}
             />
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'taxi_fleet.config.fleet.defaultPayoutPercentHelp',
+                'Used when creating driver profiles and for settlements when a driver has no payout percent set.',
+              )}
+            </p>
           </div>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        title={t('taxi_fleet.config.indicators.title', 'Settlement indicator ranges')}
+        description={t(
+          'taxi_fleet.config.indicators.description',
+          'Optional min and max thresholds for fuel and revenue per km. Empty fields mean no limit. LEDs on settlements use these ranges.',
+        )}
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <SettlementIndicatorRangeFields
+            label={t('taxi_fleet.config.indicators.fuelPerKm', 'Fuel (PLN/km)')}
+            minLabel={t('taxi_fleet.config.indicators.min', 'Min')}
+            maxLabel={t('taxi_fleet.config.indicators.max', 'Max')}
+            value={settings.settlementIndicatorRanges.fuelPerKm}
+            disabled={saving}
+            onChange={(next) =>
+              setSettings((current) => ({
+                ...current,
+                settlementIndicatorRanges: {
+                  ...current.settlementIndicatorRanges,
+                  fuelPerKm: next,
+                },
+              }))
+            }
+          />
+          <SettlementIndicatorRangeFields
+            label={t('taxi_fleet.config.indicators.revenuePerKm', 'Revenue (PLN/km)')}
+            minLabel={t('taxi_fleet.config.indicators.min', 'Min')}
+            maxLabel={t('taxi_fleet.config.indicators.max', 'Max')}
+            value={settings.settlementIndicatorRanges.revenuePerKm}
+            disabled={saving}
+            onChange={(next) =>
+              setSettings((current) => ({
+                ...current,
+                settlementIndicatorRanges: {
+                  ...current.settlementIndicatorRanges,
+                  revenuePerKm: next,
+                },
+              }))
+            }
+          />
         </div>
       </SettingsSection>
 

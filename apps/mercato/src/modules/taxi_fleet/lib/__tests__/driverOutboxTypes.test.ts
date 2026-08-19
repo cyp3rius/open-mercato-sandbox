@@ -7,7 +7,8 @@ describe('driver outbox contract', () => {
       'trip.create',
       'trip.update',
       'location.batch',
+      'expense.create',
     ]
-    expect(new Set(types).size).toBe(4)
+    expect(new Set(types).size).toBe(5)
   })
 })

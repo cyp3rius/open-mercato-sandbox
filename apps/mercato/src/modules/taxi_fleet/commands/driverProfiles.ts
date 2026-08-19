@@ -12,6 +12,8 @@ import {
   type DriverProfileCreateInput,
   type DriverProfileUpdateInput,
 } from '../data/validators'
+import { resolveDriverPayoutPercent } from '../lib/driverPayoutPercent'
+import { loadTaxiFleetOrganizationSettings } from '../lib/taxiFleetOrganizationSettings'
 import { ensureOrganizationScope, ensureTenantScope, numericToString } from './shared'
 
 const createDriverProfileCommand: CommandHandler<DriverProfileCreateInput, { profileId: string }> = {
@@ -32,12 +34,20 @@ const createDriverProfileCommand: CommandHandler<DriverProfileCreateInput, { pro
       const { translate } = await resolveTranslations()
       throw new CrudHttpError(409, { error: translate('taxi_fleet.errors.profileExists', 'Driver profile already exists.') })
     }
+    const settings = await loadTaxiFleetOrganizationSettings(em, {
+      tenantId: parsed.tenantId,
+      organizationId: parsed.organizationId,
+    })
+    const payoutPercent = resolveDriverPayoutPercent({
+      profilePayoutPercent: parsed.payoutPercent,
+      defaultPayoutPercent: settings.defaultPayoutPercent,
+    })
     const now = new Date()
     const record = em.create(TaxiFleetDriverProfile, {
       tenantId: parsed.tenantId,
       organizationId: parsed.organizationId,
       teamMemberId: parsed.teamMemberId,
-      payoutPercent: numericToString(parsed.payoutPercent),
+      payoutPercent: numericToString(payoutPercent),
       defaultResourceId: parsed.defaultResourceId ?? null,
       externalAppEnabled: parsed.externalAppEnabled ?? false,
       createdAt: now,

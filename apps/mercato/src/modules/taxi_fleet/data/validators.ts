@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { localizedCustomerEmailTemplateSchema } from '../lib/taxiFleetSettings'
+import { localizedCustomerEmailTemplateSchema, settlementIndicatorRangesSchema } from '../lib/taxiFleetSettings'
 import { pricingConfigSchema } from '../lib/pricing/pricingConfigSchema'
 import { tripStatusDictionarySchema } from '../lib/tripStatuses'
 
@@ -13,9 +13,13 @@ export const tripStatusSchema = z.string().trim().min(1).max(64)
 export const tripCancelSourceSchema = z.enum(['customer', 'operator', 'driver'])
 export const tripPaymentMethodSchema = z.enum(['paypal', 'cash', 'transfer', 'other'])
 export const costTypeSchema = z.enum(['fuel', 'toll', 'parking', 'maintenance', 'other'])
+export const expenseVatRateSchema = z.coerce.number().refine((value) => value === 8 || value === 23)
+export const tripPlatformSchema = z.enum(['uber', 'bolt', 'free'])
 export const incomeDocumentTypeSchema = z.enum(['receipt', 'invoice'])
 export const financialEntryKindSchema = z.enum(['income', 'expense'])
 export const settlementStatusSchema = z.enum(['draft', 'submitted', 'approved', 'paid'])
+
+export const settlementClosureTypeSchema = z.enum(['payout', 'cash_return'])
 
 export const driverProfileCreateSchema = z.object({
   tenantId: uuid,
@@ -211,6 +215,7 @@ export const tripCreateSchema = z
     resourceId: uuid,
     assignmentId: optionalUuid,
     tripType: tripTypeSchema,
+    platform: tripPlatformSchema.optional().nullable(),
     startedAt: z.coerce.date().optional().nullable(),
     endedAt: z.coerce.date().optional().nullable(),
     odometerStart: z.coerce.number().optional().nullable(),
@@ -252,6 +257,7 @@ export const tripUpdateSchema = z
     resourceId: uuid.optional(),
     assignmentId: optionalUuid,
     tripType: tripTypeSchema.optional(),
+    platform: tripPlatformSchema.optional().nullable(),
     startedAt: z.coerce.date().optional().nullable(),
     endedAt: z.coerce.date().optional().nullable(),
     odometerStart: z.coerce.number().optional().nullable(),
@@ -335,6 +341,7 @@ const financialEntryBaseSchema = z.object({
   customerEntityId: optionalUuid,
   amount: z.coerce.number().positive(),
   currencyCode: z.string().min(3).max(3).optional().default('PLN'),
+  vatRatePercent: expenseVatRateSchema.optional().default(23),
   documentNumber: z.string().max(120).optional().nullable(),
   occurredAt: z.coerce.date(),
   receiptAttachmentId: optionalUuid,
@@ -390,6 +397,7 @@ export const financialEntryUpdateSchema = z.object({
   customerEntityId: optionalUuid,
   amount: z.coerce.number().positive().optional(),
   currencyCode: z.string().min(3).max(3).optional(),
+  vatRatePercent: expenseVatRateSchema.optional(),
   documentNumber: z.string().max(120).optional().nullable(),
   occurredAt: z.coerce.date().optional(),
   receiptAttachmentId: optionalUuid,
@@ -397,6 +405,18 @@ export const financialEntryUpdateSchema = z.object({
 })
 
 export const financialEntryDeleteSchema = z.object({ id: uuid })
+
+export const driverExpenseCreateSchema = z.object({
+  costType: costTypeSchema,
+  amount: z.coerce.number().positive(),
+  currencyCode: z.string().min(3).max(3).optional().default('PLN'),
+  vatRatePercent: expenseVatRateSchema.optional().default(23),
+  documentNumber: z.string().max(120).optional().nullable(),
+  occurredAt: z.coerce.date().optional(),
+  receiptAttachmentId: optionalUuid,
+  notes: z.string().max(5000).optional().nullable(),
+  tripId: optionalUuid,
+})
 
 export const settlementGenerateSchema = z.object({
   tenantId: uuid,
@@ -408,10 +428,44 @@ export const settlementGenerateSchema = z.object({
 export const settlementUpdateSchema = z.object({
   id: uuid,
   status: settlementStatusSchema.optional(),
+  closureType: settlementClosureTypeSchema.optional(),
+  closureAmount: z.coerce.number().min(0).optional(),
+  totalDistanceKm: z.coerce.number().min(0).optional(),
+  recalculateDistance: z.boolean().optional(),
+  recalculateSettlement: z.boolean().optional(),
+  cashCollected: z.coerce.number().min(0).optional(),
+  bonusAmount: z.coerce.number().min(0).optional(),
+  compensationAmount: z.coerce.number().min(0).optional(),
+  airportA4Amount: z.coerce.number().min(0).optional(),
+  excludedCosts: z
+    .array(
+      z.object({
+        financialEntryId: uuid,
+        comment: z.string().min(1).max(2000),
+      }),
+    )
+    .optional(),
 })
 
 export const settlementSubmitSchema = z.object({
   weekStart: dateOnly,
+})
+
+export const monthlySettlementStatusSchema = z.enum(['draft', 'approved', 'closed'])
+
+export const monthlySettlementGenerateSchema = z.object({
+  tenantId: uuid,
+  organizationId: uuid,
+  monthStart: dateOnly.refine((value) => value.endsWith('-01'), {
+    message: 'taxi_fleet.monthlySettlements.errors.monthStartInvalid',
+  }),
+})
+
+export const monthlySettlementUpdateSchema = z.object({
+  id: uuid,
+  status: monthlySettlementStatusSchema.optional(),
+  notes: z.string().max(20000).optional().nullable(),
+  recalculateSettlement: z.boolean().optional(),
 })
 
 export const suggestDriversQuerySchema = z.object({
@@ -449,6 +503,7 @@ export const taxiFleetSettingsPutSchema = z.object({
     trip_cancelled: localizedCustomerEmailTemplateSchema,
   }),
   pricing: pricingConfigSchema.optional(),
+  settlementIndicatorRanges: settlementIndicatorRangesSchema.optional(),
 })
 
 export type TaxiFleetSettingsPutInput = z.infer<typeof taxiFleetSettingsPutSchema>
@@ -467,6 +522,7 @@ export type TripMarkPaidInput = z.infer<typeof tripMarkPaidSchema>
 export type TripCostLineCreateInput = z.infer<typeof tripCostLineCreateSchema>
 export type FinancialEntryCreateInput = z.infer<typeof financialEntryCreateSchema>
 export type FinancialEntryUpdateInput = z.infer<typeof financialEntryUpdateSchema>
+export type DriverExpenseCreateInput = z.infer<typeof driverExpenseCreateSchema>
 export type SettlementGenerateInput = z.infer<typeof settlementGenerateSchema>
 
 const routeLocaleSchema = z.enum(['pl', 'en']).default('pl')
@@ -539,3 +595,5 @@ export const quoteResponseSchema = z.object({
 export type QuoteBodyInput = z.infer<typeof quoteBodySchema>
 export type SettlementUpdateInput = z.infer<typeof settlementUpdateSchema>
 export type SettlementSubmitInput = z.infer<typeof settlementSubmitSchema>
+export type MonthlySettlementGenerateInput = z.infer<typeof monthlySettlementGenerateSchema>
+export type MonthlySettlementUpdateInput = z.infer<typeof monthlySettlementUpdateSchema>

@@ -3,7 +3,7 @@ import { deleteReceiptBlob, getReceiptBlob } from './tripDrafts'
 export type DriverOutboxItem = {
   id: string
   clientMutationId: string
-  type: 'assignment.shift' | 'trip.create' | 'trip.update' | 'location.batch'
+  type: 'assignment.shift' | 'trip.create' | 'trip.update' | 'location.batch' | 'expense.create'
   payload: Record<string, unknown>
   createdAt: string
   retryCount: number
@@ -128,6 +128,15 @@ export async function appendPendingTripToCache(trip: Record<string, unknown>): P
   await cacheDriverJson('driver/trips', { items })
 }
 
+export async function appendPendingExpenseToCache(expense: Record<string, unknown>): Promise<void> {
+  const cached = await readCachedDriverJson<Record<string, unknown>[] | { items?: Record<string, unknown>[] }>(
+    'driver/expenses',
+  )
+  const items = Array.isArray(cached) ? [...cached] : Array.isArray(cached?.items) ? [...cached.items] : []
+  items.unshift({ ...expense, pending: true })
+  await cacheDriverJson('driver/expenses', items)
+}
+
 function dataUrlToBlob(dataBase64: string, mime: string): Blob {
   const raw = dataBase64.includes(',') ? dataBase64.split(',')[1] ?? '' : dataBase64
   const binary = atob(raw)
@@ -191,6 +200,14 @@ export async function flushDriverOutbox(): Promise<void> {
           body: JSON.stringify({ ...payload, clientMutationId: item.clientMutationId }),
         })
         if (!res.ok) throw new Error(`trip.update ${res.status}`)
+      } else if (item.type === 'expense.create') {
+        const payload = await resolveReceiptAttachment(item.payload)
+        const res = await fetch('/api/taxi_fleet/driver/expenses', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ...payload, clientMutationId: item.clientMutationId }),
+        })
+        if (!res.ok) throw new Error(`expense.create ${res.status}`)
       } else if (item.type === 'location.batch') {
         const res = await fetch('/api/taxi_fleet/driver/location', {
           method: 'POST',

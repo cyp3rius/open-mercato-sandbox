@@ -85,6 +85,7 @@ export async function saveTaxiFleetOrganizationSettings(
         paypal: normalized.paypal,
         calendar: normalized.calendar,
         customerEmails: normalized.customerEmails,
+        settlementIndicatorRanges: normalized.settlementIndicatorRanges,
       },
       createdAt: now,
       updatedAt: now,
@@ -100,6 +101,7 @@ export async function saveTaxiFleetOrganizationSettings(
       paypal: normalized.paypal,
       calendar: normalized.calendar,
       customerEmails: normalized.customerEmails,
+      settlementIndicatorRanges: normalized.settlementIndicatorRanges,
     }
     row.updatedAt = now
   }
