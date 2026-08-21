@@ -28,6 +28,7 @@ import {
 } from '../lib/settlementRecalculation'
 import { isWeeklySettlementLocked } from '../lib/settlementLock'
 import { isAllowedWeeklySettlementStatusTransition } from '../lib/settlementStatusTransitions'
+import { assertWeeklySettlementDocumentNumbersComplete } from '../lib/settlementDocumentNumberGate'
 import { ensureOrganizationScope, ensureTenantScope, numericToString } from './shared'
 
 async function emitSettlementEvent(
@@ -155,6 +156,24 @@ const updateSettlementCommand: CommandHandler<SettlementUpdateInput, { settlemen
             'This status change is not allowed.',
           ),
         })
+      }
+      if (parsed.status === 'approved') {
+        const gate = await assertWeeklySettlementDocumentNumbersComplete(em, {
+          tenantId: row.tenantId,
+          organizationId: row.organizationId,
+          teamMemberId: row.teamMemberId,
+          weekStart: row.weekStart,
+        })
+        if (!gate.ok) {
+          const { translate } = await resolveTranslations()
+          throw new CrudHttpError(409, {
+            error: translate(
+              'taxi_fleet.errors.settlementMissingDocumentNumbers',
+              'Cannot approve settlement: some trips are missing receipt document numbers.',
+            ),
+            details: { missingTripIds: gate.missingTripIds },
+          })
+        }
       }
     }
 

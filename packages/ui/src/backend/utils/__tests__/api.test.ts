@@ -68,6 +68,48 @@ describe('apiFetch', () => {
       'Insufficient permissions. Redirecting to login…',
       'warning',
     )
+    jest.advanceTimersByTime(60)
+    expect(window.location.href).toContain('/login?')
+    expect(window.location.href).not.toContain('/driver/login')
+  })
+
+  it('redirects forbidden driver routes to driver login, not /login or /backend', async () => {
+    window.history.pushState({}, '', '/driver/trips')
+    ;(window as unknown as Record<string, unknown>).__omOriginalFetch = jest.fn(async () =>
+      createMockResponse(403, {
+        error: 'Forbidden',
+        requiredFeatures: ['taxi_fleet.driver'],
+      }),
+    )
+
+    await expect(apiFetch('/api/taxi_fleet/driver/me')).rejects.toBeInstanceOf(ForbiddenError)
+    expect(flash).toHaveBeenCalledWith(
+      'Insufficient permissions. Redirecting to login…',
+      'warning',
+    )
+    jest.advanceTimersByTime(60)
+    expect(window.location.href).toContain('/driver/login?')
+    expect(window.location.href).toContain('redirect=%2Fdriver%2Ftrips')
+    expect(window.location.href).not.toMatch(/\/login\?/)
+    expect(window.location.href).not.toContain('/backend')
+  })
+
+  it('throws UnauthorizedError for 401 on driver routes via session refresh (not /login)', async () => {
+    window.history.pushState({}, '', '/driver/expenses')
+    ;(window as unknown as Record<string, unknown>).__omOriginalFetch = jest.fn(async () =>
+      createMockResponse(401, { error: 'Unauthorized' }),
+    )
+
+    await expect(apiFetch('/api/taxi_fleet/driver/me')).rejects.toBeInstanceOf(UnauthorizedError)
+    expect(flash).toHaveBeenCalledWith(
+      'Session expired. Redirecting to sign in…',
+      'warning',
+    )
+    jest.advanceTimersByTime(20)
+    expect(window.location.href).toContain('/api/auth/session/refresh?redirect=')
+    expect(window.location.href).toContain(encodeURIComponent('/driver/expenses'))
+    expect(window.location.href).not.toContain('/login?')
+    expect(window.location.href).not.toContain('/backend')
   })
 
   it('throws ForbiddenError when ACL hints are missing', async () => {

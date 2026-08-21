@@ -339,7 +339,7 @@ const financialEntryBaseSchema = z.object({
   customerPersonId: optionalUuid,
   customerCompanyId: optionalUuid,
   customerEntityId: optionalUuid,
-  amount: z.coerce.number().positive(),
+  amount: z.coerce.number().min(0),
   currencyCode: z.string().min(3).max(3).optional().default('PLN'),
   vatRatePercent: expenseVatRateSchema.optional().default(23),
   documentNumber: z.string().max(120).optional().nullable(),
@@ -408,7 +408,10 @@ export const financialEntryDeleteSchema = z.object({ id: uuid })
 
 export const driverExpenseCreateSchema = z.object({
   costType: costTypeSchema,
-  amount: z.coerce.number().positive(),
+  amount: z.preprocess((value) => {
+    if (value === '' || value === null || value === undefined) return null
+    return value
+  }, z.coerce.number().positive().nullable().optional()),
   currencyCode: z.string().min(3).max(3).optional().default('PLN'),
   vatRatePercent: expenseVatRateSchema.optional().default(23),
   documentNumber: z.string().max(120).optional().nullable(),

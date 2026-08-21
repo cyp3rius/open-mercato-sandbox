@@ -1,4 +1,5 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { after } from 'next/server'
 import { Attachment, AttachmentPartition } from '../data/entities'
 import { OcrService } from './ocrService'
 
@@ -80,10 +81,18 @@ export async function requestOcrProcessing(
     tenantId: attachment.tenantId ?? null,
   }
 
-  setImmediate(() => {
-    const workerEm = typeof (em as any)?.fork === 'function' ? (em as any).fork() : em
+  const run = () => {
+    const workerEm = typeof (em as { fork?: () => EntityManager }).fork === 'function'
+      ? (em as { fork: () => EntityManager }).fork()
+      : em
     processAttachmentOcr(workerEm, payload).catch((error) => {
       console.error(`[attachments.ocr] Background processing error:`, error)
     })
-  })
+  }
+
+  try {
+    after(run)
+  } catch {
+    setImmediate(run)
+  }
 }

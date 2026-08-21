@@ -58,7 +58,7 @@ function SummaryRow({
         {hint ? <div className="text-xs text-muted-foreground/80">{hint}</div> : null}
       </td>
       <td
-        className={`px-3 py-2 text-right tabular-nums ${emphasized ? 'font-semibold' : 'font-medium'} ${valueClassName ?? ''}`}
+        className={`whitespace-nowrap px-3 py-2 text-right tabular-nums ${emphasized ? 'font-semibold' : 'font-medium'} ${valueClassName ?? ''}`}
       >
         {valueNode ?? value}
       </td>

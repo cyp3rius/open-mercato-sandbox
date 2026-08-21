@@ -32,6 +32,10 @@ export const driverGhostActionClass =
 export const driverListRowClass =
   'block rounded-xl border border-[#F1F1F4] bg-white px-4 py-3.5 shadow-[0_3px_4px_0_rgba(0,0,0,0.03)] transition-colors active:bg-[#F9F9F9]'
 
+/** Static list card (no hover / press feedback). */
+export const driverListRowStaticClass =
+  'rounded-xl border border-[#F1F1F4] bg-white px-4 py-3.5 shadow-[0_3px_4px_0_rgba(0,0,0,0.03)]'
+
 export const driverBadgeBaseClass =
   'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium'
 

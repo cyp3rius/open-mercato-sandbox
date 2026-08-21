@@ -6,6 +6,9 @@ import { normalizeTripPlatform, type TaxiFleetTripPlatform } from './tripPlatfor
 import { readTripPaymentType, tripCountsForSettlementRevenue } from './settlementRevenue'
 import type { TripRequestPaymentType } from './tripRequestForm'
 import type { SettlementTripSnapshot } from './settlementTripDistance'
+import { tripRequiresIncomeReceipt } from './tripIncomeReceiptRules'
+
+export { tripRequiresIncomeReceipt } from './tripIncomeReceiptRules'
 
 export type SettlementIncomeReconciliationSummary = {
   missingIncomeReceiptCount: number
@@ -18,15 +21,6 @@ function toNumber(value: string | null | undefined): number {
   if (value == null) return 0
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : 0
-}
-
-export function tripRequiresIncomeReceipt(params: {
-  platform: TaxiFleetTripPlatform | null
-}): boolean {
-  if (params.platform === 'uber' || params.platform === 'bolt' || params.platform === 'free') {
-    return false
-  }
-  return true
 }
 
 export function tripMissingPlatformForRevenue(params: {

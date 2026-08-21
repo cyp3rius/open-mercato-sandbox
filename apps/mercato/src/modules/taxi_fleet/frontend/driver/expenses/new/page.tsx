@@ -56,9 +56,9 @@ export default function DriverExpenseCreatePage() {
   const [busy, setBusy] = React.useState(false)
 
   async function submit() {
-    const parsedAmount = parseNumericValue(amount)
-    if (parsedAmount === null || parsedAmount <= 0) {
-      flash(t('taxi_fleet.driverApp.expenses.amountRequired', 'Enter a cost amount.'), 'error')
+    const parsedAmount = amount.trim() ? parseNumericValue(amount) : null
+    if (amount.trim() && (parsedAmount === null || parsedAmount <= 0)) {
+      flash(t('taxi_fleet.driverApp.expenses.amountInvalid', 'Enter a valid cost amount.'), 'error')
       return
     }
     const occurredAt = fromDateTimeLocalValue(occurredAtLocal)
@@ -87,7 +87,7 @@ export default function DriverExpenseCreatePage() {
           id: `pending:${receiptDraftRecordId}`,
           kind: 'expense',
           costType,
-          amount: parsedAmount.toFixed(2),
+          amount: parsedAmount !== null ? parsedAmount.toFixed(2) : '0.00',
           vatRatePercent: String(vatRatePercent),
           currencyCode: 'PLN',
           documentNumber: documentNumber.trim() || null,
@@ -143,50 +143,6 @@ export default function DriverExpenseCreatePage() {
           </p>
         </div>
 
-        <DriverCostTypePicker value={costType} disabled={busy} onChange={setCostType} />
-
-        <DriverVatRatePicker value={vatRatePercent} disabled={busy} onChange={setVatRatePercent} />
-
-        <div>
-          <label htmlFor="expenseAmount" className={driverLabelClass}>
-            {t('taxi_fleet.driverApp.expenses.amount', 'Amount')}
-          </label>
-          <div className="flex min-w-0 items-stretch">
-            <input
-              id="expenseAmount"
-              type="text"
-              inputMode="decimal"
-              disabled={busy}
-              value={amount}
-              onChange={(event) => setAmount(sanitizePercentTypingInput(event.target.value, 2))}
-              onBlur={() => {
-                const parsed = parseNumericValue(amount)
-                setAmount(parsed === null || parsed < 0 ? '' : parsed.toFixed(2))
-              }}
-              placeholder="0.00"
-              className={`${driverFieldClass} min-w-0 flex-1 rounded-r-none tabular-nums`}
-              autoComplete="off"
-            />
-            <div className="flex min-h-11 shrink-0 items-center rounded-r-md border border-l-0 border-[#DBDFE9] bg-[#F9F9F9] px-3 text-sm font-semibold text-[#78829D]">
-              PLN
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <label htmlFor="expenseOccurredAt" className={driverLabelClass}>
-            {t('taxi_fleet.driverApp.expenses.occurredAt', 'When')}
-          </label>
-          <input
-            id="expenseOccurredAt"
-            type="datetime-local"
-            disabled={busy}
-            value={occurredAtLocal}
-            onChange={(event) => setOccurredAtLocal(event.target.value)}
-            className={driverFieldClass}
-          />
-        </div>
-
         <DriverReceiptFields
           documentNumber={documentNumber}
           attachmentId={receiptAttachmentId}
@@ -215,6 +171,53 @@ export default function DriverExpenseCreatePage() {
             setReceiptAttachmentName(next.fileName)
           }}
         />
+
+        <DriverCostTypePicker value={costType} disabled={busy} onChange={setCostType} />
+
+        <DriverVatRatePicker value={vatRatePercent} disabled={busy} onChange={setVatRatePercent} />
+
+        <div>
+          <label htmlFor="expenseAmount" className={driverLabelClass}>
+            {t('taxi_fleet.driverApp.expenses.amount', 'Amount')}
+          </label>
+          <div className="flex min-w-0 items-stretch">
+            <input
+              id="expenseAmount"
+              type="text"
+              inputMode="decimal"
+              disabled={busy}
+              value={amount}
+              onChange={(event) => setAmount(sanitizePercentTypingInput(event.target.value, 2))}
+              onBlur={() => {
+                if (!amount.trim()) {
+                  setAmount('')
+                  return
+                }
+                const parsed = parseNumericValue(amount)
+                setAmount(parsed === null || parsed < 0 ? '' : parsed.toFixed(2))
+              }}
+              className={`${driverFieldClass} min-w-0 flex-1 rounded-r-none tabular-nums`}
+              autoComplete="off"
+            />
+            <div className="flex min-h-11 shrink-0 items-center rounded-r-md border border-l-0 border-[#DBDFE9] bg-[#F9F9F9] px-3 text-sm font-semibold text-[#78829D]">
+              PLN
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="expenseOccurredAt" className={driverLabelClass}>
+            {t('taxi_fleet.driverApp.expenses.occurredAt', 'When')}
+          </label>
+          <input
+            id="expenseOccurredAt"
+            type="datetime-local"
+            disabled={busy}
+            value={occurredAtLocal}
+            onChange={(event) => setOccurredAtLocal(event.target.value)}
+            className={driverFieldClass}
+          />
+        </div>
 
         <div>
           <label htmlFor="expenseNotes" className={driverLabelClass}>

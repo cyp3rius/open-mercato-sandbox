@@ -13,6 +13,11 @@ import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
 import { TAXI_FLEET_FINANCIAL_ENTRY_ENTITY_ID } from '@/modules/taxi_fleet/lib/financialEntryEntity'
+import {
+  createPendingReceiptExtraction,
+  scheduleReceiptExtractionProcessing,
+} from '@/modules/taxi_fleet/lib/receiptExtractionPipeline'
+import { TAXI_FLEET_DRIVER_RECEIPTS_PARTITION } from '@/modules/taxi_fleet/lib/receiptPartition'
 
 export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['taxi_fleet.driver'] },
@@ -73,6 +78,11 @@ export async function POST(req: Request) {
     const buf = Buffer.from(await file.arrayBuffer())
     const safeName = String(file.name || 'receipt.jpg').replace(/[^a-zA-Z0-9._-]/g, '_')
 
+    const { ensureTaxiFleetDriverReceiptsPartition } = await import(
+      '@/modules/taxi_fleet/lib/receiptPartition'
+    )
+    await ensureTaxiFleetDriverReceiptsPartition(em)
+
     const { item } = await createStoredAttachment({
       em,
       dataEngine,
@@ -83,9 +93,30 @@ export async function POST(req: Request) {
       fileName: safeName,
       mimeType: mime,
       tags: ['taxi_fleet', 'driver_receipt'],
+      partitionOverride: TAXI_FLEET_DRIVER_RECEIPTS_PARTITION,
     })
 
-    return NextResponse.json({ id: item.id, fileName: item.fileName, url: item.url }, { status: 201 })
+    const extraction = await createPendingReceiptExtraction(em, {
+      tenantId,
+      organizationId: orgId,
+      attachmentId: item.id,
+    })
+    scheduleReceiptExtractionProcessing(em, extraction.id)
+    console.info('[taxi_fleet.driver.attachments] upload accepted', {
+      attachmentId: item.id,
+      extractionId: extraction.id,
+      recordId,
+    })
+
+    return NextResponse.json(
+      {
+        id: item.id,
+        fileName: item.fileName,
+        url: item.url,
+        extractionId: extraction.id,
+      },
+      { status: 201 },
+    )
   } catch (err) {
     if (err instanceof CrudHttpError) return NextResponse.json(err.body, { status: err.status })
     if (err instanceof CreateStoredAttachmentError) {

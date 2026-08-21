@@ -2,6 +2,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import type { ModuleSetupConfig } from '@open-mercato/shared/modules/setup'
 import { Role } from '@open-mercato/core/modules/auth/data/entities'
 import { syncTaxiVehicleCustomFieldScope } from './lib/vehicleResourceTypes'
+import { ensureTaxiFleetDriverReceiptsPartition } from './lib/receiptPartition'
 
 const DRIVER_ROLE_NAME = 'driver'
 
@@ -20,10 +21,12 @@ async function ensureDriverRole(em: EntityManager, tenantId: string): Promise<vo
 export const setup: ModuleSetupConfig = {
   async onTenantCreated({ em, tenantId }) {
     await ensureDriverRole(em as EntityManager, tenantId)
+    await ensureTaxiFleetDriverReceiptsPartition(em as EntityManager)
   },
 
   seedDefaults: async (ctx) => {
     await ensureDriverRole(ctx.em as EntityManager, ctx.tenantId)
+    await ensureTaxiFleetDriverReceiptsPartition(ctx.em as EntityManager)
     await syncTaxiVehicleCustomFieldScope(ctx.em, {
       tenantId: ctx.tenantId,
       organizationId: ctx.organizationId,

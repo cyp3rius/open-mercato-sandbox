@@ -21,6 +21,7 @@ import {
   resolveFinancialEntryWeekStart,
 } from '../lib/settlementWeekScope'
 import { ensureOrganizationScope, ensureTenantScope, numericToString } from './shared'
+import { syncFinancialEntryDocumentDuplicates } from '../lib/documentDuplicates'
 
 const createFinancialEntryCommand: CommandHandler<FinancialEntryCreateInput, { entryId: string }> = {
   id: 'taxi_fleet.financial_entries.create',
@@ -71,6 +72,7 @@ const createFinancialEntryCommand: CommandHandler<FinancialEntryCreateInput, { e
       deletedAt: null,
     })
     await em.persistAndFlush(record)
+    await syncFinancialEntryDocumentDuplicates(em, record)
     await recalculateWeeklySettlementsForFinancialEntry(em, record)
     const eventBus = ctx.container.resolve('eventBus') as { emitEvent: (event: string, data: unknown) => Promise<void> }
     await eventBus.emitEvent('taxi_fleet.financial_entry.created', {
@@ -137,6 +139,7 @@ const updateFinancialEntryCommand: CommandHandler<FinancialEntryUpdateInput, { e
     if (parsed.notes !== undefined) row.notes = parsed.notes
     row.updatedAt = new Date()
     await em.flush()
+    await syncFinancialEntryDocumentDuplicates(em, row)
     await recalculateWeeklySettlementsForFinancialEntry(em, row, previousWeekStart)
     return { entryId: row.id }
   },

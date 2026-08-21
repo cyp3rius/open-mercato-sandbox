@@ -24,6 +24,7 @@ import {
   tripFormValuesToUpdatePayload,
 } from '../../../../components/tripFormConfig'
 import { TripCrudForm } from '../../../../components/TripCrudForm'
+import { TripReceiptOcrPanel } from '../../../../components/TripReceiptOcrPanel'
 import {
   tripDetailActionsForStatus,
   tripDetailAllowsDriverEdit,
@@ -289,6 +290,7 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
               void load()
             }}
           />
+          <TripReceiptOcrPanel tripId={row.id} canManage={canManageTrips} />
           {suggestions.length > 0 ? (
             <section className="mt-6 space-y-3 rounded-lg border bg-card px-4 py-3">
               <h2 className="text-sm font-medium">{t('taxi_fleet.trips.suggestedDrivers', 'Suggested drivers')}</h2>

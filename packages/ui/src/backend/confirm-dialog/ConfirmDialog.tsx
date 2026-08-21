@@ -26,6 +26,7 @@ export type ConfirmDialogProps = {
   variant?: "default" | "destructive"
   loading?: boolean
   trigger?: React.ReactNode
+  contentClassName?: string
 }
 
 export function ConfirmDialog({
@@ -40,6 +41,7 @@ export function ConfirmDialog({
   variant = "default",
   loading = false,
   trigger,
+  contentClassName,
 }: ConfirmDialogProps) {
   const t = useT()
   const [internalOpen, setInternalOpen] = React.useState(false)
@@ -116,6 +118,7 @@ export function ConfirmDialog({
         </AlertDialogTrigger>
       ) : null}
       <AlertDialogContent
+        className={contentClassName}
         onEscapeKeyDown={(e) => {
           if (loading) e.preventDefault()
         }}

@@ -13,6 +13,7 @@ import { useDriverDefaultLocale } from './useDriverDefaultLocale'
 import { useDriverOnlineStatus } from './useDriverOnlineStatus'
 import { useDriverGpsStatus } from './useDriverGpsStatus'
 import { useDriverPwa } from './useDriverPwa'
+import { useDriverForcedLightTheme } from './useDriverForcedLightTheme'
 import { flushDriverOutbox, getPendingOutboxCount } from '../../lib/driverOffline/outbox'
 import { getActiveLiveTripDraft } from '../../lib/driverOffline/tripDrafts'
 import { useDriverTracking } from './useDriverTracking'
@@ -97,6 +98,7 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
   const pathname = usePathname()
   const router = useRouter()
   useDriverDefaultLocale()
+  useDriverForcedLightTheme()
   const online = useDriverOnlineStatus()
   const gpsStatus = useDriverGpsStatus()
   const { canInstall, install } = useDriverPwa()

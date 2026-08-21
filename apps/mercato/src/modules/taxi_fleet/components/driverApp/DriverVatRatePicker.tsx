@@ -35,10 +35,10 @@ export function DriverVatRatePicker({ value, disabled = false, onChange }: Props
               aria-checked={selected}
               disabled={disabled}
               onClick={() => onChange(rate)}
-              className={`h-auto min-h-11 rounded-md border px-2 py-2 text-sm shadow-none ${
+              className={`h-auto min-h-11 rounded-md border px-2 py-2 text-sm shadow-none transition-colors ${
                 selected
-                  ? 'border-[#1B84FF] bg-[#EFF6FF] font-semibold text-[#1B84FF]'
-                  : 'border-[#DBDFE9] bg-white font-medium text-[#4B5675]'
+                  ? 'border-[#1B84FF] bg-[#EFF6FF] font-semibold text-[#1B84FF] hover:bg-[#EFF6FF]'
+                  : 'border-[#DBDFE9] bg-white font-medium text-[#4B5675] hover:bg-[#F9F9F9] hover:text-[#071437]'
               }`}
             >
               {t(`taxi_fleet.driverApp.expenses.vatRates.${rate}`, `${rate}%`)}

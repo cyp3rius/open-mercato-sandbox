@@ -10,6 +10,8 @@ const events = [
   { id: 'taxi_fleet.trip.approved', label: 'Trip approved', entity: 'trip', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.trip.cancelled', label: 'Trip cancelled', entity: 'trip', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.financial_entry.created', label: 'Financial entry created', entity: 'financial_entry', category: 'crud', persistent: true },
+  { id: 'taxi_fleet.receipt_extraction.completed', label: 'Receipt OCR completed', entity: 'receipt_extraction', category: 'lifecycle', persistent: true },
+  { id: 'taxi_fleet.receipt_extraction.needs_review', label: 'Receipt OCR needs review', entity: 'receipt_extraction', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.settlement.submitted', label: 'Weekly settlement submitted', entity: 'settlement', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.settlement.approved', label: 'Weekly settlement approved', entity: 'settlement', category: 'lifecycle', persistent: true },
 ] as const

@@ -69,6 +69,23 @@ function isStaffLoginPath(pathname: string): boolean {
   return false
 }
 
+function isDriverAppPath(pathname: string): boolean {
+  return pathname === '/driver' || pathname.startsWith('/driver/')
+}
+
+function buildStaffLoginHref(params: {
+  pathname: string
+  search: string
+  query?: string
+}): string {
+  const current = `${params.pathname}${params.search}`
+  const loginBase = isDriverAppPath(params.pathname) ? '/driver/login' : '/login'
+  if (params.query) {
+    return `${loginBase}?${params.query}&redirect=${encodeURIComponent(current)}`
+  }
+  return `${loginBase}?redirect=${encodeURIComponent(current)}`
+}
+
 function resolveRequestUrl(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input
   if (input instanceof URL) return input.href
@@ -98,7 +115,8 @@ export function redirectToForbiddenLogin(options?: { requiredRoles?: string[] | 
   // Portal routes have their own customer auth — never redirect to staff login
   if (/\/[^/]+\/portal(\/|$)/.test(window.location.pathname)) return
   try {
-    const current = window.location.pathname + window.location.search
+    const pathname = window.location.pathname
+    const search = window.location.search
     const features = options?.requiredFeatures?.filter(Boolean) ?? []
     const roles = options?.requiredRoles?.filter(Boolean) ?? []
     const fallbackRoles = DEFAULT_FORBIDDEN_ROLES.filter(Boolean)
@@ -108,9 +126,7 @@ export function redirectToForbiddenLogin(options?: { requiredRoles?: string[] | 
       : effectiveRoles.length
         ? `requireRole=${encodeURIComponent(effectiveRoles.map(String).join(','))}`
         : ''
-    const url = query
-      ? `/login?${query}&redirect=${encodeURIComponent(current)}`
-      : `/login?redirect=${encodeURIComponent(current)}`
+    const url = buildStaffLoginHref({ pathname, search, query: query || undefined })
     flash('Insufficient permissions. Redirecting to login…', 'warning')
     setTimeout(() => { window.location.href = url }, 60)
   } catch {

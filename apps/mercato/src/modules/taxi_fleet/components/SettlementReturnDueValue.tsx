@@ -13,7 +13,7 @@ export function SettlementReturnDueValue({ amount, align = 'right' }: Settlement
   const justifyClass = align === 'right' ? 'justify-end' : 'justify-start'
 
   return (
-    <div className={`flex tabular-nums ${justifyClass}`}>
+    <div className={`flex whitespace-nowrap tabular-nums ${justifyClass}`}>
       <span className="inline-flex items-center gap-2">
         {hasReturn ? (
           <span

@@ -18,6 +18,7 @@ export type ConfirmDialogOptions = {
   confirmText?: string | false;
   cancelText?: string | false;
   variant?: "default" | "destructive";
+  contentClassName?: string;
 };
 
 export type UseConfirmDialogReturn = {
@@ -126,6 +127,7 @@ export function useConfirmDialog(): UseConfirmDialogReturn {
           cancelText={options.cancelText}
           variant={options.variant}
           loading={loading}
+          contentClassName={options.contentClassName}
         />
       </>
     ),

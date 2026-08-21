@@ -1,5 +1,13 @@
 import type { TaxiFleetFinancialEntry } from '../data/entities'
 import type { DriverExpenseCreateInput } from '../data/validators'
+import type { ReceiptOcrWarning, ReceiptOcrWarningCode } from './receiptExtractionRules'
+import { RECEIPT_OCR_WARNING_CODES } from './receiptExtractionRules'
+
+export type DriverExpenseWarning = {
+  code: ReceiptOcrWarningCode | 'document_duplicate'
+  field?: string | null
+  message?: string | null
+}
 
 export type DriverExpenseListItem = {
   id: string
@@ -10,13 +18,65 @@ export type DriverExpenseListItem = {
   currencyCode: string
   documentNumber: string | null
   occurredAt: string | null
+  createdAt: string | null
   notes: string | null
   tripId: string | null
   receiptAttachmentId: string | null
+  isDocumentDuplicate: boolean
+  ocrStatus: string | null
+  warnings: DriverExpenseWarning[]
+  canDelete: boolean
   pending?: boolean
 }
 
-export function serializeDriverExpense(row: TaxiFleetFinancialEntry): DriverExpenseListItem {
+export type DriverExpenseSortField = 'createdAt' | 'occurredAt'
+
+const WARNING_CODE_SET = new Set<string>(RECEIPT_OCR_WARNING_CODES)
+
+export function parseDriverExpenseWarnings(
+  raw: Array<Record<string, unknown>> | ReceiptOcrWarning[] | null | undefined,
+): DriverExpenseWarning[] {
+  if (!Array.isArray(raw)) return []
+  const out: DriverExpenseWarning[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const code = typeof item.code === 'string' ? item.code : ''
+    if (!WARNING_CODE_SET.has(code) && code !== 'document_duplicate') continue
+    out.push({
+      code: code as DriverExpenseWarning['code'],
+      field: typeof item.field === 'string' ? item.field : null,
+      message: typeof item.message === 'string' ? item.message : null,
+    })
+  }
+  return out
+}
+
+export function driverExpenseCanDelete(params: {
+  isDocumentDuplicate?: boolean | null
+  warnings?: DriverExpenseWarning[] | null
+  ocrStatus?: string | null
+}): boolean {
+  if (params.isDocumentDuplicate) return true
+  if (Array.isArray(params.warnings) && params.warnings.length > 0) return true
+  if (params.ocrStatus === 'needs_review' || params.ocrStatus === 'failed') return true
+  return false
+}
+
+export function serializeDriverExpense(
+  row: TaxiFleetFinancialEntry,
+  extras?: {
+    warnings?: DriverExpenseWarning[]
+    ocrStatus?: string | null
+  },
+): DriverExpenseListItem {
+  const baseWarnings = extras?.warnings ?? []
+  const ocrStatus = extras?.ocrStatus ?? null
+  const isDocumentDuplicate = Boolean(row.isDocumentDuplicate)
+  const warnings =
+    isDocumentDuplicate && !baseWarnings.some((warning) => warning.code === 'document_duplicate')
+      ? [...baseWarnings, { code: 'document_duplicate' as const }]
+      : baseWarnings
+
   return {
     id: row.id,
     kind: 'expense',
@@ -26,9 +86,18 @@ export function serializeDriverExpense(row: TaxiFleetFinancialEntry): DriverExpe
     currencyCode: row.currencyCode,
     documentNumber: row.documentNumber ?? null,
     occurredAt: row.occurredAt ? row.occurredAt.toISOString() : null,
+    createdAt: row.createdAt ? row.createdAt.toISOString() : null,
     notes: row.notes ?? null,
     tripId: row.tripId ?? null,
     receiptAttachmentId: row.receiptAttachmentId ?? null,
+    isDocumentDuplicate,
+    ocrStatus,
+    warnings,
+    canDelete: driverExpenseCanDelete({
+      isDocumentDuplicate,
+      warnings,
+      ocrStatus,
+    }),
   }
 }
 
@@ -42,7 +111,7 @@ export function mapDriverExpenseToCreateInput(
     teamMemberId: scope.teamMemberId,
     kind: 'expense' as const,
     costType: parsed.costType,
-    amount: parsed.amount,
+    amount: parsed.amount ?? 0,
     vatRatePercent: parsed.vatRatePercent ?? 23,
     currencyCode: parsed.currencyCode ?? 'PLN',
     documentNumber: parsed.documentNumber ?? null,
@@ -51,4 +120,8 @@ export function mapDriverExpenseToCreateInput(
     notes: parsed.notes ?? null,
     tripId: parsed.tripId ?? null,
   }
+}
+
+export function resolveDriverExpenseSortField(raw: string | null): DriverExpenseSortField {
+  return raw === 'createdAt' ? 'createdAt' : 'occurredAt'
 }

@@ -22,7 +22,7 @@ export function SettlementIndicatorLedValue({ value, tone }: SettlementIndicator
         className={`size-2 shrink-0 rounded-full ${tone ? toneClass[tone] : neutralLedClass}`}
         aria-hidden
       />
-      <span className="text-lg font-semibold tabular-nums">{value}</span>
+      <span className="whitespace-nowrap text-lg font-semibold tabular-nums">{value}</span>
     </div>
   )
 }

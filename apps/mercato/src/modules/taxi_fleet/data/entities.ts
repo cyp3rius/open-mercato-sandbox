@@ -278,6 +278,16 @@ export class TaxiFleetFinancialEntry {
   @Property({ name: 'document_number', type: 'text', nullable: true })
   documentNumber?: string | null
 
+  /** Seller/document NIP used for duplicate detection (from OCR when available). */
+  @Property({ name: 'document_nip', type: 'text', nullable: true })
+  documentNip?: string | null
+
+  @Property({ name: 'is_document_duplicate', type: 'boolean', default: false })
+  isDocumentDuplicate: boolean = false
+
+  @Property({ name: 'duplicate_of_entry_id', type: 'uuid', nullable: true })
+  duplicateOfEntryId?: string | null
+
   @Property({ name: 'occurred_at', type: Date })
   occurredAt!: Date
 
@@ -533,4 +543,90 @@ export class TaxiFleetLocationPing {
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
+}
+
+@Entity({ tableName: 'taxi_fleet_receipt_extractions' })
+@Index({ name: 'taxi_fleet_receipt_extractions_scope_idx', properties: ['tenantId', 'organizationId'] })
+@Index({ name: 'taxi_fleet_receipt_extractions_attachment_idx', properties: ['attachmentId'] })
+@Index({ name: 'taxi_fleet_receipt_extractions_trip_idx', properties: ['tripId'] })
+@Index({ name: 'taxi_fleet_receipt_extractions_entry_idx', properties: ['financialEntryId'] })
+@Index({ name: 'taxi_fleet_receipt_extractions_status_idx', properties: ['status', 'tenantId'] })
+export class TaxiFleetReceiptExtraction {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'attachment_id', type: 'uuid' })
+  attachmentId!: string
+
+  @Property({ name: 'trip_id', type: 'uuid', nullable: true })
+  tripId?: string | null
+
+  @Property({ name: 'financial_entry_id', type: 'uuid', nullable: true })
+  financialEntryId?: string | null
+
+  @Property({ type: 'text', default: 'pending' })
+  status: 'pending' | 'processing' | 'extracted' | 'needs_review' | 'failed' | 'applied' = 'pending'
+
+  @Property({ name: 'driver_document_number', type: 'text', nullable: true })
+  driverDocumentNumber?: string | null
+
+  @Property({ name: 'driver_amount', type: 'numeric', precision: 14, scale: 2, nullable: true })
+  driverAmount?: string | null
+
+  @Property({ name: 'ocr_document_number', type: 'text', nullable: true })
+  ocrDocumentNumber?: string | null
+
+  @Property({ name: 'ocr_gross_amount', type: 'numeric', precision: 14, scale: 2, nullable: true })
+  ocrGrossAmount?: string | null
+
+  @Property({ name: 'ocr_vat_rate_percent', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  ocrVatRatePercent?: string | null
+
+  @Property({ name: 'ocr_buyer_nip', type: 'text', nullable: true })
+  ocrBuyerNip?: string | null
+
+  @Property({ name: 'ocr_seller_nip', type: 'text', nullable: true })
+  ocrSellerNip?: string | null
+
+  @Property({ name: 'ocr_occurred_at', type: Date, nullable: true })
+  ocrOccurredAt?: Date | null
+
+  @Property({ type: 'numeric', precision: 4, scale: 3, nullable: true })
+  confidence?: string | null
+
+  @Property({ name: 'raw_text_excerpt', type: 'text', nullable: true })
+  rawTextExcerpt?: string | null
+
+  @Property({ type: 'text', nullable: true })
+  model?: string | null
+
+  @Property({ name: 'warnings_json', type: 'json', nullable: true })
+  warningsJson?: Record<string, unknown>[] | null
+
+  @Property({ name: 'resolved_company_id', type: 'uuid', nullable: true })
+  resolvedCompanyId?: string | null
+
+  @Property({ name: 'applied_document_number', type: 'text', nullable: true })
+  appliedDocumentNumber?: string | null
+
+  @Property({ name: 'error_message', type: 'text', nullable: true })
+  errorMessage?: string | null
+
+  @Property({ name: 'processed_at', type: Date, nullable: true })
+  processedAt?: Date | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
 }

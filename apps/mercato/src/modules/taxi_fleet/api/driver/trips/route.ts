@@ -10,6 +10,10 @@ import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { parseScopedCommandInput } from '@open-mercato/shared/lib/api/scoped'
 import { findOneWithDecryption, findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetTrip } from '@/modules/taxi_fleet/data/entities'
+import { maybeEnsureCompanyForExtraction } from '@/modules/taxi_fleet/lib/receiptExtractionCompany'
+import { linkReceiptExtractionToTrip } from '@/modules/taxi_fleet/lib/receiptExtractionPipeline'
+import { tripRequiresIncomeReceipt } from '@/modules/taxi_fleet/lib/tripIncomeReceiptRules'
+import { normalizeTripPlatform } from '@/modules/taxi_fleet/lib/tripPlatforms'
 import { tripCreateSchema, tripUpdateSchema } from '@/modules/taxi_fleet/data/validators'
 import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
 import { resolveDriverTripUpdateInput } from '@/modules/taxi_fleet/lib/driverTripExecution'
@@ -69,6 +73,28 @@ export async function POST(req: Request) {
     const receipt = driverTripReceiptSchema.parse(body)
     const receiptDocumentNumber = receipt.receiptDocumentNumber?.trim() || null
     const receiptAttachmentId = receipt.receiptAttachmentId || null
+
+    const platform = normalizeTripPlatform(
+      body && typeof body === 'object' && 'platform' in body ? (body as { platform?: unknown }).platform : null,
+    )
+    const revenueAmountPreview =
+      typeof (body as { revenueAmount?: unknown }).revenueAmount === 'number'
+        ? (body as { revenueAmount: number }).revenueAmount
+        : Number((body as { revenueAmount?: unknown }).revenueAmount ?? 0)
+    if (
+      tripRequiresIncomeReceipt({ platform }) &&
+      Number.isFinite(revenueAmountPreview) &&
+      revenueAmountPreview > 0 &&
+      !receiptAttachmentId
+    ) {
+      throw new CrudHttpError(400, {
+        error: translate(
+          'taxi_fleet.driverApp.receipt.photoRequired',
+          'Receipt photo is required for this trip.',
+        ),
+      })
+    }
+
     const existingMetadata =
       body && typeof body === 'object' && body.metadata && typeof body.metadata === 'object'
         ? (body.metadata as Record<string, unknown>)
@@ -106,13 +132,14 @@ export async function POST(req: Request) {
     const hasCustomerLink = Boolean(
       scoped.customerEntityId || scoped.customerPersonId || scoped.customerCompanyId,
     )
+    let financialEntryId: string | null = null
     if (
       tripId &&
       revenueAmount > 0 &&
       hasCustomerLink &&
       (receiptDocumentNumber || receiptAttachmentId)
     ) {
-      await commandBus.execute('taxi_fleet.financial_entries.create', {
+      const created = await commandBus.execute('taxi_fleet.financial_entries.create', {
         input: {
           tenantId: driver.teamMember.tenantId,
           organizationId: driver.teamMember.organizationId,
@@ -131,6 +158,37 @@ export async function POST(req: Request) {
         },
         ctx: context,
       })
+      financialEntryId =
+        created?.result && typeof created.result === 'object' && 'entryId' in created.result
+          ? String((created.result as { entryId: string }).entryId)
+          : null
+    }
+
+    if (tripId && receiptAttachmentId) {
+      const em = context.container.resolve('em') as EntityManager
+      const extraction = await linkReceiptExtractionToTrip(em, {
+        attachmentId: receiptAttachmentId,
+        tenantId: driver.teamMember.tenantId,
+        organizationId: driver.teamMember.organizationId,
+        tripId,
+        financialEntryId,
+        driverDocumentNumber: receiptDocumentNumber,
+        tripRevenueAmount: revenueAmount,
+      })
+      if (extraction) {
+        await maybeEnsureCompanyForExtraction({
+          em,
+          commandBus,
+          ctx: context,
+          extraction,
+        })
+        const { applyReceiptExtractionToLinkedRecords } = await import(
+          '@/modules/taxi_fleet/lib/receiptExtractionPipeline'
+        )
+        await applyReceiptExtractionToLinkedRecords(em, extraction.id, {
+          tripRevenueAmount: revenueAmount,
+        })
+      }
     }
 
     return NextResponse.json({ id: tripId }, { status: 201 })

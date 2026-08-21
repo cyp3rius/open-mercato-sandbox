@@ -15,6 +15,7 @@ import {
 } from './driverUi'
 import type { TaxiFleetTripType } from '../useTaxiFleetLabels'
 import type { TaxiFleetTripPlatform } from '../../lib/tripPlatforms'
+import { tripRequiresIncomeReceipt } from '../../lib/tripIncomeReceiptRules'
 
 export type DriverCommercialValue = {
   tripType: TaxiFleetTripType
@@ -45,6 +46,7 @@ export function DriverCommercialStep({
   onReceiptFileOffline,
 }: Props) {
   const t = useT()
+  const receiptRequired = tripRequiresIncomeReceipt({ platform: value.platform })
 
   return (
     <div className="space-y-4">
@@ -128,16 +130,22 @@ export function DriverCommercialStep({
           {t('taxi_fleet.driverApp.receipt.title', 'Receipt')}
         </div>
         <p className={`${driverSectionDescClass} mb-4`}>
-          {t(
-            'taxi_fleet.driverApp.receipt.sectionHint',
-            'Optionally add the receipt number and/or a photo.',
-          )}
+          {receiptRequired
+            ? t(
+                'taxi_fleet.driverApp.receipt.sectionHintRequired',
+                'Add a receipt photo. Document number is filled automatically.',
+              )
+            : t(
+                'taxi_fleet.driverApp.receipt.sectionHintOptional',
+                'Receipt photo is optional for this platform.',
+              )}
         </p>
         <DriverReceiptFields
           documentNumber={value.receiptDocumentNumber}
           attachmentId={value.receiptAttachmentId}
           attachmentName={value.receiptAttachmentName}
           draftRecordId={receiptDraftRecordId}
+          required={receiptRequired}
           disabled={disabled}
           onDocumentNumberChange={(receiptDocumentNumber) =>
             onChange({ ...value, receiptDocumentNumber })
@@ -192,6 +200,17 @@ export function validateCommercialStep(
   const revenue = parseNumericValue(value.revenueAmount)
   if (revenue === null || revenue < 0) {
     return t('taxi_fleet.driverApp.trips.revenueInvalid', 'Enter a valid revenue amount.')
+  }
+  if (
+    tripRequiresIncomeReceipt({ platform: value.platform }) &&
+    revenue > 0 &&
+    !value.receiptAttachmentId &&
+    !value.receiptBlobId
+  ) {
+    return t(
+      'taxi_fleet.driverApp.receipt.photoRequired',
+      'Receipt photo is required for this trip.',
+    )
   }
   return null
 }

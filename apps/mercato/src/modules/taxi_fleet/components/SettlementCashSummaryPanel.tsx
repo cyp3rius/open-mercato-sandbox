@@ -63,7 +63,7 @@ export function SettlementCashSummaryPanel({
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
             {t('taxi_fleet.settlements.cashSummary.expected', 'Gotówka z kursów')}
           </p>
-          <p className="mt-1 text-lg font-semibold tabular-nums">{formatMoney(cashExpected)}</p>
+          <p className="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums">{formatMoney(cashExpected)}</p>
         </div>
         <div className={canEdit ? 'h-full' : 'rounded border border-border bg-muted/30 p-3'}>
           {canEdit ? (
@@ -84,7 +84,7 @@ export function SettlementCashSummaryPanel({
               }}
               onSave={saveCashCollected}
               renderDisplay={({ value }) => (
-                <span className="text-lg font-semibold tabular-nums">{formatMoney(value)}</span>
+                <span className="whitespace-nowrap text-lg font-semibold tabular-nums">{formatMoney(value)}</span>
               )}
             />
           ) : (
@@ -92,7 +92,7 @@ export function SettlementCashSummaryPanel({
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 {t('taxi_fleet.settlements.cashSummary.transferred', 'Przekazał')}
               </p>
-              <p className="mt-1 text-lg font-semibold tabular-nums">{formatMoney(cashCollected)}</p>
+              <p className="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums">{formatMoney(cashCollected)}</p>
             </>
           )}
         </div>
@@ -100,7 +100,7 @@ export function SettlementCashSummaryPanel({
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
             {t('taxi_fleet.settlements.cashSummary.notTransferred', 'Nie przekazał')}
           </p>
-          <p className="mt-1 text-lg font-semibold tabular-nums">{formatMoney(cashNotTransferred)}</p>
+          <p className="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums">{formatMoney(cashNotTransferred)}</p>
         </div>
       </div>
     </>

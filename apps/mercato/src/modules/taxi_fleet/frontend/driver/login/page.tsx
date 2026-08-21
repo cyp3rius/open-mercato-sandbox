@@ -6,6 +6,7 @@ import { flash, FlashMessages } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { DriverBrandMark } from '../../../components/driverApp/DriverBrandMark'
 import { useDriverDefaultLocale } from '../../../components/driverApp/useDriverDefaultLocale'
+import { useDriverForcedLightTheme } from '../../../components/driverApp/useDriverForcedLightTheme'
 import {
   driverCardClass,
   driverFieldClass,
@@ -22,9 +23,24 @@ type LoginSuccess = {
   error?: string
 }
 
+/** Keep driver PWA inside /driver — never land on /backend or the main /login. */
+function resolveDriverPostLoginPath(raw: string | null | undefined): string {
+  const value = String(raw ?? '').trim()
+  if (!value.startsWith('/') || value.startsWith('//')) return '/driver'
+  if (value === '/login' || value.startsWith('/login/') || value.startsWith('/login?')) return '/driver'
+  if (value === '/backend' || value.startsWith('/backend/') || value.startsWith('/backend?')) {
+    return '/driver'
+  }
+  if (value === '/driver' || value.startsWith('/driver/') || value.startsWith('/driver?')) {
+    return value
+  }
+  return '/driver'
+}
+
 export default function DriverLoginPage() {
   const t = useT()
   useDriverDefaultLocale()
+  useDriverForcedLightTheme()
   const [clientReady, setClientReady] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
   const [email, setEmail] = React.useState('')
@@ -89,7 +105,12 @@ export default function DriverLoginPage() {
         credentials: 'same-origin',
       })
       if (res.redirected) {
-        window.location.assign(res.url || '/driver')
+        try {
+          const next = new URL(res.url || '/driver', window.location.origin)
+          window.location.assign(resolveDriverPostLoginPath(`${next.pathname}${next.search}${next.hash}`))
+        } catch {
+          window.location.assign('/driver')
+        }
         return
       }
       const data = (await res.json().catch(() => null)) as LoginSuccess | null
@@ -116,11 +137,7 @@ export default function DriverLoginPage() {
         setSubmitting(false)
         return
       }
-      window.location.assign(
-        typeof data?.redirect === 'string' && data.redirect.startsWith('/')
-          ? data.redirect
-          : '/driver',
-      )
+      window.location.assign(resolveDriverPostLoginPath(data?.redirect))
     } catch {
       flash(
         t(

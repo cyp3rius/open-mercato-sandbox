@@ -16,14 +16,15 @@ import { frontendMiddlewareEntries } from '@/.mercato/generated/frontend-middlew
 
 type FrontendParams = { params: Promise<{ slug: string[] }> }
 
-async function renderAccessDenied() {
+async function renderAccessDenied(pathname: string) {
   const { translate } = await resolveTranslations()
+  const homeHref = pathname === '/driver' || pathname.startsWith('/driver/') ? '/driver' : '/'
   return (
     <AccessDeniedMessage
       label={translate('auth.accessDenied.title', 'Access Denied')}
       description={translate('auth.accessDenied.message', 'You do not have permission to view this page. Please contact your administrator.')}
       action={
-        <Link href="/" className="text-sm underline hover:opacity-80">
+        <Link href={homeHref} className="text-sm underline hover:opacity-80">
           {translate('auth.accessDenied.home', 'Go to Home')}
         </Link>
       }
@@ -64,7 +65,7 @@ export default async function SiteCatchAll({ params }: FrontendParams) {
     const customerFeatures = match.route.requireCustomerFeatures
     if (customerFeatures && customerFeatures.length) {
       const ok = hasAllFeatures(customerFeatures as string[], customerAuth.resolvedFeatures)
-      if (!ok) return renderAccessDenied()
+      if (!ok) return renderAccessDenied(pathname)
     }
     const Component = match.route.Component
     return <Component params={match.params} />
@@ -86,14 +87,14 @@ export default async function SiteCatchAll({ params }: FrontendParams) {
     if (required.length) {
       const roles = auth.roles || []
       const ok = required.some(r => roles.includes(r))
-      if (!ok) return renderAccessDenied()
+      if (!ok) return renderAccessDenied(pathname)
     }
     const features = match.route.requireFeatures
     if (features && features.length) {
       const scopeContainer = await ensureContainer()
       const rbac = scopeContainer.resolve('rbacService') as RbacService
       const ok = await rbac.userHasAllFeatures(auth.sub, features, { tenantId: auth.tenantId, organizationId: auth.orgId })
-      if (!ok) return renderAccessDenied()
+      if (!ok) return renderAccessDenied(pathname)
     }
   }
   const middlewareRedirect = await resolvePageMiddlewareRedirect({

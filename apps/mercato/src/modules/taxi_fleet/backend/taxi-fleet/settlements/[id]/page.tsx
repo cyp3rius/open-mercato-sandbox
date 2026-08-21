@@ -220,10 +220,17 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
       await updateCrud(
         'taxi_fleet/settlements',
         { id: row.id, status: 'approved' },
-        { errorMessage: t('taxi_fleet.settlements.form.saveError', 'Could not save settlement.') },
+        {
+          errorMessage: t(
+            'taxi_fleet.errors.settlementMissingDocumentNumbers',
+            'Cannot approve settlement: some trips are missing receipt document numbers.',
+          ),
+        },
       )
       flash(t('taxi_fleet.settlements.approved', 'Settlement approved.'), 'success')
       await load()
+    } catch {
+      // updateCrud already flashes the server/error message
     } finally {
       setIsApproving(false)
     }

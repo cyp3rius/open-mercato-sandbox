@@ -16,6 +16,7 @@ type Props = {
   attachmentId: string | null
   attachmentName: string | null
   draftRecordId: string
+  required?: boolean
   disabled?: boolean
   onDocumentNumberChange: (value: string) => void
   onAttachmentChange: (next: { id: string | null; fileName: string | null }) => void
@@ -28,6 +29,7 @@ export function DriverReceiptFields({
   attachmentId,
   attachmentName,
   draftRecordId,
+  required = false,
   disabled = false,
   onDocumentNumberChange,
   onAttachmentChange,
@@ -80,24 +82,9 @@ export function DriverReceiptFields({
   return (
     <div className="space-y-4">
       <div>
-        <label htmlFor="receiptDocumentNumber" className={driverLabelClass}>
-          {t('taxi_fleet.driverApp.receipt.number', 'Receipt number')}
-        </label>
-        <input
-          id="receiptDocumentNumber"
-          name="receiptDocumentNumber"
-          value={documentNumber}
-          disabled={disabled}
-          onChange={(event) => onDocumentNumberChange(event.target.value)}
-          placeholder={t('taxi_fleet.driverApp.receipt.numberPlaceholder', 'Optional')}
-          className={driverFieldClass}
-          autoComplete="off"
-        />
-      </div>
-
-      <div>
         <div className={driverLabelClass}>
-          {t('taxi_fleet.driverApp.receipt.photo', 'Receipt photo')}
+          {t('taxi_fleet.driverApp.receipt.photo', 'Receipt / invoice photo')}
+          {required ? <span className="text-red-600"> *</span> : null}
         </div>
         <input
           ref={fileRef}
@@ -148,12 +135,21 @@ export function DriverReceiptFields({
           </Button>
         )}
         {uploadError ? <div className="mt-1.5 text-sm text-red-600">{uploadError}</div> : null}
-        <p className="mt-1.5 text-xs text-[#78829D]">
-          {t(
-            'taxi_fleet.driverApp.receipt.hint',
-            'Optional — add a receipt number and/or photo.',
-          )}
-        </p>
+      </div>
+
+      <div>
+        <label htmlFor="receiptDocumentNumber" className={driverLabelClass}>
+          {t('taxi_fleet.driverApp.receipt.numberOptional', 'Receipt / invoice number')}
+        </label>
+        <input
+          id="receiptDocumentNumber"
+          name="receiptDocumentNumber"
+          value={documentNumber}
+          disabled={disabled}
+          onChange={(event) => onDocumentNumberChange(event.target.value)}
+          className={driverFieldClass}
+          autoComplete="off"
+        />
       </div>
     </div>
   )
