@@ -1,0 +1,70 @@
+---
+title: Przegląd instrukcji (PL)
+description: Polskie instrukcje obsługi modułów z menu Codzienna praca w Open Mercato.
+---
+
+# Instrukcje obsługi — przegląd
+
+Ten rozdział zawiera **polskie instrukcje** dla osób nietechnicznych korzystających z panelu administracyjnego Open Mercato. Dotyczą modułów widocznych w menu **Codzienna praca** oraz skrótów, z wyjątkiem modułu floty taxi i modułu księgowości.
+
+## Jak korzystać z instrukcji
+
+1. Wybierz moduł z listy po lewej stronie.
+2. Na początku każdej instrukcji znajdziesz informację, **dla kogo** jest moduł i **gdzie** go znaleźć w menu.
+3. Kroki są ponumerowane — wykonuj je po kolei.
+
+## Moduły według sekcji menu
+
+### Pulpit i skróty
+
+- [Pulpit](./dashboard)
+- [Wiadomości](./messages)
+- [Zadania](./workflows-tasks)
+
+### Klienci
+
+- [Klienci (firmy, osoby, transakcje)](./customers)
+- [Programy partnerskie](./partner-programs)
+
+### Sprzedaż
+
+- [Sprzedaż](./sales-simple)
+- [Produkty (katalog)](./catalog-products)
+
+### Zasoby
+
+- [Zasoby](./resources)
+
+### Serwis
+
+- [Zakupy](./procurement)
+- [Sprawy](./cases)
+- [Procedury](./playbooks)
+
+### Ubezpieczenia
+
+- [Ubezpieczenia (biurko ubezpieczeniowe)](./insurance-desk)
+
+## Wersja PDF
+
+Instrukcje można wyeksportować do PDF (dla administratorów technicznych):
+
+```bash
+# Pojedynczy moduł
+.ai/skills/user-guide-authoring/scripts/export-pdf.sh cases
+
+# Wszystkie moduły (z katalogu docs)
+.ai/skills/user-guide-authoring/scripts/export-all-pdf.sh
+
+# Jeden zbiorczy PDF (wszystkie moduły Codziennej pracy, ze spisem treści)
+.ai/skills/user-guide-authoring/scripts/export-combined-pdf.sh
+# alias: merge-pdf.sh
+```
+
+Pliki trafiają do `apps/docs/static/manuals/pl/`. Zbiorczy plik: **`codzienna-praca-pelna.pdf`**.
+
+Wymagane: [pandoc](https://pandoc.org/) oraz silnik PDF (`tectonic`, `xelatex` lub `pdflatex`); do scalania: `pdfunite` (pakiet poppler).
+
+## Powiązane materiały (angielski)
+
+Ogólny przewodnik użytkownika po angielsku: [User guide overview](../overview).

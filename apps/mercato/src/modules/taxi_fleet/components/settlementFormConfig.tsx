@@ -41,8 +41,8 @@ export type SettlementGenerateWeekFormValues = {
   weekStart: string
 }
 
-export function defaultSettlementGenerateValues(weekStart: string): SettlementGenerateFormValues {
-  return { teamMemberId: '', weekStart }
+export function defaultSettlementGenerateValues(weekStart: string, teamMemberId = ''): SettlementGenerateFormValues {
+  return { teamMemberId, weekStart }
 }
 
 export function defaultSettlementGenerateWeekValues(weekStart: string): SettlementGenerateWeekFormValues {
@@ -118,7 +118,8 @@ export type SettlementGenerateDialogFieldOptions = {
   includeDriver: boolean
   driverProfiles: FleetDriverProfile[]
   resolveDriverName: (teamMemberId: string) => string
-  availableWeeks: string[]
+  recentWeeks: string[]
+  settledWeekStarts: Set<string>
   weeksLoading: boolean
   driverSelected: boolean
   onDriverChange?: (teamMemberId: string) => void
@@ -191,7 +192,7 @@ export function buildSettlementGenerateDialogFields(
     return fields
   }
 
-  if (options.availableWeeks.length === 0) {
+  if (options.recentWeeks.length === 0) {
     fields.push({
       id: 'weekStart',
       type: 'custom',
@@ -206,6 +207,8 @@ export function buildSettlementGenerateDialogFields(
     return fields
   }
 
+  const settledLabel = t('taxi_fleet.settlements.weekSettledLabel', 'Already settled')
+
   fields.push({
     id: 'weekStart',
     type: 'select',
@@ -213,10 +216,14 @@ export function buildSettlementGenerateDialogFields(
     description: t('taxi_fleet.settlements.generateWeekHint', 'Select the Monday that starts the settlement week (ISO).'),
     required: true,
     layout: 'full',
-    options: options.availableWeeks.map((weekStart) => ({
-      value: weekStart,
-      label: formatWeekRange(weekStart),
-    })),
+    options: options.recentWeeks.map((weekStart) => {
+      const settled = options.settledWeekStarts.has(weekStart)
+      return {
+        value: weekStart,
+        label: settled ? `${formatWeekRange(weekStart)} — ${settledLabel}` : formatWeekRange(weekStart),
+        disabled: settled,
+      }
+    }),
   })
 
   return fields

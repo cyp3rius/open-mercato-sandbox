@@ -1,0 +1,86 @@
+---
+title: Zakupy (procurement)
+description: Jak prowadzić procesy zakupowe wewnętrzne, porównywać dostawców i zamykać proces z zadaniami.
+---
+
+# Zakupy (procurement)
+
+## Dla kogo jest ten moduł
+
+Moduł **Zakupy** obsługuje **wewnętrzne procesy zakupowe**: od zgłoszenia potrzeby, przez porównanie dostawców i specyfikację, po zadania i zamknięcie procesu. Dla koordynatorów zakupów, opiekunów procesów i osób realizujących zadania w ramach zakupu.
+
+## Gdzie znaleźć w systemie
+
+Ścieżka w menu: **Codzienna praca → Serwis → Zakupy**.
+
+Ustawienia pipeline statusów: **Ustawienia → Konfiguracja modułów → Zakupy** (tylko administrator).
+
+## Co można zrobić
+
+- Tworzyć procesy zakupowe z typem, statusem, klientem wewnętrznym i opiekunem.
+- Prowadzić **specyfikację** i porównanie **dostawców** z pozycjami cenowymi.
+- Wybierać zwycięskiego dostawcę.
+- Przypisywać i realizować **zadania** w procesie (powiązane ze skrzynką Zadań).
+- Zamykać proces zgodnie z pipeline statusów.
+
+## Instrukcje krok po kroku
+
+### Otwarcie procesu zakupowego
+
+1. Otwórz **Zakupy**.
+2. Kliknij **Utwórz proces**.
+3. Wpisz **tytuł**, wybierz **typ** i **status** początkowy.
+4. Wskaż **klienta** (jednostkę / podmiot wewnętrzny w CRM) i **opiekuna** procesu.
+5. Opcjonalnie powiąż ofertę, fakturę sprzedażową lub **zasób**.
+6. Zapisz.
+
+### Porównanie dostawców
+
+1. Otwórz szczegóły procesu.
+2. Przejdź do zakładki **Dostawcy**.
+3. Dodaj dostawców — z bazy CRM (firma-dostawca) lub jako wpis tekstowy.
+4. Uzupełnij **pozycje** i ceny dla każdego dostawcy.
+5. Oznacz **wybranego dostawcę** lub linię refinansowania.
+
+### Realizacja zadań
+
+1. Otwórz zakładkę **Zadania** na procesie (lub skrzynkę **Zadania** w skrótach).
+2. Wykonaj przypisane zadania — mogą synchronizować się z modułem workflow.
+3. Po ukończeniu zadania zespół może otrzymać powiadomienie.
+
+### Zamknięcie procesu
+
+1. Zmień **status** zgodnie z dozwolonymi przejściami (pipeline w ustawieniach).
+2. Gdy proces osiągnie status końcowy, zostanie oznaczony jako zamknięty z datą zamknięcia.
+
+## Uprawnienia
+
+| Uprawnienie | Co umożliwia |
+|-------------|--------------|
+| Podgląd procesów | Lista i szczegóły |
+| Zarządzanie procesami | Tworzenie i edycja |
+| Obsługa przypisanych procesów | Praca tylko na procesach przypisanych do Ciebie (admin) |
+| Ustawienia pipeline | Konfiguracja statusów (administrator) |
+
+## Powiązania z innymi modułami
+
+- **Klienci** — klient procesu i dostawcy jako firmy CRM.
+- **Zasoby** — powiązany zasób na procesie.
+- **Sprzedaż** — opcjonalne powiązanie z ofertą lub fakturą.
+- **Zadania** — zadania procesu w skrzynce zadań.
+- **Sprawy** — sprawa może odnosić się do procesu zakupowego.
+
+## Częste pytania
+
+**Pytanie:** Nie mogę zmienić statusu.  
+**Odpowiedź:** Pipeline statusów może blokować niektóre przejścia — sprawdź dozwolone kroki lub skontaktuj się z administratorem.
+
+**Pytanie:** Gdzie ustawić kolejność statusów?  
+**Odpowiedź:** W ustawieniach modułu Zakupy (wymaga uprawnienia administratora).
+
+## Powiązane materiały
+
+- [Zadania](./workflows-tasks)
+- [Sprawy](./cases)
+- [Zasoby](./resources)
+- [Przegląd instrukcji PL](./overview)

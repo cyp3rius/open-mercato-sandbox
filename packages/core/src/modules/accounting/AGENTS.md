@@ -57,6 +57,10 @@ Import używa jednego pola pliku (`invoiceFile`) i wykonuje:
 - Podgląd: `accounting.invoices.view`
 - Zarządzanie (create/update/delete/import): `accounting.invoices.manage`
 
+## Operator documentation
+
+- Module guide: [`.ai/module-guides/accounting.md`](../../../../.ai/module-guides/accounting.md)
+
 ## Dobre praktyki zmian
 
 - Używaj kluczy i18n `accounting.*` we wszystkich nowych etykietach.

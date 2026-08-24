@@ -17,6 +17,7 @@ type Props = {
   attachmentName: string | null
   draftRecordId: string
   required?: boolean
+  hideDocumentNumber?: boolean
   disabled?: boolean
   onDocumentNumberChange: (value: string) => void
   onAttachmentChange: (next: { id: string | null; fileName: string | null }) => void
@@ -30,6 +31,7 @@ export function DriverReceiptFields({
   attachmentName,
   draftRecordId,
   required = false,
+  hideDocumentNumber = false,
   disabled = false,
   onDocumentNumberChange,
   onAttachmentChange,
@@ -137,20 +139,22 @@ export function DriverReceiptFields({
         {uploadError ? <div className="mt-1.5 text-sm text-red-600">{uploadError}</div> : null}
       </div>
 
-      <div>
-        <label htmlFor="receiptDocumentNumber" className={driverLabelClass}>
-          {t('taxi_fleet.driverApp.receipt.numberOptional', 'Receipt / invoice number')}
-        </label>
-        <input
-          id="receiptDocumentNumber"
-          name="receiptDocumentNumber"
-          value={documentNumber}
-          disabled={disabled}
-          onChange={(event) => onDocumentNumberChange(event.target.value)}
-          className={driverFieldClass}
-          autoComplete="off"
-        />
-      </div>
+      {hideDocumentNumber ? null : (
+        <div>
+          <label htmlFor="receiptDocumentNumber" className={driverLabelClass}>
+            {t('taxi_fleet.driverApp.receipt.numberOptional', 'Receipt / invoice number')}
+          </label>
+          <input
+            id="receiptDocumentNumber"
+            name="receiptDocumentNumber"
+            value={documentNumber}
+            disabled={disabled}
+            onChange={(event) => onDocumentNumberChange(event.target.value)}
+            className={driverFieldClass}
+            autoComplete="off"
+          />
+        </div>
+      )}
     </div>
   )
 }

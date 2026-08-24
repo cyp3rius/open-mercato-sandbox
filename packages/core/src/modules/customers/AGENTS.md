@@ -83,3 +83,8 @@ Use `collectCustomFieldValues()` from `@open-mercato/ui/backend/utils/customFiel
 ## Module Files Checklist — All MUST Be Present
 
 `acl.ts`, `ce.ts`, `di.ts`, `events.ts`, `index.ts`, `notifications.ts`, `search.ts`, `setup.ts`, `analytics.ts`, `vector.ts`
+
+## Operator documentation
+
+- Module guide: [`.ai/module-guides/customers.md`](../../../../.ai/module-guides/customers.md)
+- EN user guide: `apps/docs/docs/user-guide/customers/`

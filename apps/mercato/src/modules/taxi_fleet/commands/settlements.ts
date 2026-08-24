@@ -2,12 +2,15 @@ import { registerCommand, type CommandHandler } from '@open-mercato/shared/lib/c
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
+import { requireId } from '@open-mercato/shared/lib/commands/helpers'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetWeeklySettlement } from '../data/entities'
 import {
+  settlementDeleteSchema,
   settlementGenerateSchema,
   settlementSubmitSchema,
   settlementUpdateSchema,
+  type SettlementDeleteInput,
   type SettlementGenerateInput,
   type SettlementSubmitInput,
   type SettlementUpdateInput,
@@ -27,7 +30,7 @@ import {
   syncSettlementPayoutPercentFromDriverProfile,
 } from '../lib/settlementRecalculation'
 import { isWeeklySettlementLocked } from '../lib/settlementLock'
-import { isAllowedWeeklySettlementStatusTransition } from '../lib/settlementStatusTransitions'
+import { canDeleteWeeklySettlement, isAllowedWeeklySettlementStatusTransition } from '../lib/settlementStatusTransitions'
 import { assertWeeklySettlementDocumentNumbersComplete } from '../lib/settlementDocumentNumberGate'
 import { ensureOrganizationScope, ensureTenantScope, numericToString } from './shared'
 
@@ -76,6 +79,38 @@ function applySettlementStatusChange(
   if (status === 'submitted') row.submittedAt = new Date()
 }
 
+type WeeklySettlementScope = {
+  tenantId: string
+  organizationId: string
+  teamMemberId: string
+  weekStart: string
+}
+
+async function findWeeklySettlementByScope(
+  em: EntityManager,
+  scope: WeeklySettlementScope,
+): Promise<TaxiFleetWeeklySettlement | null> {
+  return findOneWithDecryption(
+    em,
+    TaxiFleetWeeklySettlement,
+    scope,
+    undefined,
+    { tenantId: scope.tenantId, organizationId: scope.organizationId },
+  )
+}
+
+function restoreWeeklySettlementDraft(row: TaxiFleetWeeklySettlement, now: Date): void {
+  row.deletedAt = null
+  row.status = 'draft'
+  row.submittedAt = null
+  row.approvedAt = null
+  row.approvedByUserId = null
+  row.closureType = null
+  row.closureAmount = null
+  row.closedAt = null
+  row.updatedAt = now
+}
+
 const generateSettlementCommand: CommandHandler<SettlementGenerateInput, { settlementId: string }> = {
   id: 'taxi_fleet.settlements.generate_week',
   async execute(input, ctx) {
@@ -83,20 +118,14 @@ const generateSettlementCommand: CommandHandler<SettlementGenerateInput, { settl
     ensureTenantScope(ctx, parsed.tenantId)
     ensureOrganizationScope(ctx, parsed.organizationId)
     const em = (ctx.container.resolve('em') as EntityManager).fork()
-    const existing = await findOneWithDecryption(
-      em,
-      TaxiFleetWeeklySettlement,
-      {
-        tenantId: parsed.tenantId,
-        organizationId: parsed.organizationId,
-        teamMemberId: parsed.teamMemberId,
-        weekStart: parsed.weekStart,
-        deletedAt: null,
-      },
-      undefined,
-      { tenantId: parsed.tenantId, organizationId: parsed.organizationId },
-    )
-    if (existing) {
+    const scope: WeeklySettlementScope = {
+      tenantId: parsed.tenantId,
+      organizationId: parsed.organizationId,
+      teamMemberId: parsed.teamMemberId,
+      weekStart: parsed.weekStart,
+    }
+    const existing = await findWeeklySettlementByScope(em, scope)
+    if (existing?.deletedAt == null) {
       const { translate } = await resolveTranslations()
       throw new CrudHttpError(409, { error: translate('taxi_fleet.errors.settlementExists', 'Settlement already exists for this week.') })
     }
@@ -108,22 +137,28 @@ const generateSettlementCommand: CommandHandler<SettlementGenerateInput, { settl
       translate,
     })
     const now = new Date()
-    const record = em.create(TaxiFleetWeeklySettlement, {
-      tenantId: parsed.tenantId,
-      organizationId: parsed.organizationId,
-      teamMemberId: parsed.teamMemberId,
-      weekStart: parsed.weekStart,
-      payoutPercent: '0',
-      cashCollected: '0',
-      bonusAmount: '0',
-      compensationAmount: '0',
-      airportA4Amount: '0',
-      status: 'draft',
-      createdAt: now,
-      updatedAt: now,
-      deletedAt: null,
-    })
-    em.persist(record)
+    let record: TaxiFleetWeeklySettlement
+    if (existing) {
+      restoreWeeklySettlementDraft(existing, now)
+      record = existing
+    } else {
+      record = em.create(TaxiFleetWeeklySettlement, {
+        tenantId: parsed.tenantId,
+        organizationId: parsed.organizationId,
+        teamMemberId: parsed.teamMemberId,
+        weekStart: parsed.weekStart,
+        payoutPercent: '0',
+        cashCollected: '0',
+        bonusAmount: '0',
+        compensationAmount: '0',
+        airportA4Amount: '0',
+        status: 'draft',
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+      })
+      em.persist(record)
+    }
     await syncSettlementPayoutPercentFromDriverProfile(em, record)
     await applyWeeklySettlementRecalculation(em, record)
     record.cashCollected = record.cashExpected
@@ -274,6 +309,32 @@ const submitSettlementCommand: CommandHandler<
   },
 }
 
+const deleteSettlementCommand: CommandHandler<SettlementDeleteInput, { ok: true }> = {
+  id: 'taxi_fleet.settlements.delete',
+  async execute(input, ctx) {
+    const parsed = settlementDeleteSchema.parse(input)
+    const id = requireId(parsed.id)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const row = await findOneWithDecryption(em, TaxiFleetWeeklySettlement, { id, deletedAt: null })
+    if (!row) throw new CrudHttpError(404, { error: 'Not found' })
+    ensureTenantScope(ctx, row.tenantId)
+    ensureOrganizationScope(ctx, row.organizationId)
+    if (!canDeleteWeeklySettlement(row.status)) {
+      const { translate } = await resolveTranslations()
+      throw new CrudHttpError(409, {
+        error: translate(
+          'taxi_fleet.errors.settlementDeleteNotDraft',
+          'Only draft settlements can be deleted.',
+        ),
+      })
+    }
+    row.deletedAt = new Date()
+    await em.flush()
+    return { ok: true }
+  },
+}
+
 registerCommand(generateSettlementCommand)
 registerCommand(updateSettlementCommand)
+registerCommand(deleteSettlementCommand)
 registerCommand(submitSettlementCommand)

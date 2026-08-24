@@ -165,6 +165,11 @@ src/modules/workflows/
 └── workers/                  # Async activity worker (workflow-activities queue)
 ```
 
+## Operator documentation
+
+- Module guide (tasks inbox): [`.ai/module-guides/workflows-tasks.md`](../../../../.ai/module-guides/workflows-tasks.md)
+- EN user guide: `apps/docs/docs/user-guide/workflows/user-tasks.mdx`
+
 ## Cross-References
 
 - **Event bus architecture**: `packages/events/AGENTS.md`

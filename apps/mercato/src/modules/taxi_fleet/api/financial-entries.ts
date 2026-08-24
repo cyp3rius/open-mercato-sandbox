@@ -1,9 +1,16 @@
 import { z } from 'zod'
+import type { EntityManager } from '@mikro-orm/postgresql'
 import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { resolveCrudRecordId, parseScopedCommandInput } from '@open-mercato/shared/lib/api/scoped'
+import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetFinancialEntry } from '../data/entities'
 import { financialEntryCreateSchema, financialEntryUpdateSchema } from '../data/validators'
+import {
+  buildFinancialEntryReceiptOcrExtras,
+  loadExtractionsForFinancialEntries,
+  mergeReceiptOcrOntoListItem,
+} from '../lib/financialEntryReceiptEnrichment'
 import {
   createTaxiFleetCrudOpenApi,
   createPagedListResponseSchema,
@@ -68,6 +75,7 @@ const crud = makeCrudRoute({
       'document_number',
       'occurred_at',
       'receipt_attachment_id',
+      'is_document_duplicate',
       'notes',
       'created_at',
       'updated_at',
@@ -91,6 +99,60 @@ const crud = makeCrudRoute({
         filters.occurred_at = range
       }
       return filters
+    },
+  },
+  hooks: {
+    afterList: async (payload, ctx) => {
+      const items = Array.isArray(payload.items) ? payload.items : []
+      if (!items.length) return
+
+      const scopeSource = (items[0] ?? {}) as Record<string, unknown>
+      const tenantId =
+        (typeof scopeSource.tenantId === 'string' ? scopeSource.tenantId : null) ??
+        (typeof scopeSource.tenant_id === 'string' ? scopeSource.tenant_id : null) ??
+        (ctx as { auth?: { tenantId?: string } }).auth?.tenantId ??
+        null
+      const organizationId =
+        (typeof scopeSource.organizationId === 'string' ? scopeSource.organizationId : null) ??
+        (typeof scopeSource.organization_id === 'string' ? scopeSource.organization_id : null) ??
+        (ctx as { auth?: { orgId?: string } }).auth?.orgId ??
+        null
+      if (!tenantId || !organizationId) return
+
+      const entryIds = items
+        .map((item) => (item && typeof item === 'object' ? (item as { id?: unknown }).id : null))
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      if (!entryIds.length) return
+
+      const em = (ctx as { container: { resolve: (key: string) => unknown } }).container.resolve(
+        'em',
+      ) as EntityManager
+      const entries = await findWithDecryption(
+        em,
+        TaxiFleetFinancialEntry,
+        { id: { $in: entryIds }, deletedAt: null },
+        undefined,
+        { tenantId, organizationId },
+      )
+      const entryById = new Map(entries.map((entry) => [entry.id, entry]))
+      const extractions = await loadExtractionsForFinancialEntries(em, {
+        tenantId,
+        organizationId,
+        entries,
+      })
+
+      for (const item of items) {
+        if (!item || typeof item !== 'object') continue
+        const record = item as Record<string, unknown>
+        const id = typeof record.id === 'string' ? record.id : null
+        if (!id) continue
+        const entry = entryById.get(id)
+        if (!entry || entry.kind !== 'expense') continue
+        mergeReceiptOcrOntoListItem(
+          record,
+          buildFinancialEntryReceiptOcrExtras(entry, extractions.get(id)),
+        )
+      }
     },
   },
   actions: {
@@ -145,6 +207,18 @@ const rowSchema = z.object({
   documentNumber: z.string().nullable().optional(),
   occurredAt: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+  receiptAttachmentId: z.string().uuid().nullable().optional(),
+  isDocumentDuplicate: z.boolean().optional(),
+  ocrStatus: z.string().nullable().optional(),
+  warnings: z
+    .array(
+      z.object({
+        code: z.string(),
+        field: z.string().nullable().optional(),
+        message: z.string().nullable().optional(),
+      }),
+    )
+    .optional(),
 })
 
 export const openApi = createTaxiFleetCrudOpenApi({

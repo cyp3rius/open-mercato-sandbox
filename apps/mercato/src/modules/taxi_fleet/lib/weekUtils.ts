@@ -59,16 +59,18 @@ export function listUnsettledMonths(existingMonthStarts: Set<string>, monthsBack
   return listRecentMonthStarts(monthsBack).filter((monthStart) => !existingMonthStarts.has(monthStart))
 }
 
-export function listUnsettledMondays(existingWeekStarts: Set<string>, weeksBack = 52): string[] {
+export function listRecentMondays(weeksBack = 52): string[] {
   const mondays: string[] = []
   let cursor = getIsoWeekStart(new Date())
   for (let index = 0; index < weeksBack; index += 1) {
-    if (!existingWeekStarts.has(cursor)) {
-      mondays.push(cursor)
-    }
+    mondays.push(cursor)
     cursor = addDays(cursor, -7)
   }
   return mondays
+}
+
+export function listUnsettledMondays(existingWeekStarts: Set<string>, weeksBack = 52): string[] {
+  return listRecentMondays(weeksBack).filter((weekStart) => !existingWeekStarts.has(weekStart))
 }
 
 export function getMonthStart(dateInput: string | Date): string {

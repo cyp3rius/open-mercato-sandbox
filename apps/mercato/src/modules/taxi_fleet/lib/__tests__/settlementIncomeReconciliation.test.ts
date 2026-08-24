@@ -60,6 +60,42 @@ describe('settlementIncomeReconciliation', () => {
         }),
       ).toBe(false)
     })
+
+    it('passes when trip receipt is verified on the trip even without income entry', () => {
+      expect(
+        tripMissingIncomeReceipt({
+          tripId: 'trip-1',
+          platform: null,
+          revenueAmount: 50,
+          status: 'paid',
+          incomeTripIds: new Set(),
+          receiptExtras: {
+            receiptAttachmentId: 'att-1',
+            ocrStatus: 'applied',
+            receiptWarnings: [],
+            isIncomeDocumentDuplicate: false,
+          },
+        }),
+      ).toBe(false)
+    })
+
+    it('still flags trip with receipt still processing', () => {
+      expect(
+        tripMissingIncomeReceipt({
+          tripId: 'trip-1',
+          platform: null,
+          revenueAmount: 50,
+          status: 'paid',
+          incomeTripIds: new Set(),
+          receiptExtras: {
+            receiptAttachmentId: 'att-1',
+            ocrStatus: 'processing',
+            receiptWarnings: [],
+            isIncomeDocumentDuplicate: false,
+          },
+        }),
+      ).toBe(true)
+    })
   })
 
   describe('buildSettlementIncomeReconciliationSummary', () => {

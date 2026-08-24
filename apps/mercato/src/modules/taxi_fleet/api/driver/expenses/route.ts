@@ -28,6 +28,10 @@ import {
   applyReceiptExtractionToLinkedRecords,
   linkReceiptExtractionToFinancialEntry,
 } from '@/modules/taxi_fleet/lib/receiptExtractionPipeline'
+import {
+  buildFinancialEntryReceiptOcrExtras,
+  loadExtractionsForFinancialEntries,
+} from '@/modules/taxi_fleet/lib/financialEntryReceiptEnrichment'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['taxi_fleet.driver'] },
@@ -53,48 +57,6 @@ async function buildContext(req: Request): Promise<CommandRuntimeContext> {
   }
 }
 
-async function loadExtractionsByEntryId(
-  em: EntityManager,
-  params: {
-    tenantId: string
-    organizationId: string
-    entryIds: string[]
-    attachmentIds?: string[]
-  },
-): Promise<Map<string, TaxiFleetReceiptExtraction>> {
-  const map = new Map<string, TaxiFleetReceiptExtraction>()
-  if (!params.entryIds.length && !params.attachmentIds?.length) return map
-
-  const filters: Array<Record<string, unknown>> = []
-  if (params.entryIds.length) {
-    filters.push({ financialEntryId: { $in: params.entryIds } })
-  }
-  if (params.attachmentIds?.length) {
-    filters.push({ attachmentId: { $in: params.attachmentIds } })
-  }
-
-  const rows = await findWithDecryption(
-    em,
-    TaxiFleetReceiptExtraction,
-    {
-      tenantId: params.tenantId,
-      organizationId: params.organizationId,
-      deletedAt: null,
-      ...(filters.length === 1 ? filters[0]! : { $or: filters }),
-    },
-    { orderBy: { updatedAt: 'DESC' } },
-    { tenantId: params.tenantId, organizationId: params.organizationId },
-  )
-
-  for (const row of rows) {
-    const entryId = row.financialEntryId
-    if (entryId && !map.has(entryId)) {
-      map.set(entryId, row)
-    }
-  }
-  return map
-}
-
 async function loadExtractionsForEntries(
   em: EntityManager,
   params: {
@@ -103,53 +65,17 @@ async function loadExtractionsForEntries(
     entries: TaxiFleetFinancialEntry[]
   },
 ): Promise<Map<string, TaxiFleetReceiptExtraction>> {
-  const entryIds = params.entries.map((row) => row.id)
-  const attachmentIds = params.entries
-    .map((row) => row.receiptAttachmentId)
-    .filter((id): id is string => Boolean(id))
-  const byEntry = await loadExtractionsByEntryId(em, {
-    tenantId: params.tenantId,
-    organizationId: params.organizationId,
-    entryIds,
-    attachmentIds,
-  })
-
-  // Attach by attachment id when financialEntryId was never persisted (OCR race).
-  if (attachmentIds.length) {
-    const rows = await findWithDecryption(
-      em,
-      TaxiFleetReceiptExtraction,
-      {
-        tenantId: params.tenantId,
-        organizationId: params.organizationId,
-        attachmentId: { $in: attachmentIds },
-        deletedAt: null,
-      },
-      { orderBy: { updatedAt: 'DESC' } },
-      { tenantId: params.tenantId, organizationId: params.organizationId },
-    )
-    const entryIdByAttachment = new Map(
-      params.entries
-        .filter((row) => row.receiptAttachmentId)
-        .map((row) => [row.receiptAttachmentId!, row.id] as const),
-    )
-    for (const row of rows) {
-      const entryId = row.financialEntryId || entryIdByAttachment.get(row.attachmentId)
-      if (!entryId || byEntry.has(entryId)) continue
-      byEntry.set(entryId, row)
-    }
-  }
-  return byEntry
+  return loadExtractionsForFinancialEntries(em, params)
 }
 
 function serializeWithExtraction(
   entry: TaxiFleetFinancialEntry,
   extraction: TaxiFleetReceiptExtraction | null | undefined,
 ) {
-  const warnings = parseDriverExpenseWarnings(extraction?.warningsJson)
+  const extras = buildFinancialEntryReceiptOcrExtras(entry, extraction)
   return serializeDriverExpense(entry, {
-    warnings,
-    ocrStatus: extraction?.status ?? null,
+    warnings: extras.warnings,
+    ocrStatus: extras.ocrStatus,
   })
 }
 

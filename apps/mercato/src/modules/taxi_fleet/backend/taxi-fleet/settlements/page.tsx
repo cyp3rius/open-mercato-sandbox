@@ -11,6 +11,9 @@ import { RowActions } from '@open-mercato/ui/backend/RowActions'
 import type { FilterDef, FilterValues } from '@open-mercato/ui/backend/FilterBar'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { deleteCrud } from '@open-mercato/ui/backend/utils/crud'
+import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { TAXI_FLEET_BASE } from '../paths'
@@ -20,6 +23,7 @@ import { SettlementGenerateDialog } from '../../../components/SettlementGenerate
 import { SettlementStatusBadge } from '../../../components/SettlementStatusBadge'
 import { formatSettlementMoney } from '../../../lib/settlementPayoutDisplay'
 import { formatWeekRange } from '../../../lib/weekUtils'
+import { canDeleteWeeklySettlement } from '../../../lib/settlementStatusTransitions'
 
 const PAGE_SIZE = 20
 
@@ -37,6 +41,7 @@ type ListResponse = { items: SettlementRow[]; totalPages: number; total?: number
 export default function TaxiFleetSettlementsPage() {
   const t = useT()
   const router = useRouter()
+  const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const scopeVersion = useOrganizationScopeVersion()
   const { resolveName } = useFleetDriverDirectory()
   const { canManageSettlements } = useTaxiFleetPermissions()
@@ -65,7 +70,12 @@ export default function TaxiFleetSettlementsPage() {
   )
 
   const queryParams = React.useMemo(() => {
-    const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) })
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(PAGE_SIZE),
+      sortField: 'weekStart',
+      sortDir: 'desc',
+    })
     const status = filterValues.status
     if (typeof status === 'string' && status.trim()) params.set('status', status.trim())
     return params.toString()
@@ -89,6 +99,22 @@ export default function TaxiFleetSettlementsPage() {
   }, [queryParams, reloadToken, scopeVersion])
 
   const detailHref = (id: string) => `${TAXI_FLEET_BASE}/settlements/${encodeURIComponent(id)}`
+
+  const handleDelete = React.useCallback(
+    async (settlement: SettlementRow) => {
+      const ok = await confirm({
+        title: t('taxi_fleet.settlements.list.deleteConfirm', 'Delete this draft settlement?'),
+        variant: 'destructive',
+      })
+      if (!ok) return
+      await deleteCrud('taxi_fleet/settlements', settlement.id, {
+        errorMessage: t('taxi_fleet.settlements.list.deleteError', 'Could not delete settlement.'),
+      })
+      flash(t('taxi_fleet.settlements.list.deleteSuccess', 'Settlement deleted.'), 'success')
+      setReloadToken((value) => value + 1)
+    },
+    [confirm, t],
+  )
 
   const columns = React.useMemo<ColumnDef<SettlementRow>[]>(
     () => [
@@ -175,6 +201,16 @@ export default function TaxiFleetSettlementsPage() {
                   label: t('taxi_fleet.settlements.list.actions.openInNewTab', 'Open in new tab'),
                   onSelect: () => window.open(detailHref(row.id), '_blank', 'noopener,noreferrer'),
                 },
+                ...(canManageSettlements && canDeleteWeeklySettlement(row.status)
+                  ? [
+                      {
+                        id: 'delete',
+                        label: t('taxi_fleet.settlements.list.actions.delete', 'Delete'),
+                        destructive: true,
+                        onSelect: () => void handleDelete(row),
+                      },
+                    ]
+                  : []),
               ]}
             />
           )}
@@ -189,6 +225,7 @@ export default function TaxiFleetSettlementsPage() {
           onOpenChange={setGenerateOpen}
           onGenerated={() => setReloadToken((value) => value + 1)}
         />
+        {ConfirmDialogElement}
       </PageBody>
     </Page>
   )

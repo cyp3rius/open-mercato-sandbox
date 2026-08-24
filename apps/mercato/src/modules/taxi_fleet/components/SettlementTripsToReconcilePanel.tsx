@@ -2,9 +2,11 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { AlertCircle, AlertTriangle, ExternalLink, FileWarning, RouteOff } from 'lucide-react'
+import { AlertCircle, AlertTriangle, ExternalLink, FileWarning, Loader2, RefreshCw, RouteOff } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { updateCrud } from '@open-mercato/ui/backend/utils/crud'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { TAXI_FLEET_BASE } from '../backend/taxi-fleet/paths'
@@ -14,6 +16,9 @@ import { useTaxiFleetLabels } from './useTaxiFleetLabels'
 
 type SettlementTripsToReconcilePanelProps = {
   trips: SettlementTripSnapshot[]
+  settlementId?: string
+  readOnly?: boolean
+  onUpdated?: () => Promise<void>
 }
 
 type TripIssueBadgeProps = {
@@ -53,9 +58,15 @@ function formatRevenue(value: number | null | undefined): string {
   return `${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PLN`
 }
 
-export function SettlementTripsToReconcilePanel({ trips }: SettlementTripsToReconcilePanelProps) {
+export function SettlementTripsToReconcilePanel({
+  trips,
+  settlementId,
+  readOnly = false,
+  onUpdated,
+}: SettlementTripsToReconcilePanelProps) {
   const t = useT()
   const { resolveTripTypeLabel } = useTaxiFleetLabels()
+  const [isRefreshing, setIsRefreshing] = React.useState(false)
 
   const revenueTrips = React.useMemo(() => filterSettlementRevenueTrips(trips), [trips])
 
@@ -64,10 +75,38 @@ export function SettlementTripsToReconcilePanel({ trips }: SettlementTripsToReco
     [revenueTrips],
   )
 
+  const canRefresh = Boolean(settlementId) && !readOnly && Boolean(onUpdated)
+
+  const refreshTrips = React.useCallback(async () => {
+    if (!settlementId || !onUpdated) return
+    setIsRefreshing(true)
+    try {
+      await updateCrud(
+        'taxi_fleet/settlements',
+        { id: settlementId, recalculateSettlement: true },
+        {
+          errorMessage: t(
+            'taxi_fleet.settlements.tripsToReconcile.refreshError',
+            'Could not refresh trips.',
+          ),
+        },
+      )
+      flash(
+        t('taxi_fleet.settlements.tripsToReconcile.refreshed', 'Trips refreshed from current week data.'),
+        'success',
+      )
+      await onUpdated()
+    } catch {
+      // updateCrud already flashes the error
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [onUpdated, settlementId, t])
+
   return (
     <section className="space-y-3 rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <h3 className="text-base font-semibold">
             {t('taxi_fleet.settlements.tripsToReconcile.title', 'Trips to reconcile')}
           </h3>
@@ -78,14 +117,32 @@ export function SettlementTripsToReconcilePanel({ trips }: SettlementTripsToReco
             )}
           </p>
         </div>
-        {flaggedTrips.length > 0 ? (
-          <Badge variant="outline" className="gap-1 border-amber-400 text-amber-800">
-            <AlertTriangle className="size-3 shrink-0" aria-hidden />
-            {t('taxi_fleet.settlements.tripsToReconcile.attentionCount', '{count} requiring attention', {
-              count: flaggedTrips.length,
-            })}
-          </Badge>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {flaggedTrips.length > 0 ? (
+            <Badge variant="outline" className="gap-1 border-amber-400 text-amber-800">
+              <AlertTriangle className="size-3 shrink-0" aria-hidden />
+              {t('taxi_fleet.settlements.tripsToReconcile.attentionCount', '{count} requiring attention', {
+                count: flaggedTrips.length,
+              })}
+            </Badge>
+          ) : null}
+          {canRefresh ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isRefreshing}
+              onClick={() => void refreshTrips()}
+            >
+              {isRefreshing ? (
+                <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+              ) : (
+                <RefreshCw className="mr-2 size-4" aria-hidden />
+              )}
+              {t('taxi_fleet.settlements.tripsToReconcile.refresh', 'Refresh trips')}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {revenueTrips.length === 0 ? (

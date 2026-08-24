@@ -59,6 +59,7 @@ type AssignmentListItem = DriverShiftAssignmentLike & {
 
 function emptyCommercial(): DriverCommercialValue {
   return {
+    completionMode: 'manual',
     tripType: 'client',
     platform: null,
     customerEntityId: '',

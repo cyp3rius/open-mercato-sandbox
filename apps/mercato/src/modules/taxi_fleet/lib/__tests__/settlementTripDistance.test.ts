@@ -4,6 +4,7 @@ import {
   parseTripDistanceKm,
   tripBelongsToSettlementWeek,
 } from '../settlementTripDistance'
+import type { SettlementTripReceiptContext } from '../settlementTripReceiptEnrichment'
 
 describe('settlementTripDistance', () => {
   describe('parseTripDistanceKm', () => {
@@ -82,6 +83,38 @@ describe('settlementTripDistance', () => {
       expect(result.missingDistanceTripIds).toEqual(['t3'])
       expect(result.trips).toHaveLength(3)
       expect(result.trips.find((trip) => trip.id === 't3')?.missingDistance).toBe(true)
+    })
+
+    it('does not flag missing income receipt when trip receipt is verified', () => {
+      const tripReceiptContext: SettlementTripReceiptContext = new Map([
+        [
+          't1',
+          {
+            receiptAttachmentId: 'att-1',
+            ocrStatus: 'applied',
+            receiptWarnings: [],
+            isIncomeDocumentDuplicate: false,
+          },
+        ],
+      ])
+
+      const result = buildSettlementDistanceFromTrips(
+        [
+          {
+            id: 't1',
+            startedAt: new Date('2026-08-11T10:00:00.000Z'),
+            endedAt: null,
+            status: 'completed',
+            tripType: 'client',
+            platform: null,
+            revenueAmount: '175',
+            distanceKm: '22',
+          },
+        ],
+        { incomeTripIds: new Set(), tripReceiptContext },
+      )
+
+      expect(result.trips[0]?.missingIncomeReceipt).toBe(false)
     })
   })
 })

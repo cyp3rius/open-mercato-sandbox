@@ -450,6 +450,8 @@ export const settlementUpdateSchema = z.object({
     .optional(),
 })
 
+export const settlementDeleteSchema = z.object({ id: uuid })
+
 export const settlementSubmitSchema = z.object({
   weekStart: dateOnly,
 })
@@ -597,6 +599,7 @@ export const quoteResponseSchema = z.object({
 
 export type QuoteBodyInput = z.infer<typeof quoteBodySchema>
 export type SettlementUpdateInput = z.infer<typeof settlementUpdateSchema>
+export type SettlementDeleteInput = z.infer<typeof settlementDeleteSchema>
 export type SettlementSubmitInput = z.infer<typeof settlementSubmitSchema>
 export type MonthlySettlementGenerateInput = z.infer<typeof monthlySettlementGenerateSchema>
 export type MonthlySettlementUpdateInput = z.infer<typeof monthlySettlementUpdateSchema>

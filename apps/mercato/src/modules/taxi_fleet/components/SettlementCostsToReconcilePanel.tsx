@@ -22,6 +22,8 @@ import {
 } from '../lib/settlementCostExclusions'
 import { useTaxiFleetLabels } from './useTaxiFleetLabels'
 import { DriverFinancialEntryDialog, type FinancialEntryRow } from './DriverFinancialEntryDialog'
+import { SettlementExpenseReceiptOcrBadge } from './SettlementExpenseReceiptOcrBadge'
+import type { DriverExpenseWarning } from '../lib/driverExpenses'
 import {
   TaxiFleetDialogForm,
   TaxiFleetDialogFrame,
@@ -38,6 +40,63 @@ type SettlementExpenseRow = {
   documentNumber?: string | null
   occurredAt?: string | null
   notes?: string | null
+  receiptAttachmentId?: string | null
+  isDocumentDuplicate?: boolean
+  ocrStatus?: string | null
+  warnings?: DriverExpenseWarning[]
+}
+
+function expenseWarningLabel(
+  t: (key: string, fallback?: string) => string,
+  warning: DriverExpenseWarning,
+): string {
+  return t(
+    `taxi_fleet.driverApp.expenses.warnings.${warning.code}`,
+    warning.message || warning.code,
+  )
+}
+
+function SettlementExpenseReceiptCell({
+  row,
+  t,
+}: {
+  row: SettlementExpenseRow
+  t: (key: string, fallback?: string) => string
+}) {
+  const warnings = row.warnings ?? []
+  const showWarnings =
+    warnings.length > 0 || row.ocrStatus === 'needs_review' || row.ocrStatus === 'failed'
+
+  const messages: string[] = warnings.map((warning) => expenseWarningLabel(t, warning))
+  if (messages.length === 0 && row.ocrStatus === 'needs_review') {
+    messages.push(
+      t(
+        'taxi_fleet.settlements.receipt.needsReview',
+        'Document needs review — check OCR results.',
+      ),
+    )
+  }
+  if (messages.length === 0 && row.ocrStatus === 'failed') {
+    messages.push(
+      t(
+        'taxi_fleet.settlements.receipt.ocrFailed',
+        'Receipt OCR failed — verify or re-upload the document.',
+      ),
+    )
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <SettlementExpenseReceiptOcrBadge item={row} />
+      {showWarnings && messages.length > 0 ? (
+        <ul className="max-w-52 space-y-0.5 text-xs text-amber-800 dark:text-amber-200">
+          {messages.map((message, index) => (
+            <li key={`${row.id}-warn-${index}`}>{message}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
 }
 
 type SettlementCostsToReconcilePanelProps = {
@@ -273,6 +332,9 @@ export function SettlementCostsToReconcilePanel({
                     <th className="px-3 py-2 font-medium">
                       {t('taxi_fleet.settlements.costsToReconcile.settlementStatus', 'In settlement')}
                     </th>
+                    <th className="px-3 py-2 font-medium">
+                      {t('taxi_fleet.settlements.receipt.column', 'Receipt')}
+                    </th>
                     <th className="px-3 py-2 font-medium">{t('taxi_fleet.financial.documentNumber', 'Document number')}</th>
                     <th className="px-3 py-2 font-medium">{t('taxi_fleet.settlements.ledger.trip', 'Trip')}</th>
                     <th className="px-3 py-2 font-medium text-right">{t('taxi_fleet.settlements.costs.gross', 'Gross')}</th>
@@ -306,6 +368,9 @@ export function SettlementCostsToReconcilePanel({
                             includedLabel={t('taxi_fleet.settlements.costsToReconcile.includedBadge', 'Included')}
                             excludedLabel={t('taxi_fleet.settlements.costsToReconcile.excludedBadge', 'Excluded')}
                           />
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          <SettlementExpenseReceiptCell row={row} t={t} />
                         </td>
                         <td className="px-3 py-2">{row.documentNumber ?? '—'}</td>
                         <td className="px-3 py-2">
@@ -366,7 +431,7 @@ export function SettlementCostsToReconcilePanel({
                     )
                   })}
                   <tr className="border-t bg-muted/30 font-semibold">
-                    <td className="px-3 py-2" colSpan={5}>
+                    <td className="px-3 py-2" colSpan={6}>
                       {t('taxi_fleet.settlements.costsToReconcile.includedTotals', 'Included totals')}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">{formatMoney(includedTotals.gross)}</td>

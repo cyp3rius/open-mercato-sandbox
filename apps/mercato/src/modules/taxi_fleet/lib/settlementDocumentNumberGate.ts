@@ -7,6 +7,15 @@ import { settlementMissingDocumentNumberTripIds } from './receiptExtractionRules
 import { normalizeTripPlatform } from './tripPlatforms'
 import { tripCountsForSettlementRevenue } from './settlementRevenue'
 
+function readTripReceiptDocumentNumber(trip: TaxiFleetTrip): string | null {
+  const metadata = trip.metadata
+  if (!metadata || typeof metadata !== 'object') return null
+  const value = metadata.receiptDocumentNumber
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
 export async function assertWeeklySettlementDocumentNumbersComplete(
   em: EntityManager,
   params: {
@@ -34,14 +43,13 @@ export async function assertWeeklySettlementDocumentNumbersComplete(
     { tenantId: params.tenantId, organizationId: params.organizationId },
   )
 
-  const requiredTripIds = trips
-    .filter((trip) => {
-      const revenueAmount = Number(trip.revenueAmount ?? 0)
-      if (!(revenueAmount > 0)) return false
-      if (!tripCountsForSettlementRevenue(trip.status)) return false
-      return tripRequiresIncomeReceipt({ platform: normalizeTripPlatform(trip.platform) })
-    })
-    .map((trip) => trip.id)
+  const requiredTrips = trips.filter((trip) => {
+    const revenueAmount = Number(trip.revenueAmount ?? 0)
+    if (!(revenueAmount > 0)) return false
+    if (!tripCountsForSettlementRevenue(trip.status)) return false
+    return tripRequiresIncomeReceipt({ platform: normalizeTripPlatform(trip.platform) })
+  })
+  const requiredTripIds = requiredTrips.map((trip) => trip.id)
 
   if (!requiredTripIds.length) return { ok: true }
 
@@ -60,11 +68,23 @@ export async function assertWeeklySettlementDocumentNumbersComplete(
     { tenantId: params.tenantId, organizationId: params.organizationId },
   )
 
+  const documentNumberByTripId = new Map<string, string>()
+  for (const entry of incomeEntries) {
+    if (!entry.tripId) continue
+    const fromEntry = entry.documentNumber?.trim()
+    if (fromEntry) documentNumberByTripId.set(entry.tripId, fromEntry)
+  }
+  for (const trip of requiredTrips) {
+    if (documentNumberByTripId.has(trip.id)) continue
+    const fromMetadata = readTripReceiptDocumentNumber(trip)
+    if (fromMetadata) documentNumberByTripId.set(trip.id, fromMetadata)
+  }
+
   const missing = settlementMissingDocumentNumberTripIds({
     requiredTripIds,
-    incomeEntries: incomeEntries.map((entry) => ({
-      tripId: entry.tripId,
-      documentNumber: entry.documentNumber,
+    incomeEntries: requiredTripIds.map((tripId) => ({
+      tripId,
+      documentNumber: documentNumberByTripId.get(tripId) ?? null,
     })),
   })
 

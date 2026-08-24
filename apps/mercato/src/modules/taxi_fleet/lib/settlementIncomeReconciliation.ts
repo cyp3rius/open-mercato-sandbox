@@ -1,11 +1,16 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import { TaxiFleetFinancialEntry } from '../data/entities'
+import { TaxiFleetFinancialEntry, TaxiFleetTrip } from '../data/entities'
 import { getWeekEnd } from './weekUtils'
 import { normalizeTripPlatform, type TaxiFleetTripPlatform } from './tripPlatforms'
 import { readTripPaymentType, tripCountsForSettlementRevenue } from './settlementRevenue'
 import type { TripRequestPaymentType } from './tripRequestForm'
+import {
+  isTripReceiptVerified,
+  type DriverTripListExtras,
+} from './driverTripReceiptStatus'
 import type { SettlementTripSnapshot } from './settlementTripDistance'
+import type { SettlementTripReceiptExtras } from './settlementTripReceiptEnrichment'
 import { tripRequiresIncomeReceipt } from './tripIncomeReceiptRules'
 
 export { tripRequiresIncomeReceipt } from './tripIncomeReceiptRules'
@@ -33,17 +38,28 @@ export function tripMissingPlatformForRevenue(params: {
   return params.platform == null
 }
 
+function tripHasIncomeReceiptEvidence(params: {
+  tripId: string
+  incomeTripIds: ReadonlySet<string>
+  receiptExtras?: SettlementTripReceiptExtras | DriverTripListExtras | null
+}): boolean {
+  if (params.incomeTripIds.has(params.tripId)) return true
+  if (!params.receiptExtras) return false
+  return isTripReceiptVerified(params.receiptExtras)
+}
+
 export function tripMissingIncomeReceipt(params: {
   tripId: string
   platform: TaxiFleetTripPlatform | null
   revenueAmount: number
   status: string
   incomeTripIds: ReadonlySet<string>
+  receiptExtras?: SettlementTripReceiptExtras | DriverTripListExtras | null
 }): boolean {
   if (!tripCountsForSettlementRevenue(params.status)) return false
   if (params.revenueAmount <= 0) return false
   if (!tripRequiresIncomeReceipt({ platform: params.platform })) return false
-  return !params.incomeTripIds.has(params.tripId)
+  return !tripHasIncomeReceiptEvidence(params)
 }
 
 export function buildSettlementIncomeReconciliationSummary(
@@ -76,6 +92,7 @@ export function enrichSettlementTripSnapshot(params: {
   distanceKm: number | null
   missingDistance: boolean
   incomeTripIds: ReadonlySet<string>
+  receiptExtras?: SettlementTripReceiptExtras | null
 }): SettlementTripSnapshot {
   const platform = normalizeTripPlatform(params.trip.platform)
   const revenueAmount = toNumber(params.trip.revenueAmount)
@@ -102,6 +119,7 @@ export function enrichSettlementTripSnapshot(params: {
       revenueAmount,
       status: params.trip.status,
       incomeTripIds: params.incomeTripIds,
+      receiptExtras: params.receiptExtras,
     }),
   }
 }
@@ -116,6 +134,25 @@ export async function loadIncomeTripIdsForWeek(
   },
 ): Promise<Set<string>> {
   const weekEnd = getWeekEnd(params.weekStart)
+  const trips = await findWithDecryption(
+    em,
+    TaxiFleetTrip,
+    {
+      tenantId: params.tenantId,
+      organizationId: params.organizationId,
+      teamMemberId: params.teamMemberId,
+      deletedAt: null,
+      startedAt: {
+        $gte: new Date(`${params.weekStart}T00:00:00`),
+        $lte: new Date(`${weekEnd}T23:59:59.999`),
+      },
+    },
+    undefined,
+    { tenantId: params.tenantId, organizationId: params.organizationId },
+  )
+  const tripIds = trips.map((trip) => trip.id)
+  if (!tripIds.length) return new Set<string>()
+
   const entries = await findWithDecryption(
     em,
     TaxiFleetFinancialEntry,
@@ -125,20 +162,16 @@ export async function loadIncomeTripIdsForWeek(
       teamMemberId: params.teamMemberId,
       kind: 'income',
       deletedAt: null,
-      tripId: { $ne: null },
-      occurredAt: {
-        $gte: new Date(`${params.weekStart}T00:00:00`),
-        $lte: new Date(`${weekEnd}T23:59:59`),
-      },
+      tripId: { $in: tripIds },
     },
     undefined,
     { tenantId: params.tenantId, organizationId: params.organizationId },
   )
-  const tripIds = new Set<string>()
+  const linkedTripIds = new Set<string>()
   for (const entry of entries) {
-    if (entry.tripId) tripIds.add(entry.tripId)
+    if (entry.tripId) linkedTripIds.add(entry.tripId)
   }
-  return tripIds
+  return linkedTripIds
 }
 
 export function readTripPaymentTypeFromSnapshot(trip: SettlementTripSnapshot): TripRequestPaymentType {

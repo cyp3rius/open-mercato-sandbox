@@ -36,20 +36,25 @@ export function buildDriverTripPayload(input: {
   const revenue = parseNumericValue(input.commercial.revenueAmount) ?? 0
   const documentNumber = input.commercial.receiptDocumentNumber.trim()
 
+  const isReceiptCompletion = input.commercial.completionMode === 'receipt'
+
   const base: Record<string, unknown> = {
-    tripType: input.commercial.tripType,
-    platform: input.commercial.platform,
+    completionMode: input.commercial.completionMode,
+    tripType: isReceiptCompletion ? 'other' : input.commercial.tripType,
+    platform: isReceiptCompletion ? null : input.commercial.platform,
     startedAt: input.route.startedAt,
     endedAt: input.route.endedAt || null,
     distanceKm: input.route.distanceKm,
-    revenueAmount: revenue,
+    revenueAmount: isReceiptCompletion ? 0 : revenue,
     currencyCode: 'PLN',
     notes: input.commercial.notes,
     resourceId: input.resourceId || undefined,
     assignmentId: input.assignmentId || undefined,
     status: input.status ?? 'completed',
     metadata,
-    ...(input.commercial.tripType === 'client' && input.commercial.customerEntityId
+    ...(!isReceiptCompletion &&
+    input.commercial.tripType === 'client' &&
+    input.commercial.customerEntityId
       ? { customerEntityId: input.commercial.customerEntityId }
       : {}),
     ...(documentNumber ? { receiptDocumentNumber: documentNumber } : {}),

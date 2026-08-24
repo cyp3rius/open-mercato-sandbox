@@ -150,6 +150,7 @@ export type CrudFieldOption = {
   icon?: string
   /** Dictionary / catalog: optional CSS color (e.g. hex). */
   color?: string
+  disabled?: boolean
 }
 
 export type CrudBuiltinField = CrudFieldBase & {
@@ -3808,7 +3809,7 @@ const FieldControl = React.memo(function FieldControlImpl({
         >
           <option value="">{t('ui.forms.select.emptyOption', '—')}</option>
           {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
+            <option key={opt.value} value={opt.value} disabled={opt.disabled}>
               {opt.label}
             </option>
           ))}

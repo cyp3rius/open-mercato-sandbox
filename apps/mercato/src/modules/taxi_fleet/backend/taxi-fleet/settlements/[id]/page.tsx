@@ -1,15 +1,17 @@
 'use client'
 
 import * as React from 'react'
-import { Banknote, Check, Loader2 } from 'lucide-react'
+import { Banknote, Check, Loader2, Trash2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { ApplyBreadcrumb } from '@open-mercato/ui/backend/AppShell'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { FormHeader } from '@open-mercato/ui/backend/forms'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { updateCrud } from '@open-mercato/ui/backend/utils/crud'
+import { deleteCrud, updateCrud } from '@open-mercato/ui/backend/utils/crud'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { DetailTabsLayout } from '@open-mercato/core/modules/customers/components/detail/DetailTabsLayout'
 import { TAXI_FLEET_BASE } from '../../paths'
@@ -38,6 +40,7 @@ import { isWeeklySettlementLocked } from '../../../../lib/settlementLock'
 import {
   canApproveWeeklySettlement,
   canCloseWeeklySettlementPayout,
+  canDeleteWeeklySettlement,
 } from '../../../../lib/settlementStatusTransitions'
 import { formatWeekRange } from '../../../../lib/weekUtils'
 
@@ -87,8 +90,10 @@ function parseSettlementTrips(snapshotJson?: Record<string, unknown> | null): Se
 
 export default function TaxiFleetSettlementDetailPage({ params }: { params?: { id?: string } }) {
   const t = useT()
+  const router = useRouter()
   const settlementId = params?.id ?? ''
-  const { resolveName } = useFleetDriverDirectory()
+  const { confirm, ConfirmDialogElement } = useConfirmDialog()
+  const { resolveName, resolvePayoutPercent } = useFleetDriverDirectory()
   const { canManageSettlements } = useTaxiFleetPermissions()
   const { settings: fleetSettings } = useTaxiFleetSettings()
   const [row, setRow] = React.useState<SettlementRow | null>(null)
@@ -96,6 +101,7 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
   const [error, setError] = React.useState<string | null>(null)
   const [tab, setTab] = React.useState<SettlementDetailTabId>('summary')
   const [isApproving, setIsApproving] = React.useState(false)
+  const [isDeleting, setIsDeleting] = React.useState(false)
   const [closePayoutOpen, setClosePayoutOpen] = React.useState(false)
   const [adjustmentsOpen, setAdjustmentsOpen] = React.useState(false)
 
@@ -208,6 +214,7 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
 
   const canApprove = canManageSettlements && row != null && canApproveWeeklySettlement(row.status)
   const canClosePayout = canManageSettlements && row != null && canCloseWeeklySettlementPayout(row.status)
+  const canDelete = canManageSettlements && row != null && canDeleteWeeklySettlement(row.status)
 
   const openAdjustments = React.useCallback(() => {
     setAdjustmentsOpen(true)
@@ -240,10 +247,44 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
     setClosePayoutOpen(true)
   }, [])
 
+  const deleteSettlement = React.useCallback(async () => {
+    if (!row) return
+    const ok = await confirm({
+      title: t('taxi_fleet.settlements.list.deleteConfirm', 'Delete this draft settlement?'),
+      variant: 'destructive',
+    })
+    if (!ok) return
+    setIsDeleting(true)
+    try {
+      await deleteCrud('taxi_fleet/settlements', row.id, {
+        errorMessage: t('taxi_fleet.settlements.list.deleteError', 'Could not delete settlement.'),
+      })
+      flash(t('taxi_fleet.settlements.list.deleteSuccess', 'Settlement deleted.'), 'success')
+      router.push(`${TAXI_FLEET_BASE}/settlements-overview/weekly`)
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [confirm, row, router, t])
+
   const headerActions = React.useMemo(() => {
-    if (!canApprove && !canClosePayout) return null
+    if (!canApprove && !canClosePayout && !canDelete) return null
     return (
       <div className="flex w-full flex-wrap items-center justify-end gap-2 md:ml-auto md:w-auto">
+        {canDelete ? (
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={isDeleting}
+            onClick={() => void deleteSettlement()}
+          >
+            {isDeleting ? (
+              <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+            ) : (
+              <Trash2 className="mr-2 size-4" aria-hidden />
+            )}
+            {t('taxi_fleet.settlements.actions.delete', 'Delete draft')}
+          </Button>
+        ) : null}
         {canApprove ? (
           <Button type="button" disabled={isApproving} onClick={() => void approveSettlement()}>
             {isApproving ? (
@@ -262,7 +303,7 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
         ) : null}
       </div>
     )
-  }, [approveSettlement, canApprove, canClosePayout, isApproving, openClosePayout, t])
+  }, [approveSettlement, canApprove, canClosePayout, canDelete, deleteSettlement, isApproving, isDeleting, openClosePayout, t])
 
   const tabs = React.useMemo(
     () => [
@@ -346,7 +387,12 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
 
                 {tab === 'trips' ? (
                   <div className="space-y-4">
-                    <SettlementTripsToReconcilePanel trips={trips} />
+                    <SettlementTripsToReconcilePanel
+                      trips={trips}
+                      settlementId={row.id}
+                      readOnly={readOnly}
+                      onUpdated={load}
+                    />
                     <SettlementRevenueBreakdownPanel
                       titleMode="summary"
                       breakdown={revenueBreakdown}
@@ -391,6 +437,7 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
                   status: row.status,
                 }}
                 resolveDriverName={resolveName}
+                resolvePayoutPercent={resolvePayoutPercent}
               />
               <SettlementTripDistancePanel
                 settlementId={row.id}
@@ -450,6 +497,7 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
             airportA4Amount={String(row.airportA4Amount ?? '0')}
             onSaved={load}
           />
+          {ConfirmDialogElement}
         </PageBody>
       </Page>
     </>

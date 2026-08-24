@@ -10,6 +10,7 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Notice } from '@open-mercato/ui/primitives/Notice'
 import { DriverTripGate } from '../../../../components/driverApp/DriverTripGate'
+import { DriverTripReceiptStatusBadge } from '../../../../components/driverApp/DriverTripReceiptStatusBadge'
 import {
   driverBadgeNeutralClass,
   driverBadgeWarningClass,
@@ -32,6 +33,14 @@ import { isDriverTripElectronicallyPrepaid } from '../../../../lib/driverTripPay
 import { findDriverTripOverlap } from '../../../../lib/driverTripOverlapClient'
 import { useTaxiFleetLabels } from '../../../../components/useTaxiFleetLabels'
 import { DriverReceiptPreview } from '../../../../components/driverApp/DriverReceiptPreview'
+import { DriverReceiptFields } from '../../../../components/driverApp/DriverReceiptFields'
+import {
+  isTripReceiptProcessing,
+  isTripReceiptVerified,
+  resolveTripReceiptAttachmentId,
+  tripHasReceiptAttachment,
+  type DriverTripReceiptWarning,
+} from '../../../../lib/driverTripReceiptStatus'
 
 type TripRow = {
   id: string
@@ -44,6 +53,9 @@ type TripRow = {
   notes?: string | null
   distanceKm?: string | number | null
   metadata?: Record<string, unknown> | null
+  receiptAttachmentId?: string | null
+  ocrStatus?: string | null
+  warnings?: DriverTripReceiptWarning[]
 }
 
 function hasText(value: unknown): value is string {
@@ -127,6 +139,9 @@ export default function DriverTripDetailPage({
   const [showDetails, setShowDetails] = React.useState(false)
   const [revenueAmount, setRevenueAmount] = React.useState('')
   const [distanceKm, setDistanceKm] = React.useState('')
+  const [receiptDocumentNumber, setReceiptDocumentNumber] = React.useState('')
+  const [receiptAttachmentId, setReceiptAttachmentId] = React.useState<string | null>(null)
+  const [receiptAttachmentName, setReceiptAttachmentName] = React.useState<string | null>(null)
 
   const reload = React.useCallback(async () => {
     if (!tripId) {
@@ -169,6 +184,48 @@ export default function DriverTripDetailPage({
       active = false
     }
   }, [reload])
+
+  React.useEffect(() => {
+    if (!trip || !tripHasReceiptAttachment(trip)) return
+    if (!isTripReceiptProcessing(trip)) return
+    const timer = window.setInterval(() => {
+      void reload().catch(() => undefined)
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [reload, trip])
+
+  async function saveReceipt() {
+    if (!trip || trip.status !== 'completed') return
+    if (tripHasReceiptAttachment(trip)) return
+    if (!receiptAttachmentId) {
+      flash(
+        t('taxi_fleet.driverApp.receipt.photoRequired', 'Receipt photo is required for this trip.'),
+        'error',
+      )
+      return
+    }
+    setBusy(true)
+    setNotice(null)
+    try {
+      await putTripUpdate({
+        id: trip.id,
+        receiptAttachmentId,
+        receiptDocumentNumber: receiptDocumentNumber.trim() || undefined,
+      })
+      setReceiptAttachmentId(null)
+      setReceiptAttachmentName(null)
+      setReceiptDocumentNumber('')
+      flash(t('taxi_fleet.driverApp.trips.receiptSaved', 'Receipt saved.'), 'success')
+      await reload()
+    } catch (err) {
+      const message =
+        (err as { body?: { error?: string }; message?: string } | null)?.body?.error ||
+        (err as { message?: string } | null)?.message
+      flash(message || t('taxi_fleet.driverApp.trips.saveFailed', 'Could not save trip.'), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function savePricing() {
     if (!trip || trip.status !== 'scheduled') return
@@ -290,7 +347,18 @@ export default function DriverTripDetailPage({
 
   const isScheduled = trip?.status === 'scheduled'
   const isInProgress = trip?.status === 'in_progress'
+  const isCompleted = trip?.status === 'completed'
   const isPrepaid = trip ? isDriverTripElectronicallyPrepaid(trip) : false
+  const resolvedReceiptAttachmentId = trip ? resolveTripReceiptAttachmentId(trip) : null
+  const receiptStatusItem = {
+    receiptAttachmentId: resolvedReceiptAttachmentId,
+    ocrStatus: trip?.ocrStatus ?? null,
+    warnings: trip?.warnings ?? [],
+  }
+  const receiptProcessing = Boolean(trip && isTripReceiptProcessing(receiptStatusItem))
+  const receiptVerified = Boolean(trip && isTripReceiptVerified(receiptStatusItem))
+  const showReceiptProcessingNotice = receiptProcessing && !receiptVerified
+  const canSupplementReceipt = Boolean(trip && isCompleted && !tripHasReceiptAttachment(trip))
   const request = trip
     ? tripRequestDetailsFromMetadata(trip.metadata ?? null, {
         distanceKm: trip.distanceKm != null ? String(trip.distanceKm) : null,
@@ -309,10 +377,7 @@ export default function DriverTripDetailPage({
     trip?.metadata && typeof trip.metadata.receiptDocumentNumber === 'string'
       ? trip.metadata.receiptDocumentNumber.trim()
       : ''
-  const receiptAttachmentId =
-    trip?.metadata && typeof trip.metadata.receiptAttachmentId === 'string'
-      ? trip.metadata.receiptAttachmentId
-      : ''
+  const receiptAttachmentIdForPreview = resolvedReceiptAttachmentId ?? ''
   const yesLabel = t('taxi_fleet.driverApp.common.yes', 'Yes')
   const noLabel = t('taxi_fleet.driverApp.common.no', 'No')
   const serviceTypeLabel = request?.serviceType
@@ -329,7 +394,10 @@ export default function DriverTripDetailPage({
     : null
 
   return (
-    <DriverTripGate title={t('taxi_fleet.driverApp.trips.detail', 'Trip')}>
+    <DriverTripGate
+      showShiftPrompt={trip != null && !isCompleted}
+      title={t('taxi_fleet.driverApp.trips.detail', 'Trip')}
+    >
       <div className="space-y-4">
         <Link
           href="/driver/trips"
@@ -339,6 +407,14 @@ export default function DriverTripDetailPage({
           {t('taxi_fleet.driverApp.trips.backToList', 'Back to trips')}
         </Link>
         {notice ? <Notice variant="info">{notice}</Notice> : null}
+        {showReceiptProcessingNotice ? (
+          <Notice variant="info">
+            {t(
+              'taxi_fleet.driverApp.trips.receiptProcessing',
+              'Receipt recognition in progress.',
+            )}
+          </Notice>
+        ) : null}
         {trip && request ? (
           <>
             <div className={driverCardClass}>
@@ -361,11 +437,17 @@ export default function DriverTripDetailPage({
                         : t('taxi_fleet.driverApp.trips.detailHint', 'Overview of this reported trip.')}
                   </p>
                 </div>
-                <span
-                  className={`${isScheduled || isInProgress ? driverBadgeWarningClass : driverBadgeNeutralClass}`}
-                >
-                  {resolveTripStatusLabel(trip.status)}
-                </span>
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                  <span
+                    className={`${isScheduled || isInProgress ? driverBadgeWarningClass : driverBadgeNeutralClass}`}
+                  >
+                    {resolveTripStatusLabel(trip.status)}
+                  </span>
+                  <DriverTripReceiptStatusBadge
+                    item={receiptStatusItem}
+                    t={t}
+                  />
+                </div>
               </div>
 
               <div className="mt-4">
@@ -395,6 +477,45 @@ export default function DriverTripDetailPage({
                 />
               </div>
             </div>
+
+            {canSupplementReceipt ? (
+              <div className={driverCardClass}>
+                <div className={driverSectionTitleClass}>
+                  {t('taxi_fleet.driverApp.trips.receiptSupplementTitle', 'Add receipt')}
+                </div>
+                <p className={driverSectionDescClass}>
+                  {t(
+                    'taxi_fleet.driverApp.trips.receiptSupplementHint',
+                    'This trip has no receipt yet. You can add one now.',
+                  )}
+                </p>
+                <div className="mt-4">
+                  <DriverReceiptFields
+                    documentNumber={receiptDocumentNumber}
+                    attachmentId={receiptAttachmentId}
+                    attachmentName={receiptAttachmentName}
+                    draftRecordId={trip.id}
+                    required
+                    disabled={busy}
+                    onDocumentNumberChange={setReceiptDocumentNumber}
+                    onAttachmentChange={({ id, fileName }) => {
+                      setReceiptAttachmentId(id)
+                      setReceiptAttachmentName(fileName)
+                    }}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  className={`${driverPrimaryActionClass} mt-4`}
+                  disabled={busy || !receiptAttachmentId}
+                  onClick={() => void saveReceipt()}
+                >
+                  {busy
+                    ? t('taxi_fleet.driverApp.trips.saving', 'Saving…')
+                    : t('taxi_fleet.driverApp.trips.saveReceipt', 'Save receipt')}
+                </Button>
+              </div>
+            ) : null}
 
             <Button
               type="button"
@@ -502,12 +623,12 @@ export default function DriverTripDetailPage({
                     label={t('taxi_fleet.driverApp.receipt.number', 'Receipt number')}
                     value={receiptNumber || null}
                   />
-                  {receiptAttachmentId ? (
+                  {receiptAttachmentIdForPreview ? (
                     <div className="border-b border-[#F1F1F4] py-3 last:border-b-0">
                       <div className={driverMutedTextClass}>
                         {t('taxi_fleet.driverApp.receipt.photo', 'Receipt photo')}
                       </div>
-                      <DriverReceiptPreview attachmentId={receiptAttachmentId} />
+                      <DriverReceiptPreview attachmentId={receiptAttachmentIdForPreview} />
                     </div>
                   ) : null}
                   <OptionalDetailRow

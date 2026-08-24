@@ -125,3 +125,39 @@ export function mapDriverExpenseToCreateInput(
 export function resolveDriverExpenseSortField(raw: string | null): DriverExpenseSortField {
   return raw === 'createdAt' ? 'createdAt' : 'occurredAt'
 }
+
+export type ExpenseReceiptOcrFields = {
+  amount: string
+  receiptAttachmentId?: string | null
+  ocrStatus?: string | null
+  warnings?: DriverExpenseWarning[] | null
+  isDocumentDuplicate?: boolean | null
+}
+
+export function isExpenseOcrProcessing(item: ExpenseReceiptOcrFields): boolean {
+  if (item.ocrStatus === 'pending' || item.ocrStatus === 'processing') return true
+  if (!item.receiptAttachmentId) return false
+  if (
+    item.ocrStatus === 'failed' ||
+    item.ocrStatus === 'applied' ||
+    item.ocrStatus === 'needs_review' ||
+    item.ocrStatus === 'extracted'
+  ) {
+    return false
+  }
+  const amount = Number(item.amount)
+  return !Number.isFinite(amount) || amount <= 0
+}
+
+export function expenseHasWarnings(item: ExpenseReceiptOcrFields): boolean {
+  if (Array.isArray(item.warnings) && item.warnings.length > 0) return true
+  if (item.ocrStatus === 'needs_review' || item.ocrStatus === 'failed') return true
+  return false
+}
+
+export function isExpenseOcrVerified(item: ExpenseReceiptOcrFields): boolean {
+  if (!item.receiptAttachmentId) return false
+  if (isExpenseOcrProcessing(item)) return false
+  if (expenseHasWarnings(item)) return false
+  return item.ocrStatus === 'applied' || item.ocrStatus === 'extracted'
+}

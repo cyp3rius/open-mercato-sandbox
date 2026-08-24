@@ -73,6 +73,10 @@ IMPORTANT: Before any research or coding, match the task to the root `AGENTS.md`
 | Implementing a spec (or specific phases) with coordinated agents, unit tests, docs, progress tracking | `.ai/skills/implement-spec/SKILL.md` |
 | Writing new specs, updating existing specs after implementation, documenting architectural decisions, maintaining changelogs | `.ai/specs/AGENTS.md` |
 | Reviewing code changes for architecture, security, conventions, and quality compliance | `.ai/skills/code-review/SKILL.md` |
+| **Documentation** | |
+| Operator user guides, module descriptions (EN), Polish PDF manuals for Daily work sidebar | `.ai/skills/user-guide-authoring/SKILL.md` + `.ai/module-guides/INDEX.md` |
+| In-CRM playbook procedures (MD ↔ playbook import) | `.ai/skills/procedure-authoring/SKILL.md` |
+| Open Mercato MCP operations (local/remote CRM) | `.ai/skills/remote-crm-mcp/SKILL.md` + domain `crm-*` skills |
 
 ## Core Principles
 

@@ -2,7 +2,18 @@ import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 
 const DRIVER_UPDATE_IGNORED_KEYS = new Set(['id', 'clientMutationId'])
 
-export type DriverTripExecutionAction = 'pricing' | 'start' | 'complete' | 'live_update'
+export type DriverTripExecutionAction =
+  | 'pricing'
+  | 'start'
+  | 'complete'
+  | 'live_update'
+  | 'receipt_supplement'
+
+const RECEIPT_SUPPLEMENT_KEYS = new Set([
+  'receiptAttachmentId',
+  'receiptDocumentNumber',
+  'completionMode',
+])
 
 function presentKeys(body: Record<string, unknown>): string[] {
   return Object.keys(body).filter((key) => {
@@ -15,6 +26,7 @@ function presentKeys(body: Record<string, unknown>): string[] {
  * Restricts driver trip updates:
  * - `scheduled`: only price/distance, or start (overwrite startedAt → in_progress)
  * - `in_progress`: complete with endedAt only, or full live-trip finish payload
+ * - `completed`: supplement receipt when none is attached yet
  * - other statuses: no writes
  */
 export function resolveDriverTripUpdateInput(
@@ -73,6 +85,17 @@ export function resolveDriverTripUpdateInput(
     return {
       action: 'live_update',
       input: body,
+    }
+  }
+
+  if (status === 'completed') {
+    const isReceiptSupplement =
+      keys.includes('receiptAttachmentId') &&
+      typeof body.receiptAttachmentId === 'string' &&
+      body.receiptAttachmentId.trim().length > 0 &&
+      keys.every((key) => RECEIPT_SUPPLEMENT_KEYS.has(key))
+    if (isReceiptSupplement) {
+      return { action: 'receipt_supplement', input: { id } }
     }
   }
 

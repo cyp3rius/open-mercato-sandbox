@@ -1,0 +1,96 @@
+---
+title: Księgowość (rejestr faktur)
+description: Jak wystawiać faktury, importować dokumenty kosztowe i sprzedażowe oraz przeglądać rejestr w module Księgowość.
+---
+
+# Księgowość (rejestr faktur)
+
+## Dla kogo jest ten moduł
+
+Moduł **Księgowość** to **rejestr faktur** — nie pełna księga rachunkowa. Służy działowi finansowemu do ewidencji faktur **wystawionych w systemie** oraz **zaimportowanych** (kosztowych i sprzedażowych), z załącznikami PDF i podziałem na przychody, koszty i szkice.
+
+## Gdzie znaleźć w systemie
+
+Ścieżka w menu: **Codzienna praca → Księgowość**.
+
+Ustawienia firm sprzedających i numeracji: ikona **ustawień** na ekranie księgowości lub **Ustawienia → Księgowość**.
+
+## Co można zrobić
+
+- Przeglądać faktury w zakładkach: **Sprzedaż (przychody)**, **Koszty**, **Szkice**.
+- **Wystawić fakturę** w systemie (dokument wystawiony).
+- **Importować** fakturę kosztową lub sprzedażową z pliku.
+- Edytować nagłówek faktury i zarządzać **załącznikami**.
+- Konfigurować **podmioty sprzedające** (dane wystawcy, numery faktur).
+
+## Instrukcje krok po kroku
+
+### Wystawienie faktury
+
+1. Otwórz **Księgowość**.
+2. Kliknij **Wystaw fakturę**.
+3. Wybierz **podmiot sprzedający** (Twoja firma wystawiająca).
+4. Wskaż **nabywcę** — wyszukaj firmę w bazie klientów.
+5. Dodaj **pozycje** faktury, walutę i daty.
+6. Opcjonalnie zaznacz **szkic**, jeśli dokument nie jest jeszcze finalny.
+7. Zapisz.
+
+### Import faktury kosztowej
+
+1. Na ekranie **Księgowość** kliknij ikonę **Import**.
+2. Wybierz **Import kosztu**.
+3. Uzupełnij dane nagłówka faktury.
+4. Dołącz **plik PDF** (lub inny dozwolony format) faktury.
+5. Zapisz — system utworzy rekord i powiąże załącznik.
+
+### Import faktury sprzedażowej (spoza systemu)
+
+1. Użyj **Import** → **Import sprzedaży**.
+2. Postępuj jak przy imporcie kosztu — typ dokumentu jest ustawiany przez system.
+
+### Przeglądanie rejestru
+
+1. Na pulpicie księgowości wybierz zakładkę **Sprzedaż**, **Koszty** lub **Szkice**.
+2. Użyj **wyszukiwarki**, aby znaleźć fakturę po numerze lub kontrahencie.
+3. Kliknij wiersz, aby otworzyć szczegóły i załączniki.
+
+### Konfiguracja podmiotu sprzedającego
+
+1. Przejdź do **ustawień księgowości**.
+2. Otwórz listę **podmiotów sprzedających**.
+3. Dodaj lub edytuj firmę: dane rejestrowe, rachunki bankowe, **szablon numeracji** faktur.
+
+## Uprawnienia
+
+| Uprawnienie | Co umożliwia |
+|-------------|--------------|
+| Podgląd faktur | Hub i szczegóły dokumentów |
+| Zarządzanie fakturami | Wystawianie, edycja, import, usuwanie |
+| Ustawienia księgowości | Podmioty sprzedające i konfiguracja |
+
+Domyślnie moduł jest dostępny dla **administratora**. Pracownicy finansowi muszą otrzymać odpowiednie uprawnienia od administratora roli.
+
+## Powiązania z innymi modułami
+
+- **Klienci** — nabywca / kontrahent na fakturze.
+- **Waluty** — kod waluty na dokumencie.
+- **Załączniki** — pliki PDF powiązane z fakturą.
+
+Moduł **nie zastępuje** pełnego obiegu sprzedaży (oferty, zamówienia) — to osobny rejestr dokumentów księgowych.
+
+## Częste pytania
+
+**Pytanie:** Nie widzę menu Księgowość.  
+**Odpowiedź:** Poproś administratora o uprawnienie do podglądu faktur księgowych.
+
+**Pytanie:** Czym różni się to od faktur w Sprzedaży?  
+**Odpowiedź:** Księgowość to rejestr i archiwum (wystawione + importowane). Sprzedaż obsługuje proces handlowy oferta → zamówienie.
+
+**Pytanie:** W jakiej kolejności importować plik?  
+**Odpowiedź:** Najpierw zapisz rekord faktury w formularzu, potem dołącz plik — system powiąże załącznik z utworzonym dokumentem.
+
+## Powiązane materiały
+
+- [Klienci](./customers)
+- [Prosta sprzedaż](./sales-simple)
+- [Przegląd instrukcji PL](./overview)

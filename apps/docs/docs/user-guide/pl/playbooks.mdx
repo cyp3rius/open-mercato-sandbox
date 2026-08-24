@@ -1,0 +1,79 @@
+---
+title: Procedury
+description: Jak tworzyć i publikować procedury oraz gdzie są wykonywane w systemie.
+---
+
+# Procedury
+
+## Dla kogo jest ten moduł
+
+Moduł **Procedury** to biblioteka procedur krok po kroku używanych przy obsłudze spraw i procesów w CRM. Autorzy procedur (zwykle administratorzy lub liderzy zespołu) tworzą i publikują je w tym module; operatorzy **wykonują** procedury na sprawie, nie z listy definicji.
+
+## Gdzie znaleźć w systemie
+
+Ścieżka w menu: **Codzienna praca → Serwis → Procedury**.
+
+**Wykonanie** procedury: na szczegółach **Sprawy** (moduł Sprawy), nie na liście procedur.
+
+## Co można zrobić
+
+- Przeglądać listę procedur (tytuł, wersja, odbiorcy).
+- Tworzyć i edytować procedury (administrator).
+- Publikować nową wersję procedury.
+- Importować i eksportować procedury w formacie Markdown (administrator).
+- Uruchamiać procedurę na sprawie (operator — moduł Sprawy).
+
+## Instrukcje krok po kroku
+
+### Utworzenie procedury (autor)
+
+1. Otwórz **Procedury** → **Utwórz**.
+2. Podaj **tytuł** i identyfikator (slug), jeśli wymagany.
+3. Napisz **treść dla operatora** — jasny opis celu procedury.
+4. Zdefiniuj **kroki procedury** w edytorze kroków.
+5. Ustaw **odbiorców** (wewnętrzni / klienci / obie grupy) i opcjonalnie SLA.
+6. Zapisz.
+7. Gdy procedura jest gotowa, kliknij **Opublikuj wersję**.
+
+### Import procedury z pliku
+
+1. Na liście procedur użyj akcji **Import**.
+2. Wybierz plik Markdown zgodny z formatem systemu.
+3. Zweryfikuj zaimportowaną treść i opublikuj wersję.
+
+### Wykonanie procedury (operator)
+
+1. Otwórz **Sprawę** w module Sprawy.
+2. Wybierz i **uruchom** odpowiednią procedurę.
+3. Wykonuj kroki wyświetlane na ekranie sprawy.
+4. Zakończ lub przerwij procedurę zgodnie z opisem kroków.
+
+Procedury w CRM to **nie to samo** co niniejsza instrukcja obsługi — instrukcja opisuje ekrany systemu; procedura to proces biznesowy wykonywany na konkretnej sprawie.
+
+## Uprawnienia
+
+| Uprawnienie | Co umożliwia |
+|-------------|--------------|
+| Podgląd procedur | Lista i szczegóły |
+| Tworzenie / edycja / usuwanie | Zwykle tylko administrator |
+| Ustawienia słowników akcji | Administrator |
+
+Pracownicy zwykle mogą **przeglądać** procedury i **wykonywać** je na sprawach, ale nie edytować definicji.
+
+## Powiązania z innymi modułami
+
+- **Sprawy** — jedyne miejsce wykonania procedury dla operatora.
+- **Słowniki** — statusy i akcje procedur w ustawieniach modułu Procedury.
+
+## Częste pytania
+
+**Pytanie:** Dlaczego nie mogę edytować procedury?  
+**Odpowiedź:** Edycja jest zarezerwowana dla administratora. Jako operator uruchamiasz procedurę na sprawie.
+
+**Pytanie:** Gdzie są procedury z warsztatów w plikach?  
+**Odpowiedź:** Mogą być przygotowane jako Markdown i importowane do systemu — szczegóły ustala administrator.
+
+## Powiązane materiały
+
+- [Obsługa spraw](./cases)
+- [Przegląd instrukcji PL](./overview)

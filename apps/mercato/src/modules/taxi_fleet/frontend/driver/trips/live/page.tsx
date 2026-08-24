@@ -53,6 +53,7 @@ type Phase = 'active' | 'route' | 'commercial'
 
 function emptyCommercial(): DriverCommercialValue {
   return {
+    completionMode: 'manual',
     tripType: 'client',
     customerEntityId: '',
     customerLabel: '',

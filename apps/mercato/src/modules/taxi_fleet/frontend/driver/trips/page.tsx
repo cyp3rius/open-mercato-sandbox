@@ -9,6 +9,10 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { DriverTripGate } from '../../../components/driverApp/DriverTripGate'
 import {
+  DriverTripReceiptStatusBadge,
+  tripListHasProcessingReceipt,
+} from '../../../components/driverApp/DriverTripReceiptStatusBadge'
+import {
   driverBadgeInfoClass,
   driverBadgeNeutralClass,
   driverListRowClass,
@@ -16,6 +20,7 @@ import {
   driverPrimaryActionClass,
   driverSecondaryActionClass,
 } from '../../../components/driverApp/driverUi'
+import type { DriverTripReceiptWarning } from '../../../lib/driverTripReceiptStatus'
 import { cacheDriverJson, readCachedDriverJson } from '../../../lib/driverOffline/outbox'
 import { tripRequestDetailsFromMetadata } from '../../../lib/tripRequestForm'
 import { isDriverTripElectronicallyPrepaid } from '../../../lib/driverTripPayment'
@@ -32,6 +37,9 @@ type TripRow = {
   currencyCode?: string | null
   notes?: string | null
   metadata?: Record<string, unknown> | null
+  receiptAttachmentId?: string | null
+  ocrStatus?: string | null
+  warnings?: DriverTripReceiptWarning[]
 }
 
 type TripFilter = 'all' | 'today'
@@ -163,6 +171,21 @@ export default function DriverTripsPage() {
     }
   }, [t])
 
+  const reloadTrips = React.useCallback(async () => {
+    const { result } = await apiCall<{ items: TripRow[] }>('/api/taxi_fleet/driver/trips')
+    const next = sortTripsByStartedAtDesc(result.items ?? [])
+    setItems(next)
+    await cacheDriverJson('driver/trips', next)
+  }, [])
+
+  React.useEffect(() => {
+    if (!tripListHasProcessingReceipt(items)) return
+    const timer = window.setInterval(() => {
+      void reloadTrips().catch(() => undefined)
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [items, reloadTrips])
+
   const effectiveFilter: TripFilter = onOpenShift ? filter : 'all'
 
   const filteredItems = React.useMemo(() => {
@@ -188,7 +211,7 @@ export default function DriverTripsPage() {
   }
 
   return (
-    <DriverTripGate title={t('taxi_fleet.driverApp.trips.title', 'My trips')}>
+    <DriverTripGate showShiftPrompt={false} title={t('taxi_fleet.driverApp.trips.title', 'My trips')}>
       <div className="space-y-3">
         <Link href="/driver/trips/new" className={`${driverPrimaryActionClass} gap-2`}>
           <Plus className="size-4" aria-hidden />
@@ -240,12 +263,25 @@ export default function DriverTripsPage() {
                 : trip.revenueAmount != null && String(trip.revenueAmount).trim()
                   ? `${trip.revenueAmount} ${currency}`
                   : null
+              const receiptAttachmentId =
+                trip.receiptAttachmentId ??
+                (trip.metadata && typeof trip.metadata.receiptAttachmentId === 'string'
+                  ? trip.metadata.receiptAttachmentId
+                  : null)
+              const receiptItem = {
+                receiptAttachmentId,
+                ocrStatus: trip.ocrStatus ?? null,
+                warnings: trip.warnings ?? [],
+              }
               return (
                 <Link key={trip.id} href={`/driver/trips/${trip.id}`} className={driverListRowClass}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold text-[#071437]">
-                        {resolveTripStatusLabel(trip.status)}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-semibold text-[#071437]">
+                          {resolveTripStatusLabel(trip.status)}
+                        </div>
+                        <DriverTripReceiptStatusBadge item={receiptItem} t={t} />
                       </div>
                       {timeRange ? (
                         <div className={`mt-1 ${driverMutedTextClass}`}>{timeRange}</div>

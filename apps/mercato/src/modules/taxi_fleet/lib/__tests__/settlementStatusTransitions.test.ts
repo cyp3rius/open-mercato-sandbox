@@ -1,6 +1,7 @@
 import {
   canApproveWeeklySettlement,
   canCloseWeeklySettlementPayout,
+  canDeleteWeeklySettlement,
   isAllowedWeeklySettlementStatusTransition,
 } from '../settlementStatusTransitions'
 
@@ -26,5 +27,8 @@ describe('settlementStatusTransitions', () => {
     expect(canApproveWeeklySettlement('approved')).toBe(false)
     expect(canCloseWeeklySettlementPayout('approved')).toBe(true)
     expect(canCloseWeeklySettlementPayout('paid')).toBe(false)
+    expect(canDeleteWeeklySettlement('draft')).toBe(true)
+    expect(canDeleteWeeklySettlement('submitted')).toBe(false)
+    expect(canDeleteWeeklySettlement('approved')).toBe(false)
   })
 })

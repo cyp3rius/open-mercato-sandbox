@@ -1,4 +1,10 @@
-import { driverExpenseCanDelete, parseDriverExpenseWarnings } from '../driverExpenses'
+import {
+  driverExpenseCanDelete,
+  expenseHasWarnings,
+  isExpenseOcrProcessing,
+  isExpenseOcrVerified,
+  parseDriverExpenseWarnings,
+} from '../driverExpenses'
 
 describe('driverExpenses helpers', () => {
   it('parses known OCR warning codes', () => {
@@ -20,5 +26,32 @@ describe('driverExpenses helpers', () => {
     expect(driverExpenseCanDelete({ ocrStatus: 'needs_review' })).toBe(true)
     expect(driverExpenseCanDelete({ ocrStatus: 'failed' })).toBe(true)
     expect(driverExpenseCanDelete({ ocrStatus: 'applied', warnings: [] })).toBe(false)
+  })
+
+  it('derives OCR badge states for settlement and driver lists', () => {
+    expect(
+      isExpenseOcrVerified({
+        amount: '10.00',
+        receiptAttachmentId: 'att-1',
+        ocrStatus: 'applied',
+        warnings: [],
+      }),
+    ).toBe(true)
+    expect(
+      isExpenseOcrProcessing({
+        amount: '0.00',
+        receiptAttachmentId: 'att-1',
+        ocrStatus: null,
+        warnings: [],
+      }),
+    ).toBe(true)
+    expect(
+      expenseHasWarnings({
+        amount: '10.00',
+        receiptAttachmentId: 'att-1',
+        ocrStatus: 'failed',
+        warnings: [],
+      }),
+    ).toBe(true)
   })
 })

@@ -19,3 +19,7 @@ export function canApproveWeeklySettlement(status: string): boolean {
 export function canCloseWeeklySettlementPayout(status: string): boolean {
   return status === 'approved'
 }
+
+export function canDeleteWeeklySettlement(status: string): boolean {
+  return status === 'draft'
+}

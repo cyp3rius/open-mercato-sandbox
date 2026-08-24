@@ -53,5 +53,10 @@ export function useFleetDriverDirectory() {
     [nameByMemberId],
   )
 
-  return { profiles, nameByMemberId, resolveName, isLoading, reload }
+  const resolvePayoutPercent = React.useCallback(
+    (teamMemberId: string) => profiles.find((profile) => profile.teamMemberId === teamMemberId)?.payoutPercent ?? null,
+    [profiles],
+  )
+
+  return { profiles, nameByMemberId, resolveName, resolvePayoutPercent, isLoading, reload }
 }

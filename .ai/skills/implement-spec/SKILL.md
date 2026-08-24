@@ -111,6 +111,7 @@ For each new feature:
 - If new entities with user-facing text: create `translations.ts`
 - If new convention files: run `yarn generate` / `npm run modules:prepare`
 - Update relevant AGENTS.md if the feature introduces new patterns developers should follow
+- If the feature adds or changes **Daily work** sidebar UI: update `.ai/module-guides/<module>.md` and, when PL manuals exist, `apps/docs/docs/user-guide/pl/<module>.mdx` (see `user-guide-authoring` skill)
 
 ### Step 6 — Self-Review (Code-Review Gate)
 

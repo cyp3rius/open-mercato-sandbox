@@ -26,10 +26,106 @@ import {
 import { normalizeExpenseVatRatePercent } from './expenseVat'
 import { extractReceiptFieldsFromImage, hasAnthropicReceiptOcrKey, hasOpenAiReceiptOcrKey, isTaxiFleetReceiptOcrEnabled, resolveReceiptOcrModel, resolveReceiptOcrProvider } from './receiptOcrExtract'
 import { ensureTaxiFleetDriverReceiptsPartition } from './receiptPartition'
-import { recalculateWeeklySettlementsForFinancialEntry } from './settlementWeekScope'
+import { recalculateWeeklySettlementsForFinancialEntry, recalculateWeeklySettlementsForTrip } from './settlementWeekScope'
 import { syncFinancialEntryDocumentDuplicates } from './documentDuplicates'
 
-const STALE_PROCESSING_MS = 2 * 60 * 1000
+function mergeTripMetadata(
+  trip: TaxiFleetTrip,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const existing =
+    trip.metadata && typeof trip.metadata === 'object'
+      ? (trip.metadata as Record<string, unknown>)
+      : {}
+  return { ...existing, ...patch }
+}
+
+async function syncTripIncomeFromReceiptExtraction(
+  em: EntityManager,
+  row: TaxiFleetReceiptExtraction,
+  trip: TaxiFleetTrip,
+  documentNumber: string | null,
+): Promise<void> {
+  const revenueAmount = Number(trip.revenueAmount ?? 0)
+  const hasCustomer = Boolean(trip.customerCompanyId || trip.customerPersonId)
+  const hasReceipt = Boolean(row.attachmentId)
+  if (
+    !trip.teamMemberId ||
+    !Number.isFinite(revenueAmount) ||
+    revenueAmount <= 0 ||
+    !hasCustomer ||
+    !hasReceipt
+  ) {
+    return
+  }
+
+  if (row.financialEntryId) {
+    const entry = await em.findOne(TaxiFleetFinancialEntry, {
+      id: row.financialEntryId,
+      deletedAt: null,
+    })
+    if (entry) {
+      if (documentNumber && !entry.documentNumber?.trim()) {
+        entry.documentNumber = documentNumber
+        entry.updatedAt = new Date()
+      }
+      const ocrAmount = row.ocrGrossAmount != null ? Number(row.ocrGrossAmount) : null
+      const currentAmount = Number(entry.amount)
+      if (ocrAmount != null && Number.isFinite(ocrAmount) && ocrAmount > 0) {
+        const amountEmpty = !Number.isFinite(currentAmount) || currentAmount <= 0
+        if (amountEmpty) {
+          entry.amount = ocrAmount.toFixed(2)
+          entry.updatedAt = new Date()
+        }
+      }
+      if (!entry.receiptAttachmentId && row.attachmentId) {
+        entry.receiptAttachmentId = row.attachmentId
+        entry.updatedAt = new Date()
+      }
+      if (!entry.customerCompanyId && trip.customerCompanyId) {
+        entry.customerCompanyId = trip.customerCompanyId
+        entry.updatedAt = new Date()
+      }
+      if (!entry.customerPersonId && trip.customerPersonId) {
+        entry.customerPersonId = trip.customerPersonId
+        entry.updatedAt = new Date()
+      }
+      await em.flush()
+      await syncFinancialEntryDocumentDuplicates(em, entry)
+      await recalculateWeeklySettlementsForFinancialEntry(em, entry)
+    }
+    return
+  }
+
+  const now = new Date()
+  const entry = em.create(TaxiFleetFinancialEntry, {
+    tenantId: trip.tenantId,
+    organizationId: trip.organizationId,
+    teamMemberId: trip.teamMemberId,
+    kind: 'income',
+    incomeDocumentType: 'receipt',
+    costType: null,
+    tripId: trip.id,
+    customerPersonId: trip.customerPersonId ?? null,
+    customerCompanyId: trip.customerCompanyId ?? null,
+    amount: revenueAmount.toFixed(2),
+    vatRatePercent: '23',
+    currencyCode: trip.currencyCode ?? 'PLN',
+    documentNumber: documentNumber ?? null,
+    occurredAt: trip.startedAt ?? trip.endedAt ?? now,
+    receiptAttachmentId: row.attachmentId ?? null,
+    notes: trip.notes ?? null,
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: null,
+  })
+  await em.persistAndFlush(entry)
+  row.financialEntryId = entry.id
+  row.updatedAt = now
+  await syncFinancialEntryDocumentDuplicates(em, entry)
+  await recalculateWeeklySettlementsForFinancialEntry(em, entry)
+}
+
 
 function toWarningRecords(warnings: ReceiptOcrWarning[]): Record<string, unknown>[] {
   return warnings.map((warning) => ({ ...warning }))
@@ -603,25 +699,52 @@ export async function applyReceiptExtractionToLinkedRecords(
     }
   }
 
-  if (row.tripId && row.resolvedCompanyId) {
+  if (row.tripId) {
     const trip = await em.findOne(TaxiFleetTrip, { id: row.tripId, deletedAt: null })
-    if (trip && !trip.customerCompanyId) {
-      trip.customerCompanyId = row.resolvedCompanyId
-      trip.updatedAt = new Date()
-    } else if (
-      trip?.customerCompanyId &&
-      trip.customerCompanyId !== row.resolvedCompanyId &&
-      row.ocrBuyerNip
-    ) {
-      if (!deduped.some((w) => w.code === 'customer_nip_conflict')) {
-        deduped.push({
-          code: 'customer_nip_conflict',
-          field: 'buyerNip',
-          ocrValue: row.ocrBuyerNip,
-        })
+    if (trip) {
+      const ocrAmount = row.ocrGrossAmount != null ? Number(row.ocrGrossAmount) : null
+      if (ocrAmount != null && Number.isFinite(ocrAmount) && ocrAmount > 0) {
+        const currentRevenue = Number(trip.revenueAmount ?? 0)
+        if (!Number.isFinite(currentRevenue) || currentRevenue <= 0) {
+          trip.revenueAmount = ocrAmount.toFixed(2)
+          trip.updatedAt = new Date()
+        }
       }
-      row.warningsJson = toWarningRecords(deduped)
-      row.status = 'needs_review'
+
+      if (documentNumber || row.attachmentId) {
+        trip.metadata = mergeTripMetadata(trip, {
+          ...(documentNumber ? { receiptDocumentNumber: documentNumber } : {}),
+          ...(row.attachmentId ? { receiptAttachmentId: row.attachmentId } : {}),
+        })
+        trip.updatedAt = new Date()
+      }
+
+      if (row.resolvedCompanyId && !trip.customerCompanyId) {
+        trip.customerCompanyId = row.resolvedCompanyId
+        if (trip.tripType !== 'client') {
+          trip.tripType = 'client'
+        }
+        trip.updatedAt = new Date()
+      } else if (
+        trip.customerCompanyId &&
+        row.resolvedCompanyId &&
+        trip.customerCompanyId !== row.resolvedCompanyId &&
+        row.ocrBuyerNip
+      ) {
+        if (!deduped.some((w) => w.code === 'customer_nip_conflict')) {
+          deduped.push({
+            code: 'customer_nip_conflict',
+            field: 'buyerNip',
+            ocrValue: row.ocrBuyerNip,
+          })
+        }
+        row.warningsJson = toWarningRecords(deduped)
+        row.status = 'needs_review'
+      }
+
+      await em.flush()
+      await syncTripIncomeFromReceiptExtraction(em, row, trip, documentNumber)
+      await recalculateWeeklySettlementsForTrip(em, trip)
     }
   }
 

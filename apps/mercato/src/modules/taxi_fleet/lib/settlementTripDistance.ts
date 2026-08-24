@@ -4,6 +4,10 @@ import { TaxiFleetTrip } from '../data/entities'
 import { getWeekEnd, isDateInWeek } from './weekUtils'
 import { normalizeTripStatus } from './tripStatuses'
 import { enrichSettlementTripSnapshot } from './settlementIncomeReconciliation'
+import {
+  loadSettlementTripReceiptContext,
+  type SettlementTripReceiptContext,
+} from './settlementTripReceiptEnrichment'
 import type { TripRequestPaymentType } from './tripRequestForm'
 
 export type SettlementTripSnapshot = {
@@ -70,12 +74,16 @@ export function buildSettlementDistanceFromTrips(
     revenueAmount?: string | null
     metadata?: Record<string, unknown> | null
   }>,
-  options?: { incomeTripIds?: ReadonlySet<string> },
+  options?: {
+    incomeTripIds?: ReadonlySet<string>
+    tripReceiptContext?: SettlementTripReceiptContext
+  },
 ): SettlementDistanceResult {
   let computedDistanceKm = 0
   const snapshots: SettlementTripSnapshot[] = []
   const missingDistanceTripIds: string[] = []
   const incomeTripIds = options?.incomeTripIds ?? new Set<string>()
+  const tripReceiptContext = options?.tripReceiptContext
 
   for (const trip of trips) {
     const distanceKm = parseTripDistanceKm(trip.distanceKm)
@@ -91,6 +99,7 @@ export function buildSettlementDistanceFromTrips(
         distanceKm,
         missingDistance,
         incomeTripIds,
+        receiptExtras: tripReceiptContext?.get(trip.id) ?? null,
       }),
     )
   }
@@ -160,7 +169,14 @@ export async function calculateSettlementTripDistance(
   },
 ): Promise<SettlementDistanceResult> {
   const trips = await loadDriverWeekTrips(em, params)
-  return buildSettlementDistanceFromTrips(trips, { incomeTripIds: params.incomeTripIds })
+  const tripReceiptContext = await loadSettlementTripReceiptContext(em, trips, {
+    tenantId: params.tenantId,
+    organizationId: params.organizationId,
+  })
+  return buildSettlementDistanceFromTrips(trips, {
+    incomeTripIds: params.incomeTripIds,
+    tripReceiptContext,
+  })
 }
 
 export function formatDistanceKm(value: number | null | undefined): string {

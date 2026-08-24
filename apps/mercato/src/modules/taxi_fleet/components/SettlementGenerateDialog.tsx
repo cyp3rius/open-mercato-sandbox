@@ -8,7 +8,7 @@ import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { TAXI_FLEET_BASE } from '../backend/taxi-fleet/paths'
-import { listUnsettledMondays } from '../lib/weekUtils'
+import { listRecentMondays } from '../lib/weekUtils'
 import { useFleetDriverDirectory } from './useFleetDriverDirectory'
 import {
   TaxiFleetDialogFrame,
@@ -36,6 +36,10 @@ type SettlementListItem = {
   weekStart?: string
 }
 
+function firstUnsettledWeek(recentWeeks: string[], settledWeekStarts: Set<string>): string {
+  return recentWeeks.find((weekStart) => !settledWeekStarts.has(weekStart)) ?? ''
+}
+
 export function SettlementGenerateDialog({
   open,
   onOpenChange,
@@ -49,27 +53,40 @@ export function SettlementGenerateDialog({
   const dialogContentRef = React.useRef<HTMLDivElement | null>(null)
   const isDriverLocked = Boolean(lockedTeamMemberId)
   const [selectedDriverId, setSelectedDriverId] = React.useState('')
-  const [formKey, setFormKey] = React.useState(0)
-  const [availableWeeks, setAvailableWeeks] = React.useState<string[]>([])
+  const [dialogSession, setDialogSession] = React.useState(0)
+  const [weeksRevision, setWeeksRevision] = React.useState(0)
+  const [recentWeeks, setRecentWeeks] = React.useState<string[]>([])
+  const [settledWeekStarts, setSettledWeekStarts] = React.useState<Set<string>>(() => new Set())
   const [loadingWeeks, setLoadingWeeks] = React.useState(false)
 
   const effectiveDriverId = lockedTeamMemberId ?? (selectedDriverId.trim() || null)
   const driverSelected = Boolean(effectiveDriverId)
-  const canSubmit = driverSelected && !loadingWeeks && availableWeeks.length > 0
+  const unsettledWeeks = React.useMemo(
+    () => recentWeeks.filter((weekStart) => !settledWeekStarts.has(weekStart)),
+    [recentWeeks, settledWeekStarts],
+  )
+  const canSubmit = driverSelected && !loadingWeeks && unsettledWeeks.length > 0
 
   React.useEffect(() => {
     if (!open) return
-    setFormKey((value) => value + 1)
+    setDialogSession((value) => value + 1)
+    setWeeksRevision(0)
     setSelectedDriverId('')
-    setAvailableWeeks([])
+    setRecentWeeks([])
+    setSettledWeekStarts(new Set())
   }, [open])
 
   React.useEffect(() => {
     if (!open || !effectiveDriverId) {
-      setAvailableWeeks([])
+      setRecentWeeks([])
+      setSettledWeekStarts(new Set())
+      setWeeksRevision(0)
       return
     }
     let cancelled = false
+    setRecentWeeks([])
+    setSettledWeekStarts(new Set())
+    setWeeksRevision(0)
     async function loadWeeks() {
       setLoadingWeeks(true)
       const params = new URLSearchParams({
@@ -84,9 +101,10 @@ export function SettlementGenerateDialog({
           .map((item) => (typeof item.weekStart === 'string' ? item.weekStart : ''))
           .filter((value) => value.length > 0),
       )
-      setAvailableWeeks(listUnsettledMondays(existing))
-      setFormKey((value) => value + 1)
+      setRecentWeeks(listRecentMondays())
+      setSettledWeekStarts(existing)
       setLoadingWeeks(false)
+      setWeeksRevision((value) => value + 1)
     }
     void loadWeeks()
     return () => {
@@ -104,30 +122,37 @@ export function SettlementGenerateDialog({
         includeDriver: !isDriverLocked,
         driverProfiles: profiles,
         resolveDriverName: resolveName,
-        availableWeeks,
+        recentWeeks,
+        settledWeekStarts,
         weeksLoading: loadingWeeks,
         driverSelected,
         onDriverChange: handleDriverChange,
       }),
     [
-      availableWeeks,
       driverSelected,
       handleDriverChange,
       isDriverLocked,
       loadingWeeks,
       profiles,
+      recentWeeks,
       resolveName,
+      settledWeekStarts,
       t,
     ],
   )
 
+  const defaultWeekStart = firstUnsettledWeek(recentWeeks, settledWeekStarts)
+
   const initialValues = React.useMemo(() => {
-    const weekStart = availableWeeks[0] ?? ''
     if (isDriverLocked) {
-      return defaultSettlementGenerateWeekValues(weekStart)
+      return defaultSettlementGenerateWeekValues(defaultWeekStart)
     }
-    return defaultSettlementGenerateValues(weekStart)
-  }, [availableWeeks, formKey, isDriverLocked])
+    return defaultSettlementGenerateValues(defaultWeekStart, effectiveDriverId ?? '')
+  }, [defaultWeekStart, dialogSession, effectiveDriverId, isDriverLocked, weeksRevision])
+
+  const formKey = isDriverLocked
+    ? `locked-${lockedTeamMemberId}-${dialogSession}-${weeksRevision}`
+    : `gen-${effectiveDriverId ?? 'none'}-${dialogSession}-${weeksRevision}`
 
   const handleCancel = React.useCallback(() => {
     onOpenChange(false)
@@ -148,7 +173,7 @@ export function SettlementGenerateDialog({
       if (!teamMemberId) {
         throw new Error(t('taxi_fleet.settlements.pickDriverFirst', 'Select a driver to choose the settlement week.'))
       }
-      if (!values.weekStart || !availableWeeks.includes(values.weekStart)) {
+      if (!values.weekStart || settledWeekStarts.has(values.weekStart)) {
         throw new Error(t('taxi_fleet.settlements.weekAlreadySettled', 'This week already has a settlement.'))
       }
       const call = await apiCall<{ id?: string | null }>('/api/taxi_fleet/settlements/generate', {
@@ -171,7 +196,7 @@ export function SettlementGenerateDialog({
       onGenerated?.()
       router.push(`${TAXI_FLEET_BASE}/settlements/${encodeURIComponent(newId)}`)
     },
-    [availableWeeks, lockedTeamMemberId, onGenerated, onOpenChange, organizationId, router, t, tenantId],
+    [lockedTeamMemberId, onGenerated, onOpenChange, organizationId, router, settledWeekStarts, t, tenantId],
   )
 
   return (

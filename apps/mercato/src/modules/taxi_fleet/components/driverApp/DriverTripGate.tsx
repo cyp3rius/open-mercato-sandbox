@@ -34,9 +34,11 @@ type MeResponse = {
 type Props = {
   children: React.ReactNode
   title: string
+  /** Soft clock-in CTA when today’s assignment exists but shift not started. Off on trip list (browse/add past trips freely). */
+  showShiftPrompt?: boolean
 }
 
-export function DriverTripGate({ children, title }: Props) {
+export function DriverTripGate({ children, title, showShiftPrompt = true }: Props) {
   const t = useT()
   const router = useRouter()
   const [me, setMe] = React.useState<MeResponse | null>(null)
@@ -122,15 +124,15 @@ export function DriverTripGate({ children, title }: Props) {
 
   return (
     <DriverShell title={title} shiftActive={shiftActive} assignmentId={assignment?.id ?? null}>
-      {!shiftActive && assignment && !assignment.shiftStart ? (
+      {showShiftPrompt && !shiftActive && assignment && !assignment.shiftStart ? (
         <div className={`${driverCardClass} mb-3 space-y-3`}>
           <div className={driverSectionTitleClass}>
-            {t('taxi_fleet.driverApp.trips.gateTitle', 'Clock in to work with trips')}
+            {t('taxi_fleet.driverApp.trips.gateTitle', 'Start your shift for a live trip')}
           </div>
           <p className={driverSectionDescClass}>
             {t(
               'taxi_fleet.driverApp.trips.gateHintPastOnly',
-              'You can add past trips anytime. Clock in to start a live trip.',
+              'You can add past trips anytime. Start your shift to run a live trip.',
             )}
           </p>
           <Button
@@ -141,7 +143,7 @@ export function DriverTripGate({ children, title }: Props) {
           >
             {busy
               ? t('taxi_fleet.driverApp.home.starting', 'Starting…')
-              : t('taxi_fleet.driverApp.home.startShift', 'Start shift')}
+              : t('taxi_fleet.driverApp.home.clockIn', 'Start shift')}
           </Button>
           {!bypass ? (
             <Link href="/driver" className={`${driverSecondaryActionClass} inline-flex`}>
