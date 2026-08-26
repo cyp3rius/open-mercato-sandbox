@@ -15,11 +15,14 @@ export type DriverProfileFormValues = {
   payoutPercent: string
   defaultResourceId: string
   externalAppEnabled: boolean
+  boltDriverId: string
+  uberDriverId: string
+  freeDriverId: string
 }
 
 export type DriverProfileUpdateFormValues = Pick<
   DriverProfileFormValues,
-  'payoutPercent' | 'defaultResourceId' | 'externalAppEnabled'
+  'payoutPercent' | 'defaultResourceId' | 'externalAppEnabled' | 'boltDriverId' | 'uberDriverId' | 'freeDriverId'
 >
 
 export type DriverProfileFormSurface = 'page' | 'dialog' | 'sidebar'
@@ -46,6 +49,9 @@ export function defaultDriverProfileFormValues(defaultPayoutPercent = 0): Driver
     payoutPercent: formatPercentInputValue(defaultPayoutPercent),
     defaultResourceId: '',
     externalAppEnabled: false,
+    boltDriverId: '',
+    uberDriverId: '',
+    freeDriverId: '',
   }
 }
 
@@ -53,11 +59,17 @@ export function mapDriverProfileRowToUpdateFormValues(row: {
   payoutPercent: string | number
   defaultResourceId?: string | null
   externalAppEnabled: boolean
+  boltDriverId?: string | null
+  uberDriverId?: string | null
+  freeDriverId?: string | null
 }): DriverProfileUpdateFormValues {
   return {
     payoutPercent: formatPercentInputValue(row.payoutPercent),
     defaultResourceId: row.defaultResourceId ?? '',
     externalAppEnabled: row.externalAppEnabled,
+    boltDriverId: row.boltDriverId ?? '',
+    uberDriverId: row.uberDriverId ?? '',
+    freeDriverId: row.freeDriverId ?? '',
   }
 }
 
@@ -66,6 +78,9 @@ export function mapDriverProfileRowToFormValues(row: {
   payoutPercent: string | number
   defaultResourceId?: string | null
   externalAppEnabled: boolean
+  boltDriverId?: string | null
+  uberDriverId?: string | null
+  freeDriverId?: string | null
 }): DriverProfileFormValues {
   return {
     teamMemberId: row.teamMemberId,
@@ -73,12 +88,17 @@ export function mapDriverProfileRowToFormValues(row: {
   }
 }
 
+const platformDriverIdSchema = z.string().max(191)
+
 export function driverProfileCreateSchema() {
   return z.object({
     teamMemberId: z.string().uuid(),
     payoutPercent: payoutPercentFieldSchema(),
     defaultResourceId: resourceIdSchema,
     externalAppEnabled: z.boolean(),
+    boltDriverId: platformDriverIdSchema,
+    uberDriverId: platformDriverIdSchema,
+    freeDriverId: platformDriverIdSchema,
   })
 }
 
@@ -87,6 +107,9 @@ export function driverProfileUpdateSchema() {
     payoutPercent: payoutPercentFieldSchema(),
     defaultResourceId: resourceIdSchema,
     externalAppEnabled: z.boolean(),
+    boltDriverId: platformDriverIdSchema,
+    uberDriverId: platformDriverIdSchema,
+    freeDriverId: platformDriverIdSchema,
   })
 }
 
@@ -101,7 +124,15 @@ export function buildDriverProfileFormGroups(t: TranslateFn): CrudFormGroup[] {
       id: 'basics',
       title: t('taxi_fleet.drivers.form.groups.basics', 'Basics'),
       column: 1,
-      fields: ['teamMemberId', 'payoutPercent', 'defaultResourceId', 'externalAppEnabled'],
+      fields: [
+        'teamMemberId',
+        'payoutPercent',
+        'defaultResourceId',
+        'externalAppEnabled',
+        'boltDriverId',
+        'uberDriverId',
+        'freeDriverId',
+      ],
     },
   ]
 }
@@ -181,9 +212,35 @@ export function buildDriverProfileFormFields(t: TranslateFn, options: DriverProf
         />
       ),
     },
+    {
+      id: 'boltDriverId',
+      type: 'text',
+      label: t('taxi_fleet.drivers.platformIds.bolt', 'Bolt driver ID'),
+      layout: 'full',
+      placeholder: t('taxi_fleet.drivers.platformIds.placeholder', 'Paste ID from fleet console'),
+    },
+    {
+      id: 'uberDriverId',
+      type: 'text',
+      label: t('taxi_fleet.drivers.platformIds.uber', 'Uber driver ID'),
+      layout: 'full',
+      placeholder: t('taxi_fleet.drivers.platformIds.placeholder', 'Paste ID from fleet console'),
+    },
+    {
+      id: 'freeDriverId',
+      type: 'text',
+      label: t('taxi_fleet.drivers.platformIds.free', 'Free driver ID'),
+      layout: 'full',
+      placeholder: t('taxi_fleet.drivers.platformIds.placeholder', 'Paste ID from fleet console'),
+    },
   )
 
   return fields
+}
+
+function normalizePlatformDriverId(value: string): string | null {
+  const trimmed = value.trim()
+  return trimmed.length ? trimmed : null
 }
 
 export function driverProfileFormValuesToCreatePayload(
@@ -198,6 +255,9 @@ export function driverProfileFormValuesToCreatePayload(
     payoutPercent: parseNumericValue(values.payoutPercent) ?? 0,
     defaultResourceId: resourceId.length ? resourceId : null,
     externalAppEnabled: values.externalAppEnabled,
+    boltDriverId: normalizePlatformDriverId(values.boltDriverId),
+    uberDriverId: normalizePlatformDriverId(values.uberDriverId),
+    freeDriverId: normalizePlatformDriverId(values.freeDriverId),
   }
 }
 
@@ -211,5 +271,8 @@ export function driverProfileFormValuesToUpdatePayload(
     payoutPercent: parseNumericValue(values.payoutPercent) ?? 0,
     defaultResourceId: resourceId.length ? resourceId : null,
     externalAppEnabled: values.externalAppEnabled,
+    boltDriverId: normalizePlatformDriverId(values.boltDriverId),
+    uberDriverId: normalizePlatformDriverId(values.uberDriverId),
+    freeDriverId: normalizePlatformDriverId(values.freeDriverId),
   }
 }

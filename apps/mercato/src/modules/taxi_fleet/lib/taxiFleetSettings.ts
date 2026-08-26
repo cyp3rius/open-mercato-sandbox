@@ -52,6 +52,44 @@ export const taxiFleetCalendarSettingsSchema = z.object({
 
 export type TaxiFleetCalendarSettings = z.infer<typeof taxiFleetCalendarSettingsSchema>
 
+export const taxiFleetPlatformSyncPlatformSettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  apiBaseUrl: z.string().max(2000).optional().default(''),
+  clientId: z.string().max(500).optional().default(''),
+  clientSecret: z.string().max(500).optional().default(''),
+  refreshToken: z.string().max(2000).optional().default(''),
+  companyId: z.string().max(191).optional().default(''),
+})
+
+export type TaxiFleetPlatformSyncPlatformSettings = z.infer<typeof taxiFleetPlatformSyncPlatformSettingsSchema>
+
+export const taxiFleetPlatformSyncSettingsSchema = z.object({
+  bolt: taxiFleetPlatformSyncPlatformSettingsSchema,
+  uber: taxiFleetPlatformSyncPlatformSettingsSchema,
+  free: taxiFleetPlatformSyncPlatformSettingsSchema,
+})
+
+export type TaxiFleetPlatformSyncSettings = z.infer<typeof taxiFleetPlatformSyncSettingsSchema>
+
+export function defaultPlatformSyncPlatformSettings(): TaxiFleetPlatformSyncPlatformSettings {
+  return {
+    enabled: false,
+    apiBaseUrl: '',
+    clientId: '',
+    clientSecret: '',
+    refreshToken: '',
+    companyId: '',
+  }
+}
+
+export function defaultPlatformSyncSettings(): TaxiFleetPlatformSyncSettings {
+  return {
+    bolt: defaultPlatformSyncPlatformSettings(),
+    uber: defaultPlatformSyncPlatformSettings(),
+    free: defaultPlatformSyncPlatformSettings(),
+  }
+}
+
 const customerEmailsSchema = z.object({
   trip_created: localizedCustomerEmailTemplateSchema,
   trip_approved: localizedCustomerEmailTemplateSchema,
@@ -99,6 +137,7 @@ export const taxiFleetSettingsSchema = z.object({
   pricing: taxiFleetPricingSettingsSchema.default(defaultFleetPricingConfig()),
   paypal: taxiFleetPaypalSettingsSchema,
   calendar: taxiFleetCalendarSettingsSchema,
+  platformSync: taxiFleetPlatformSyncSettingsSchema,
   customerEmails: customerEmailsSchema,
   settlementIndicatorRanges: settlementIndicatorRangesSchema.default(defaultSettlementIndicatorRanges()),
 })
@@ -110,6 +149,12 @@ export type TaxiFleetPricingSettings = PricingConfig
 export type TaxiFleetSettingsSecretsMeta = {
   paypalClientSecretConfigured: boolean
   calendarPrivateKeyConfigured: boolean
+  platformSyncBoltClientSecretConfigured: boolean
+  platformSyncUberClientSecretConfigured: boolean
+  platformSyncFreeClientSecretConfigured: boolean
+  platformSyncBoltRefreshTokenConfigured: boolean
+  platformSyncUberRefreshTokenConfigured: boolean
+  platformSyncFreeRefreshTokenConfigured: boolean
 }
 
 export type TaxiFleetSettingsResponse = TaxiFleetSettings &
@@ -197,6 +242,7 @@ export function defaultTaxiFleetSettings(): TaxiFleetSettings {
       serviceAccountPrivateKey: '',
       defaultDurationMinutes: 60,
     },
+    platformSync: defaultPlatformSyncSettings(),
     customerEmails: defaultCustomerEmailTemplates,
     settlementIndicatorRanges: defaultSettlementIndicatorRanges(),
   })
@@ -227,6 +273,11 @@ export function parseTaxiFleetSettingsJson(raw: unknown): TaxiFleetSettings {
         : base.pricing,
     paypal: { ...base.paypal, ...asRecord(record.paypal) },
     calendar: { ...base.calendar, ...asRecord(record.calendar) },
+    platformSync: {
+      bolt: { ...base.platformSync.bolt, ...asRecord(asRecord(record.platformSync).bolt) },
+      uber: { ...base.platformSync.uber, ...asRecord(asRecord(record.platformSync).uber) },
+      free: { ...base.platformSync.free, ...asRecord(asRecord(record.platformSync).free) },
+    },
     customerEmails: {
       trip_created: { ...base.customerEmails.trip_created, ...asRecord(customerEmailsRaw.trip_created) },
       trip_approved: { ...base.customerEmails.trip_approved, ...asRecord(customerEmailsRaw.trip_approved) },
@@ -258,13 +309,49 @@ export function normalizeTaxiFleetSettingsResponse(
       record.paypalClientSecretConfigured === true || response.paypalClientSecretConfigured,
     calendarPrivateKeyConfigured:
       record.calendarPrivateKeyConfigured === true || response.calendarPrivateKeyConfigured,
+    platformSyncBoltClientSecretConfigured:
+      record.platformSyncBoltClientSecretConfigured === true ||
+      response.platformSyncBoltClientSecretConfigured,
+    platformSyncUberClientSecretConfigured:
+      record.platformSyncUberClientSecretConfigured === true ||
+      response.platformSyncUberClientSecretConfigured,
+    platformSyncFreeClientSecretConfigured:
+      record.platformSyncFreeClientSecretConfigured === true ||
+      response.platformSyncFreeClientSecretConfigured,
+    platformSyncBoltRefreshTokenConfigured:
+      record.platformSyncBoltRefreshTokenConfigured === true ||
+      response.platformSyncBoltRefreshTokenConfigured,
+    platformSyncUberRefreshTokenConfigured:
+      record.platformSyncUberRefreshTokenConfigured === true ||
+      response.platformSyncUberRefreshTokenConfigured,
+    platformSyncFreeRefreshTokenConfigured:
+      record.platformSyncFreeRefreshTokenConfigured === true ||
+      response.platformSyncFreeRefreshTokenConfigured,
   }
+}
+
+function mergePlatformSyncSecretField(
+  incoming: string | undefined,
+  current: string | undefined,
+): string {
+  const trimmed = incoming?.trim()
+  if (trimmed && trimmed !== '********') return trimmed
+  return current ?? ''
 }
 
 export function mergeTaxiFleetSettingsForSave(
   current: TaxiFleetSettings,
   incoming: TaxiFleetSettings,
-  secrets: { paypalClientSecret?: string | null; calendarPrivateKey?: string | null },
+  secrets: {
+    paypalClientSecret?: string | null
+    calendarPrivateKey?: string | null
+    platformSyncBoltClientSecret?: string | null
+    platformSyncUberClientSecret?: string | null
+    platformSyncFreeClientSecret?: string | null
+    platformSyncBoltRefreshToken?: string | null
+    platformSyncUberRefreshToken?: string | null
+    platformSyncFreeRefreshToken?: string | null
+  },
 ): TaxiFleetSettings {
   const paypalSecret = incoming.paypal.clientSecret?.trim()
   const calendarKey = incoming.calendar.serviceAccountPrivateKey?.trim()
@@ -284,6 +371,58 @@ export function mergeTaxiFleetSettingsForSave(
           ? calendarKey
           : secrets.calendarPrivateKey ?? current.calendar.serviceAccountPrivateKey,
     },
+    platformSync: {
+      bolt: {
+        ...incoming.platformSync.bolt,
+        clientSecret: mergePlatformSyncSecretField(
+          incoming.platformSync.bolt.clientSecret,
+          secrets.platformSyncBoltClientSecret ?? current.platformSync.bolt.clientSecret,
+        ),
+        refreshToken: mergePlatformSyncSecretField(
+          incoming.platformSync.bolt.refreshToken,
+          secrets.platformSyncBoltRefreshToken ?? current.platformSync.bolt.refreshToken,
+        ),
+      },
+      uber: {
+        ...incoming.platformSync.uber,
+        clientSecret: mergePlatformSyncSecretField(
+          incoming.platformSync.uber.clientSecret,
+          secrets.platformSyncUberClientSecret ?? current.platformSync.uber.clientSecret,
+        ),
+        refreshToken: mergePlatformSyncSecretField(
+          incoming.platformSync.uber.refreshToken,
+          secrets.platformSyncUberRefreshToken ?? current.platformSync.uber.refreshToken,
+        ),
+      },
+      free: {
+        ...incoming.platformSync.free,
+        clientSecret: mergePlatformSyncSecretField(
+          incoming.platformSync.free.clientSecret,
+          secrets.platformSyncFreeClientSecret ?? current.platformSync.free.clientSecret,
+        ),
+        refreshToken: mergePlatformSyncSecretField(
+          incoming.platformSync.free.refreshToken,
+          secrets.platformSyncFreeRefreshToken ?? current.platformSync.free.refreshToken,
+        ),
+      },
+    },
+  }
+}
+
+function maskSecret(value: string | undefined): string {
+  return value?.trim() ? '********' : ''
+}
+
+function platformSyncPlatformResponse(
+  settings: TaxiFleetPlatformSyncPlatformSettings,
+): TaxiFleetPlatformSyncPlatformSettings & {
+  clientSecret: string
+  refreshToken: string
+} {
+  return {
+    ...settings,
+    clientSecret: maskSecret(settings.clientSecret),
+    refreshToken: maskSecret(settings.refreshToken),
   }
 }
 
@@ -294,13 +433,24 @@ export function toTaxiFleetSettingsResponse(
     ...settings,
     paypal: {
       ...settings.paypal,
-      clientSecret: settings.paypal.clientSecret?.trim() ? '********' : '',
+      clientSecret: maskSecret(settings.paypal.clientSecret),
     },
     calendar: {
       ...settings.calendar,
-      serviceAccountPrivateKey: settings.calendar.serviceAccountPrivateKey?.trim() ? '********' : '',
+      serviceAccountPrivateKey: maskSecret(settings.calendar.serviceAccountPrivateKey),
+    },
+    platformSync: {
+      bolt: platformSyncPlatformResponse(settings.platformSync.bolt),
+      uber: platformSyncPlatformResponse(settings.platformSync.uber),
+      free: platformSyncPlatformResponse(settings.platformSync.free),
     },
     paypalClientSecretConfigured: Boolean(settings.paypal.clientSecret?.trim()),
     calendarPrivateKeyConfigured: Boolean(settings.calendar.serviceAccountPrivateKey?.trim()),
+    platformSyncBoltClientSecretConfigured: Boolean(settings.platformSync.bolt.clientSecret?.trim()),
+    platformSyncUberClientSecretConfigured: Boolean(settings.platformSync.uber.clientSecret?.trim()),
+    platformSyncFreeClientSecretConfigured: Boolean(settings.platformSync.free.clientSecret?.trim()),
+    platformSyncBoltRefreshTokenConfigured: Boolean(settings.platformSync.bolt.refreshToken?.trim()),
+    platformSyncUberRefreshTokenConfigured: Boolean(settings.platformSync.uber.refreshToken?.trim()),
+    platformSyncFreeRefreshTokenConfigured: Boolean(settings.platformSync.free.refreshToken?.trim()),
   }
 }

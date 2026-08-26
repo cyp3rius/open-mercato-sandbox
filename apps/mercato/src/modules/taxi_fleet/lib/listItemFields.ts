@@ -29,6 +29,8 @@ export function transformTripListItem(item: Record<string, unknown> | null | und
     resourceId: pickString(record, 'resourceId', 'resource_id'),
     assignmentId: pickString(record, 'assignmentId', 'assignment_id'),
     tripType: pickString(record, 'tripType', 'trip_type') ?? 'client',
+    platform: pickString(record, 'platform'),
+    externalTripId: pickString(record, 'externalTripId', 'external_trip_id'),
     startedAt: readIso(record.startedAt ?? record.started_at),
     endedAt: readIso(record.endedAt ?? record.ended_at),
     distanceKm: record.distanceKm ?? record.distance_km ?? null,

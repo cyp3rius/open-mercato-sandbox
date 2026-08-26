@@ -54,6 +54,15 @@ export class TaxiFleetDriverProfile {
   @Property({ name: 'external_app_enabled', type: 'boolean', default: false })
   externalAppEnabled: boolean = false
 
+  @Property({ name: 'bolt_driver_id', type: 'text', nullable: true })
+  boltDriverId?: string | null
+
+  @Property({ name: 'uber_driver_id', type: 'text', nullable: true })
+  uberDriverId?: string | null
+
+  @Property({ name: 'free_driver_id', type: 'text', nullable: true })
+  freeDriverId?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 
@@ -138,6 +147,9 @@ export class TaxiFleetTrip {
 
   @Property({ type: 'text', nullable: true })
   platform?: 'uber' | 'bolt' | 'free' | null
+
+  @Property({ name: 'external_trip_id', type: 'text', nullable: true })
+  externalTripId?: string | null
 
   @Property({ name: 'started_at', type: Date, nullable: true })
   startedAt?: Date | null
@@ -585,6 +597,9 @@ export class TaxiFleetReceiptExtraction {
   @Property({ name: 'ocr_gross_amount', type: 'numeric', precision: 14, scale: 2, nullable: true })
   ocrGrossAmount?: string | null
 
+  @Property({ name: 'ocr_distance_km', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  ocrDistanceKm?: string | null
+
   @Property({ name: 'ocr_vat_rate_percent', type: 'numeric', precision: 5, scale: 2, nullable: true })
   ocrVatRatePercent?: string | null
 
@@ -620,6 +635,64 @@ export class TaxiFleetReceiptExtraction {
 
   @Property({ name: 'processed_at', type: Date, nullable: true })
   processedAt?: Date | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
+@Entity({ tableName: 'taxi_fleet_platform_sync_runs' })
+@Index({ name: 'taxi_fleet_platform_sync_runs_scope_idx', properties: ['tenantId', 'organizationId', 'startedAt'] })
+export class TaxiFleetPlatformSyncRun {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ type: 'text' })
+  platform!: 'uber' | 'bolt' | 'free' | 'all'
+
+  @Property({ type: 'text' })
+  trigger!: 'schedule' | 'manual' | 'csv'
+
+  @Property({ type: 'text', default: 'running' })
+  status: 'running' | 'succeeded' | 'failed' | 'partial' = 'running'
+
+  @Property({ name: 'started_at', type: Date })
+  startedAt!: Date
+
+  @Property({ name: 'finished_at', type: Date, nullable: true })
+  finishedAt?: Date | null
+
+  @Property({ name: 'fetched_count', type: 'int', default: 0 })
+  fetchedCount: number = 0
+
+  @Property({ name: 'upserted_count', type: 'int', default: 0 })
+  upsertedCount: number = 0
+
+  @Property({ name: 'skipped_count', type: 'int', default: 0 })
+  skippedCount: number = 0
+
+  @Property({ name: 'error_count', type: 'int', default: 0 })
+  errorCount: number = 0
+
+  @Property({ name: 'window_from', type: Date, nullable: true })
+  windowFrom?: Date | null
+
+  @Property({ name: 'window_to', type: Date, nullable: true })
+  windowTo?: Date | null
+
+  @Property({ name: 'error_summary', type: 'json', nullable: true })
+  errorSummary?: Record<string, unknown> | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

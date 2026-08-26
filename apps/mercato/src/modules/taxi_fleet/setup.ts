@@ -3,6 +3,7 @@ import type { ModuleSetupConfig } from '@open-mercato/shared/modules/setup'
 import { Role } from '@open-mercato/core/modules/auth/data/entities'
 import { syncTaxiVehicleCustomFieldScope } from './lib/vehicleResourceTypes'
 import { ensureTaxiFleetDriverReceiptsPartition } from './lib/receiptPartition'
+import { registerPlatformSyncSchedule } from './lib/platformSync/registerPlatformSyncSchedule'
 
 const DRIVER_ROLE_NAME = 'driver'
 
@@ -31,6 +32,10 @@ export const setup: ModuleSetupConfig = {
       tenantId: ctx.tenantId,
       organizationId: ctx.organizationId,
     })
+    await registerPlatformSyncSchedule(ctx.container, {
+      tenantId: ctx.tenantId,
+      organizationId: ctx.organizationId,
+    })
   },
 
   defaultRoleFeatures: {
@@ -41,6 +46,7 @@ export const setup: ModuleSetupConfig = {
       'taxi_fleet.manage_trips',
       'taxi_fleet.trips.inject',
       'taxi_fleet.manage_settlements',
+      'taxi_fleet.manage_platform_sync',
       'taxi_fleet.settings.manage',
       'taxi_fleet.trip.order.notify',
       'taxi_fleet.trip.paid.notify',

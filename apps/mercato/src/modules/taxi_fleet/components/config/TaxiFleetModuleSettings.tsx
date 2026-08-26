@@ -22,6 +22,7 @@ import {
 import { ResourceTypeSearchField } from '../ResourceTypeSearchField'
 import { PercentInputField } from '@open-mercato/ui/backend/inputs/PercentInputField'
 import { TripStatusSettingsSection } from './TripStatusSettingsSection'
+import { PlatformSyncSettingsSection } from './PlatformSyncSettingsSection'
 import {
   normalizeTripStatusDefinition,
   tripStatusDictionarySchema,
@@ -584,6 +585,20 @@ export function TaxiFleetModuleSettings() {
             />
           </div>
         </div>
+      </SettingsSection>
+
+      <SettingsSection
+        title={t('taxi_fleet.config.platformSync.title', 'Platform trip sync')}
+        description={t(
+          'taxi_fleet.config.platformSync.description',
+          'Connect Bolt, Uber, and Free fleet APIs for hourly trip import. CSV import remains available as fallback.',
+        )}
+      >
+        <PlatformSyncSettingsSection
+          settings={settings}
+          saving={saving}
+          onChange={setSettings}
+        />
       </SettingsSection>
 
       <SettingsSection

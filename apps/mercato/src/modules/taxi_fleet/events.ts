@@ -4,6 +4,7 @@ const events = [
   { id: 'taxi_fleet.assignment.created', label: 'Daily assignment created', entity: 'assignment', category: 'crud' },
   { id: 'taxi_fleet.assignment.updated', label: 'Daily assignment updated', entity: 'assignment', category: 'crud' },
   { id: 'taxi_fleet.trip.created', label: 'Trip order created', entity: 'trip', category: 'lifecycle', persistent: true },
+  { id: 'taxi_fleet.trip.updated', label: 'Trip updated', entity: 'trip', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.trip.assigned', label: 'Trip assigned to driver', entity: 'trip', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.trip.paid', label: 'Trip paid by customer', entity: 'trip', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.trip.submitted', label: 'Trip submitted by driver', entity: 'trip', category: 'lifecycle', persistent: true },
@@ -12,6 +13,7 @@ const events = [
   { id: 'taxi_fleet.financial_entry.created', label: 'Financial entry created', entity: 'financial_entry', category: 'crud', persistent: true },
   { id: 'taxi_fleet.receipt_extraction.completed', label: 'Receipt OCR completed', entity: 'receipt_extraction', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.receipt_extraction.needs_review', label: 'Receipt OCR needs review', entity: 'receipt_extraction', category: 'lifecycle', persistent: true },
+  { id: 'taxi_fleet.platform_sync.completed', label: 'Platform trip sync completed', entity: 'platform_sync', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.settlement.submitted', label: 'Weekly settlement submitted', entity: 'settlement', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.settlement.approved', label: 'Weekly settlement approved', entity: 'settlement', category: 'lifecycle', persistent: true },
 ] as const

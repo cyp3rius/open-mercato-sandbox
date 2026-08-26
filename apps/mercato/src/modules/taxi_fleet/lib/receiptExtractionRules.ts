@@ -13,6 +13,7 @@ export const RECEIPT_OCR_WARNING_CODES = [
   'field_conflict',
   'ocr_missing_field',
   'amount_mismatch_trip',
+  'distance_mismatch_trip',
   'nip_invalid',
   'nip_not_found',
   'nip_lookup_failed',
@@ -25,7 +26,7 @@ export type ReceiptOcrWarningCode = (typeof RECEIPT_OCR_WARNING_CODES)[number]
 
 export type ReceiptOcrWarning = {
   code: ReceiptOcrWarningCode
-  field?: 'documentNumber' | 'amount' | 'buyerNip' | 'vatRatePercent' | 'occurredAt'
+  field?: 'documentNumber' | 'amount' | 'distanceKm' | 'buyerNip' | 'vatRatePercent' | 'occurredAt'
   message?: string
   driverValue?: string | null
   ocrValue?: string | null

@@ -11,6 +11,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { TaxiFleetTrip } from '@/modules/taxi_fleet/data/entities'
 import { tripCostLineCreateSchema } from '@/modules/taxi_fleet/data/validators'
 import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
+import { assertDriverCanMutatePlatformTrip } from '@/modules/taxi_fleet/lib/platformSync/platformTripIngest'
 
 export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['taxi_fleet.driver'] },
@@ -46,6 +47,7 @@ export async function POST(req: Request, routeCtx: { params: Promise<{ id: strin
       { tenantId: driver.teamMember.tenantId, organizationId: driver.teamMember.organizationId },
     )
     if (!trip) throw new CrudHttpError(404, { error: 'Trip not found' })
+    assertDriverCanMutatePlatformTrip(trip.metadata ?? null, translate)
     const body = await req.json().catch(() => ({}))
     const parsed = parseScopedCommandInput(
       tripCostLineCreateSchema,

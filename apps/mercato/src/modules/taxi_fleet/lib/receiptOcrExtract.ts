@@ -6,6 +6,7 @@ import path from 'path'
 const receiptOcrFieldsSchema = z.object({
   documentNumber: z.string().nullable().optional(),
   grossAmount: z.number().nullable().optional(),
+  distanceKm: z.number().nullable().optional(),
   vatRatePercent: z.number().nullable().optional(),
   buyerNip: z.string().nullable().optional(),
   sellerNip: z.string().nullable().optional(),
@@ -21,6 +22,7 @@ const PROMPT = `You extract fields from a Polish fiscal receipt (paragon fiskaln
 Return ONLY valid JSON with keys:
 documentNumber (string|null) — receipt/invoice number,
 grossAmount (number|null) — total gross amount PLN,
+distanceKm (number|null) — trip distance in kilometers if printed on the receipt (look for "Dystans", "km", "kilometry", "przebieg"),
 vatRatePercent (number|null) — VAT rate percent as shown on the document (typically 8 or 23 in Poland),
 buyerNip (string|null) — buyer NIP digits only if present,
 sellerNip (string|null) — seller NIP digits only if present,

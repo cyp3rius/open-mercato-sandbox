@@ -41,6 +41,7 @@ import {
   tripHasReceiptAttachment,
   type DriverTripReceiptWarning,
 } from '../../../../lib/driverTripReceiptStatus'
+import { isPlatformIngestedTrip } from '../../../../lib/platformSync/platformTripIngest'
 
 type TripRow = {
   id: string
@@ -348,6 +349,7 @@ export default function DriverTripDetailPage({
   const isScheduled = trip?.status === 'scheduled'
   const isInProgress = trip?.status === 'in_progress'
   const isCompleted = trip?.status === 'completed'
+  const isPlatformTrip = Boolean(trip && isPlatformIngestedTrip(trip.metadata ?? null))
   const isPrepaid = trip ? isDriverTripElectronicallyPrepaid(trip) : false
   const resolvedReceiptAttachmentId = trip ? resolveTripReceiptAttachmentId(trip) : null
   const receiptStatusItem = {
@@ -358,7 +360,8 @@ export default function DriverTripDetailPage({
   const receiptProcessing = Boolean(trip && isTripReceiptProcessing(receiptStatusItem))
   const receiptVerified = Boolean(trip && isTripReceiptVerified(receiptStatusItem))
   const showReceiptProcessingNotice = receiptProcessing && !receiptVerified
-  const canSupplementReceipt = Boolean(trip && isCompleted && !tripHasReceiptAttachment(trip))
+  const canSupplementReceipt =
+    Boolean(trip && isCompleted && !tripHasReceiptAttachment(trip)) && !isPlatformTrip
   const request = trip
     ? tripRequestDetailsFromMetadata(trip.metadata ?? null, {
         distanceKm: trip.distanceKm != null ? String(trip.distanceKm) : null,
@@ -407,6 +410,14 @@ export default function DriverTripDetailPage({
           {t('taxi_fleet.driverApp.trips.backToList', 'Back to trips')}
         </Link>
         {notice ? <Notice variant="info">{notice}</Notice> : null}
+        {isPlatformTrip ? (
+          <Notice variant="info">
+            {t(
+              'taxi_fleet.platformSync.driverReadOnly',
+              'This trip was imported from a platform app and cannot be edited in the driver app.',
+            )}
+          </Notice>
+        ) : null}
         {showReceiptProcessingNotice ? (
           <Notice variant="info">
             {t(
@@ -639,7 +650,7 @@ export default function DriverTripDetailPage({
               </div>
             ) : null}
 
-            {isScheduled ? (
+            {isScheduled && !isPlatformTrip ? (
               <div className="space-y-3">
                 <div className={driverCardClass}>
                   <div className={driverSectionTitleClass}>
@@ -724,7 +735,7 @@ export default function DriverTripDetailPage({
               </div>
             ) : null}
 
-            {isInProgress ? (
+            {isInProgress && !isPlatformTrip ? (
               <Button
                 type="button"
                 className={driverPrimaryActionClass}

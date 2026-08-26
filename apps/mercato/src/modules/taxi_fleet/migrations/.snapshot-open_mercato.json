@@ -56148,11 +56148,85 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "bolt_driver_id": {
+          "name": "bolt_driver_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "uber_driver_id": {
+          "name": "uber_driver_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "free_driver_id": {
+          "name": "free_driver_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
         }
       },
       "name": "taxi_fleet_driver_profiles",
       "schema": "public",
       "indexes": [
+        {
+          "columnNames": [
+            "tenant_id",
+            "organization_id",
+            "bolt_driver_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "taxi_fleet_driver_profiles_bolt_id_uidx",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX taxi_fleet_driver_profiles_bolt_id_uidx ON public.taxi_fleet_driver_profiles USING btree (tenant_id, organization_id, bolt_driver_id) WHERE ((bolt_driver_id IS NOT NULL) AND (deleted_at IS NULL))"
+        },
+        {
+          "columnNames": [
+            "tenant_id",
+            "organization_id",
+            "free_driver_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "taxi_fleet_driver_profiles_free_id_uidx",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX taxi_fleet_driver_profiles_free_id_uidx ON public.taxi_fleet_driver_profiles USING btree (tenant_id, organization_id, free_driver_id) WHERE ((free_driver_id IS NOT NULL) AND (deleted_at IS NULL))"
+        },
         {
           "columnNames": [
             "id"
@@ -56185,6 +56259,19 @@
           "keyName": "taxi_fleet_driver_profiles_tenant_id_organization_b79bb_unique",
           "unique": true,
           "primary": false
+        },
+        {
+          "columnNames": [
+            "tenant_id",
+            "organization_id",
+            "uber_driver_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "taxi_fleet_driver_profiles_uber_id_uidx",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX taxi_fleet_driver_profiles_uber_id_uidx ON public.taxi_fleet_driver_profiles USING btree (tenant_id, organization_id, uber_driver_id) WHERE ((uber_driver_id IS NOT NULL) AND (deleted_at IS NULL))"
         }
       ],
       "checks": [],
@@ -57605,6 +57692,328 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
+        "platform": {
+          "name": "platform",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "trigger": {
+          "name": "trigger",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'running'",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "fetched_count": {
+          "name": "fetched_count",
+          "type": "int4",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 32,
+          "scale": 0,
+          "default": "0",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "upserted_count": {
+          "name": "upserted_count",
+          "type": "int4",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 32,
+          "scale": 0,
+          "default": "0",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "skipped_count": {
+          "name": "skipped_count",
+          "type": "int4",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 32,
+          "scale": 0,
+          "default": "0",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "error_count": {
+          "name": "error_count",
+          "type": "int4",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 32,
+          "scale": 0,
+          "default": "0",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "window_from": {
+          "name": "window_from",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "window_to": {
+          "name": "window_to",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "error_summary": {
+          "name": "error_summary",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "json"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "name": "taxi_fleet_platform_sync_runs",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "taxi_fleet_platform_sync_runs_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "tenant_id",
+            "organization_id",
+            "started_at"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "taxi_fleet_platform_sync_runs_scope_idx",
+          "unique": false,
+          "primary": false
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {},
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "gen_random_uuid()",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
         "attachment_id": {
           "name": "attachment_id",
           "type": "uuid",
@@ -57972,6 +58381,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "decimal"
+        },
+        "ocr_distance_km": {
+          "name": "ocr_distance_km",
+          "type": "numeric(12,2)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": 12,
+          "scale": 2,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "decimal"
         }
       },
       "name": "taxi_fleet_receipt_extractions",
@@ -58326,7 +58751,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -58670,6 +59095,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "text"
+        },
+        "external_trip_id": {
+          "name": "external_trip_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
         }
       },
       "name": "taxi_fleet_trips",
@@ -58695,6 +59136,33 @@
           "keyName": "taxi_fleet_trips_pkey",
           "unique": true,
           "primary": true
+        },
+        {
+          "columnNames": [
+            "tenant_id",
+            "organization_id",
+            "platform",
+            "external_trip_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "taxi_fleet_trips_platform_external_uidx",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX taxi_fleet_trips_platform_external_uidx ON public.taxi_fleet_trips USING btree (tenant_id, organization_id, platform, external_trip_id) WHERE ((external_trip_id IS NOT NULL) AND (deleted_at IS NULL))"
+        },
+        {
+          "columnNames": [
+            "tenant_id",
+            "organization_id",
+            "platform",
+            "started_at"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "taxi_fleet_trips_platform_started_idx",
+          "unique": false,
+          "primary": false
         },
         {
           "columnNames": [

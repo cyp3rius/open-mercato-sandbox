@@ -35,7 +35,14 @@ async function buildContext(req: Request): Promise<CommandRuntimeContext> {
   }
 }
 
-function serializeExtraction(row: TaxiFleetReceiptExtraction) {
+function serializeExtraction(
+  row: TaxiFleetReceiptExtraction,
+  trip?: TaxiFleetTrip | null,
+) {
+  const metadata =
+    trip?.metadata && typeof trip.metadata === 'object'
+      ? (trip.metadata as Record<string, unknown>)
+      : null
   return {
     id: row.id,
     attachmentId: row.attachmentId,
@@ -46,6 +53,7 @@ function serializeExtraction(row: TaxiFleetReceiptExtraction) {
     driverAmount: row.driverAmount ?? null,
     ocrDocumentNumber: row.ocrDocumentNumber ?? null,
     ocrGrossAmount: row.ocrGrossAmount ?? null,
+    ocrDistanceKm: row.ocrDistanceKm ?? null,
     ocrVatRatePercent: row.ocrVatRatePercent ?? null,
     ocrBuyerNip: row.ocrBuyerNip ?? null,
     ocrSellerNip: row.ocrSellerNip ?? null,
@@ -59,6 +67,11 @@ function serializeExtraction(row: TaxiFleetReceiptExtraction) {
     errorMessage: row.errorMessage ?? null,
     processedAt: row.processedAt?.toISOString() ?? null,
     attachmentUrl: `/api/attachments/file/${row.attachmentId}`,
+    tripDistanceKm: trip?.distanceKm ?? null,
+    routeDistanceKm:
+      metadata && typeof metadata.routeDistanceKm === 'string' ? metadata.routeDistanceKm : null,
+    distanceSource:
+      metadata && typeof metadata.distanceSource === 'string' ? metadata.distanceSource : null,
   }
 }
 
@@ -96,13 +109,13 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
           deletedAt: null,
         })
         if (byAttachment) {
-          return NextResponse.json({ item: serializeExtraction(byAttachment) })
+          return NextResponse.json({ item: serializeExtraction(byAttachment, trip) })
         }
       }
       return NextResponse.json({ item: null })
     }
 
-    return NextResponse.json({ item: serializeExtraction(extraction) })
+    return NextResponse.json({ item: serializeExtraction(extraction, trip) })
   } catch (err) {
     if (err instanceof CrudHttpError) return NextResponse.json(err.body, { status: err.status })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
@@ -170,7 +183,7 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
     }
 
     if (!extraction) throw new CrudHttpError(404, { error: 'Not found' })
-    return NextResponse.json({ item: serializeExtraction(extraction) })
+    return NextResponse.json({ item: serializeExtraction(extraction, trip) })
   } catch (err) {
     if (err instanceof CrudHttpError) return NextResponse.json(err.body, { status: err.status })
     if (err instanceof z.ZodError) {

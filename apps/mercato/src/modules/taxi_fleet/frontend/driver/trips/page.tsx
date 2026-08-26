@@ -26,6 +26,7 @@ import { tripRequestDetailsFromMetadata } from '../../../lib/tripRequestForm'
 import { isDriverTripElectronicallyPrepaid } from '../../../lib/driverTripPayment'
 import { isDriverOnOpenShift } from '../../../lib/driverTripShiftWindow'
 import { useTaxiFleetLabels } from '../../../components/useTaxiFleetLabels'
+import { readPlatformTripIngestLabel } from '../../../components/PlatformTripIngestBadge'
 
 type TripRow = {
   id: string
@@ -273,6 +274,7 @@ export default function DriverTripsPage() {
                 ocrStatus: trip.ocrStatus ?? null,
                 warnings: trip.warnings ?? [],
               }
+              const ingestLabel = readPlatformTripIngestLabel(trip.metadata ?? null, t)
               return (
                 <Link key={trip.id} href={`/driver/trips/${trip.id}`} className={driverListRowClass}>
                   <div className="flex items-start justify-between gap-3">
@@ -281,6 +283,9 @@ export default function DriverTripsPage() {
                         <div className="text-sm font-semibold text-[#071437]">
                           {resolveTripStatusLabel(trip.status)}
                         </div>
+                        {ingestLabel ? (
+                          <span className={`${driverBadgeNeutralClass} text-xs`}>{ingestLabel}</span>
+                        ) : null}
                         <DriverTripReceiptStatusBadge item={receiptItem} t={t} />
                       </div>
                       {timeRange ? (

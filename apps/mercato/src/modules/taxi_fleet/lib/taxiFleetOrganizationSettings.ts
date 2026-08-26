@@ -69,6 +69,12 @@ export async function saveTaxiFleetOrganizationSettings(
   const merged = mergeTaxiFleetSettingsForSave(current, incoming, {
     paypalClientSecret: current.paypal.clientSecret,
     calendarPrivateKey: current.calendar.serviceAccountPrivateKey,
+    platformSyncBoltClientSecret: current.platformSync.bolt.clientSecret,
+    platformSyncUberClientSecret: current.platformSync.uber.clientSecret,
+    platformSyncFreeClientSecret: current.platformSync.free.clientSecret,
+    platformSyncBoltRefreshToken: current.platformSync.bolt.refreshToken,
+    platformSyncUberRefreshToken: current.platformSync.uber.refreshToken,
+    platformSyncFreeRefreshToken: current.platformSync.free.refreshToken,
   })
   const normalized = taxiFleetSettingsSchema.parse(merged)
 
@@ -84,6 +90,7 @@ export async function saveTaxiFleetOrganizationSettings(
         pricing: normalized.pricing,
         paypal: normalized.paypal,
         calendar: normalized.calendar,
+        platformSync: normalized.platformSync,
         customerEmails: normalized.customerEmails,
         settlementIndicatorRanges: normalized.settlementIndicatorRanges,
       },

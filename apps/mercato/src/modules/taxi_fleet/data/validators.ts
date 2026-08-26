@@ -21,6 +21,18 @@ export const settlementStatusSchema = z.enum(['draft', 'submitted', 'approved', 
 
 export const settlementClosureTypeSchema = z.enum(['payout', 'cash_return'])
 
+const optionalPlatformDriverId = z
+  .string()
+  .trim()
+  .max(191)
+  .optional()
+  .nullable()
+  .transform((value) => {
+    if (value == null) return null
+    const trimmed = value.trim()
+    return trimmed.length ? trimmed : null
+  })
+
 export const driverProfileCreateSchema = z.object({
   tenantId: uuid,
   organizationId: uuid,
@@ -28,6 +40,9 @@ export const driverProfileCreateSchema = z.object({
   payoutPercent: z.coerce.number().min(0).max(100).optional().default(0),
   defaultResourceId: optionalUuid,
   externalAppEnabled: z.boolean().optional().default(false),
+  boltDriverId: optionalPlatformDriverId,
+  uberDriverId: optionalPlatformDriverId,
+  freeDriverId: optionalPlatformDriverId,
 })
 
 export const driverProfileUpdateSchema = z.object({
@@ -35,6 +50,9 @@ export const driverProfileUpdateSchema = z.object({
   payoutPercent: z.coerce.number().min(0).max(100).optional(),
   defaultResourceId: optionalUuid,
   externalAppEnabled: z.boolean().optional(),
+  boltDriverId: optionalPlatformDriverId,
+  uberDriverId: optionalPlatformDriverId,
+  freeDriverId: optionalPlatformDriverId,
 })
 
 export const driverProfileDeleteSchema = z.object({ id: uuid })
@@ -509,6 +527,34 @@ export const taxiFleetSettingsPutSchema = z.object({
   }),
   pricing: pricingConfigSchema.optional(),
   settlementIndicatorRanges: settlementIndicatorRangesSchema.optional(),
+  platformSync: z
+    .object({
+      bolt: z.object({
+        enabled: z.boolean(),
+        apiBaseUrl: z.string().max(2000).optional().default(''),
+        clientId: z.string().max(500).optional().default(''),
+        clientSecret: z.string().max(500).optional().default(''),
+        refreshToken: z.string().max(2000).optional().default(''),
+        companyId: z.string().max(191).optional().default(''),
+      }),
+      uber: z.object({
+        enabled: z.boolean(),
+        apiBaseUrl: z.string().max(2000).optional().default(''),
+        clientId: z.string().max(500).optional().default(''),
+        clientSecret: z.string().max(500).optional().default(''),
+        refreshToken: z.string().max(2000).optional().default(''),
+        companyId: z.string().max(191).optional().default(''),
+      }),
+      free: z.object({
+        enabled: z.boolean(),
+        apiBaseUrl: z.string().max(2000).optional().default(''),
+        clientId: z.string().max(500).optional().default(''),
+        clientSecret: z.string().max(500).optional().default(''),
+        refreshToken: z.string().max(2000).optional().default(''),
+        companyId: z.string().max(191).optional().default(''),
+      }),
+    })
+    .optional(),
 })
 
 export type TaxiFleetSettingsPutInput = z.infer<typeof taxiFleetSettingsPutSchema>
@@ -598,6 +644,56 @@ export const quoteResponseSchema = z.object({
 })
 
 export type QuoteBodyInput = z.infer<typeof quoteBodySchema>
+
+export const platformTripIngestSourceSchema = z.enum(['platform_sync', 'platform_csv'])
+export const platformTripUpsertStatusSchema = z.enum(['completed', 'cancelled', 'paid'])
+export const platformTripPaymentTypeSchema = z.enum(['cash', 'card', 'electronic', 'transfer', 'other'])
+
+export const platformTripUpsertSchema = z.object({
+  tenantId: uuid,
+  organizationId: uuid,
+  ingestSource: platformTripIngestSourceSchema,
+  platform: tripPlatformSchema,
+  externalTripId: z.string().trim().min(1).max(191),
+  platformDriverId: z.string().trim().min(1).max(191),
+  status: platformTripUpsertStatusSchema,
+  startedAt: z.coerce.date(),
+  endedAt: z.coerce.date().optional().nullable(),
+  distanceKm: z.coerce.number().optional().nullable(),
+  revenueAmount: z.coerce.number(),
+  currencyCode: z.string().trim().min(3).max(3).optional().default('PLN'),
+  paymentType: platformTripPaymentTypeSchema.optional().nullable(),
+  rawExternalStatus: z.string().trim().max(120).optional().nullable(),
+})
+
+export type PlatformTripUpsertInput = z.infer<typeof platformTripUpsertSchema>
+
+export const platformSyncRunSchema = z.object({
+  tenantId: uuid,
+  organizationId: uuid,
+  platforms: z.array(tripPlatformSchema).optional(),
+  windowFrom: z.coerce.date().optional().nullable(),
+  windowTo: z.coerce.date().optional().nullable(),
+  trigger: z.enum(['manual', 'schedule']).optional().default('manual'),
+})
+
+export const platformTripImportCsvSchema = z.object({
+  tenantId: uuid,
+  organizationId: uuid,
+  platform: tripPlatformSchema,
+  csvText: z.string().min(1),
+})
+
+export const platformSyncRunsListSchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  pageSize: z.coerce.number().min(1).max(100).default(20),
+  platform: z.union([tripPlatformSchema, z.literal('all')]).optional(),
+  status: z.enum(['running', 'succeeded', 'failed', 'partial']).optional(),
+})
+
+export type PlatformSyncRunInput = z.infer<typeof platformSyncRunSchema>
+export type PlatformTripImportCsvInput = z.infer<typeof platformTripImportCsvSchema>
+
 export type SettlementUpdateInput = z.infer<typeof settlementUpdateSchema>
 export type SettlementDeleteInput = z.infer<typeof settlementDeleteSchema>
 export type SettlementSubmitInput = z.infer<typeof settlementSubmitSchema>

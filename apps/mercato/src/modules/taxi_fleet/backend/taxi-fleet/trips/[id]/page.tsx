@@ -25,6 +25,9 @@ import {
 } from '../../../../components/tripFormConfig'
 import { TripCrudForm } from '../../../../components/TripCrudForm'
 import { TripReceiptOcrPanel } from '../../../../components/TripReceiptOcrPanel'
+import { PlatformTripIngestBadge } from '../../../../components/PlatformTripIngestBadge'
+import { Notice } from '@open-mercato/ui/primitives/Notice'
+import { isPlatformIngestedTrip } from '../../../../lib/platformSync/platformTripIngest'
 import {
   tripDetailActionsForStatus,
   tripDetailAllowsDriverEdit,
@@ -39,6 +42,8 @@ type TripRow = {
   resourceId: string
   tripType: string
   status: string
+  platform?: string | null
+  externalTripId?: string | null
   customerPersonId?: string | null
   customerCompanyId?: string | null
   startedAt?: string | null
@@ -244,6 +249,21 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
       />
       <Page>
         <PageBody>
+          {isPlatformIngestedTrip(row.metadata ?? null) ? (
+            <div className="mb-4 space-y-3">
+              <Notice variant="info">
+                {t(
+                  'taxi_fleet.platformSync.backendReadOnly',
+                  'This trip was imported from a platform app. Edit fields here only when correcting sync data.',
+                )}
+              </Notice>
+              <PlatformTripIngestBadge
+                metadata={row.metadata ?? null}
+                platform={row.platform ?? null}
+                externalTripId={row.externalTripId ?? null}
+              />
+            </div>
+          ) : null}
           <TripCrudForm
             layout="page"
             mode="edit"

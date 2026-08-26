@@ -51,6 +51,9 @@ const crud = makeCrudRoute({
       'payout_percent',
       'default_resource_id',
       'external_app_enabled',
+      'bolt_driver_id',
+      'uber_driver_id',
+      'free_driver_id',
       'created_at',
       'updated_at',
     ],
@@ -108,6 +111,9 @@ const rowSchema = z.object({
   teamMemberId: z.string().uuid(),
   payoutPercent: z.string(),
   externalAppEnabled: z.boolean(),
+  boltDriverId: z.string().nullable().optional(),
+  uberDriverId: z.string().nullable().optional(),
+  freeDriverId: z.string().nullable().optional(),
 })
 
 export const openApi = createTaxiFleetCrudOpenApi({

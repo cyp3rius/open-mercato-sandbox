@@ -28,6 +28,8 @@ import { extractReceiptFieldsFromImage, hasAnthropicReceiptOcrKey, hasOpenAiRece
 import { ensureTaxiFleetDriverReceiptsPartition } from './receiptPartition'
 import { recalculateWeeklySettlementsForFinancialEntry, recalculateWeeklySettlementsForTrip } from './settlementWeekScope'
 import { syncFinancialEntryDocumentDuplicates } from './documentDuplicates'
+import { mergeReceiptTripDistance, readTripRouteDistanceKm } from './receiptTripDistanceApply'
+import { formatDistanceKm } from './settlementTripDistance'
 
 function mergeTripMetadata(
   trip: TaxiFleetTrip,
@@ -362,6 +364,10 @@ export async function processReceiptExtraction(
       fields.grossAmount != null && Number.isFinite(fields.grossAmount)
         ? fields.grossAmount.toFixed(2)
         : null
+    row.ocrDistanceKm =
+      fields.distanceKm != null && Number.isFinite(fields.distanceKm) && fields.distanceKm > 0
+        ? fields.distanceKm.toFixed(2)
+        : null
     row.ocrVatRatePercent =
       fields.vatRatePercent != null && Number.isFinite(fields.vatRatePercent)
         ? String(normalizeExpenseVatRatePercent(fields.vatRatePercent))
@@ -401,6 +407,7 @@ export async function processReceiptExtraction(
       grossAmount: row.ocrGrossAmount,
       financialEntryId: row.financialEntryId ?? null,
       tripId: row.tripId ?? null,
+      ocrDistanceKm: row.ocrDistanceKm ?? null,
       provider,
       model,
       warningCount: warnings.length,
@@ -709,6 +716,39 @@ export async function applyReceiptExtractionToLinkedRecords(
           trip.revenueAmount = ocrAmount.toFixed(2)
           trip.updatedAt = new Date()
         }
+      }
+
+      const ocrDistance =
+        row.ocrDistanceKm != null && Number.isFinite(Number(row.ocrDistanceKm))
+          ? Number(row.ocrDistanceKm)
+          : null
+      const distanceMerge = mergeReceiptTripDistance({
+        tripDistanceKm: trip.distanceKm,
+        ocrDistanceKm: ocrDistance,
+      })
+      if (distanceMerge.applied && distanceMerge.distanceKm) {
+        const existingMetadata =
+          trip.metadata && typeof trip.metadata === 'object'
+            ? (trip.metadata as Record<string, unknown>)
+            : {}
+        const routeDistanceKm =
+          readTripRouteDistanceKm(existingMetadata) ?? distanceMerge.previousDistanceKm
+        trip.distanceKm = distanceMerge.distanceKm
+        trip.metadata = mergeTripMetadata(trip, {
+          distanceSource: 'ocr',
+          receiptOcrDistanceKm: distanceMerge.distanceKm,
+          ...(routeDistanceKm != null ? { routeDistanceKm: formatDistanceKm(routeDistanceKm) } : {}),
+        })
+        trip.updatedAt = new Date()
+      }
+      if (distanceMerge.warnings.length) {
+        deduped.push(...distanceMerge.warnings.filter(
+          (warning) =>
+            !deduped.some(
+              (existing) => existing.code === warning.code && existing.field === warning.field,
+            ),
+        ))
+        row.warningsJson = toWarningRecords(deduped)
       }
 
       if (documentNumber || row.attachmentId) {

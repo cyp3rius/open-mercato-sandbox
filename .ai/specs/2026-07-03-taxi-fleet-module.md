@@ -70,8 +70,8 @@ Monthly settlement MVP aggregates weekly totals + driver breakdown. Future opera
 7. GetTransfer courses vs transfers; running balance
 8. Per-driver revenue minus fuel (earned wage) + km driven
 9. Cash in register for full month (weeks may straddle months)
-10. Uber payouts vs bank transfers (rolling windows, e.g. 8.07–4.08)
-11. Bolt payouts vs bank transfers
+10. Uber payouts vs bank transfers (rolling windows, e.g. 8.07–4.08) — **ops outside CRM**; trip ingest into CRM is separate (see `.ai/specs/2026-08-25-taxi-fleet-platform-trip-sync.md`)
+11. Bolt payouts vs bank transfers — same as above (payouts outside CRM)
 12. Mariusz payout total (On + Gośka)
 13. Card inflows vs terminal transactions (carry forward over/under between months)
 

@@ -17,12 +17,16 @@ type ExtractionItem = {
   driverDocumentNumber: string | null
   ocrDocumentNumber: string | null
   ocrGrossAmount: string | null
+  ocrDistanceKm: string | null
   ocrBuyerNip: string | null
   appliedDocumentNumber: string | null
   confidence: string | null
   warnings: Array<Record<string, unknown>>
   errorMessage: string | null
   attachmentUrl: string
+  tripDistanceKm: string | null
+  routeDistanceKm: string | null
+  distanceSource: string | null
 }
 
 type TripReceiptOcrPanelProps = {
@@ -37,6 +41,24 @@ const statusClass: Record<string, string> = {
   needs_review: 'border-amber-400 bg-amber-50 text-amber-950',
   failed: 'border-destructive/40 bg-destructive/10 text-destructive',
   applied: 'border-emerald-300 bg-emerald-50 text-emerald-950',
+}
+
+function formatWarningLabel(
+  t: ReturnType<typeof useT>,
+  warning: Record<string, unknown>,
+): string {
+  const code = String(warning.code ?? '')
+  if (code === 'distance_mismatch_trip') {
+    return t(
+      'taxi_fleet.receiptOcr.warnings.distanceMismatch',
+      'Receipt distance differs from route/calculated distance ({route} km → {ocr} km)',
+      {
+        route: String(warning.driverValue ?? '—'),
+        ocr: String(warning.ocrValue ?? '—'),
+      },
+    )
+  }
+  return code
 }
 
 export function TripReceiptOcrPanel({ tripId, canManage }: TripReceiptOcrPanelProps) {
@@ -134,6 +156,40 @@ export function TripReceiptOcrPanel({ tripId, canManage }: TripReceiptOcrPanelPr
           </div>
         </div>
         <div className="space-y-1 text-sm">
+          <div className="text-xs text-muted-foreground">
+            {t('taxi_fleet.receiptOcr.ocrDistance', 'OCR distance')}
+          </div>
+          <div className="font-medium tabular-nums">
+            {item.ocrDistanceKm != null ? `${item.ocrDistanceKm} km` : '—'}
+          </div>
+        </div>
+        <div className="space-y-1 text-sm">
+          <div className="text-xs text-muted-foreground">
+            {t('taxi_fleet.receiptOcr.tripDistance', 'Trip distance')}
+          </div>
+          <div className="font-medium tabular-nums">
+            {item.tripDistanceKm != null ? `${item.tripDistanceKm} km` : '—'}
+          </div>
+        </div>
+        <div className="space-y-1 text-sm">
+          <div className="text-xs text-muted-foreground">
+            {t('taxi_fleet.receiptOcr.routeDistance', 'Route distance')}
+          </div>
+          <div className="font-medium tabular-nums">
+            {item.routeDistanceKm != null ? `${item.routeDistanceKm} km` : '—'}
+          </div>
+        </div>
+        {item.distanceSource ? (
+          <div className="space-y-1 text-sm">
+            <div className="text-xs text-muted-foreground">
+              {t('taxi_fleet.receiptOcr.distanceSource', 'Distance source')}
+            </div>
+            <div className="font-medium">
+              {t(`taxi_fleet.receiptOcr.distanceSources.${item.distanceSource}`, item.distanceSource)}
+            </div>
+          </div>
+        ) : null}
+        <div className="space-y-1 text-sm">
           <div className="text-xs text-muted-foreground">{t('taxi_fleet.receiptOcr.buyerNip', 'Buyer NIP')}</div>
           <div className="font-medium tabular-nums">{item.ocrBuyerNip || '—'}</div>
         </div>
@@ -146,7 +202,7 @@ export function TripReceiptOcrPanel({ tripId, canManage }: TripReceiptOcrPanelPr
       {item.warnings?.length ? (
         <ul className="list-disc space-y-1 pl-5 text-xs text-amber-800">
           {item.warnings.map((warning, index) => (
-            <li key={`${String(warning.code)}-${index}`}>{String(warning.code)}</li>
+            <li key={`${String(warning.code)}-${index}`}>{formatWarningLabel(t, warning)}</li>
           ))}
         </ul>
       ) : null}

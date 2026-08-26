@@ -66,6 +66,7 @@ const crud = makeCrudRoute({
       'assignment_id',
       'trip_type',
       'platform',
+      'external_trip_id',
       'started_at',
       'ended_at',
       'distance_km',

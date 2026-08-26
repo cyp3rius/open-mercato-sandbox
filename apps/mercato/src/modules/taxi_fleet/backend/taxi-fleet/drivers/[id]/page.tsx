@@ -27,6 +27,9 @@ type DriverRow = {
   payoutPercent: string
   defaultResourceId?: string | null
   externalAppEnabled: boolean
+  boltDriverId?: string | null
+  uberDriverId?: string | null
+  freeDriverId?: string | null
 }
 
 type DriverDetailTabId = 'trips' | 'allocations' | 'settlements'
@@ -77,6 +80,9 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
         payoutPercent: 0,
         defaultResourceId: '',
         externalAppEnabled: false,
+        boltDriverId: '',
+        uberDriverId: '',
+        freeDriverId: '',
       })
     }
     return mapDriverProfileRowToUpdateFormValues(row)

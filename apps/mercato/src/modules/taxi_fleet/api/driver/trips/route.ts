@@ -28,6 +28,7 @@ import {
   tripHasReceiptAttachment,
   type DriverTripCompletionMode,
 } from '@/modules/taxi_fleet/lib/driverTripReceiptStatus'
+import { assertDriverCanMutatePlatformTrip } from '@/modules/taxi_fleet/lib/platformSync/platformTripIngest'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['taxi_fleet.driver'] },
@@ -371,6 +372,7 @@ export async function PUT(req: Request) {
       { tenantId: driver.teamMember.tenantId, organizationId: driver.teamMember.organizationId },
     )
     if (!existing) throw new CrudHttpError(404, { error: 'Not found' })
+    assertDriverCanMutatePlatformTrip(existing.metadata ?? null, translate)
 
     const receipt = driverTripReceiptSchema.parse(body)
     const receiptInput = parseDriverTripReceiptInput(body)

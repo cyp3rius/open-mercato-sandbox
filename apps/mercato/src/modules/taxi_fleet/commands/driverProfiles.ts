@@ -50,6 +50,9 @@ const createDriverProfileCommand: CommandHandler<DriverProfileCreateInput, { pro
       payoutPercent: numericToString(payoutPercent),
       defaultResourceId: parsed.defaultResourceId ?? null,
       externalAppEnabled: parsed.externalAppEnabled ?? false,
+      boltDriverId: parsed.boltDriverId ?? null,
+      uberDriverId: parsed.uberDriverId ?? null,
+      freeDriverId: parsed.freeDriverId ?? null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -71,6 +74,9 @@ const updateDriverProfileCommand: CommandHandler<DriverProfileUpdateInput, { pro
     if (parsed.payoutPercent !== undefined) row.payoutPercent = numericToString(parsed.payoutPercent)
     if (parsed.defaultResourceId !== undefined) row.defaultResourceId = parsed.defaultResourceId
     if (parsed.externalAppEnabled !== undefined) row.externalAppEnabled = parsed.externalAppEnabled
+    if (parsed.boltDriverId !== undefined) row.boltDriverId = parsed.boltDriverId
+    if (parsed.uberDriverId !== undefined) row.uberDriverId = parsed.uberDriverId
+    if (parsed.freeDriverId !== undefined) row.freeDriverId = parsed.freeDriverId
     await em.flush()
     return { profileId: row.id }
   },

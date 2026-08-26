@@ -33,6 +33,10 @@ export function buildDriverTripPayload(input: {
   details.durationText = input.route.durationText?.trim() || ''
 
   const metadata = buildTripRequestMetadata(details)
+  if (input.route.distanceKm != null && Number.isFinite(input.route.distanceKm) && input.route.distanceKm > 0) {
+    metadata.distanceSource = 'route'
+    metadata.routeDistanceKm = input.route.distanceKm.toFixed(2)
+  }
   const revenue = parseNumericValue(input.commercial.revenueAmount) ?? 0
   const documentNumber = input.commercial.receiptDocumentNumber.trim()
 

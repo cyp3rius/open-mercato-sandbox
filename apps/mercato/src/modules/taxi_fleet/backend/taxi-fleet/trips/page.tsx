@@ -3,7 +3,7 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus } from 'lucide-react'
+import { Plus, RefreshCw, Upload } from 'lucide-react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
@@ -24,6 +24,9 @@ import { useFleetBackendSession } from '../../../components/useFleetBackendSessi
 import { TripCustomerPreview } from '../../../components/TripCustomerPreview'
 import { useTripStatusDictionary } from '../../../components/useTripStatusDictionary'
 import { DictionaryAppearancePreview } from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
+import { PlatformTripIngestBadge } from '../../../components/PlatformTripIngestBadge'
+import { PlatformSyncImportCsvDialog } from '../../../components/PlatformSyncImportCsvDialog'
+import { PlatformSyncRunsPanel } from '../../../components/PlatformSyncRunsPanel'
 
 const PAGE_SIZE = 20
 
@@ -31,11 +34,14 @@ type TripRow = {
   id: string
   tripType: string
   status: string
+  platform?: string | null
+  externalTripId?: string | null
   teamMemberId?: string | null
   customerPersonId?: string | null
   customerCompanyId?: string | null
   revenueAmount?: string | null
   startedAt?: string | null
+  metadata?: Record<string, unknown> | null
 }
 
 type ListResponse = { items: TripRow[]; totalPages: number; total?: number }
@@ -49,8 +55,10 @@ export default function TaxiFleetTripsPage() {
   const { resolveName } = useFleetDriverDirectory()
   const { resolveTripTypeLabel } = useTaxiFleetLabels()
   const { statusOptions, findDefinition } = useTripStatusDictionary()
-  const { canManageTrips } = useTaxiFleetPermissions()
+  const { canManageTrips, canManagePlatformSync } = useTaxiFleetPermissions()
   const { isDriverOnly } = useFleetBackendSession()
+  const [importOpen, setImportOpen] = React.useState(false)
+  const [syncBusy, setSyncBusy] = React.useState(false)
   const [rows, setRows] = React.useState<TripRow[]>([])
   const [page, setPage] = React.useState(1)
   const [totalPages, setTotalPages] = React.useState(1)
@@ -151,6 +159,29 @@ export default function TaxiFleetTripsPage() {
     [confirm, t],
   )
 
+  const handleSyncNow = React.useCallback(async () => {
+    if (syncBusy) return
+    setSyncBusy(true)
+    const call = await apiCall<{ upsertedCount?: number; skippedCount?: number; errorCount?: number }>(
+      '/api/taxi_fleet/platform-sync/run',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      },
+    )
+    setSyncBusy(false)
+    if (!call.ok) {
+      const message =
+        (call.result as { error?: string } | null)?.error ??
+        t('taxi_fleet.platformSync.run.error', 'Sync failed.')
+      flash(message, 'error')
+      return
+    }
+    flash(t('taxi_fleet.platformSync.run.success', 'Platform sync finished.'), 'success')
+    setReloadToken((value) => value + 1)
+  }, [syncBusy, t])
+
   const columns = React.useMemo<ColumnDef<TripRow>[]>(
     () => [
       {
@@ -176,6 +207,17 @@ export default function TaxiFleetTripsPage() {
             />
           )
         },
+      },
+      {
+        id: 'source',
+        header: t('taxi_fleet.platformSync.column.source', 'Source'),
+        cell: ({ row }) => (
+          <PlatformTripIngestBadge
+            metadata={row.original.metadata ?? null}
+            platform={row.original.platform ?? null}
+            externalTripId={row.original.externalTripId ?? null}
+          />
+        ),
       },
       {
         accessorKey: 'teamMemberId',
@@ -214,14 +256,43 @@ export default function TaxiFleetTripsPage() {
             },
           }}
           actions={
-            canManageTrips ? (
-              <Button asChild type="button" size="sm" className="inline-flex items-center gap-2">
-                <Link href={`${TAXI_FLEET_BASE}/trips/create`}>
-                  <Plus className="size-4 shrink-0" aria-hidden />
-                  {t('taxi_fleet.trips.actions.new', 'New trip')}
-                </Link>
-              </Button>
-            ) : null
+            <div className="flex flex-wrap items-center gap-2">
+              {canManagePlatformSync ? (
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="inline-flex items-center gap-2"
+                    disabled={syncBusy}
+                    onClick={() => void handleSyncNow()}
+                  >
+                    <RefreshCw className="size-4 shrink-0" aria-hidden />
+                    {syncBusy
+                      ? t('taxi_fleet.platformSync.run.running', 'Syncing…')
+                      : t('taxi_fleet.platformSync.run.action', 'Sync now')}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="inline-flex items-center gap-2"
+                    onClick={() => setImportOpen(true)}
+                  >
+                    <Upload className="size-4 shrink-0" aria-hidden />
+                    {t('taxi_fleet.platformSync.import.action', 'Import CSV')}
+                  </Button>
+                </>
+              ) : null}
+              {canManageTrips ? (
+                <Button asChild type="button" size="sm" className="inline-flex items-center gap-2">
+                  <Link href={`${TAXI_FLEET_BASE}/trips/create`}>
+                    <Plus className="size-4 shrink-0" aria-hidden />
+                    {t('taxi_fleet.trips.actions.new', 'New trip')}
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
           }
           columns={columns}
           data={rows}
@@ -267,7 +338,13 @@ export default function TaxiFleetTripsPage() {
           pagination={{ page, totalPages, total, pageSize: PAGE_SIZE, onPageChange: setPage }}
           perspective={{ tableId: 'taxi_fleet.trips' }}
         />
+        {canManagePlatformSync ? <PlatformSyncRunsPanel reloadToken={reloadToken} /> : null}
       </PageBody>
+      <PlatformSyncImportCsvDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={() => setReloadToken((value) => value + 1)}
+      />
       {ConfirmDialogElement}
     </Page>
   )

@@ -849,6 +849,13 @@ function buildTripPayloadExtras(values: TripFormValues) {
       // ignore invalid quote snapshot payload
     }
   }
+  if (values.routeSyncedFingerprint.trim() && distanceKm != null && distanceKm > 0) {
+    metadata = {
+      ...metadata,
+      distanceSource: 'route',
+      routeDistanceKm: distanceKm.toFixed(2),
+    }
+  }
   return {
     distanceKm,
     revenueAmount,
