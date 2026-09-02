@@ -1,12 +1,16 @@
-"use client"
+'use client'
 
 import * as React from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Label } from '@open-mercato/ui/primitives/label'
 import { Switch } from '@open-mercato/ui/primitives/switch'
+import { Button } from '@open-mercato/ui/primitives/button'
 import { CRUD_FORM_TEXT_INPUT_CLASS } from '@open-mercato/ui/backend/CrudForm'
+import { readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import type { TaxiFleetPlatformSyncPlatformSettings, TaxiFleetSettingsResponse } from '../../lib/taxiFleetSettings'
 import type { TaxiFleetTripPlatform } from '../../lib/tripPlatforms'
+import { BOLT_DEFAULT_API_BASE_URL } from '../../lib/platformSync/adapters/bolt/constants'
 
 const PLATFORMS: TaxiFleetTripPlatform[] = ['bolt', 'uber', 'free']
 
@@ -40,6 +44,47 @@ export function PlatformSyncSettingsSection({
   onChange,
 }: PlatformSyncSettingsSectionProps) {
   const t = useT()
+  const [testingBolt, setTestingBolt] = React.useState(false)
+
+  const testBoltConnection = async () => {
+    setTestingBolt(true)
+    try {
+      const result = await readApiResultOrThrow<{
+        ok: boolean
+        apiBaseUrl: string
+        companyCount: number
+        companyIdMatched: boolean | null
+      }>('/api/taxi_fleet/platform-sync/test-connection', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ platform: 'bolt' }),
+      })
+      if (result.companyIdMatched === false) {
+        flash(
+          t(
+            'taxi_fleet.config.platformSync.test.companyMismatch',
+            'Connected, but company ID was not found in Bolt companies list.',
+          ),
+          'warning',
+        )
+      } else {
+        flash(
+          t('taxi_fleet.config.platformSync.test.success', 'Bolt connection OK ({count} companies).', {
+            count: result.companyCount,
+          }),
+          'success',
+        )
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : t('taxi_fleet.config.platformSync.test.error', 'Bolt connection test failed.')
+      flash(message, 'error')
+    } finally {
+      setTestingBolt(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -52,11 +97,10 @@ export function PlatformSyncSettingsSection({
               ? settings.platformSyncUberClientSecretConfigured
               : settings.platformSyncFreeClientSecretConfigured
         const refreshTokenConfigured =
-          platform === 'bolt'
-            ? settings.platformSyncBoltRefreshTokenConfigured
-            : platform === 'uber'
-              ? settings.platformSyncUberRefreshTokenConfigured
-              : settings.platformSyncFreeRefreshTokenConfigured
+          platform === 'uber'
+            ? settings.platformSyncUberRefreshTokenConfigured
+            : settings.platformSyncFreeRefreshTokenConfigured
+        const isBolt = platform === 'bolt'
         return (
           <div key={platform} className="rounded-md border border-border/70 p-4 space-y-4">
             <div className="flex items-center justify-between gap-3">
@@ -85,11 +129,20 @@ export function PlatformSyncSettingsSection({
                   type="url"
                   className={CRUD_FORM_TEXT_INPUT_CLASS}
                   value={platformSettings.apiBaseUrl}
+                  placeholder={isBolt ? BOLT_DEFAULT_API_BASE_URL : undefined}
                   disabled={saving}
                   onChange={(event) =>
                     onChange(patchPlatform(settings, platform, { apiBaseUrl: event.target.value }))
                   }
                 />
+                {isBolt ? (
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      'taxi_fleet.config.platformSync.boltApiBaseHint',
+                      'Leave empty to use the default Bolt Fleet Integration Gateway.',
+                    )}
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-1">
                 <Label className="text-sm font-medium">
@@ -122,7 +175,7 @@ export function PlatformSyncSettingsSection({
                   }
                 />
               </div>
-              {platform !== 'free' ? (
+              {platform === 'uber' ? (
                 <div className="space-y-1 md:col-span-2">
                   <Label className="text-sm font-medium">
                     {t('taxi_fleet.config.platformSync.refreshToken', 'Refresh token (optional)')}
@@ -141,7 +194,9 @@ export function PlatformSyncSettingsSection({
               ) : null}
               <div className="space-y-1 md:col-span-2">
                 <Label className="text-sm font-medium">
-                  {t('taxi_fleet.config.platformSync.companyId', 'Company / fleet ID')}
+                  {isBolt
+                    ? t('taxi_fleet.config.platformSync.companyIdRequired', 'Company ID (required)')
+                    : t('taxi_fleet.config.platformSync.companyId', 'Company / fleet ID')}
                 </Label>
                 <input
                   type="text"
@@ -153,6 +208,26 @@ export function PlatformSyncSettingsSection({
                   }
                 />
               </div>
+              {isBolt ? (
+                <div className="md:col-span-2 space-y-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={saving || testingBolt}
+                    onClick={() => void testBoltConnection()}
+                  >
+                    {testingBolt
+                      ? t('taxi_fleet.config.platformSync.test.running', 'Testing…')
+                      : t('taxi_fleet.config.platformSync.test.action', 'Test connection')}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      'taxi_fleet.config.platformSync.test.hint',
+                      'Uses saved credentials (save settings first). Requires Client ID, secret, and company ID.',
+                    )}
+                  </p>
+                </div>
+              ) : null}
             </div>
           </div>
         )

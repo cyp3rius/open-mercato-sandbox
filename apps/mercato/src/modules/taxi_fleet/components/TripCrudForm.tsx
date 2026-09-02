@@ -36,6 +36,8 @@ type TripCrudFormBaseProps = TripCrudFormSharedOptions & {
   formKey?: React.Key
   submitLabel: string
   extraActions?: React.ReactNode
+  /** Rendered in CrudForm column 2 (sidebar), below status/pricing groups. */
+  sidebarExtra?: React.ReactNode
   onSubmitReadyChange?: (ready: boolean) => void
 }
 
@@ -64,6 +66,7 @@ export function TripCrudForm(props: TripCrudFormProps) {
     formKey,
     submitLabel,
     extraActions,
+    sidebarExtra,
     onSubmitReadyChange,
     driverProfiles,
     resolveDriverName,
@@ -112,12 +115,24 @@ export function TripCrudForm(props: TripCrudFormProps) {
   const allGroups = React.useMemo(() => buildTripFormGroups(t, layout, { mode }), [layout, mode, t])
 
   const groups = React.useMemo(() => {
-    if (layout !== 'dialog' || !activeTab) return allGroups
-    const activeGroupId = tripFormTabGroupId(activeTab)
-    return allGroups.filter(
-      (group) => group.id === activeGroupId || group.id === TRIP_FORM_SYNC_GROUP_ID,
-    )
-  }, [activeTab, allGroups, layout])
+    const base =
+      layout !== 'dialog' || !activeTab
+        ? allGroups
+        : allGroups.filter(
+            (group) =>
+              group.id === tripFormTabGroupId(activeTab) || group.id === TRIP_FORM_SYNC_GROUP_ID,
+          )
+    if (!sidebarExtra || layout !== 'page') return base
+    return [
+      ...base,
+      {
+        id: 'trip-sidebar-extra',
+        column: 2 as const,
+        bare: true,
+        component: () => sidebarExtra,
+      },
+    ]
+  }, [activeTab, allGroups, layout, sidebarExtra])
 
   const enforceMinAdvance = mode === 'create'
   const schema = React.useMemo(
@@ -156,6 +171,8 @@ export function TripCrudForm(props: TripCrudFormProps) {
     submitLabel,
     extraActions,
     readOnly,
+    // Completed/cancelled trips must stay viewable (OCR sidebar, scroll) without CrudForm's frosted overlay.
+    readOnlyOverlay: readOnly ? (false as const) : undefined,
     submitDisabled,
     onValuesChange: handleValuesChange,
     onSubmit,
@@ -180,7 +197,7 @@ export function TripCrudForm(props: TripCrudFormProps) {
       key={formKey}
       title={title}
       backHref={backHref}
-      cancelHref={cancelHref}
+      cancelHref={readOnly ? undefined : cancelHref}
       onDelete={onDelete}
       {...crudFormProps}
     />

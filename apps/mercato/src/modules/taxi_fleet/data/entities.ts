@@ -143,7 +143,7 @@ export class TaxiFleetTrip {
   assignmentId?: string | null
 
   @Property({ name: 'trip_type', type: 'text' })
-  tripType!: 'client' | 'private' | 'internal' | 'empty' | 'event' | 'other'
+  tripType!: 'client' | 'private' | 'internal' | 'empty' | 'event' | 'other' | 'platform'
 
   @Property({ type: 'text', nullable: true })
   platform?: 'uber' | 'bolt' | 'free' | null
@@ -665,7 +665,7 @@ export class TaxiFleetPlatformSyncRun {
   trigger!: 'schedule' | 'manual' | 'csv'
 
   @Property({ type: 'text', default: 'running' })
-  status: 'running' | 'succeeded' | 'failed' | 'partial' = 'running'
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'partial' = 'running'
 
   @Property({ name: 'started_at', type: Date })
   startedAt!: Date
@@ -693,6 +693,9 @@ export class TaxiFleetPlatformSyncRun {
 
   @Property({ name: 'error_summary', type: 'json', nullable: true })
   errorSummary?: Record<string, unknown> | null
+
+  @Property({ name: 'job_payload', type: 'json', nullable: true })
+  jobPayload?: Record<string, unknown> | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

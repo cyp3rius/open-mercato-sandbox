@@ -54,6 +54,7 @@ export function mapVendorTripRecord(
 ): PlatformTripAdapterRow | null {
   const externalTripId = readString(
     record,
+    'order_reference',
     'externalTripId',
     'external_trip_id',
     'tripId',

@@ -36,8 +36,8 @@ const listSchema = z
     unscheduled: z.coerce.boolean().optional(),
     dateFrom: z.string().optional(),
     dateTo: z.string().optional(),
-    sortField: z.string().optional(),
-    sortDir: z.enum(['asc', 'desc']).optional(),
+    sortField: z.string().optional().default('startedAt'),
+    sortDir: z.enum(['asc', 'desc']).optional().default('desc'),
   })
   .passthrough()
 

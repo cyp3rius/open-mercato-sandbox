@@ -33,8 +33,15 @@ export function ScheduleCalendarListPanel({
   disabled = false,
 }: ScheduleCalendarListPanelProps) {
   return (
-    <div className={cn('space-y-4', className)}>
-      <div className={cn('flex flex-wrap items-center justify-end gap-2', toolbarClassName)}>
+    <div
+      className={cn(
+        mode === 'calendar'
+          ? 'flex h-[calc(100svh-14rem)] max-h-[calc(100svh-14rem)] flex-col gap-4 overflow-hidden'
+          : 'space-y-4',
+        className,
+      )}
+    >
+      <div className={cn('flex shrink-0 flex-wrap items-center justify-end gap-2', toolbarClassName)}>
         {headerActions}
         <SchedulePresentationSwitch
           mode={mode}
@@ -44,7 +51,9 @@ export function ScheduleCalendarListPanel({
           disabled={disabled}
         />
       </div>
-      {mode === 'calendar' ? calendarContent : listContent}
+      <div className={mode === 'calendar' ? 'flex min-h-0 flex-1 flex-col' : undefined}>
+        {mode === 'calendar' ? calendarContent : listContent}
+      </div>
     </div>
   )
 }

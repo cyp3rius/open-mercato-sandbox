@@ -15,6 +15,7 @@ export const features = [
   { id: 'taxi_fleet.financial.income.notify', title: 'Notify on registered invoice/receipt', module: 'taxi_fleet' },
   { id: 'taxi_fleet.financial.expense.notify', title: 'Notify on registered cost', module: 'taxi_fleet' },
   { id: 'taxi_fleet.settlement.submitted.notify', title: 'Notify when driver submits settlement', module: 'taxi_fleet' },
+  { id: 'taxi_fleet.platform_sync.notify', title: 'Notify when platform CSV/API sync finishes', module: 'taxi_fleet' },
 ]
 
 export default features

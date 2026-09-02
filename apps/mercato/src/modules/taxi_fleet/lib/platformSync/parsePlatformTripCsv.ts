@@ -27,17 +27,17 @@ export type PlatformTripCsvParseResult = {
   errors: PlatformTripCsvRowError[]
 }
 
-function normalizeHeader(value: string): string {
+export function normalizeCsvHeader(value: string): string {
   return value.trim().replace(/^\uFEFF/, '')
 }
 
-function detectDelimiter(headerLine: string): ',' | ';' {
+export function detectCsvDelimiter(headerLine: string): ',' | ';' {
   const commaCount = (headerLine.match(/,/g) ?? []).length
   const semicolonCount = (headerLine.match(/;/g) ?? []).length
   return semicolonCount > commaCount ? ';' : ','
 }
 
-function parseCsvLine(line: string, delimiter: ',' | ';'): string[] {
+export function parseCsvLine(line: string, delimiter: ',' | ';'): string[] {
   const cells: string[] = []
   let current = ''
   let inQuotes = false
@@ -64,19 +64,24 @@ function parseCsvLine(line: string, delimiter: ',' | ';'): string[] {
   return cells.map((cell) => cell.trim())
 }
 
-function parseDecimal(value: string): number | null {
+export function parseCsvDecimal(value: string): number | null {
   const normalized = value.trim().replace(/\s/g, '').replace(',', '.')
   if (!normalized) return null
   const parsed = Number(normalized)
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function parseDateValue(value: string): Date | null {
+export function parseCsvDateValue(value: string): Date | null {
   const trimmed = value.trim()
   if (!trimmed) return null
-  const isoCandidate = trimmed.includes('T') ? trimmed : trimmed.replace(' ', 'T')
+  const withoutNamedZone = trimmed.replace(/\s+[A-Za-z]{2,5}$/, '').trim()
+  const isoCandidate = withoutNamedZone.includes('T')
+    ? withoutNamedZone
+    : withoutNamedZone.replace(' ', 'T')
   const parsed = new Date(isoCandidate)
   if (!Number.isNaN(parsed.getTime())) return parsed
+  const fallback = new Date(trimmed)
+  if (!Number.isNaN(fallback.getTime())) return fallback
   return null
 }
 
@@ -97,10 +102,10 @@ function parsePaymentType(value: string | undefined): PlatformTripUpsertInput['p
   return 'electronic'
 }
 
-function buildHeaderIndex(headers: string[]): Map<string, number> {
+export function buildCsvHeaderIndex(headers: string[]): Map<string, number> {
   const index = new Map<string, number>()
   headers.forEach((header, position) => {
-    const normalized = normalizeHeader(header)
+    const normalized = normalizeCsvHeader(header)
     if (normalized) index.set(normalized, position)
   })
   return index
@@ -127,9 +132,9 @@ export function parsePlatformTripCsv(params: {
     }
   }
 
-  const delimiter = detectDelimiter(lines[0]!)
-  const headerCells = parseCsvLine(lines[0]!, delimiter).map(normalizeHeader)
-  const headerIndex = buildHeaderIndex(headerCells)
+  const delimiter = detectCsvDelimiter(lines[0]!)
+  const headerCells = parseCsvLine(lines[0]!, delimiter).map(normalizeCsvHeader)
+  const headerIndex = buildCsvHeaderIndex(headerCells)
 
   const missingHeaders = REQUIRED_HEADERS.filter((header) => !headerIndex.has(header))
   if (missingHeaders.length) {
@@ -188,27 +193,27 @@ export function parsePlatformTripCsv(params: {
       return
     }
 
-    const startedAt = parseDateValue(startedAtRaw)
+    const startedAt = parseCsvDateValue(startedAtRaw)
     if (!startedAt) {
       errors.push({ row: rowNumber, message: 'Invalid startedAt date.' })
       return
     }
 
-    const revenueAmount = parseDecimal(revenueRaw)
+    const revenueAmount = parseCsvDecimal(revenueRaw)
     if (revenueAmount == null) {
       errors.push({ row: rowNumber, message: 'Invalid revenueAmount.' })
       return
     }
 
     const endedAtRaw = readCell('endedAt').trim()
-    const endedAt = endedAtRaw ? parseDateValue(endedAtRaw) : null
+    const endedAt = endedAtRaw ? parseCsvDateValue(endedAtRaw) : null
     if (endedAtRaw && !endedAt) {
       errors.push({ row: rowNumber, message: 'Invalid endedAt date.' })
       return
     }
 
     const distanceRaw = readCell('distanceKm').trim()
-    const distanceKm = distanceRaw ? parseDecimal(distanceRaw) : null
+    const distanceKm = distanceRaw ? parseCsvDecimal(distanceRaw) : null
     if (distanceRaw && distanceKm == null) {
       errors.push({ row: rowNumber, message: 'Invalid distanceKm.' })
       return

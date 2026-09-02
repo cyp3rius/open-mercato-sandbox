@@ -8,7 +8,7 @@ import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { TAXI_FLEET_BASE } from '../backend/taxi-fleet/paths'
-import { listUnsettledMonths } from '../lib/weekUtils'
+import { listUnsettledMonths, normalizeDateOnly } from '../lib/weekUtils'
 import {
   TaxiFleetDialogFrame,
   taxiFleetDialogCrudBodyClass,
@@ -63,12 +63,22 @@ export function MonthlySettlementGenerateDialog({
     async function loadMonths() {
       setLoadingMonths(true)
       const call = await apiCall<{ items: MonthlySettlementListItem[] }>(
-        '/api/taxi_fleet/monthly-settlements?page=1&pageSize=200',
+        '/api/taxi_fleet/monthly-settlements?page=1&pageSize=100',
       )
       if (cancelled) return
+      if (!call.ok) {
+        setAvailableMonths([])
+        setLoadingMonths(false)
+        flash(
+          (call.result as { error?: string } | null)?.error ??
+            t('taxi_fleet.monthlySettlements.loadMonthsError', 'Could not load existing monthly settlements.'),
+          'error',
+        )
+        return
+      }
       const existing = new Set(
         (Array.isArray(call.result?.items) ? call.result.items : [])
-          .map((item) => (typeof item.monthStart === 'string' ? item.monthStart : ''))
+          .map((item) => normalizeDateOnly(item.monthStart))
           .filter((value) => value.length > 0),
       )
       setAvailableMonths(listUnsettledMonths(existing))
@@ -79,7 +89,7 @@ export function MonthlySettlementGenerateDialog({
     return () => {
       cancelled = true
     }
-  }, [open])
+  }, [open, t])
 
   const fields = React.useMemo(
     () => [
@@ -151,7 +161,10 @@ export function MonthlySettlementGenerateDialog({
         }),
       })
       if (!call.ok) {
-        throw new Error(t('taxi_fleet.monthlySettlements.form.saveError', 'Could not generate monthly settlement.'))
+        throw new Error(
+          (call.result as { error?: string } | null)?.error ??
+            t('taxi_fleet.monthlySettlements.form.saveError', 'Could not generate monthly settlement.'),
+        )
       }
       const newId = typeof call.result?.id === 'string' ? call.result.id : ''
       if (!newId) throw new Error(t('taxi_fleet.settlements.form.missingId', 'No id returned.'))

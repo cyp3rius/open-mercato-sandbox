@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { endOfDay, endOfWeek, format, startOfWeek } from 'date-fns'
-import { enUS } from 'date-fns/locale/en-US'
+import { pl } from 'date-fns/locale/pl'
 import {
   ScheduleView,
   type ScheduleItem,
@@ -15,6 +15,7 @@ import {
   type CalendarAssignment,
 } from '../lib/calendarScheduleItems'
 import type { FleetCalendarLabelResolvers } from '../lib/calendarScheduleItems'
+import { AssignmentScheduleEventCard } from './TripScheduleEventCard'
 
 type AllocationCalendarProps = {
   assignments: CalendarAssignment[]
@@ -80,14 +81,15 @@ export function AllocationCalendar({
       onSlotClick={handleSlotClick}
       showTimezone={false}
       viewModes={['week', 'month']}
+      renderEvent={(item) => <AssignmentScheduleEventCard item={item} />}
     />
   )
 }
 
 export function createDefaultAllocationWeekRange(reference = new Date()): ScheduleRange {
   return {
-    start: startOfWeek(reference, { locale: enUS }),
-    end: endOfWeek(reference, { locale: enUS }),
+    start: startOfWeek(reference, { locale: pl, weekStartsOn: 1 }),
+    end: endOfWeek(reference, { locale: pl, weekStartsOn: 1 }),
   }
 }
 

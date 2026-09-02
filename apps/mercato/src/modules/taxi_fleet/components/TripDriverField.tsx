@@ -65,9 +65,17 @@ export function TripDriverField({
     }
   }, [endedAtLocal, lockedDisplayName, startedAtLocal])
 
-  if (lockedDisplayName) {
+  const selectedLabel =
+    lockedDisplayName ??
+    driverOptions.find((option) => option.id === value)?.title ??
+    null
+
+  // Read-only / locked trips: plain text only — LookupSelect still exposed a clear control when disabled.
+  if (disabled || lockedDisplayName) {
     return (
-      <p className="text-sm text-foreground">{lockedDisplayName}</p>
+      <p className="text-sm text-foreground">
+        {selectedLabel || t('taxi_fleet.trips.noDriver', '—')}
+      </p>
     )
   }
 
@@ -77,6 +85,7 @@ export function TripDriverField({
         value={value.length ? value : null}
         onChange={(next) => onChange(next ?? '')}
         options={driverOptions}
+        minQuery={0}
         fetchOptions={async (query) =>
           driverOptions.filter((option) =>
             !query?.trim() ? true : option.title.toLowerCase().includes(query.trim().toLowerCase()),

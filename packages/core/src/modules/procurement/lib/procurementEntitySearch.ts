@@ -352,20 +352,62 @@ export type ProcurementCustomerAssociationPreview = {
   recordHref: string | null
 }
 
+function readTrimmed(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length ? trimmed : null
+}
+
+function resolvePersonDisplayTitle(
+  person: { displayName?: string | null; display_name?: string | null },
+  profile?: {
+    firstName?: string | null
+    lastName?: string | null
+    preferredName?: string | null
+    first_name?: string | null
+    last_name?: string | null
+    preferred_name?: string | null
+  } | null,
+): string | null {
+  const fromPerson =
+    readTrimmed(person.displayName) ?? readTrimmed(person.display_name)
+  if (fromPerson) return fromPerson
+  if (!profile) return null
+  const preferred = readTrimmed(profile.preferredName) ?? readTrimmed(profile.preferred_name)
+  if (preferred) return preferred
+  const first = readTrimmed(profile.firstName) ?? readTrimmed(profile.first_name)
+  const last = readTrimmed(profile.lastName) ?? readTrimmed(profile.last_name)
+  const composed = [first, last].filter(Boolean).join(' ').trim()
+  return composed.length ? composed : null
+}
+
 export async function fetchProcurementCustomerAssociationPreview(
   entityId: string,
 ): Promise<ProcurementCustomerAssociationPreview | null> {
   const id = entityId.trim()
   if (!id.length) return null
   const personRes = await apiCall<{
-    person?: { id?: string; displayName?: string | null; primaryEmail?: string | null }
+    person?: {
+      id?: string
+      displayName?: string | null
+      display_name?: string | null
+      primaryEmail?: string | null
+      primary_email?: string | null
+    }
+    profile?: {
+      firstName?: string | null
+      lastName?: string | null
+      preferredName?: string | null
+      first_name?: string | null
+      last_name?: string | null
+      preferred_name?: string | null
+    } | null
   }>(`/api/customers/people/${encodeURIComponent(id)}`)
   if (personRes.ok && personRes.result?.person?.id === id) {
     const row = personRes.result.person
-    const title =
-      typeof row.displayName === 'string' && row.displayName.trim().length ? row.displayName.trim() : id
+    const title = resolvePersonDisplayTitle(row, personRes.result.profile) ?? id
     const email =
-      typeof row.primaryEmail === 'string' && row.primaryEmail.trim().length ? row.primaryEmail.trim() : null
+      readTrimmed(row.primaryEmail) ?? readTrimmed(row.primary_email)
     return {
       kind: 'person',
       title,
@@ -374,15 +416,21 @@ export async function fetchProcurementCustomerAssociationPreview(
     }
   }
   const companyRes = await apiCall<{
-    company?: { id?: string; displayName?: string | null; primaryEmail?: string | null }
+    company?: {
+      id?: string
+      displayName?: string | null
+      display_name?: string | null
+      primaryEmail?: string | null
+      primary_email?: string | null
+    }
     profile?: { domain?: string | null } | null
   }>(`/api/customers/companies/${encodeURIComponent(id)}`)
   if (companyRes.ok && companyRes.result?.company?.id === id) {
     const row = companyRes.result.company
     const title =
-      typeof row.displayName === 'string' && row.displayName.trim().length ? row.displayName.trim() : id
+      readTrimmed(row.displayName) ?? readTrimmed(row.display_name) ?? id
     const email =
-      typeof row.primaryEmail === 'string' && row.primaryEmail.trim().length ? row.primaryEmail.trim() : null
+      readTrimmed(row.primaryEmail) ?? readTrimmed(row.primary_email)
     const domainRaw =
       companyRes.result.profile && typeof companyRes.result.profile.domain === 'string'
         ? companyRes.result.profile.domain.trim()

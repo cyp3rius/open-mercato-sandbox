@@ -9,7 +9,7 @@ import { Label } from '@open-mercato/ui/primitives/label'
 import { Switch } from '@open-mercato/ui/primitives/switch'
 import { CRUD_FORM_SELECT_CLASS, CRUD_FORM_TEXT_INPUT_CLASS } from '@open-mercato/ui/backend/CrudForm'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
-import { apiCallOrThrow, readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import {
   TAXI_FLEET_CUSTOMER_EMAIL_EVENTS,
@@ -209,7 +209,7 @@ export function TaxiFleetModuleSettings() {
     const payload = { ...settings, tripStatuses: parsedStatuses.data }
     setSaving(true)
     try {
-      const saved = await apiCallOrThrow<TaxiFleetSettingsResponse>(
+      const saved = await readApiResultOrThrow<TaxiFleetSettingsResponse>(
         '/api/taxi_fleet/settings',
         {
           method: 'PUT',

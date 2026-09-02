@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { ExternalLink, RefreshCw } from 'lucide-react'
+import { ExternalLink, Loader2, RefreshCw, Save } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -66,6 +66,7 @@ export function TripReceiptOcrPanel({ tripId, canManage }: TripReceiptOcrPanelPr
   const [item, setItem] = React.useState<ExtractionItem | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [overwriteValue, setOverwriteValue] = React.useState('')
+  const [overwriteBaseline, setOverwriteBaseline] = React.useState('')
   const [busy, setBusy] = React.useState(false)
 
   const load = React.useCallback(async () => {
@@ -75,7 +76,10 @@ export function TripReceiptOcrPanel({ tripId, canManage }: TripReceiptOcrPanelPr
     )
     const next = call.result?.item ?? null
     setItem(next)
-    setOverwriteValue(next?.appliedDocumentNumber || next?.ocrDocumentNumber || next?.driverDocumentNumber || '')
+    const documentNumber =
+      next?.appliedDocumentNumber || next?.ocrDocumentNumber || next?.driverDocumentNumber || ''
+    setOverwriteValue(documentNumber)
+    setOverwriteBaseline(documentNumber)
     setLoading(false)
   }, [tripId])
 
@@ -102,7 +106,17 @@ export function TripReceiptOcrPanel({ tripId, canManage }: TripReceiptOcrPanelPr
         flash(t('taxi_fleet.receiptOcr.actionFailed', 'Could not update receipt OCR.'), 'error')
         return
       }
-      setItem(call.result.item)
+      const updated = call.result.item
+      setItem(updated)
+      if (action === 'overwrite') {
+        const documentNumber =
+          updated.appliedDocumentNumber ||
+          updated.ocrDocumentNumber ||
+          updated.driverDocumentNumber ||
+          overwriteValue
+        setOverwriteValue(documentNumber)
+        setOverwriteBaseline(documentNumber)
+      }
       flash(t('taxi_fleet.receiptOcr.actionSuccess', 'Receipt OCR updated.'), 'success')
     } finally {
       setBusy(false)
@@ -224,11 +238,11 @@ export function TripReceiptOcrPanel({ tripId, canManage }: TripReceiptOcrPanelPr
       </div>
 
       {canManage ? (
-        <div className="space-y-2 border-t pt-3">
-          <Label htmlFor="receipt-ocr-overwrite" className="text-sm font-medium">
-            {t('taxi_fleet.receiptOcr.overwriteLabel', 'Overwrite document number')}
-          </Label>
-          <div className="flex flex-wrap gap-2">
+        <div className="space-y-3 border-t pt-3">
+          <div className="space-y-1">
+            <Label htmlFor="receipt-ocr-overwrite" className="block text-sm font-medium">
+              {t('taxi_fleet.receiptOcr.overwriteLabel', 'Overwrite document number')}
+            </Label>
             <input
               id="receipt-ocr-overwrite"
               value={overwriteValue}
@@ -236,8 +250,19 @@ export function TripReceiptOcrPanel({ tripId, canManage }: TripReceiptOcrPanelPr
               className={`${CRUD_FORM_TEXT_INPUT_CLASS} max-w-sm`}
               disabled={busy}
             />
-            <Button type="button" disabled={busy || !overwriteValue.trim()} onClick={() => void runAction('overwrite')}>
-              {t('taxi_fleet.receiptOcr.overwrite', 'Save overwrite')}
+          </div>
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              disabled={busy || overwriteValue === overwriteBaseline}
+              onClick={() => void runAction('overwrite')}
+            >
+              {busy ? (
+                <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+              ) : (
+                <Save className="mr-2 size-4" aria-hidden />
+              )}
+              {t('ui.forms.actions.save', 'Save')}
             </Button>
           </div>
         </div>

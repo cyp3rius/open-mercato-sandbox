@@ -8,7 +8,7 @@ const optionalUuid = z.string().uuid().optional().nullable()
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 
 export const assignmentStatusSchema = z.enum(['planned', 'confirmed', 'completed', 'cancelled'])
-export const tripTypeSchema = z.enum(['client', 'private', 'internal', 'empty', 'event', 'other'])
+export const tripTypeSchema = z.enum(['client', 'private', 'internal', 'empty', 'event', 'other', 'platform'])
 export const tripStatusSchema = z.string().trim().min(1).max(64)
 export const tripCancelSourceSchema = z.enum(['customer', 'operator', 'driver'])
 export const tripPaymentMethodSchema = z.enum(['paypal', 'cash', 'transfer', 'other'])
@@ -664,9 +664,19 @@ export const platformTripUpsertSchema = z.object({
   currencyCode: z.string().trim().min(3).max(3).optional().default('PLN'),
   paymentType: platformTripPaymentTypeSchema.optional().nullable(),
   rawExternalStatus: z.string().trim().max(120).optional().nullable(),
+  fromAddress: z.string().trim().max(500).optional().nullable(),
+  toAddress: z.string().trim().max(500).optional().nullable(),
+  platformVehicleId: z.string().trim().max(191).optional().nullable(),
+  vehiclePlate: z.string().trim().max(64).optional().nullable(),
 })
 
 export type PlatformTripUpsertInput = z.infer<typeof platformTripUpsertSchema>
+
+export const platformSyncTestConnectionSchema = z.object({
+  platform: tripPlatformSchema.default('bolt'),
+})
+
+export type PlatformSyncTestConnectionInput = z.infer<typeof platformSyncTestConnectionSchema>
 
 export const platformSyncRunSchema = z.object({
   tenantId: uuid,
@@ -677,18 +687,38 @@ export const platformSyncRunSchema = z.object({
   trigger: z.enum(['manual', 'schedule']).optional().default('manual'),
 })
 
-export const platformTripImportCsvSchema = z.object({
-  tenantId: uuid,
-  organizationId: uuid,
-  platform: tripPlatformSchema,
-  csvText: z.string().min(1),
-})
+export const platformTripImportCsvSchema = z
+  .object({
+    tenantId: uuid,
+    organizationId: uuid,
+    platform: tripPlatformSchema,
+    csvText: z.string().optional(),
+    tripActivityCsvText: z.string().optional(),
+    paymentsCsvText: z.string().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.platform === 'uber') {
+      if (!value.tripActivityCsvText?.trim() || !value.paymentsCsvText?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Uber import requires both Trip Activity and Payments CSV files.',
+        })
+      }
+      return
+    }
+    if (!value.csvText?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'CSV file is required.',
+      })
+    }
+  })
 
 export const platformSyncRunsListSchema = z.object({
   page: z.coerce.number().min(1).default(1),
   pageSize: z.coerce.number().min(1).max(100).default(20),
   platform: z.union([tripPlatformSchema, z.literal('all')]).optional(),
-  status: z.enum(['running', 'succeeded', 'failed', 'partial']).optional(),
+  status: z.enum(['queued', 'running', 'succeeded', 'failed', 'partial']).optional(),
 })
 
 export type PlatformSyncRunInput = z.infer<typeof platformSyncRunSchema>

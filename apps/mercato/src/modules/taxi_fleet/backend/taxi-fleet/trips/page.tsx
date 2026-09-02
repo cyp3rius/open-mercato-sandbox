@@ -15,6 +15,7 @@ import { deleteCrud } from '@open-mercato/ui/backend/utils/crud'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { formatDateTime } from '@open-mercato/shared/lib/time'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { TAXI_FLEET_BASE } from '../paths'
 import { useFleetDriverDirectory } from '../../../components/useFleetDriverDirectory'
@@ -26,7 +27,10 @@ import { useTripStatusDictionary } from '../../../components/useTripStatusDictio
 import { DictionaryAppearancePreview } from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
 import { PlatformTripIngestBadge } from '../../../components/PlatformTripIngestBadge'
 import { PlatformSyncImportCsvDialog } from '../../../components/PlatformSyncImportCsvDialog'
-import { PlatformSyncRunsPanel } from '../../../components/PlatformSyncRunsPanel'
+import {
+  formatPlatformSyncRunFlashMessage,
+  resolvePlatformSyncFlashVariant,
+} from '../../../components/platformSyncResultSummary'
 
 const PAGE_SIZE = 20
 
@@ -114,7 +118,12 @@ export default function TaxiFleetTripsPage() {
   )
 
   const queryParams = React.useMemo(() => {
-    const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) })
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(PAGE_SIZE),
+      sortField: 'startedAt',
+      sortDir: 'desc',
+    })
     const unscheduled = filterValues.unscheduled
     if (unscheduled === 'true' || unscheduled === true) params.set('unscheduled', 'true')
     const status = filterValues.status
@@ -162,7 +171,13 @@ export default function TaxiFleetTripsPage() {
   const handleSyncNow = React.useCallback(async () => {
     if (syncBusy) return
     setSyncBusy(true)
-    const call = await apiCall<{ upsertedCount?: number; skippedCount?: number; errorCount?: number }>(
+    const call = await apiCall<{
+      upsertedCount?: number
+      skippedCount?: number
+      unmappedDriverSkippedCount?: number
+      errorCount?: number
+      createdCount?: number
+    }>(
       '/api/taxi_fleet/platform-sync/run',
       {
         method: 'POST',
@@ -178,20 +193,32 @@ export default function TaxiFleetTripsPage() {
       flash(message, 'error')
       return
     }
-    flash(t('taxi_fleet.platformSync.run.success', 'Platform sync finished.'), 'success')
+    const counts = {
+      upsertedCount: call.result?.upsertedCount ?? call.result?.createdCount ?? 0,
+      skippedCount: call.result?.skippedCount ?? 0,
+      unmappedDriverSkippedCount: call.result?.unmappedDriverSkippedCount ?? 0,
+      errorCount: call.result?.errorCount ?? 0,
+    }
+    flash(formatPlatformSyncRunFlashMessage(counts, t), resolvePlatformSyncFlashVariant(counts))
     setReloadToken((value) => value + 1)
   }, [syncBusy, t])
 
   const columns = React.useMemo<ColumnDef<TripRow>[]>(
     () => [
       {
-        accessorKey: 'tripType',
-        header: t('taxi_fleet.trips.type', 'Type'),
+        accessorKey: 'startedAt',
+        header: t('taxi_fleet.trips.date', 'Date'),
+        enableSorting: true,
         cell: ({ row }) => (
-          <Link href={detailHref(row.original.id)} className="font-medium hover:underline">
-            {resolveTripTypeLabel(row.original.tripType)}
+          <Link href={detailHref(row.original.id)} className="font-medium tabular-nums hover:underline">
+            {formatDateTime(row.original.startedAt) ?? '—'}
           </Link>
         ),
+      },
+      {
+        accessorKey: 'tripType',
+        header: t('taxi_fleet.trips.type', 'Type'),
+        cell: ({ row }) => resolveTripTypeLabel(row.original.tripType),
       },
       {
         accessorKey: 'status',
@@ -209,13 +236,13 @@ export default function TaxiFleetTripsPage() {
         },
       },
       {
-        id: 'source',
-        header: t('taxi_fleet.platformSync.column.source', 'Source'),
+        id: 'platform',
+        header: t('taxi_fleet.trips.platform', 'Platform'),
         cell: ({ row }) => (
           <PlatformTripIngestBadge
+            variant="compact"
             metadata={row.original.metadata ?? null}
             platform={row.original.platform ?? null}
-            externalTripId={row.original.externalTripId ?? null}
           />
         ),
       },
@@ -238,7 +265,6 @@ export default function TaxiFleetTripsPage() {
         ),
       },
       { accessorKey: 'revenueAmount', header: t('taxi_fleet.trips.revenue', 'Revenue') },
-      { accessorKey: 'startedAt', header: t('taxi_fleet.trips.started', 'Started') },
     ],
     [findDefinition, resolveName, resolveTripTypeLabel, t],
   )
@@ -248,6 +274,8 @@ export default function TaxiFleetTripsPage() {
       <PageBody>
         <DataTable<TripRow>
           title={t('taxi_fleet.trips.list.title', 'Trips')}
+          sortable
+          sorting={[{ id: 'startedAt', desc: true }]}
           refreshButton={{
             label: t('taxi_fleet.trips.list.actions.refresh', 'Refresh'),
             onRefresh: () => {
@@ -338,7 +366,6 @@ export default function TaxiFleetTripsPage() {
           pagination={{ page, totalPages, total, pageSize: PAGE_SIZE, onPageChange: setPage }}
           perspective={{ tableId: 'taxi_fleet.trips' }}
         />
-        {canManagePlatformSync ? <PlatformSyncRunsPanel reloadToken={reloadToken} /> : null}
       </PageBody>
       <PlatformSyncImportCsvDialog
         open={importOpen}

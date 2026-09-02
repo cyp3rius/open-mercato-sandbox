@@ -1,4 +1,5 @@
 export * from './types'
+export * from './dateLocale'
 export * from './ScheduleToolbar'
 export * from './ScheduleGrid'
 export * from './ScheduleAgenda'

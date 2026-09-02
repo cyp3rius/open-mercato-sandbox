@@ -2,7 +2,8 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import type { CommandBus, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import { TaxiFleetPlatformSyncRun } from '../../data/entities'
+import type { TaxiFleetPlatformSyncRun } from '../../data/entities'
+import { resolveTaxiFleetPlatformSyncRunEntity } from '../resolveTaxiFleetOrmEntity'
 import type { PlatformTripUpsertInput } from '../../data/validators'
 import { loadTaxiFleetOrganizationSettings } from '../taxiFleetOrganizationSettings'
 import type { TaxiFleetTripPlatform } from '../tripPlatforms'
@@ -12,6 +13,8 @@ import {
   parsePlatformTripCsv,
   PLATFORM_TRIP_CSV_CHUNK_SIZE,
 } from './parsePlatformTripCsv'
+import { parseUberFleetCsv } from './parseUberFleetCsv'
+import { parseBoltTripHistoryCsv } from './parseBoltTripHistoryCsv'
 import {
   listEnabledPlatformSyncPlatforms,
 } from './platformSyncCredentials'
@@ -19,22 +22,43 @@ import {
   recalculateSettlementsAfterPlatformSync,
   type PlatformSyncTouchedTripRef,
 } from './recalculateSettlementsAfterPlatformSync'
-import { resolvePlatformSyncWindow } from './resolvePlatformSyncWindow'
+import {
+  resolveManualPlatformSyncWindow,
+  resolvePlatformSyncWindow,
+  resolveScheduledPlatformSyncWindow,
+} from './resolvePlatformSyncWindow'
+import {
+  filterPlatformTripRowsForKnownDrivers,
+  loadKnownPlatformDriverIds,
+} from './resolvePlatformDriver'
 import type { PlatformTripIngestSource } from './types'
+
+function platformSyncRunEntity(): typeof TaxiFleetPlatformSyncRun {
+  return resolveTaxiFleetPlatformSyncRunEntity()
+}
 
 export type PlatformSyncRunResult = {
   runId: string
   status: 'succeeded' | 'failed' | 'partial'
   fetchedCount: number
+  /** Newly created trips (CSV) or created+updated (live sync). */
   upsertedCount: number
+  /** Newly created trips only (CSV import). */
+  createdCount: number
+  /** Existing platform trip IDs left unchanged (CSV import). */
+  duplicateCount: number
   skippedCount: number
+  unmappedDriverSkippedCount: number
   errorCount: number
 }
 
 type UpsertBatchStats = {
   fetchedCount: number
   upsertedCount: number
+  createdCount: number
+  duplicateCount: number
   skippedCount: number
+  unmappedDriverSkippedCount: number
   errorCount: number
   touchedTrips: PlatformSyncTouchedTripRef[]
   rowErrors: Array<{ row?: number; message: string }>
@@ -43,14 +67,17 @@ type UpsertBatchStats = {
 export async function findRunningPlatformSyncRun(
   em: EntityManager,
   scope: { tenantId: string; organizationId: string },
+  options?: { includeQueued?: boolean },
 ): Promise<TaxiFleetPlatformSyncRun | null> {
+  const statuses: Array<'queued' | 'running'> =
+    options?.includeQueued === false ? ['running'] : ['queued', 'running']
   return findOneWithDecryption(
     em,
-    TaxiFleetPlatformSyncRun,
+    platformSyncRunEntity(),
     {
       tenantId: scope.tenantId,
       organizationId: scope.organizationId,
-      status: 'running',
+      status: { $in: statuses },
       deletedAt: null,
     },
     undefined,
@@ -58,20 +85,66 @@ export async function findRunningPlatformSyncRun(
   )
 }
 
-export async function assertNoRunningPlatformSync(
+const QUEUED_STALE_MS = 5 * 60 * 1000
+const RUNNING_STALE_MS = 2 * 60 * 60 * 1000
+
+export async function reclaimStalePlatformSyncRuns(
   em: EntityManager,
   scope: { tenantId: string; organizationId: string },
-  translate: (key: string, fallback: string) => string,
-): Promise<void> {
-  const running = await findRunningPlatformSyncRun(em, scope)
-  if (!running) return
-  throw new CrudHttpError(409, {
-    error: translate(
-      'taxi_fleet.platformSync.runAlreadyInProgress',
-      'Platform sync is already running for this organization.',
-    ),
-    runId: running.id,
+): Promise<number> {
+  const now = Date.now()
+  const rows = await em.find(platformSyncRunEntity(), {
+    tenantId: scope.tenantId,
+    organizationId: scope.organizationId,
+    status: { $in: ['queued', 'running'] },
+    deletedAt: null,
   })
+  let reclaimed = 0
+  for (const row of rows) {
+    const referenceTime = row.updatedAt ?? row.startedAt ?? row.createdAt
+    const ageMs = now - referenceTime.getTime()
+    const wasQueued = row.status === 'queued'
+    const stale =
+      (wasQueued && ageMs > QUEUED_STALE_MS) || (!wasQueued && ageMs > RUNNING_STALE_MS)
+    if (!stale) continue
+    row.status = 'failed'
+    row.finishedAt = new Date()
+    row.errorCount = Math.max(row.errorCount, 1)
+    row.errorSummary = {
+      errors: [
+        {
+          message: wasQueued
+            ? 'Timed out waiting for the sync worker.'
+            : 'Sync timed out.',
+        },
+      ],
+    }
+    row.jobPayload = null
+    row.updatedAt = new Date()
+    reclaimed += 1
+  }
+  if (reclaimed > 0) await em.flush()
+  return reclaimed
+}
+
+export async function findLastSuccessfulLivePlatformSyncWindowEnd(
+  em: EntityManager,
+  scope: { tenantId: string; organizationId: string },
+): Promise<Date | null> {
+  const run = await em.findOne(
+    platformSyncRunEntity(),
+    {
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      trigger: { $in: ['manual', 'schedule'] },
+      status: { $in: ['succeeded', 'partial'] },
+      deletedAt: null,
+      finishedAt: { $ne: null },
+    },
+    { orderBy: { finishedAt: 'DESC' } },
+  )
+  if (!run) return null
+  return run.windowTo ?? run.finishedAt ?? null
 }
 
 async function upsertPlatformTripBatch(params: {
@@ -83,23 +156,38 @@ async function upsertPlatformTripBatch(params: {
   rows: Array<Omit<PlatformTripUpsertInput, 'tenantId' | 'organizationId'>>
   ingestSource: PlatformTripIngestSource
   rowOffset?: number
+  seenExternalTripIds?: Set<string>
 }): Promise<UpsertBatchStats> {
   const stats: UpsertBatchStats = {
     fetchedCount: params.rows.length,
     upsertedCount: 0,
+    createdCount: 0,
+    duplicateCount: 0,
     skippedCount: 0,
+    unmappedDriverSkippedCount: 0,
     errorCount: 0,
     touchedTrips: [],
     rowErrors: [],
   }
+  const seenExternalTripIds = params.seenExternalTripIds ?? new Set<string>()
 
   for (let index = 0; index < params.rows.length; index += 1) {
     const row = params.rows[index]!
     const rowNumber = (params.rowOffset ?? 0) + index + 2
+    const externalTripId = row.externalTripId.trim()
+
+    if (params.ingestSource === 'platform_csv' && externalTripId) {
+      if (seenExternalTripIds.has(externalTripId)) {
+        stats.duplicateCount += 1
+        continue
+      }
+      seenExternalTripIds.add(externalTripId)
+    }
+
     try {
       const { result } = await params.commandBus.execute<
         PlatformTripUpsertInput,
-        | { tripId: string; created: boolean; skipped: false }
+        | { tripId: string; created: boolean; skipped: false; duplicate?: boolean }
         | { skipped: true; skipReason: string }
       >('taxi_fleet.platform_trip.upsert', {
         input: {
@@ -113,6 +201,9 @@ async function upsertPlatformTripBatch(params: {
 
       if (result && 'skipped' in result && result.skipped) {
         stats.skippedCount += 1
+        if (result.skipReason === 'unmapped_driver') {
+          stats.unmappedDriverSkippedCount += 1
+        }
         stats.rowErrors.push({
           row: rowNumber,
           message:
@@ -123,8 +214,14 @@ async function upsertPlatformTripBatch(params: {
         continue
       }
 
+      if (result && 'duplicate' in result && result.duplicate) {
+        stats.duplicateCount += 1
+        continue
+      }
+
       if (result && 'tripId' in result && result.tripId) {
         stats.upsertedCount += 1
+        if (result.created) stats.createdCount += 1
         stats.touchedTrips.push({
           tripId: result.tripId,
           tenantId: params.tenantId,
@@ -145,10 +242,12 @@ async function upsertPlatformTripBatch(params: {
 
 function resolveRunStatus(stats: {
   upsertedCount: number
+  createdCount: number
+  duplicateCount: number
   skippedCount: number
   errorCount: number
 }): PlatformSyncRunResult['status'] {
-  if (stats.errorCount > 0 && stats.upsertedCount === 0) return 'failed'
+  if (stats.errorCount > 0 && stats.upsertedCount === 0 && stats.createdCount === 0) return 'failed'
   if (stats.errorCount > 0 || stats.skippedCount > 0) return 'partial'
   return 'succeeded'
 }
@@ -167,11 +266,16 @@ async function finalizePlatformSyncRun(params: {
   params.run.errorCount = params.stats.errorCount
   params.run.finishedAt = new Date()
   params.run.updatedAt = new Date()
-  if (params.stats.rowErrors.length) {
-    params.run.errorSummary = {
-      errors: params.stats.rowErrors.slice(0, 100),
-      truncated: params.stats.rowErrors.length > 100,
-    }
+  params.run.errorSummary = {
+    ...(params.stats.rowErrors.length
+      ? {
+          errors: params.stats.rowErrors.slice(0, 100),
+          truncated: params.stats.rowErrors.length > 100,
+        }
+      : {}),
+    createdCount: params.stats.createdCount,
+    duplicateCount: params.stats.duplicateCount,
+    unmappedDriverSkippedCount: params.stats.unmappedDriverSkippedCount,
   }
   await params.em.flush()
 
@@ -188,7 +292,10 @@ async function finalizePlatformSyncRun(params: {
     status: params.run.status,
     fetchedCount: params.run.fetchedCount,
     upsertedCount: params.run.upsertedCount,
+    createdCount: params.stats.createdCount,
+    duplicateCount: params.stats.duplicateCount,
     skippedCount: params.run.skippedCount,
+    unmappedDriverSkippedCount: params.stats.unmappedDriverSkippedCount,
     errorCount: params.run.errorCount,
   })
 
@@ -197,9 +304,58 @@ async function finalizePlatformSyncRun(params: {
     status,
     fetchedCount: params.run.fetchedCount,
     upsertedCount: params.run.upsertedCount,
+    createdCount: params.stats.createdCount,
+    duplicateCount: params.stats.duplicateCount,
     skippedCount: params.run.skippedCount,
+    unmappedDriverSkippedCount: params.stats.unmappedDriverSkippedCount,
     errorCount: params.run.errorCount,
   }
+}
+
+export type PlatformSyncCsvJobPayload = {
+  kind: 'csv_import'
+  platform: TaxiFleetTripPlatform
+  csvText?: string
+  tripActivityCsvText?: string
+  paymentsCsvText?: string
+}
+
+export async function createQueuedPlatformCsvImportRun(params: {
+  em: EntityManager
+  tenantId: string
+  organizationId: string
+  platform: TaxiFleetTripPlatform
+  csvText?: string
+  tripActivityCsvText?: string
+  paymentsCsvText?: string
+}): Promise<TaxiFleetPlatformSyncRun> {
+  const jobPayload: PlatformSyncCsvJobPayload = {
+    kind: 'csv_import',
+    platform: params.platform,
+    ...(params.csvText != null ? { csvText: params.csvText } : {}),
+    ...(params.tripActivityCsvText != null
+      ? { tripActivityCsvText: params.tripActivityCsvText }
+      : {}),
+    ...(params.paymentsCsvText != null ? { paymentsCsvText: params.paymentsCsvText } : {}),
+  }
+  const run = params.em.create(platformSyncRunEntity(), {
+    tenantId: params.tenantId,
+    organizationId: params.organizationId,
+    platform: params.platform,
+    trigger: 'csv',
+    status: 'queued',
+    startedAt: new Date(),
+    fetchedCount: 0,
+    upsertedCount: 0,
+    skippedCount: 0,
+    errorCount: 0,
+    jobPayload,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    deletedAt: null,
+  })
+  await params.em.persistAndFlush(run)
+  return run
 }
 
 export async function executePlatformTripCsvImport(params: {
@@ -209,39 +365,85 @@ export async function executePlatformTripCsvImport(params: {
   tenantId: string
   organizationId: string
   platform: TaxiFleetTripPlatform
-  csvText: string
+  csvText?: string
+  tripActivityCsvText?: string
+  paymentsCsvText?: string
+  existingRun?: TaxiFleetPlatformSyncRun
 }): Promise<PlatformSyncRunResult> {
-  const parseResult = parsePlatformTripCsv({
-    csvText: params.csvText,
-    platform: params.platform,
-    ingestSource: 'platform_csv',
-  })
+  const payload = params.existingRun?.jobPayload as PlatformSyncCsvJobPayload | null | undefined
+  const platform = params.platform ?? payload?.platform
+  if (!platform) {
+    throw new CrudHttpError(400, { error: 'CSV import run is missing platform.' })
+  }
+  const csvText = params.csvText ?? payload?.csvText
+  const tripActivityCsvText = params.tripActivityCsvText ?? payload?.tripActivityCsvText
+  const paymentsCsvText = params.paymentsCsvText ?? payload?.paymentsCsvText
 
-  const run = params.em.create(TaxiFleetPlatformSyncRun, {
+  const parseResult =
+    platform === 'uber'
+      ? parseUberFleetCsv({
+          tripActivityCsvText: tripActivityCsvText ?? '',
+          paymentsCsvText: paymentsCsvText ?? '',
+          ingestSource: 'platform_csv',
+        })
+      : platform === 'bolt'
+        ? parseBoltTripHistoryCsv({
+            csvText: csvText ?? '',
+            ingestSource: 'platform_csv',
+          })
+        : parsePlatformTripCsv({
+            csvText: csvText ?? '',
+            platform,
+            ingestSource: 'platform_csv',
+          })
+
+  const run =
+    params.existingRun ??
+    params.em.create(platformSyncRunEntity(), {
+      tenantId: params.tenantId,
+      organizationId: params.organizationId,
+      platform,
+      trigger: 'csv',
+      status: 'running',
+      startedAt: new Date(),
+      fetchedCount: 0,
+      upsertedCount: 0,
+      skippedCount: 0,
+      errorCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+    })
+
+  if (params.existingRun) {
+    run.status = 'running'
+    run.startedAt = new Date()
+    run.updatedAt = new Date()
+    // Clear CSV body once processing starts so it is not retained in the DB.
+    run.jobPayload = null
+    await params.em.flush()
+  } else {
+    await params.em.persistAndFlush(run)
+  }
+
+  const knownDriverIds = await loadKnownPlatformDriverIds(params.em, {
     tenantId: params.tenantId,
     organizationId: params.organizationId,
-    platform: params.platform,
-    trigger: 'csv',
-    status: 'running',
-    startedAt: new Date(),
-    fetchedCount: 0,
-    upsertedCount: 0,
-    skippedCount: 0,
-    errorCount: 0,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    deletedAt: null,
-  })
-  await params.em.persistAndFlush(run)
+  }, platform)
+  const driverFilter = filterPlatformTripRowsForKnownDrivers(parseResult.rows, knownDriverIds)
 
   const aggregate: UpsertBatchStats = {
     fetchedCount: parseResult.rows.length,
     upsertedCount: 0,
-    skippedCount: 0,
+    createdCount: 0,
+    duplicateCount: 0,
+    skippedCount: driverFilter.skippedCount,
+    unmappedDriverSkippedCount: driverFilter.skippedCount,
     errorCount: parseResult.errors.length,
     touchedTrips: [],
     rowErrors: [...parseResult.errors],
   }
+  const seenExternalTripIds = new Set<string>()
 
   if (parseResult.errors.some((error) => error.row <= 1)) {
     run.fetchedCount = 0
@@ -255,8 +457,8 @@ export async function executePlatformTripCsvImport(params: {
     })
   }
 
-  for (let offset = 0; offset < parseResult.rows.length; offset += PLATFORM_TRIP_CSV_CHUNK_SIZE) {
-    const chunk = parseResult.rows.slice(offset, offset + PLATFORM_TRIP_CSV_CHUNK_SIZE)
+  for (let offset = 0; offset < driverFilter.rows.length; offset += PLATFORM_TRIP_CSV_CHUNK_SIZE) {
+    const chunk = driverFilter.rows.slice(offset, offset + PLATFORM_TRIP_CSV_CHUNK_SIZE)
     const batchStats = await upsertPlatformTripBatch({
       em: params.em,
       commandBus: params.commandBus,
@@ -266,13 +468,20 @@ export async function executePlatformTripCsvImport(params: {
       rows: chunk,
       ingestSource: 'platform_csv',
       rowOffset: offset,
+      seenExternalTripIds,
     })
     aggregate.upsertedCount += batchStats.upsertedCount
+    aggregate.createdCount += batchStats.createdCount
+    aggregate.duplicateCount += batchStats.duplicateCount
     aggregate.skippedCount += batchStats.skippedCount
+    aggregate.unmappedDriverSkippedCount += batchStats.unmappedDriverSkippedCount
     aggregate.errorCount += batchStats.errorCount
     aggregate.touchedTrips.push(...batchStats.touchedTrips)
     aggregate.rowErrors.push(...batchStats.rowErrors)
   }
+
+  // CSV: upsertedCount mirrors newly created rows for operators/UI.
+  aggregate.upsertedCount = aggregate.createdCount
 
   return finalizePlatformSyncRun({
     em: params.em,
@@ -321,14 +530,24 @@ export async function executeLivePlatformSync(params: {
     })
   }
 
-  const window = resolvePlatformSyncWindow({
-    windowFrom: params.windowFrom ?? null,
-    windowTo: params.windowTo ?? null,
-  })
+  const window =
+    params.windowFrom != null || params.windowTo != null
+      ? resolvePlatformSyncWindow({
+          windowFrom: params.windowFrom ?? null,
+          windowTo: params.windowTo ?? null,
+        })
+      : params.trigger === 'manual'
+        ? resolveManualPlatformSyncWindow()
+        : resolveScheduledPlatformSyncWindow(
+            await findLastSuccessfulLivePlatformSyncWindowEnd(params.em, {
+              tenantId: params.tenantId,
+              organizationId: params.organizationId,
+            }),
+          )
   const platformLabel: TaxiFleetPlatformSyncRun['platform'] =
     enabledPlatforms.length === 1 ? enabledPlatforms[0]! : 'all'
 
-  const run = params.em.create(TaxiFleetPlatformSyncRun, {
+  const run = params.em.create(platformSyncRunEntity(), {
     tenantId: params.tenantId,
     organizationId: params.organizationId,
     platform: platformLabel,
@@ -350,7 +569,10 @@ export async function executeLivePlatformSync(params: {
   const aggregate: UpsertBatchStats = {
     fetchedCount: 0,
     upsertedCount: 0,
+    createdCount: 0,
+    duplicateCount: 0,
     skippedCount: 0,
+    unmappedDriverSkippedCount: 0,
     errorCount: 0,
     touchedTrips: [],
     rowErrors: [],
@@ -362,14 +584,25 @@ export async function executeLivePlatformSync(params: {
       const fetchResult = await adapter.fetchTrips({
         platform,
         credentials: settings.platformSync[platform],
-        window,
+        window: {
+          from: window.windowFrom,
+          to: window.windowTo,
+        },
       })
       aggregate.fetchedCount += fetchResult.trips.length
       aggregate.errorCount += fetchResult.errors.length
       aggregate.rowErrors.push(...fetchResult.errors)
 
-      for (let offset = 0; offset < fetchResult.trips.length; offset += PLATFORM_TRIP_CSV_CHUNK_SIZE) {
-        const chunk = fetchResult.trips.slice(offset, offset + PLATFORM_TRIP_CSV_CHUNK_SIZE)
+      const knownDriverIds = await loadKnownPlatformDriverIds(params.em, {
+        tenantId: params.tenantId,
+        organizationId: params.organizationId,
+      }, platform)
+      const driverFilter = filterPlatformTripRowsForKnownDrivers(fetchResult.trips, knownDriverIds)
+      aggregate.skippedCount += driverFilter.skippedCount
+      aggregate.unmappedDriverSkippedCount += driverFilter.skippedCount
+
+      for (let offset = 0; offset < driverFilter.rows.length; offset += PLATFORM_TRIP_CSV_CHUNK_SIZE) {
+        const chunk = driverFilter.rows.slice(offset, offset + PLATFORM_TRIP_CSV_CHUNK_SIZE)
         const batchStats = await upsertPlatformTripBatch({
           em: params.em,
           commandBus: params.commandBus,
@@ -381,7 +614,10 @@ export async function executeLivePlatformSync(params: {
           rowOffset: offset,
         })
         aggregate.upsertedCount += batchStats.upsertedCount
+        aggregate.createdCount += batchStats.createdCount
+        aggregate.duplicateCount += batchStats.duplicateCount
         aggregate.skippedCount += batchStats.skippedCount
+        aggregate.unmappedDriverSkippedCount += batchStats.unmappedDriverSkippedCount
         aggregate.errorCount += batchStats.errorCount
         aggregate.touchedTrips.push(...batchStats.touchedTrips)
         aggregate.rowErrors.push(...batchStats.rowErrors)
@@ -432,7 +668,20 @@ export function serializePlatformSyncRun(row: TaxiFleetPlatformSyncRun): Record<
     finishedAt: row.finishedAt ? row.finishedAt.toISOString() : null,
     fetchedCount: row.fetchedCount,
     upsertedCount: row.upsertedCount,
+    createdCount:
+      row.errorSummary && typeof row.errorSummary === 'object'
+        ? Number((row.errorSummary as { createdCount?: unknown }).createdCount) || 0
+        : 0,
+    duplicateCount:
+      row.errorSummary && typeof row.errorSummary === 'object'
+        ? Number((row.errorSummary as { duplicateCount?: unknown }).duplicateCount) || 0
+        : 0,
     skippedCount: row.skippedCount,
+    unmappedDriverSkippedCount:
+      row.errorSummary && typeof row.errorSummary === 'object'
+        ? Number((row.errorSummary as { unmappedDriverSkippedCount?: unknown }).unmappedDriverSkippedCount) ||
+          0
+        : 0,
     errorCount: row.errorCount,
     windowFrom: row.windowFrom ? row.windowFrom.toISOString() : null,
     windowTo: row.windowTo ? row.windowTo.toISOString() : null,

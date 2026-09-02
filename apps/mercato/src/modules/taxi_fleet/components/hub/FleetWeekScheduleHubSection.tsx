@@ -3,7 +3,7 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { endOfWeek, format, startOfWeek } from 'date-fns'
-import { enUS } from 'date-fns/locale/en-US'
+import { pl } from 'date-fns/locale/pl'
 import { ArrowRight } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
@@ -28,8 +28,8 @@ export function FleetWeekScheduleHubSection() {
   const [loading, setLoading] = React.useState(true)
 
   const weekRange = React.useMemo(() => {
-    const start = startOfWeek(new Date(), { locale: enUS })
-    const end = endOfWeek(new Date(), { locale: enUS })
+    const start = startOfWeek(new Date(), { locale: pl, weekStartsOn: 1 })
+    const end = endOfWeek(new Date(), { locale: pl, weekStartsOn: 1 })
     return { start, end }
   }, [])
 

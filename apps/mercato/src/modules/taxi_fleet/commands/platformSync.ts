@@ -9,9 +9,9 @@ import {
   type PlatformTripImportCsvInput,
 } from '../data/validators'
 import {
-  assertNoRunningPlatformSync,
   executeManualPlatformSync,
   executePlatformTripCsvImport,
+  reclaimStalePlatformSyncRuns,
   type PlatformSyncRunResult,
 } from '../lib/platformSync/executePlatformSyncRun'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
@@ -24,12 +24,10 @@ const importPlatformTripCsvCommand: CommandHandler<PlatformTripImportCsvInput, P
     ensureOrganizationScope(ctx, parsed.organizationId)
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const commandBus = ctx.container.resolve('commandBus') as CommandBus
-    const { translate } = await resolveTranslations()
-    await assertNoRunningPlatformSync(
-      em,
-      { tenantId: parsed.tenantId, organizationId: parsed.organizationId },
-      translate,
-    )
+    await reclaimStalePlatformSyncRuns(em, {
+      tenantId: parsed.tenantId,
+      organizationId: parsed.organizationId,
+    })
     return executePlatformTripCsvImport({
       em,
       commandBus,
@@ -38,6 +36,8 @@ const importPlatformTripCsvCommand: CommandHandler<PlatformTripImportCsvInput, P
       organizationId: parsed.organizationId,
       platform: parsed.platform,
       csvText: parsed.csvText,
+      tripActivityCsvText: parsed.tripActivityCsvText,
+      paymentsCsvText: parsed.paymentsCsvText,
     })
   },
 }
@@ -51,11 +51,10 @@ const runPlatformSyncCommand: CommandHandler<PlatformSyncRunInput, PlatformSyncR
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const commandBus = ctx.container.resolve('commandBus') as CommandBus
     const { translate } = await resolveTranslations()
-    await assertNoRunningPlatformSync(
-      em,
-      { tenantId: parsed.tenantId, organizationId: parsed.organizationId },
-      translate,
-    )
+    await reclaimStalePlatformSyncRuns(em, {
+      tenantId: parsed.tenantId,
+      organizationId: parsed.organizationId,
+    })
     return executeManualPlatformSync({
       em,
       commandBus,

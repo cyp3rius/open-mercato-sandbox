@@ -8,6 +8,7 @@ export const TAXI_FLEET_FINANCIAL_INCOME_NOTIFY_FEATURE = 'taxi_fleet.financial.
 export const TAXI_FLEET_FINANCIAL_EXPENSE_NOTIFY_FEATURE = 'taxi_fleet.financial.expense.notify'
 export const TAXI_FLEET_TRIP_SUBMITTED_NOTIFY_FEATURE = 'taxi_fleet.trip.submitted.notify'
 export const TAXI_FLEET_SETTLEMENT_SUBMITTED_NOTIFY_FEATURE = 'taxi_fleet.settlement.submitted.notify'
+export const TAXI_FLEET_PLATFORM_SYNC_NOTIFY_FEATURE = 'taxi_fleet.platform_sync.notify'
 
 const tripViewAction = {
   id: 'view',
@@ -215,6 +216,31 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     ],
     linkHref: '/backend/taxi-fleet/settlements',
     expiresAfterHours: 168,
+  },
+  {
+    type: 'taxi_fleet.platform_sync.completed',
+    module: 'taxi_fleet',
+    titleKey: 'taxi_fleet.notifications.platform_sync_completed.title',
+    bodyKey: 'taxi_fleet.notifications.platform_sync_completed.body',
+    icon: 'upload',
+    severity: 'info',
+    userPreference: {
+      labelKey: 'taxi_fleet.notifications.preferences.platform_sync_completed',
+      scopeFeature: 'taxi_fleet.manage_platform_sync',
+      lockFeature: TAXI_FLEET_PLATFORM_SYNC_NOTIFY_FEATURE,
+      lockedWhenRoleGrants: true,
+    },
+    actions: [
+      {
+        id: 'view',
+        labelKey: 'common.view',
+        variant: 'outline',
+        href: '/backend/taxi-fleet/trips',
+        icon: 'external-link',
+      },
+    ],
+    linkHref: '/backend/taxi-fleet/trips',
+    expiresAfterHours: 72,
   },
 ]
 

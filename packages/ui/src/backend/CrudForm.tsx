@@ -302,6 +302,11 @@ export type CrudFormProps<TValues extends Record<string, unknown>> = {
   // Optional custom content injected between the header actions and the form body
   contentHeader?: React.ReactNode
   readOnly?: boolean
+  /**
+   * Custom content for the read-only frosted overlay.
+   * Pass `false` to keep field/footer locking without the blocking overlay
+   * (e.g. viewable completed records with interactive sidebar widgets).
+   */
   readOnlyOverlay?: React.ReactNode
   // Optional mapping of entityId -> form value key storing the selected fieldset code
   customFieldsetBindings?: Record<string, { valueKey: string }>
@@ -2535,6 +2540,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
               wrapperClassName={wrapperClassName}
               entityIdForField={primaryEntityId ?? undefined}
               recordId={recordId}
+              formReadOnly={formReadOnly}
             />
           )
         })}
@@ -2745,6 +2751,10 @@ export function CrudForm<TValues extends Record<string, unknown>>({
 
   const wrapFormBody = React.useCallback((children: React.ReactNode, className?: string) => {
     if (!formReadOnly) return children
+    // Explicit false: lock actions/fields without a full-screen blocking overlay.
+    if (readOnlyOverlay === false) {
+      return <div className={className}>{children}</div>
+    }
     return (
       <div
         className={cn('relative', className)}
@@ -2877,7 +2887,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
               showDelete: !formReadOnly && showDelete,
               onDelete: handleDelete, // NOSONAR — async→void assignment is valid TypeScript
               deleteLabel,
-              cancelHref,
+              cancelHref: formReadOnly ? undefined : cancelHref,
               cancelLabel,
               submit: formReadOnly ? undefined : { formId, pending: pending, label: resolvedSubmitLabel, pendingLabel: savingLabel, icon: submitIcon, disabled: submitDisabled },
             }}
@@ -2958,7 +2968,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
             showDelete: !formReadOnly && showDelete,
             onDelete: handleDelete, // NOSONAR — async→void assignment is valid TypeScript
             deleteLabel,
-            cancelHref,
+            cancelHref: formReadOnly ? undefined : cancelHref,
             cancelLabel,
             submit: formReadOnly ? undefined : { formId, pending: pending, label: resolvedSubmitLabel, pendingLabel: savingLabel, icon: submitIcon, disabled: submitDisabled },
           }}
@@ -3011,6 +3021,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
                     wrapperClassName={wrapperClassName}
                     entityIdForField={primaryEntityId ?? undefined}
                     recordId={recordId}
+                    formReadOnly={formReadOnly}
                   />
                 )
               })}
@@ -3444,6 +3455,8 @@ type FieldControlProps = {
   wrapperClassName?: string
   entityIdForField?: string
   recordId?: string
+  /** Form-level read-only (e.g. completed trip). Must lock custom fields even when `readOnlyOverlay` is false. */
+  formReadOnly?: boolean
 }
 
 function supportsWrapperBlurValidation(field: CrudField): boolean {
@@ -3541,20 +3554,27 @@ const FieldControl = React.memo(function FieldControlImpl({
   wrapperClassName,
   entityIdForField,
   recordId,
+  formReadOnly = false,
 }: FieldControlProps) {
   const t = useT()
   const fieldSetValue = React.useCallback(
-    (nextValue: unknown) => setValue(field.id, nextValue),
-    [setValue, field.id]
+    (nextValue: unknown) => {
+      if (formReadOnly) return
+      setValue(field.id, nextValue)
+    },
+    [formReadOnly, setValue, field.id]
   )
   const setFormValue = React.useCallback(
-    (targetId: string, nextValue: unknown) => setValue(targetId, nextValue),
-    [setValue],
+    (targetId: string, nextValue: unknown) => {
+      if (formReadOnly) return
+      setValue(targetId, nextValue)
+    },
+    [formReadOnly, setValue],
   )
   const builtin = field.type === 'custom' ? null : field
   const hasLoader = typeof builtin?.loadOptions === 'function'
-  const disabled = Boolean(field.disabled)
-  const readOnly = Boolean(field.readOnly)
+  const disabled = Boolean(field.disabled) || formReadOnly
+  const readOnly = Boolean(field.readOnly) || formReadOnly
   const autoFocusField = autoFocus && !disabled
 
   React.useEffect(() => {

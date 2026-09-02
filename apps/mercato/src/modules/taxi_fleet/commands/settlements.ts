@@ -125,10 +125,17 @@ const generateSettlementCommand: CommandHandler<SettlementGenerateInput, { settl
       weekStart: parsed.weekStart,
     }
     const existing = await findWeeklySettlementByScope(em, scope)
-    if (existing?.deletedAt == null) {
+    if (existing?.deletedAt == null && existing?.teamMemberId === parsed.teamMemberId) {
       const { translate } = await resolveTranslations()
-      throw new CrudHttpError(409, { error: translate('taxi_fleet.errors.settlementExists', 'Settlement already exists for this week.') })
+      throw new CrudHttpError(409, {
+        error: translate(
+          'taxi_fleet.errors.settlementExists',
+          'A settlement already exists for this driver and week.',
+        ),
+      })
     }
+    // Soft-deleted row for this driver+week can be restored below; ignore any unexpected row.
+    const restorable = existing?.teamMemberId === parsed.teamMemberId ? existing : null
     const { translate } = await resolveTranslations()
     await assertTeamMemberHasDriverProfile(em, {
       tenantId: parsed.tenantId,
@@ -138,9 +145,9 @@ const generateSettlementCommand: CommandHandler<SettlementGenerateInput, { settl
     })
     const now = new Date()
     let record: TaxiFleetWeeklySettlement
-    if (existing) {
-      restoreWeeklySettlementDraft(existing, now)
-      record = existing
+    if (restorable) {
+      restoreWeeklySettlementDraft(restorable, now)
+      record = restorable
     } else {
       record = em.create(TaxiFleetWeeklySettlement, {
         tenantId: parsed.tenantId,

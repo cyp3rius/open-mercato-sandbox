@@ -54,7 +54,10 @@ const responseSchema = z.object({
   status: z.enum(['succeeded', 'failed', 'partial']),
   fetchedCount: z.number().int(),
   upsertedCount: z.number().int(),
+  createdCount: z.number().int(),
+  duplicateCount: z.number().int(),
   skippedCount: z.number().int(),
+  unmappedDriverSkippedCount: z.number().int(),
   errorCount: z.number().int(),
 })
 
@@ -63,6 +66,6 @@ export const openApi = {
     summary: 'Run platform trip sync (manual)',
     tags: ['Taxi fleet platform sync'],
     requestBody: { schema: platformSyncRunSchema },
-    responses: { 201: { schema: responseSchema }, 409: { description: 'Sync already running' } },
+    responses: { 201: { schema: responseSchema }, 409: { description: 'No platform credentials configured' } },
   },
 }

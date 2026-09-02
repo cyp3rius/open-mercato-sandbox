@@ -1,12 +1,22 @@
 export const VEHICLE_PLATE_CUSTOM_FIELD_KEY = 'vehicle_plate'
 
+function normalizePlateKey(value: string): string {
+  return value.replace(/[\s-]/g, '').toUpperCase()
+}
+
 export function formatVehicleResourceLabel(
   name: string | null | undefined,
   plate: string | null | undefined,
 ): string {
   const trimmedName = typeof name === 'string' ? name.trim() : ''
   const trimmedPlate = typeof plate === 'string' ? plate.trim() : ''
-  if (trimmedName && trimmedPlate) return `${trimmedName} · ${trimmedPlate}`
+  if (trimmedName && trimmedPlate) {
+    const nameKey = normalizePlateKey(trimmedName)
+    const plateKey = normalizePlateKey(trimmedPlate)
+    if (!plateKey.length) return trimmedName
+    if (nameKey === plateKey || nameKey.includes(plateKey)) return trimmedName
+    return `${trimmedName} · ${trimmedPlate}`
+  }
   return trimmedName || trimmedPlate
 }
 

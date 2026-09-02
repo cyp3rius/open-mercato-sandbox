@@ -9,6 +9,7 @@ import {
   createPagedListResponseSchema,
   defaultOkResponseSchema,
 } from './openapi'
+import { normalizeDateOnly } from '../lib/weekUtils'
 
 const routeMetadata = {
   GET: { requireAuth: true, requireFeatures: ['taxi_fleet.view'] },
@@ -79,33 +80,59 @@ const crud = makeCrudRoute({
     ],
     sortFieldMap: { weekStart: 'week_start', createdAt: 'created_at' },
     buildFilters: async (query) => {
+      // ORM fallback uses entity property names (camelCase), not DB column names.
       const filters: Record<string, unknown> = {}
       if (query.ids) {
         const ids = query.ids.split(',').map((item) => item.trim()).filter(Boolean)
         if (ids.length) filters.id = { $in: ids }
       }
-      if (query.teamMemberId) filters.team_member_id = query.teamMemberId
-      if (query.weekStart) filters.week_start = query.weekStart
+      if (query.teamMemberId) filters.teamMemberId = query.teamMemberId
+      if (query.weekStart) filters.weekStart = query.weekStart
       if (query.status) filters.status = query.status
       return filters
     },
   },
   hooks: {
     afterList: async (payload, ctx) => {
-      const items = Array.isArray(payload.items) ? [...payload.items] : []
-      if (!items.length) return
-
       const query = (ctx.query ?? {}) as {
         page?: number
         pageSize?: number
         sortField?: string
         sortDir?: 'asc' | 'desc'
+        teamMemberId?: string
       }
+      let items = Array.isArray(payload.items) ? [...payload.items] : []
+
+      // Belt-and-suspenders: keep driver scope even if an upstream filter was missed.
+      if (query.teamMemberId) {
+        items = items.filter((item) => {
+          const record = item as Record<string, unknown>
+          const memberId = String(record.teamMemberId ?? record.team_member_id ?? '')
+          return memberId === query.teamMemberId
+        })
+      }
+
+      for (const item of items) {
+        const record = item as Record<string, unknown>
+        const normalized = normalizeDateOnly(
+          (record.weekStart ?? record.week_start) as string | Date | null | undefined,
+        )
+        if (normalized) record.weekStart = normalized
+      }
+      if (!items.length) {
+        payload.items = []
+        if (query.teamMemberId) {
+          payload.total = 0
+          payload.totalPages = 0
+        }
+        return
+      }
+
       const sortField = query.sortField === 'createdAt' ? 'createdAt' : 'weekStart'
       const sortDir = query.sortDir === 'asc' ? 'asc' : 'desc'
 
       const readWeekStart = (item: Record<string, unknown>) =>
-        String(item.weekStart ?? item.week_start ?? '')
+        normalizeDateOnly(String(item.weekStart ?? item.week_start ?? ''))
       const readCreatedAt = (item: Record<string, unknown>) => {
         const raw = item.createdAt ?? item.created_at
         if (raw instanceof Date) return raw.getTime()
@@ -131,15 +158,13 @@ const crud = makeCrudRoute({
         return sortDir === 'desc' ? -createdDiff : createdDiff
       })
 
-      const page = query.page ?? 1
-      const pageSize = query.pageSize ?? 50
-      const total = items.length
-      const offset = (page - 1) * pageSize
-      payload.items = items.slice(offset, offset + pageSize)
-      payload.total = total
-      payload.page = page
-      payload.pageSize = pageSize
-      payload.totalPages = Math.max(1, Math.ceil(total / pageSize))
+      // Sort the already-fetched page in place — do not re-slice (factory already paginated).
+      payload.items = items
+      if (query.teamMemberId && typeof payload.total === 'number' && payload.total !== items.length) {
+        payload.total = items.length
+        const pageSize = query.pageSize ?? payload.pageSize ?? 50
+        payload.totalPages = Math.max(1, Math.ceil(items.length / Math.max(1, pageSize)))
+      }
     },
   },
   actions: {

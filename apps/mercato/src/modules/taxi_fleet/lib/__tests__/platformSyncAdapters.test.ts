@@ -4,12 +4,15 @@ import {
   listEnabledPlatformSyncPlatforms,
 } from '../platformSync/platformSyncCredentials'
 import { defaultPlatformSyncSettings } from '../taxiFleetSettings'
-import { resolveDefaultPlatformSyncWindow } from '../platformSync/resolvePlatformSyncWindow'
+import {
+  resolveManualPlatformSyncWindow,
+  resolveScheduledPlatformSyncWindow,
+} from '../platformSync/resolvePlatformSyncWindow'
 
 describe('mapVendorTripRecord', () => {
   it('maps bolt-style order payload', () => {
     const mapped = mapVendorTripRecord('bolt', {
-      order_id: 'bolt-99',
+      order_reference: 'bolt-ref-99',
       driver_uuid: 'driver-1',
       start_time: '2026-08-20T08:00:00Z',
       end_time: '2026-08-20T08:30:00Z',
@@ -19,7 +22,7 @@ describe('mapVendorTripRecord', () => {
     })
     expect(mapped).toMatchObject({
       platform: 'bolt',
-      externalTripId: 'bolt-99',
+      externalTripId: 'bolt-ref-99',
       platformDriverId: 'driver-1',
       paymentType: 'cash',
       revenueAmount: 42.5,
@@ -37,7 +40,7 @@ describe('mapVendorTripRecord', () => {
 describe('platformSyncCredentials', () => {
   it('lists only enabled platforms with api base and secret', () => {
     const platformSync = defaultPlatformSyncSettings()
-    platformSync.bolt = {
+    platformSync.uber = {
       enabled: true,
       apiBaseUrl: 'https://fleet.example',
       clientId: 'id',
@@ -45,16 +48,31 @@ describe('platformSyncCredentials', () => {
       refreshToken: '',
       companyId: 'co-1',
     }
-    expect(isPlatformSyncPlatformConfigured(platformSync.bolt)).toBe(true)
-    expect(listEnabledPlatformSyncPlatforms(platformSync)).toEqual(['bolt'])
+    expect(isPlatformSyncPlatformConfigured(platformSync.uber, 'uber')).toBe(true)
+    expect(listEnabledPlatformSyncPlatforms(platformSync)).toEqual(['uber'])
   })
 })
 
-describe('resolveDefaultPlatformSyncWindow', () => {
-  it('uses 26 hour lookback', () => {
-    const now = new Date('2026-08-26T12:00:00Z')
-    const window = resolveDefaultPlatformSyncWindow(now)
+describe('resolvePlatformSyncWindow', () => {
+  it('manual sync uses 7 day lookback', () => {
+    const now = new Date('2026-08-26T12:00:00.000Z')
+    const window = resolveManualPlatformSyncWindow(now)
     expect(window.windowTo.toISOString()).toBe(now.toISOString())
-    expect(window.windowFrom.toISOString()).toBe('2026-08-25T10:00:00.000Z')
+    expect(window.windowFrom.toISOString()).toBe('2026-08-19T12:00:00.000Z')
+  })
+
+  it('scheduled sync continues from last successful fetch end', () => {
+    const now = new Date('2026-08-26T12:00:00.000Z')
+    const lastEnd = new Date('2026-08-26T11:00:00.000Z')
+    const window = resolveScheduledPlatformSyncWindow(lastEnd, now)
+    expect(window.windowFrom).toEqual(lastEnd)
+    expect(window.windowTo).toEqual(now)
+  })
+
+  it('scheduled sync falls back to one hour when no prior success', () => {
+    const now = new Date('2026-08-26T12:00:00.000Z')
+    const window = resolveScheduledPlatformSyncWindow(null, now)
+    expect(window.windowTo.toISOString()).toBe(now.toISOString())
+    expect(window.windowFrom.toISOString()).toBe('2026-08-26T11:00:00.000Z')
   })
 })

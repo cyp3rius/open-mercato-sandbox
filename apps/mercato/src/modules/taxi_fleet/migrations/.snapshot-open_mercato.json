@@ -57931,6 +57931,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "job_payload": {
+          "name": "job_payload",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "json"
         }
       },
       "name": "taxi_fleet_platform_sync_runs",

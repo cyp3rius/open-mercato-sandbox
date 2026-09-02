@@ -1,3 +1,26 @@
+/** Normalize API/DB date values to `YYYY-MM-DD` (handles PG date → JS Date timezone shift). */
+export function normalizeDateOnly(value: string | Date | null | undefined): string {
+  if (value == null) return ''
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return ''
+    return value.toLocaleDateString('en-CA', { timeZone: 'Europe/Warsaw' })
+  }
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+  const matched = trimmed.match(/^(\d{4}-\d{2}-\d{2})[T\s]/)
+  if (matched) {
+    const asDate = new Date(trimmed)
+    if (!Number.isNaN(asDate.getTime())) {
+      return asDate.toLocaleDateString('en-CA', { timeZone: 'Europe/Warsaw' })
+    }
+    return matched[1]!
+  }
+  const parsed = new Date(trimmed)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return parsed.toLocaleDateString('en-CA', { timeZone: 'Europe/Warsaw' })
+}
+
 export function getIsoWeekStart(dateInput: string | Date): string {
   const date = typeof dateInput === 'string' ? new Date(`${dateInput}T12:00:00`) : new Date(dateInput)
   const day = date.getDay()
@@ -14,8 +37,9 @@ export function getWeekEnd(weekStart: string): string {
 }
 
 export function formatWeekRange(weekStart: string | null | undefined): string {
-  if (!weekStart || !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) return '—'
-  return `${weekStart} – ${getWeekEnd(weekStart)}`
+  const normalized = normalizeDateOnly(weekStart)
+  if (!normalized || !/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return '—'
+  return `${normalized} – ${getWeekEnd(normalized)}`
 }
 
 export function isDateInWeek(dateStr: string, weekStart: string): boolean {

@@ -202,7 +202,7 @@ export function tripFormSchema(
       teamMemberId: requireDriver ? z.string().uuid() : z.string(),
       resourceId: z.string().uuid(),
       customerEntityId: z.union([z.string().uuid(), z.literal('')]).optional(),
-      tripType: z.enum(['client', 'private', 'internal', 'empty', 'event', 'other']),
+      tripType: z.enum(['client', 'private', 'internal', 'empty', 'event', 'other', 'platform']),
       startedAtLocal: z.string().min(1),
       endedAtLocal: z.string().min(1),
       revenueAmount: z.string().optional(),

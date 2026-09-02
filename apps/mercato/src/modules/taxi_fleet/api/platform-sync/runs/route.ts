@@ -7,7 +7,7 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import { TaxiFleetPlatformSyncRun } from '@/modules/taxi_fleet/data/entities'
+import { resolveTaxiFleetPlatformSyncRunEntity } from '@/modules/taxi_fleet/lib/resolveTaxiFleetOrmEntity'
 import { platformSyncRunsListSchema } from '@/modules/taxi_fleet/data/validators'
 import { serializePlatformSyncRun } from '@/modules/taxi_fleet/lib/platformSync/executePlatformSyncRun'
 
@@ -58,10 +58,11 @@ export async function GET(req: Request) {
 
     const em = context.container.resolve('em') as EntityManager
     const offset = (query.page - 1) * query.pageSize
+    const PlatformSyncRun = resolveTaxiFleetPlatformSyncRunEntity()
     const [rows, total] = await Promise.all([
       findWithDecryption(
         em,
-        TaxiFleetPlatformSyncRun,
+        PlatformSyncRun,
         filters,
         {
           orderBy: { startedAt: 'DESC' },
@@ -70,7 +71,7 @@ export async function GET(req: Request) {
         },
         { tenantId, organizationId },
       ),
-      em.count(TaxiFleetPlatformSyncRun, filters),
+      em.count(PlatformSyncRun, filters),
     ])
 
     const totalPages = Math.max(1, Math.ceil(total / query.pageSize))
@@ -100,7 +101,10 @@ const runItemSchema = z.object({
   finishedAt: z.string().nullable(),
   fetchedCount: z.number(),
   upsertedCount: z.number(),
+  createdCount: z.number().optional(),
+  duplicateCount: z.number().optional(),
   skippedCount: z.number(),
+  unmappedDriverSkippedCount: z.number().optional(),
   errorCount: z.number(),
 })
 

@@ -11,6 +11,12 @@ describe('vehicleResourceLabel', () => {
     expect(formatVehicleResourceLabel('  ', '  ')).toBe('')
   })
 
+  it('does not repeat plate when name already includes it', () => {
+    expect(formatVehicleResourceLabel('KK3666G', 'KK3666G')).toBe('KK3666G')
+    expect(formatVehicleResourceLabel('KK 3666G', 'KK3666G')).toBe('KK 3666G')
+    expect(formatVehicleResourceLabel('Toyota KK3666G', 'KK3666G')).toBe('Toyota KK3666G')
+  })
+
   it('reads plate from resource row variants', () => {
     expect(readVehiclePlateFromResourceRow({ cf_vehicle_plate: 'WX 1234' })).toBe('WX 1234')
     expect(

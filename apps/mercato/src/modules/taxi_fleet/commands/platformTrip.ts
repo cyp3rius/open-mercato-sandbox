@@ -18,7 +18,7 @@ type PlatformTripUpsertUndoPayload = {
 }
 
 type PlatformTripUpsertResult =
-  | { tripId: string; created: boolean; skipped: false }
+  | { tripId: string; created: boolean; skipped: false; duplicate?: boolean }
   | { skipped: true; skipReason: 'unmapped_driver' | 'driver_reassignment_conflict' }
 
 const upsertPlatformTripCommand: CommandHandler<PlatformTripUpsertInput, PlatformTripUpsertResult> = {
@@ -44,6 +44,10 @@ const upsertPlatformTripCommand: CommandHandler<PlatformTripUpsertInput, Platfor
     const result = await upsertPlatformTrip(em, parsed)
     if (!result.ok) {
       return { skipped: true, skipReason: result.skipReason }
+    }
+
+    if (result.duplicate) {
+      return { tripId: result.tripId, created: false, skipped: false, duplicate: true }
     }
 
     const eventBus = ctx.container.resolve('eventBus') as {
@@ -77,6 +81,7 @@ const upsertPlatformTripCommand: CommandHandler<PlatformTripUpsertInput, Platfor
   },
   captureAfter: async (input, result, ctx) => {
     if ('skipped' in result && result.skipped) return null
+    if ('duplicate' in result && result.duplicate) return null
     const parsed = platformTripUpsertSchema.parse(input)
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const trip = await findOneWithDecryption(
@@ -90,6 +95,7 @@ const upsertPlatformTripCommand: CommandHandler<PlatformTripUpsertInput, Platfor
   },
   buildLog: async ({ snapshots, result }) => {
     if ('skipped' in result && result.skipped) return null
+    if ('duplicate' in result && result.duplicate) return null
     const before = snapshots.before as PlatformTripSnapshot | undefined
     const after = snapshots.after as PlatformTripSnapshot | undefined
     if (!after) return null

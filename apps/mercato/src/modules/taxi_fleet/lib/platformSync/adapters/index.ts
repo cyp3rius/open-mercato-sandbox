@@ -8,6 +8,7 @@ import type {
   PlatformTripAdapterFetchResult,
 } from './types'
 import { PlatformTripAdapterError } from './types'
+import { boltPlatformTripAdapter } from './bolt'
 
 type PartnerAdapterConfig = {
   platform: TaxiFleetTripPlatform
@@ -71,20 +72,7 @@ function createPartnerAdapter(config: PartnerAdapterConfig): PlatformTripAdapter
   }
 }
 
-export const boltPlatformTripAdapter = createPartnerAdapter({
-  platform: 'bolt',
-  defaultScope: 'fleet:read',
-  tripsPath: () => '/fleet/v1/orders',
-  buildQuery: (context) => {
-    const params = new URLSearchParams({
-      start_date: context.window.from.toISOString(),
-      end_date: context.window.to.toISOString(),
-    })
-    const companyId = context.credentials.companyId?.trim()
-    if (companyId) params.set('company_id', companyId)
-    return params
-  },
-})
+export { boltPlatformTripAdapter }
 
 export const uberPlatformTripAdapter = createPartnerAdapter({
   platform: 'uber',

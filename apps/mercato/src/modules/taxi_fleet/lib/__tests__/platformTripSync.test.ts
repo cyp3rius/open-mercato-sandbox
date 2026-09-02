@@ -33,6 +33,22 @@ describe('platformTrip sync helpers', () => {
       })
       expect(readTripPaymentType(metadata)).toBe('electronic')
     })
+
+    it('stores from/to addresses under tripRequest and vehicle fields on metadata', () => {
+      const metadata = buildPlatformTripMetadata({
+        ingestSource: 'platform_csv',
+        platformDriverId: 'driver-1',
+        fromAddress: 'Pickup St 1',
+        toAddress: 'Dropoff Ave 2',
+        platformVehicleId: 'veh-99',
+        vehiclePlate: 'WX 1A',
+      })
+      const tripRequest = metadata.tripRequest as Record<string, unknown>
+      expect(tripRequest.fromAddress).toBe('Pickup St 1')
+      expect(tripRequest.toAddress).toBe('Dropoff Ave 2')
+      expect(metadata.platformVehicleId).toBe('veh-99')
+      expect(metadata.vehiclePlate).toBe('WX 1A')
+    })
   })
 
   describe('tripCreateSchema customer rules unchanged', () => {
@@ -58,6 +74,20 @@ describe('platformTrip sync helpers', () => {
         platform: 'bolt',
         status: 'completed',
         revenueAmount: 100,
+      })
+      expect(result.success).toBe(true)
+    })
+
+    it('allows platform trip type without customer', () => {
+      const result = tripCreateSchema.safeParse({
+        tenantId: '00000000-0000-4000-8000-000000000001',
+        organizationId: '00000000-0000-4000-8000-000000000002',
+        teamMemberId: '00000000-0000-4000-8000-000000000003',
+        resourceId: '00000000-0000-4000-8000-000000000004',
+        tripType: 'platform',
+        platform: 'uber',
+        status: 'completed',
+        revenueAmount: 50,
       })
       expect(result.success).toBe(true)
     })

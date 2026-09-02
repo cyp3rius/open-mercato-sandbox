@@ -235,6 +235,27 @@ export const RESOURCES_RESOURCE_CUSTOM_FIELD_SETS: FieldSetInput[] = [
       group: { code: 'identity' },
       filterable: true,
     }),
+    cf.text('uber_vehicle_id', {
+      label: 'Uber vehicle ID',
+      description: 'Fleet vehicle UUID from Uber partner console.',
+      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+      group: { code: 'identity' },
+      filterable: true,
+    }),
+    cf.text('bolt_vehicle_id', {
+      label: 'Bolt vehicle ID',
+      description: 'Fleet vehicle ID from Bolt partner console.',
+      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+      group: { code: 'identity' },
+      filterable: true,
+    }),
+    cf.text('free_vehicle_id', {
+      label: 'Free vehicle ID',
+      description: 'Fleet vehicle ID from Free partner console.',
+      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+      group: { code: 'identity' },
+      filterable: true,
+    }),
     cf.text('vehicle_model', {
       label: 'Model',
       fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,

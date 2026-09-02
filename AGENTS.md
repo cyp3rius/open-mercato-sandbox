@@ -319,7 +319,7 @@ Third-party module developers depend on stable platform APIs. Any change to a **
 
 ```bash
 yarn dev                  # Start development server (full stack)
-yarn dev:light            # Low-memory app-only dev (no watchers/MCP/workers/scheduler)
+yarn dev:light            # Low-memory app + platform CSV import worker (no watchers/MCP/full workers/scheduler)
 yarn build                # Build everything
 yarn build:packages       # Build packages only
 yarn lint                 # Lint all packages

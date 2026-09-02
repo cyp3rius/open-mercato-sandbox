@@ -23,6 +23,7 @@ export type CalendarTrip = {
   teamMemberId?: string | null
   resourceId?: string | null
   tripType: string
+  platform?: string | null
   status: string
   startedAt?: string | null
   endedAt?: string | null
@@ -44,6 +45,7 @@ export type FleetCalendarLabelResolvers = {
   resolveResourceLabel: (resourceId: string) => string
   resolveTripTypeLabel: (tripType: string) => string
   resolveUnscheduledDriverLabel?: () => string
+  resolveDriverColor?: (teamMemberId: string) => string | null
   resolveResourceColor?: (resourceId: string) => string | null
 }
 
@@ -70,6 +72,87 @@ const TRIP_STATUS_MAP: Record<string, ScheduleItem['status']> = {
   draft: 'draft',
   submitted: 'negotiation',
   rejected: 'cancelled',
+}
+
+const TRIP_STATUS_FALLBACK_COLORS: Record<string, string> = {
+  new: '#64748b',
+  approved: '#3b82f6',
+  paid: '#10b981',
+  scheduled: '#f59e0b',
+  completed: '#22c55e',
+  cancelled: '#ef4444',
+}
+
+const ASSIGNMENT_STATUS_FALLBACK_COLORS: Record<string, string> = {
+  planned: '#94a3b8',
+  confirmed: '#10b981',
+  completed: '#059669',
+  cancelled: '#94a3b8',
+}
+
+/** Stable, distinct hues for calendar coloring by driver. */
+const DRIVER_CALENDAR_PALETTE = [
+  '#2563eb',
+  '#059669',
+  '#d97706',
+  '#db2777',
+  '#7c3aed',
+  '#0891b2',
+  '#ea580c',
+  '#4f46e5',
+  '#16a34a',
+  '#c026d3',
+  '#0d9488',
+  '#e11d48',
+] as const
+
+export function resolveStableDriverColor(teamMemberId: string): string {
+  const id = teamMemberId.trim()
+  let hash = 2166136261
+  for (let index = 0; index < id.length; index += 1) {
+    hash ^= id.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return DRIVER_CALENDAR_PALETTE[hash % DRIVER_CALENDAR_PALETTE.length]
+}
+
+const UUID_LIKE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function isUnresolvedIdLabel(value: string): boolean {
+  return UUID_LIKE.test(value.trim())
+}
+
+function resolveHumanLabel(id: string | null | undefined, resolve: (id: string) => string): string | null {
+  if (!id) return null
+  const label = resolve(id)?.trim()
+  if (!label || isUnresolvedIdLabel(label) || label === id) return null
+  return label
+}
+
+function truncateLabel(value: string, max = 28): string {
+  const trimmed = value.trim()
+  if (trimmed.length <= max) return trimmed
+  return `${trimmed.slice(0, max - 1)}…`
+}
+
+function resolveEventColor(params: {
+  teamMemberId?: string | null
+  resourceId?: string | null
+  statusKey: string
+  fallbackMap: Record<string, string>
+  resolvers: FleetCalendarLabelResolvers
+}): string | undefined {
+  if (params.teamMemberId) {
+    const fromDriver = params.resolvers.resolveDriverColor?.(params.teamMemberId)?.trim()
+    if (fromDriver) return fromDriver
+    return resolveStableDriverColor(params.teamMemberId)
+  }
+  if (params.resourceId) {
+    const fromResource = params.resolvers.resolveResourceColor?.(params.resourceId)?.trim()
+    if (fromResource) return fromResource
+  }
+  return params.fallbackMap[params.statusKey] ?? params.fallbackMap[normalizeTripStatus(params.statusKey)]
 }
 
 /** Cancelled / rejected trips stay off planning calendars. */
@@ -165,17 +248,26 @@ export function mapAssignmentsToScheduleItems(
     .filter((assignment) => matchesResourceFilter(assignment.resourceId, selectedResourceId))
     .map((assignment) => {
       const { start, end } = resolveAssignmentWindow(assignment)
-      const driverName = resolvers.resolveDriverName(assignment.teamMemberId)
-      const vehicleLabel = resolvers.resolveResourceLabel(assignment.resourceId)
+      const driverName = resolveHumanLabel(assignment.teamMemberId, resolvers.resolveDriverName)
+      const vehicleLabel = resolveHumanLabel(assignment.resourceId, resolvers.resolveResourceLabel)
+      const titleParts = [driverName, vehicleLabel].filter(Boolean)
+      const color = resolveEventColor({
+        teamMemberId: assignment.teamMemberId,
+        resourceId: assignment.resourceId,
+        statusKey: assignment.status,
+        fallbackMap: ASSIGNMENT_STATUS_FALLBACK_COLORS,
+        resolvers,
+      })
       return {
         id: `assignment-${assignment.id}`,
         kind: 'availability' as const,
-        title: `${driverName} · ${vehicleLabel}`,
+        title: titleParts.join(' · ') || 'Assignment',
         startsAt: start,
         endsAt: end,
         status: ASSIGNMENT_STATUS_MAP[assignment.status] ?? 'draft',
         subjectType: 'member' as const,
         subjectId: assignment.teamMemberId,
+        color,
         metadata: {
           recordType: 'assignment',
           assignmentId: assignment.id,
@@ -212,15 +304,26 @@ export function mapTripsToScheduleItems(
         ? new Date(trip.endedAt)
         : new Date(start.getTime() + 60 * 60 * 1000)
       if (Number.isNaN(end.getTime()) || end <= start) return []
-      const vehicleLabel = trip.resourceId
-        ? resolvers.resolveResourceLabel(trip.resourceId)
-        : resolvers.resolveTripTypeLabel('client')
+      const vehicleLabel = resolveHumanLabel(trip.resourceId, resolvers.resolveResourceLabel)
       const tripTypeLabel = resolvers.resolveTripTypeLabel(trip.tripType)
       const driverName = trip.teamMemberId
-        ? resolvers.resolveDriverName(trip.teamMemberId)
-        : resolvers.resolveUnscheduledDriverLabel?.() ?? '—'
+        ? resolveHumanLabel(trip.teamMemberId, resolvers.resolveDriverName)
+        : resolvers.resolveUnscheduledDriverLabel?.() ?? null
       const route = resolveTripCalendarRoute(trip)
-      const title = options?.omitDriverInTitle ? (route.fromAddress || tripTypeLabel) : driverName
+      const routeSummary =
+        route.fromAddress && route.toAddress
+          ? `${truncateLabel(route.fromAddress, 22)} → ${truncateLabel(route.toAddress, 22)}`
+          : route.fromAddress || route.toAddress || ''
+      const title = options?.omitDriverInTitle
+        ? routeSummary || vehicleLabel || tripTypeLabel
+        : [driverName, routeSummary || vehicleLabel].filter(Boolean).join(' · ') || tripTypeLabel
+      const color = resolveEventColor({
+        teamMemberId: trip.teamMemberId,
+        resourceId: trip.resourceId,
+        statusKey: normalizeTripStatus(trip.status),
+        fallbackMap: TRIP_STATUS_FALLBACK_COLORS,
+        resolvers,
+      })
       return [{
         id: `trip-${trip.id}`,
         kind: 'event' as const,
@@ -230,16 +333,19 @@ export function mapTripsToScheduleItems(
         status: TRIP_STATUS_MAP[normalizeTripStatus(trip.status)] ?? TRIP_STATUS_MAP[trip.status] ?? 'draft',
         subjectType: 'member' as const,
         subjectId: trip.teamMemberId ?? undefined,
+        color,
         metadata: {
           recordType: 'trip',
           tripId: trip.id,
           resourceId: trip.resourceId,
           tripType: trip.tripType,
           tripStatus: trip.status,
+          platform: trip.platform ?? null,
           driverName,
           vehicleLabel,
           fromAddress: route.fromAddress,
           toAddress: route.toAddress,
+          routeSummary,
           stopCount: route.stopCount,
           revenueAmount: trip.revenueAmount ?? null,
           currencyCode: trip.currencyCode ?? null,

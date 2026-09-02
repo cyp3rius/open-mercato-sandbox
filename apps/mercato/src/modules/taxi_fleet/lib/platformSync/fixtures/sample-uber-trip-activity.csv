@@ -1,0 +1,4 @@
+Identyfikator UUID przejazdu,Identyfikator UUID kierowcy,Imię kierowcy,Nazwisko kierowcy,Czas zamówienia przejazdu,Czas zakończenia przejazdu,Odległość przejazdu,Status przejazdu,Rodzaj produktu,Adres odbioru,Adres miejsca docelowego,UUID pojazdu,Numer tablicy rejestracyjnej
+trip-uber-001,driver-uber-42,Jan,Kowalski,2026-08-24 08:00:00,2026-08-24 08:20:00,5.50,completed,UberX,ul. Marszałkowska 1 Warszawa,ul. Puławska 10 Warszawa,veh-uber-100,WX 12345
+trip-uber-002,driver-uber-42,Jan,Kowalski,2026-08-24 09:00:00,2026-08-24 09:15:00,3.10,completed,UberX,Lotnisko Chopina,Centrum,veh-uber-100,WX 12345
+trip-uber-003,driver-uber-42,Jan,Kowalski,2026-08-24 10:00:00,2026-08-24 10:05:00,1.00,rider_cancelled,UberX,Plac Bankowy,,,

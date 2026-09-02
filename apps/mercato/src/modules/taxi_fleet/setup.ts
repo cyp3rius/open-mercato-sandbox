@@ -56,6 +56,7 @@ export const setup: ModuleSetupConfig = {
       'taxi_fleet.financial.income.notify',
       'taxi_fleet.financial.expense.notify',
       'taxi_fleet.settlement.submitted.notify',
+      'taxi_fleet.platform_sync.notify',
     ],
     driver: ['taxi_fleet.view', 'taxi_fleet.driver'],
   },

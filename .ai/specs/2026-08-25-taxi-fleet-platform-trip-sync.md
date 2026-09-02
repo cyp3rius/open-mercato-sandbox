@@ -47,7 +47,7 @@
 | Topic | Decision |
 |-------|----------|
 | Customer validation | **Do not** loosen public `tripCreateSchema` / `tripUpdateSchema`. Optional customer only on dedicated upsert/import command path. |
-| `tripType` | Synced trips use **`tripType: 'other'`** (avoids `client` → customer-required refine). Settlement revenue still counts by `status` + `revenueAmount` + `platform`. |
+| `tripType` | Synced trips use **`tripType: 'platform'`** (dedicated enum; no customer required). Settlement revenue still counts by `status` + `revenueAmount` + `platform`. |
 | Payment type storage | Write **`metadata.tripRequest.paymentType`** (what `readTripPaymentType` reads). Do **not** put payment type only at `metadata.paymentType`. |
 | Import command id | `taxi_fleet.platform_trip.import_csv` (singular). |
 | Events | Declare **before emit**: `taxi_fleet.trip.updated`, `taxi_fleet.platform_sync.completed` in `events.ts`. |
@@ -77,7 +77,7 @@ Weekly settlements remain the aggregation layer: once trips exist, generate/reca
    - Trip: columns `external_trip_id` + existing `platform` (unique per tenant/org when both set).
    - Driver profile: `bolt_driver_id`, `uber_driver_id`, `free_driver_id` (nullable text).
 2. **Normalize** — each adapter maps vendor payload → `PlatformTripDto`.
-3. **Upsert** — command `taxi_fleet.platform_trip.upsert` creates/updates `TaxiFleetTrip` (`tripType: 'other'`, no customer required) with `team_member_id` resolved from profile IDs; status `completed` / `cancelled` / `paid` as mapped. Public trip CRUD schemas stay unchanged.
+3. **Upsert** — command `taxi_fleet.platform_trip.upsert` creates/updates `TaxiFleetTrip` (`tripType: 'platform'`, no customer required) with `team_member_id` resolved from profile IDs; status `completed` / `cancelled` / `paid` as mapped. Public trip CRUD schemas stay unchanged.
 4. **Sync run** — `taxi_fleet.platform_sync.run` for one or all platforms; records a sync-run row (counts, errors); single-flight per org.
 5. **CSV** — same DTO + `taxi_fleet.platform_trip.import_csv`; column mapping validated with zod (see CSV contract).
 6. **Schedule** — UI **Sync now** (Phase 2); Phase 3: `scheduled_jobs` every 60 minutes → worker fans out orgs with enabled credentials.
@@ -95,7 +95,7 @@ Weekly settlements remain the aggregation layer: once trips exist, generate/reca
 | API + CSV same upsert | CSV remains viable when API keys/markets lag |
 | Payouts out of CRM | Explicit product boundary |
 | Soft conflict policy | Platform wins on revenue/status/times unless operator locked fields (see Conflicts) |
-| `tripType: 'other'` for sync | Avoids breaking `client` + customer-required zod/command path used by CRM/PWA create |
+| `tripType: 'platform'` for sync | Dedicated type for marketplace ingest; avoids `client` + customer-required zod path |
 | Payment under `tripRequest` | Matches existing settlement classifier (`readTripPaymentType`) |
 | Dedicated upsert validators | Keeps public create/update API contract stable (BC) |
 
@@ -297,14 +297,52 @@ Upsert persistence defaults:
 
 Row errors collected in sync-run `error_summary` (no abort of whole file unless headers invalid).
 
+#### Bolt portal CSV — „Historia przejazdów” (native export)
+
+Fleet Owner portal export (PL headers; UTF-8 with optional BOM; delimiter `,`). Fixture: `fixtures/sample-bolt-trip-history.csv`. Parser: `parseBoltTripHistoryCsv` — **only** `Status=Ukończone` → `completed`; other statuses skipped.
+
+| Portal column | Target (future) | Notes |
+|---------------|-----------------|-------|
+| `Data` | `startedAt` | `YYYY-MM-DD HH:mm` |
+| `Stawka sfinalizowana` | `endedAt` | Empty on non-completed rows |
+| `Kierowca` | metadata | Display name |
+| `Numer rejestracyjny ` | vehicle plate | **Trailing space in header** |
+| `Model samochodu` | metadata | |
+| `Trasa` | pickup / dropoff | Split on ` → ` |
+| `Przybycie do miejsca odbioru` / `…docelowego` | times | `HH:mm` on `Data` day |
+| `Odległość\|km` | `distanceKm` | |
+| `Cena przejazdu\|ZŁ` | `revenueAmount` | |
+| `Rodzaj płatności` | `paymentType` | `Gotówką`→cash; `W aplikacji` / `Konto Biznes`→electronic |
+| `Status` | status | **Only** `Ukończone` imported → `completed`; other statuses skipped |
+| `Indywidualny numer identyfikacyjny` | `platformDriverId` | Driver UUID — **not** trip id |
+| `Telefon` / `Kategoria` / `Typ` / fees / tips | metadata | Do not log phones |
+
+**Decision:** portal CSV has **no** `order_reference`. Synthetic `externalTripId` = stable hash of `driver_uuid|Data|Trasa|Cena przejazdu|Status`. Live API uses `order_reference`.
+
 ### Org credentials (settings)
 
 Store under taxi fleet org settings (encrypted at rest per platform encryption helpers):
 
 - `platformSync.bolt` / `.uber` / `.free`: `{ enabled, apiBaseUrl?, clientId?, clientSecret?, refreshToken?, companyId?, ... }`
+- **Bolt configured when**: `enabled` + `clientId` + `clientSecret` + `companyId` (`apiBaseUrl` optional; default `https://node.bolt.eu/fleet-integration-gateway`). OIDC token URL is fixed (`https://oidc.bolt.eu/token`, scope `fleet-integration:api`); refresh-token field unused for Bolt.
 - Secrets never returned on GET settings without mask; never logged.
 
-Exact OAuth/API shapes are adapter-private; settings UI exposes only fields each adapter declares.
+Exact OAuth/API shapes are adapter-private; settings UI exposes only fields each adapter declares. Bolt: **Test connection** button → `POST .../test-connection`.
+
+### Bolt Fleet Integration Gateway (live lock-in)
+
+Docs: [fleetIntegrationGatewayAuth](https://apidocs.bolt.eu/fleetIntegration/fleetIntegrationGatewayAuth/).
+
+| Concern | Value |
+|---------|-------|
+| Token | `POST https://oidc.bolt.eu/token` (`client_credentials`, scope `fleet-integration:api`); cache + refresh ~60s before expiry |
+| API base | `https://node.bolt.eu/fleet-integration-gateway` (override via `apiBaseUrl`) |
+| Orders | `POST /fleetIntegration/v1/getFleetOrders` |
+| Smoke | `GET /fleetIntegration/v1/getCompanies`; optional `POST /fleetIntegration/v1/test` |
+| Trip id | `order_reference` |
+| Driver id | `driver_uuid` |
+
+CRM trip mapping from `FleetOrder` is **not** shipped yet; Sync now may authenticate/fetch and report “mapping not implemented”.
 
 ## API Contracts
 
@@ -317,6 +355,13 @@ All routes: `requireAuth` + feature guards; filter by `organization_id` / tenant
 - **Body**: `{ platforms?: ('uber'|'bolt'|'free')[], windowFrom?: string, windowTo?: string }`
 - **Response**: `{ runId, status, fetchedCount, upsertedCount, skippedCount, errorCount }`
 - **Errors**: 400 validation; 409 no credentials **or** sync already running for org; 502 adapter upstream (mapped, no secret leak)
+
+### POST `/api/taxi_fleet/platform-sync/test-connection`
+
+- **Feature**: `taxi_fleet.manage_platform_sync`
+- **Body**: `{ platform: 'bolt' }` (only Bolt in this iteration)
+- **Response**: `{ ok: true, platform, apiBaseUrl, companyCount, companyIdMatched }`
+- **Errors**: 409 credentials incomplete; 4xx/5xx upstream mapped without leaking secrets
 
 ### POST `/api/taxi_fleet/platform-sync/import-csv`
 
@@ -366,7 +411,7 @@ i18n: all labels/errors in `en.json` / `pl.json` under `taxi_fleet.platformSync.
 
 1. Migration: `external_trip_id`, profile platform ID columns, unique indexes, `taxi_fleet_platform_sync_runs`.
 2. Declare events `taxi_fleet.trip.updated`, `taxi_fleet.platform_sync.completed`; ACL `manage_platform_sync` + setup grants.
-3. Zod `PlatformTripDto` + `taxi_fleet.platform_trip.upsert` (`tripType: 'other'`, customer null, payment → `metadata.tripRequest.paymentType`, undo via `extractUndoPayload`).
+3. Zod `PlatformTripDto` + `taxi_fleet.platform_trip.upsert` (`tripType: 'platform'`, customer null, payment → `metadata.tripRequest.paymentType`, undo via `extractUndoPayload`).
 4. Driver profile API/UI for three IDs.
 5. Unit tests: upsert idempotency, mapping, skip unmapped driver, paymentType → tripRequest, **manual create still requires customer**.
 
@@ -511,7 +556,7 @@ i18n: all labels/errors in `en.json` / `pl.json` under `taxi_fleet.platformSync.
 
 ### Gaps / Follow-ups
 
-- Exact Bolt/Uber/Free API field maps deferred to Phase 3 after per-vendor discovery spike.
+- Bolt/Uber/Free **CRM trip mapping** from live payloads: Bolt Gateway auth + client shipped; `FleetOrder` → `PlatformTripDto` still a follow-up. Bolt portal CSV parser shipped (`parseBoltTripHistoryCsv`).
 - Optional later: migrate Strapi inject idempotency to `external_trip_id` (out of scope).
 
 ### Verdict
@@ -542,3 +587,6 @@ i18n: all labels/errors in `en.json` / `pl.json` under `taxi_fleet.platformSync.
 | 2026-08-25 | Skeleton + open questions. |
 | 2026-08-25 | Full spec after Q1–Q6: all three platforms; API+CSV; profile driver IDs; optional customer; CRM+PWA; Sync now + 60 min cron; payouts explicitly out of scope. |
 | 2026-08-25 | Pre-implement remediation: tripRequest.paymentType, tripType other, no public schema loosen, CSV headers, events, singular import_csv, scheduler/single-flight, security/undo/ACL details. |
+| 2026-08-29 | UX follow-up: `tripType: platform`; async CSV import (`queued` + `job_payload`); Uber addresses/vehicle columns + resource CF IDs; filename date-range check; ingest sidebar vs OCR; History in import dialog. |
+| 2026-09-01 | Bolt Fleet Integration Gateway lock-in (OIDC `oidc.bolt.eu`, scope `fleet-integration:api`, base `node.bolt.eu/fleet-integration-gateway`); portal CSV „Historia przejazdów” contract + fixture; test-connection API; trip mapping deferred. |
+| 2026-09-01 | Bolt CSV: `parseBoltTripHistoryCsv` (only Ukończone; synthetic `boltcsv:` external ids); wired into async import + UI hints. |

@@ -9,6 +9,8 @@ export type PlatformTripUpsertResult =
       ok: true
       tripId: string
       created: boolean
+      /** Present when an existing platform trip was left unchanged (CSV import). */
+      duplicate?: boolean
     }
   | {
       ok: false

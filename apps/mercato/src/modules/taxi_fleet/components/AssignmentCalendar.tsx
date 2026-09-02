@@ -16,8 +16,13 @@ import {
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useTaxiFleetLabels } from './useTaxiFleetLabels'
 import type { TripCreateSeed } from './TripCreateDialog'
-import { TripScheduleEventCard } from './TripScheduleEventCard'
+import { TripScheduleEventCard, AssignmentScheduleEventCard } from './TripScheduleEventCard'
 import { TripCalendarDetailsPanel } from './TripCalendarDetailsPanel'
+import {
+  buildFleetCalendarDriverLegendEntries,
+  FleetCalendarDriverLegend,
+} from './FleetCalendarDriverLegend'
+import { useEnsureFleetDriverNames } from './useFleetDriverDirectory'
 
 export type { CalendarAssignment, CalendarTrip }
 
@@ -27,6 +32,10 @@ type AssignmentCalendarProps = {
   selectedTeamMemberId?: string | null
   selectedResourceId?: string | null
   tripsOnly?: boolean
+  /** When true, trip cards omit the driver line (e.g. driver profile calendar). */
+  omitDriverInTitle?: boolean
+  /** When set, overrides default legend visibility (`!omitDriverInTitle`). */
+  showDriverLegend?: boolean
   resolveDriverName: (teamMemberId: string) => string
   resolveResourceLabel: (resourceId: string) => string
   resolveResourceColor?: (resourceId: string) => string | null
@@ -44,6 +53,8 @@ export function AssignmentCalendar({
   selectedTeamMemberId,
   selectedResourceId,
   tripsOnly = false,
+  omitDriverInTitle = false,
+  showDriverLegend,
   resolveDriverName,
   resolveResourceLabel,
   resolveResourceColor,
@@ -56,8 +67,10 @@ export function AssignmentCalendar({
 }: AssignmentCalendarProps) {
   const t = useT()
   const { resolveTripTypeLabel } = useTaxiFleetLabels()
+  const ensureDriverNames = useEnsureFleetDriverNames()
   const [selectedTripItem, setSelectedTripItem] = React.useState<ScheduleItem | null>(null)
   const [panelOpen, setPanelOpen] = React.useState(false)
+  const [nameOverrides, setNameOverrides] = React.useState<Record<string, string>>({})
 
   const colorsKey = React.useMemo(
     () =>
@@ -77,20 +90,29 @@ export function AssignmentCalendar({
     [resolveResourceColor, resourceColors],
   )
 
+  const resolveDriverLabel = React.useCallback(
+    (teamMemberId: string) => {
+      const override = nameOverrides[teamMemberId]?.trim()
+      if (override) return override
+      return resolveDriverName(teamMemberId)
+    },
+    [nameOverrides, resolveDriverName],
+  )
+
   const scheduleItems = React.useMemo(
     () =>
       buildFleetCalendarItems(
         tripsOnly ? [] : assignments,
         trips,
         {
-          resolveDriverName,
+          resolveDriverName: resolveDriverLabel,
           resolveResourceLabel,
           resolveTripTypeLabel,
           resolveUnscheduledDriverLabel: () => t('taxi_fleet.trips.unassigned', 'Unassigned'),
           resolveResourceColor: resolveColor,
         },
         selectedTeamMemberId,
-        tripsOnly ? { omitDriverInTitle: true } : undefined,
+        omitDriverInTitle ? { omitDriverInTitle: true } : undefined,
         selectedResourceId,
       ),
     // colorsKey forces rebuild when vehicle colors arrive asynchronously
@@ -98,8 +120,9 @@ export function AssignmentCalendar({
     [
       assignments,
       colorsKey,
+      omitDriverInTitle,
       resolveColor,
-      resolveDriverName,
+      resolveDriverLabel,
       resolveResourceLabel,
       resolveTripTypeLabel,
       selectedResourceId,
@@ -109,6 +132,33 @@ export function AssignmentCalendar({
       tripsOnly,
     ],
   )
+
+  const visibleDriverIdsKey = React.useMemo(() => {
+    const ids = new Set<string>()
+    for (const trip of trips) {
+      if (trip.teamMemberId) ids.add(trip.teamMemberId)
+    }
+    if (!tripsOnly) {
+      for (const assignment of assignments) {
+        if (assignment.teamMemberId) ids.add(assignment.teamMemberId)
+      }
+    }
+    if (selectedTeamMemberId) ids.add(selectedTeamMemberId)
+    return [...ids].sort().join(',')
+  }, [assignments, selectedTeamMemberId, trips, tripsOnly])
+
+  React.useEffect(() => {
+    const ids = visibleDriverIdsKey.split(',').filter(Boolean)
+    if (!ids.length) return
+    let cancelled = false
+    void ensureDriverNames(ids).then((loaded) => {
+      if (cancelled || !Object.keys(loaded).length) return
+      setNameOverrides((current) => ({ ...current, ...loaded }))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [ensureDriverNames, visibleDriverIdsKey])
 
   const handleItemClick = React.useCallback(
     (item: ScheduleItem) => {
@@ -142,12 +192,30 @@ export function AssignmentCalendar({
     if (item.metadata?.recordType === 'trip') {
       return <TripScheduleEventCard item={item} />
     }
+    if (item.metadata?.recordType === 'assignment') {
+      return <AssignmentScheduleEventCard item={item} />
+    }
     return <span className="truncate text-xs font-medium">{item.title}</span>
   }, [])
 
+  const driverLegendEntries = React.useMemo(
+    () =>
+      buildFleetCalendarDriverLegendEntries(
+        scheduleItems,
+        resolveDriverLabel,
+        t('taxi_fleet.trips.unassigned', 'Unassigned'),
+        t('taxi_fleet.calendar.unknownDriver', 'Unknown driver'),
+      ),
+    [resolveDriverLabel, scheduleItems, t],
+  )
+
+  const showDriverLegendBar =
+    (showDriverLegend ?? !omitDriverInTitle) && driverLegendEntries.length > 0
+
   return (
-    <>
+    <div className="flex h-full min-h-0 max-h-full flex-1 flex-col gap-3 overflow-hidden">
       <ScheduleView
+        className="min-h-0 flex-1"
         items={scheduleItems}
         view={view}
         range={range}
@@ -158,6 +226,7 @@ export function AssignmentCalendar({
         showTimezone={false}
         renderEvent={renderEvent}
       />
+      {showDriverLegendBar ? <FleetCalendarDriverLegend entries={driverLegendEntries} /> : null}
       <TripCalendarDetailsPanel
         open={panelOpen}
         item={selectedTripItem}
@@ -166,6 +235,6 @@ export function AssignmentCalendar({
           if (!open) setSelectedTripItem(null)
         }}
       />
-    </>
+    </div>
   )
 }

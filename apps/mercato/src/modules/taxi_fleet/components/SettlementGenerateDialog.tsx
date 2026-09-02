@@ -8,7 +8,7 @@ import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { TAXI_FLEET_BASE } from '../backend/taxi-fleet/paths'
-import { listRecentMondays } from '../lib/weekUtils'
+import { listRecentMondays, normalizeDateOnly } from '../lib/weekUtils'
 import { useFleetDriverDirectory } from './useFleetDriverDirectory'
 import {
   TaxiFleetDialogFrame,
@@ -34,6 +34,8 @@ type SettlementGenerateDialogProps = {
 
 type SettlementListItem = {
   weekStart?: string
+  teamMemberId?: string
+  team_member_id?: string
 }
 
 function firstUnsettledWeek(recentWeeks: string[], settledWeekStarts: Set<string>): string {
@@ -91,14 +93,29 @@ export function SettlementGenerateDialog({
       setLoadingWeeks(true)
       const params = new URLSearchParams({
         page: '1',
-        pageSize: '200',
+        pageSize: '100',
         teamMemberId: effectiveDriverId,
       })
       const call = await apiCall<{ items: SettlementListItem[] }>(`/api/taxi_fleet/settlements?${params}`)
       if (cancelled) return
+      if (!call.ok) {
+        setRecentWeeks([])
+        setSettledWeekStarts(new Set())
+        setLoadingWeeks(false)
+        flash(
+          (call.result as { error?: string } | null)?.error ??
+            t('taxi_fleet.settlements.loadWeeksError', 'Could not load existing settlement weeks.'),
+          'error',
+        )
+        return
+      }
       const existing = new Set(
         (Array.isArray(call.result?.items) ? call.result.items : [])
-          .map((item) => (typeof item.weekStart === 'string' ? item.weekStart : ''))
+          .filter((item) => {
+            const memberId = item.teamMemberId ?? item.team_member_id ?? ''
+            return memberId === effectiveDriverId
+          })
+          .map((item) => normalizeDateOnly(item.weekStart))
           .filter((value) => value.length > 0),
       )
       setRecentWeeks(listRecentMondays())
@@ -110,7 +127,7 @@ export function SettlementGenerateDialog({
     return () => {
       cancelled = true
     }
-  }, [effectiveDriverId, open])
+  }, [effectiveDriverId, open, t])
 
   const handleDriverChange = React.useCallback((teamMemberId: string) => {
     setSelectedDriverId(teamMemberId)
@@ -169,12 +186,18 @@ export function SettlementGenerateDialog({
       if (!organizationId || !tenantId) {
         throw new Error(t('taxi_fleet.errors.generic', 'Operation failed.'))
       }
-      const teamMemberId = lockedTeamMemberId ?? ('teamMemberId' in values ? values.teamMemberId : '')
+      // Prefer dialog driver state over form values — form remount races can send the previous driver.
+      const teamMemberId = effectiveDriverId ?? lockedTeamMemberId ?? ('teamMemberId' in values ? values.teamMemberId : '')
       if (!teamMemberId) {
         throw new Error(t('taxi_fleet.settlements.pickDriverFirst', 'Select a driver to choose the settlement week.'))
       }
       if (!values.weekStart || settledWeekStarts.has(values.weekStart)) {
-        throw new Error(t('taxi_fleet.settlements.weekAlreadySettled', 'This week already has a settlement.'))
+        throw new Error(
+          t(
+            'taxi_fleet.settlements.weekAlreadySettled',
+            'This driver already has a settlement for this week.',
+          ),
+        )
       }
       const call = await apiCall<{ id?: string | null }>('/api/taxi_fleet/settlements/generate', {
         method: 'POST',
@@ -187,7 +210,10 @@ export function SettlementGenerateDialog({
         }),
       })
       if (!call.ok) {
-        throw new Error(t('taxi_fleet.settlements.form.saveError', 'Could not generate settlement.'))
+        throw new Error(
+          (call.result as { error?: string } | null)?.error ??
+            t('taxi_fleet.settlements.form.saveError', 'Could not generate settlement.'),
+        )
       }
       const newId = typeof call.result?.id === 'string' ? call.result.id : ''
       if (!newId) throw new Error(t('taxi_fleet.settlements.form.missingId', 'No id returned.'))
@@ -196,7 +222,7 @@ export function SettlementGenerateDialog({
       onGenerated?.()
       router.push(`${TAXI_FLEET_BASE}/settlements/${encodeURIComponent(newId)}`)
     },
-    [lockedTeamMemberId, onGenerated, onOpenChange, organizationId, router, settledWeekStarts, t, tenantId],
+    [effectiveDriverId, lockedTeamMemberId, onGenerated, onOpenChange, organizationId, router, settledWeekStarts, t, tenantId],
   )
 
   return (

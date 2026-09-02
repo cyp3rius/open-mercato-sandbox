@@ -26,6 +26,7 @@ import {
 import { TripCrudForm } from '../../../../components/TripCrudForm'
 import { TripReceiptOcrPanel } from '../../../../components/TripReceiptOcrPanel'
 import { PlatformTripIngestBadge } from '../../../../components/PlatformTripIngestBadge'
+import { PlatformTripIngestPanel } from '../../../../components/PlatformTripIngestPanel'
 import { Notice } from '@open-mercato/ui/primitives/Notice'
 import { isPlatformIngestedTrip } from '../../../../lib/platformSync/platformTripIngest'
 import {
@@ -93,7 +94,8 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
       return
     }
     setRow(item)
-    if (item.startedAt && item.endedAt) {
+    const lockMode = tripDetailLockMode(normalizeTripStatus(item.status))
+    if (item.startedAt && item.endedAt && lockMode !== 'full') {
       const params = new URLSearchParams({
         startedAt: item.startedAt,
         endedAt: item.endedAt,
@@ -258,6 +260,7 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
                 )}
               </Notice>
               <PlatformTripIngestBadge
+                variant="detail"
                 metadata={row.metadata ?? null}
                 platform={row.platform ?? null}
                 externalTripId={row.externalTripId ?? null}
@@ -280,6 +283,17 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
             lockStatus={canEditTrip ? normalizedStatus : null}
             allowDriverEdit={canEditTrip && tripDetailAllowsDriverEdit(normalizedStatus)}
             onDelete={canManageTrips && lockMode !== 'full' ? handleDelete : undefined}
+            sidebarExtra={
+              isPlatformIngestedTrip(row.metadata ?? null) ? (
+                <PlatformTripIngestPanel
+                  metadata={row.metadata ?? null}
+                  platform={row.platform ?? null}
+                  externalTripId={row.externalTripId ?? null}
+                />
+              ) : (
+                <TripReceiptOcrPanel tripId={row.id} canManage={canManageTrips} />
+              )
+            }
             extraActions={
               availableActions.length > 0 ? (
                 <div className="flex flex-wrap items-center gap-2">
@@ -310,7 +324,6 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
               void load()
             }}
           />
-          <TripReceiptOcrPanel tripId={row.id} canManage={canManageTrips} />
           {suggestions.length > 0 ? (
             <section className="mt-6 space-y-3 rounded-lg border bg-card px-4 py-3">
               <h2 className="text-sm font-medium">{t('taxi_fleet.trips.suggestedDrivers', 'Suggested drivers')}</h2>

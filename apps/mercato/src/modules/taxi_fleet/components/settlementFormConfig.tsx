@@ -94,6 +94,7 @@ export function buildSettlementGenerateFields(
           value={typeof value === 'string' && value.length ? value : null}
           onChange={(next) => setValue(next ?? '')}
           options={driverOptions}
+          minQuery={0}
           fetchOptions={async (query) =>
             driverOptions.filter((option) =>
               !query?.trim() ? true : option.title.toLowerCase().includes(query.trim().toLowerCase()),
@@ -152,6 +153,7 @@ export function buildSettlementGenerateDialogFields(
             options.onDriverChange?.(nextValue)
           }}
           options={driverOptions}
+          minQuery={0}
           fetchOptions={async (query) =>
             driverOptions.filter((option) =>
               !query?.trim() ? true : option.title.toLowerCase().includes(query.trim().toLowerCase()),
@@ -192,7 +194,11 @@ export function buildSettlementGenerateDialogFields(
     return fields
   }
 
-  if (options.recentWeeks.length === 0) {
+  const availableWeeks = options.recentWeeks.filter(
+    (weekStart) => !options.settledWeekStarts.has(weekStart),
+  )
+
+  if (availableWeeks.length === 0) {
     fields.push({
       id: 'weekStart',
       type: 'custom',
@@ -207,8 +213,6 @@ export function buildSettlementGenerateDialogFields(
     return fields
   }
 
-  const settledLabel = t('taxi_fleet.settlements.weekSettledLabel', 'Already settled')
-
   fields.push({
     id: 'weekStart',
     type: 'select',
@@ -216,14 +220,10 @@ export function buildSettlementGenerateDialogFields(
     description: t('taxi_fleet.settlements.generateWeekHint', 'Select the Monday that starts the settlement week (ISO).'),
     required: true,
     layout: 'full',
-    options: options.recentWeeks.map((weekStart) => {
-      const settled = options.settledWeekStarts.has(weekStart)
-      return {
-        value: weekStart,
-        label: settled ? `${formatWeekRange(weekStart)} — ${settledLabel}` : formatWeekRange(weekStart),
-        disabled: settled,
-      }
-    }),
+    options: availableWeeks.map((weekStart) => ({
+      value: weekStart,
+      label: formatWeekRange(weekStart),
+    })),
   })
 
   return fields

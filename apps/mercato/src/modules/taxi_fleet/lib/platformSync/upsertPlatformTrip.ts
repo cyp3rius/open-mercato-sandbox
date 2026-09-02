@@ -4,6 +4,7 @@ import { TaxiFleetTrip } from '../../data/entities'
 import type { PlatformTripUpsertInput } from '../../data/validators'
 import { buildPlatformTripMetadata } from './platformTripMetadata'
 import { resolveTeamMemberForPlatformDriver } from './resolvePlatformDriver'
+import { resolvePlatformTripVehicle } from './resolvePlatformTripVehicle'
 import type { PlatformTripUpsertResult } from './types'
 
 function formatDistanceKm(value: number | null | undefined): string | null {
@@ -100,6 +101,11 @@ export async function upsertPlatformTrip(
     return { ok: false, skipReason: 'driver_reassignment_conflict' }
   }
 
+  // CSV import must not rewrite existing platform trips — report as duplicates.
+  if (existing && input.ingestSource === 'platform_csv') {
+    return { ok: true, tripId: existing.id, created: false, duplicate: true }
+  }
+
   const now = new Date()
   const metadata = buildPlatformTripMetadata({
     ingestSource: input.ingestSource,
@@ -107,16 +113,30 @@ export async function upsertPlatformTrip(
     paymentType: input.paymentType,
     rawExternalStatus: input.rawExternalStatus,
     syncedAt: now,
+    fromAddress: input.fromAddress,
+    toAddress: input.toAddress,
+    platformVehicleId: input.platformVehicleId,
+    vehiclePlate: input.vehiclePlate,
   })
 
   if (!existing) {
+    const vehicle = await resolvePlatformTripVehicle(em, {
+      tenantId: input.tenantId,
+      organizationId: input.organizationId,
+      platform: input.platform,
+      teamMemberId,
+      startedAt: input.startedAt,
+      endedAt: input.endedAt ?? null,
+      platformVehicleId: input.platformVehicleId,
+      vehiclePlate: input.vehiclePlate,
+    })
     const record = em.create(TaxiFleetTrip, {
       tenantId: input.tenantId,
       organizationId: input.organizationId,
       teamMemberId,
-      resourceId: null,
-      assignmentId: null,
-      tripType: 'other',
+      resourceId: vehicle.resourceId,
+      assignmentId: vehicle.assignmentId,
+      tripType: 'platform',
       platform: input.platform,
       externalTripId: input.externalTripId,
       startedAt: input.startedAt,
@@ -147,6 +167,24 @@ export async function upsertPlatformTrip(
   existing.externalTripId = input.externalTripId
   if (!existing.teamMemberId) {
     existing.teamMemberId = teamMemberId
+  }
+  if (!existing.resourceId) {
+    const vehicle = await resolvePlatformTripVehicle(em, {
+      tenantId: input.tenantId,
+      organizationId: input.organizationId,
+      platform: input.platform,
+      teamMemberId: existing.teamMemberId ?? teamMemberId,
+      startedAt: input.startedAt,
+      endedAt: input.endedAt ?? null,
+      platformVehicleId: input.platformVehicleId,
+      vehiclePlate: input.vehiclePlate,
+    })
+    if (vehicle.resourceId) {
+      existing.resourceId = vehicle.resourceId
+      if (!existing.assignmentId && vehicle.assignmentId) {
+        existing.assignmentId = vehicle.assignmentId
+      }
+    }
   }
   existing.metadata = mergePlatformTripMetadata(existing.metadata, metadata)
   existing.updatedAt = now

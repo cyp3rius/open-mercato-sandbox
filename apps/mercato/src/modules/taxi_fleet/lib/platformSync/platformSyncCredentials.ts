@@ -7,12 +7,20 @@ import type { TaxiFleetTripPlatform } from '../tripPlatforms'
 
 export function isPlatformSyncPlatformConfigured(
   settings: TaxiFleetPlatformSyncPlatformSettings,
+  platform?: TaxiFleetTripPlatform,
 ): boolean {
   if (!settings.enabled) return false
-  const apiBaseUrl = settings.apiBaseUrl?.trim()
-  if (!apiBaseUrl) return false
   const clientSecret = settings.clientSecret?.trim()
   if (!clientSecret) return false
+
+  if (platform === 'bolt') {
+    const clientId = settings.clientId?.trim()
+    const companyId = settings.companyId?.trim()
+    return Boolean(clientId && companyId)
+  }
+
+  const apiBaseUrl = settings.apiBaseUrl?.trim()
+  if (!apiBaseUrl) return false
   return true
 }
 
@@ -21,7 +29,9 @@ export function listEnabledPlatformSyncPlatforms(
   filter?: TaxiFleetTripPlatform[],
 ): TaxiFleetTripPlatform[] {
   const candidates: TaxiFleetTripPlatform[] = filter?.length ? filter : ['bolt', 'uber', 'free']
-  return candidates.filter((platform) => isPlatformSyncPlatformConfigured(platformSync[platform]))
+  return candidates.filter((platform) =>
+    isPlatformSyncPlatformConfigured(platformSync[platform], platform),
+  )
 }
 
 export function hasConfiguredPlatformSync(settings: TaxiFleetSettings): boolean {

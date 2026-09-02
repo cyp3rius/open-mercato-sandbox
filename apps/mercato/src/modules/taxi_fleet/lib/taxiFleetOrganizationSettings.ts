@@ -107,6 +107,7 @@ export async function saveTaxiFleetOrganizationSettings(
       pricing: normalized.pricing,
       paypal: normalized.paypal,
       calendar: normalized.calendar,
+      platformSync: normalized.platformSync,
       customerEmails: normalized.customerEmails,
       settlementIndicatorRanges: normalized.settlementIndicatorRanges,
     }

@@ -32,6 +32,7 @@ import {
 import { ensureOrganizationScope, ensureTenantScope, numericToString } from './shared'
 import { assertDriverTripShift } from '../lib/assertDriverTripShift'
 import { assertNoTripOverlap } from '../lib/assertNoTripOverlap'
+import { isTripDetailFieldEditable, tripDetailLockMode } from '../lib/tripDetailWorkflow'
 import {
   recalculateWeeklySettlementsForTrip,
   resolveTripWeekStart,
@@ -156,6 +157,25 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
     await assertDriverScopedTeamMember(ctx, row.teamMemberId ?? '')
 
     const { translate } = await resolveTranslations()
+    if (tripDetailLockMode(row.status) === 'full') {
+      throw new CrudHttpError(409, {
+        error: translate(
+          'taxi_fleet.trips.errors.locked',
+          'This trip is completed or cancelled and cannot be edited.',
+        ),
+      })
+    }
+    if (
+      parsed.teamMemberId !== undefined &&
+      !isTripDetailFieldEditable(row.status, 'teamMemberId')
+    ) {
+      throw new CrudHttpError(400, {
+        error: translate(
+          'taxi_fleet.trips.errors.driverLocked',
+          'Driver cannot be changed for this trip status.',
+        ),
+      })
+    }
     const previousTeamMemberId = row.teamMemberId ?? null
     const previousWeekStart = resolveTripWeekStart(row)
     if (parsed.teamMemberId !== undefined) {
