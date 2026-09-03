@@ -7,6 +7,7 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Button } from '@open-mercato/ui/primitives/button'
 import type { DriverPlace } from '../../lib/driverOffline/tripTypes'
 import { endsDistanceKm, formatCoordAddress } from '../../lib/driverOffline/tripTypes'
+import { DriverDateTimeField } from './DriverDateTimeField'
 import {
   driverFieldClass,
   driverLabelClass,
@@ -321,34 +322,22 @@ export function DriverRouteStep({
         onGeoError={onError}
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label htmlFor="startedAt" className={driverLabelClass}>
-            {t('taxi_fleet.driverApp.trips.startedAt', 'Started at')}
-          </label>
-          <input
-            id="startedAt"
-            type="datetime-local"
-            disabled={disabled}
-            value={value.startedAtLocal}
-            onChange={(event) => onChange({ ...value, startedAtLocal: event.target.value })}
-            className={driverFieldClass}
-          />
-        </div>
+      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+        <DriverDateTimeField
+          id="startedAt"
+          label={t('taxi_fleet.driverApp.trips.startedAt', 'Started at')}
+          value={value.startedAtLocal}
+          disabled={disabled}
+          onChange={(startedAtLocal) => onChange({ ...value, startedAtLocal })}
+        />
         {requireEndedAt ? (
-          <div>
-            <label htmlFor="endedAt" className={driverLabelClass}>
-              {t('taxi_fleet.driverApp.trips.endedAt', 'Ended at')}
-            </label>
-            <input
-              id="endedAt"
-              type="datetime-local"
-              disabled={disabled}
-              value={value.endedAtLocal}
-              onChange={(event) => onChange({ ...value, endedAtLocal: event.target.value })}
-              className={driverFieldClass}
-            />
-          </div>
+          <DriverDateTimeField
+            id="endedAt"
+            label={t('taxi_fleet.driverApp.trips.endedAt', 'Ended at')}
+            value={value.endedAtLocal}
+            disabled={disabled}
+            onChange={(endedAtLocal) => onChange({ ...value, endedAtLocal })}
+          />
         ) : null}
       </div>
 

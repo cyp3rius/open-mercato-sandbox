@@ -8,6 +8,7 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { DriverCostTypePicker } from '../../../../components/driverApp/DriverCostTypePicker'
+import { DriverDateTimeField } from '../../../../components/driverApp/DriverDateTimeField'
 import { DriverVatRatePicker } from '../../../../components/driverApp/DriverVatRatePicker'
 import { DriverReceiptFields } from '../../../../components/driverApp/DriverReceiptFields'
 import { DriverShell } from '../../../../components/driverApp/DriverShell'
@@ -205,19 +206,13 @@ export default function DriverExpenseCreatePage() {
           </div>
         </div>
 
-        <div>
-          <label htmlFor="expenseOccurredAt" className={driverLabelClass}>
-            {t('taxi_fleet.driverApp.expenses.occurredAt', 'When')}
-          </label>
-          <input
-            id="expenseOccurredAt"
-            type="datetime-local"
-            disabled={busy}
-            value={occurredAtLocal}
-            onChange={(event) => setOccurredAtLocal(event.target.value)}
-            className={driverFieldClass}
-          />
-        </div>
+        <DriverDateTimeField
+          id="expenseOccurredAt"
+          label={t('taxi_fleet.driverApp.expenses.occurredAt', 'When')}
+          value={occurredAtLocal}
+          disabled={busy}
+          onChange={setOccurredAtLocal}
+        />
 
         <div>
           <label htmlFor="expenseNotes" className={driverLabelClass}>

@@ -72,8 +72,9 @@ function ensureDriverViewportMeta() {
   const pairs: Array<[string, string]> = [
     ['mobile-web-app-capable', 'yes'],
     ['apple-mobile-web-app-capable', 'yes'],
+    // Light status bar + white theme for iOS standalone PWA.
     ['apple-mobile-web-app-status-bar-style', 'default'],
-    ['apple-mobile-web-app-title', 'Driver'],
+    ['apple-mobile-web-app-title', 'RS Moto Taxi'],
     ['format-detection', 'telephone=no'],
     ['theme-color', '#ffffff'],
   ]
@@ -89,6 +90,10 @@ function ensureDriverViewportMeta() {
     meta.content = content
   }
 
+  // Force light chrome behind iOS safe areas (status bar / home indicator).
+  document.documentElement.style.backgroundColor = '#ffffff'
+  document.body.style.backgroundColor = '#ffffff'
+
   const manifestId = 'driver-web-manifest'
   if (!document.getElementById(manifestId)) {
     const link = document.createElement('link')
@@ -97,6 +102,16 @@ function ensureDriverViewportMeta() {
     link.href = '/driver/manifest.webmanifest'
     document.head.appendChild(link)
   }
+
+  const touchIconId = 'driver-apple-touch-icon'
+  let touchIcon = document.getElementById(touchIconId) as HTMLLinkElement | null
+  if (!touchIcon) {
+    touchIcon = document.createElement('link')
+    touchIcon.id = touchIconId
+    touchIcon.rel = 'apple-touch-icon'
+    document.head.appendChild(touchIcon)
+  }
+  touchIcon.href = '/driver/apple-touch-icon.png'
 }
 
 export function DriverShell({ children, title, shiftActive, assignmentId }: Props) {
@@ -106,8 +121,9 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
   useDriverDefaultLocale()
   useDriverForcedLightTheme()
   const online = useDriverOnlineStatus()
-  const gpsStatus = useDriverGpsStatus()
+  const { status: gpsStatus, requestAccess: requestGpsAccess } = useDriverGpsStatus()
   const { canInstall, install } = useDriverPwa()
+  const [gpsBusy, setGpsBusy] = React.useState(false)
   const [pending, setPending] = React.useState(0)
   const [driverName, setDriverName] = React.useState<string | null>(null)
   const [liveTripId, setLiveTripId] = React.useState<string | null>(null)
@@ -261,23 +277,39 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
               ? t('taxi_fleet.driverApp.online', 'Online')
               : t('taxi_fleet.driverApp.offline', 'Offline')}
           </span>
-          <span
+          <button
+            type="button"
+            disabled={gpsBusy || gpsStatus === 'ready'}
+            onClick={() => {
+              if (gpsStatus === 'ready' || gpsBusy) return
+              setGpsBusy(true)
+              void requestGpsAccess().finally(() => setGpsBusy(false))
+            }}
             className={`${
               gpsStatus === 'ready' ? driverBadgeSuccessClass : driverBadgeWarningClass
-            } gap-1.5`}
+            } gap-1.5 disabled:opacity-100`}
+            title={
+              gpsStatus === 'ready'
+                ? t('taxi_fleet.driverApp.gpsReady', 'Location access granted')
+                : t('taxi_fleet.driverApp.gpsTapToEnable', 'Tap to enable location')
+            }
           >
             <span
               className={
                 gpsStatus === 'ready'
                   ? driverStatusLampSuccessClass
-                  : gpsStatus === 'denied'
-                    ? driverStatusLampWarningClass
-                    : driverStatusLampDangerClass
+                  : gpsStatus === 'denied' || gpsStatus === 'unavailable'
+                    ? driverStatusLampDangerClass
+                    : driverStatusLampWarningClass
               }
               aria-hidden
             />
-            {t('taxi_fleet.driverApp.gps', 'GPS')}
-          </span>
+            {gpsStatus === 'ready'
+              ? t('taxi_fleet.driverApp.gps', 'GPS')
+              : gpsBusy
+                ? t('taxi_fleet.driverApp.gpsRequesting', 'GPS…')
+                : t('taxi_fleet.driverApp.gpsEnable', 'Enable GPS')}
+          </button>
           {pending > 0 ? (
             <span className={driverBadgeInfoClass}>
               {t('taxi_fleet.driverApp.pendingSync', 'Pending sync')}: {pending}
@@ -294,6 +326,39 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
             </span>
           ) : null}
         </div>
+        {gpsStatus !== 'ready' ? (
+          <div className="mx-auto w-full max-w-lg px-4 pb-3">
+            <button
+              type="button"
+              disabled={gpsBusy}
+              onClick={() => {
+                setGpsBusy(true)
+                void requestGpsAccess().finally(() => setGpsBusy(false))
+              }}
+              className="w-full rounded-lg border border-[#FFE8A3] bg-[#FFF8DD] px-3 py-2.5 text-left text-sm text-[#9A7700]"
+            >
+              <div className="font-medium text-[#071437]">
+                {t('taxi_fleet.driverApp.gpsBannerTitle', 'Location access required')}
+              </div>
+              <div className="mt-0.5">
+                {gpsStatus === 'unavailable'
+                  ? t(
+                      'taxi_fleet.driverApp.gpsBannerUnavailable',
+                      'Location is unavailable in this browser. Open the app over HTTPS or allow Location for Safari in iOS Settings.',
+                    )
+                  : gpsStatus === 'denied'
+                    ? t(
+                        'taxi_fleet.driverApp.gpsBannerDenied',
+                        'Location was blocked. On iPhone: Settings → Safari (or this app) → Location → Allow, then tap here.',
+                      )
+                    : t(
+                        'taxi_fleet.driverApp.gpsBannerPrompt',
+                        'Tap here to allow GPS. Without it, live trip tracking will not work.',
+                      )}
+              </div>
+            </button>
+          </div>
+        ) : null}
         {showLiveBanner && liveTripId ? (
           <div className="mx-auto w-full max-w-lg px-4 pb-3">
             <Link

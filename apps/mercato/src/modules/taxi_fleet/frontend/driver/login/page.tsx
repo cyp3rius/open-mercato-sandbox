@@ -56,8 +56,25 @@ export default function DriverLoginPage() {
     if (viewport) {
       viewport.content = 'width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1'
     }
-    const theme = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null
-    if (theme) theme.content = '#F1F1F4'
+
+    const ensureMeta = (name: string, content: string) => {
+      const id = `driver-meta-${name}`
+      let meta = document.getElementById(id) as HTMLMetaElement | null
+      if (!meta) {
+        meta = document.createElement('meta')
+        meta.id = id
+        meta.name = name
+        document.head.appendChild(meta)
+      }
+      meta.content = content
+    }
+    ensureMeta('theme-color', '#ffffff')
+    ensureMeta('apple-mobile-web-app-capable', 'yes')
+    ensureMeta('apple-mobile-web-app-status-bar-style', 'default')
+    ensureMeta('apple-mobile-web-app-title', 'RS Moto Taxi')
+    document.documentElement.style.backgroundColor = '#ffffff'
+    document.body.style.backgroundColor = '#ffffff'
+
     const id = 'driver-web-manifest'
     if (!document.getElementById(id)) {
       const link = document.createElement('link')
@@ -66,6 +83,16 @@ export default function DriverLoginPage() {
       link.href = '/driver/manifest.webmanifest'
       document.head.appendChild(link)
     }
+    const touchIconId = 'driver-apple-touch-icon'
+    let touchIcon = document.getElementById(touchIconId) as HTMLLinkElement | null
+    if (!touchIcon) {
+      touchIcon = document.createElement('link')
+      touchIcon.id = touchIconId
+      touchIcon.rel = 'apple-touch-icon'
+      document.head.appendChild(touchIcon)
+    }
+    touchIcon.href = '/driver/apple-touch-icon.png'
+
     if ('serviceWorker' in navigator) {
       void navigator.serviceWorker.register('/driver-sw.js', { scope: '/driver' }).catch(() => undefined)
     }

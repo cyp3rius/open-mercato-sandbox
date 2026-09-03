@@ -3,7 +3,7 @@
  * (classic auth, light dashboard cards, appearance-style forms).
  */
 
-export const driverPageBgClass = 'bg-[#F1F1F4] text-[#071437]'
+export const driverPageBgClass = 'bg-white text-[#071437]'
 
 export const driverCardClass =
   'rounded-xl border border-[#F1F1F4] bg-white p-5 shadow-[0_3px_4px_0_rgba(0,0,0,0.03)]'

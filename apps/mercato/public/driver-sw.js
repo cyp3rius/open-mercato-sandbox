@@ -1,5 +1,5 @@
 /* Driver PWA service worker — scoped to /driver */
-const CACHE = 'taxi-fleet-driver-v2'
+const CACHE = 'taxi-fleet-driver-v3'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting())
