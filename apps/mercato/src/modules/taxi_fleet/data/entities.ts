@@ -103,11 +103,23 @@ export class TaxiFleetDailyAssignment {
   @Property({ name: 'assignment_date', type: 'date' })
   assignmentDate!: string
 
+  /** Dispatcher-planned window (schedule). */
+  @Property({ name: 'planned_shift_start', type: Date, nullable: true })
+  plannedShiftStart?: Date | null
+
+  @Property({ name: 'planned_shift_end', type: Date, nullable: true })
+  plannedShiftEnd?: Date | null
+
+  /** Driver punch times (null until clocked in/out). */
   @Property({ name: 'shift_start', type: Date, nullable: true })
   shiftStart?: Date | null
 
   @Property({ name: 'shift_end', type: Date, nullable: true })
   shiftEnd?: Date | null
+
+  /** Aggregated GPS distance from location pings for this assignment. */
+  @Property({ name: 'gps_distance_km', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  gpsDistanceKm?: string | null
 
   @Property({ type: 'text', default: 'planned' })
   status: 'planned' | 'confirmed' | 'completed' | 'cancelled' = 'planned'
@@ -376,6 +388,10 @@ export class TaxiFleetWeeklySettlement {
 
   @Property({ name: 'total_distance_km', type: 'numeric', precision: 12, scale: 2, default: 0 })
   totalDistanceKm: string = '0'
+
+  /** Empty/deadhead km = max(0, totalDistanceKm − computedDistanceKm). */
+  @Property({ name: 'empty_distance_km', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  emptyDistanceKm: string = '0'
 
   @Property({ name: 'cash_expected', type: 'numeric', precision: 14, scale: 2, default: 0 })
   cashExpected: string = '0'

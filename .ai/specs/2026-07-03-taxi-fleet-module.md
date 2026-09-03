@@ -173,6 +173,9 @@ Preferencje użytkownika: `/backend/profile/notifications` (`NotificationPrefere
 
 ## Changelog
 
+### 2026-09-03
+- Driver shift: planned vs punch times (`planned_shift_*` / `shift_*`), configurable grace hours, GPS distance on assignments, weekly empty km (`empty_distance_km`), GPS banner only on denial. See `.ai/specs/2026-09-03-taxi-fleet-driver-shift-gps-distance.md`.
+
 ### 2026-08-08
 - Driver mobile surface `/driver`: staff JWT login, shift clock-in/out, trip reporting, PWA + offline outbox, shift-scoped location pings, operator last-known location chip; role `driver` ensured in setup.
 

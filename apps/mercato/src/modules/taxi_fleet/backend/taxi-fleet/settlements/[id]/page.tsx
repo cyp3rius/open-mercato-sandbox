@@ -64,6 +64,7 @@ type SettlementRow = {
   payoutAmount: string
   computedDistanceKm?: string
   totalDistanceKm?: string
+  emptyDistanceKm?: string
   cashExpected?: string
   cashCollected?: string
   bonusAmount?: string
@@ -449,6 +450,14 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
                 trips={trips}
                 computedDistanceKm={row.computedDistanceKm ?? '0'}
                 totalDistanceKm={row.totalDistanceKm ?? row.computedDistanceKm ?? '0'}
+                emptyDistanceKm={row.emptyDistanceKm ?? '0'}
+                gpsDistanceKm={
+                  typeof row.snapshotJson?.gpsDistanceKm === 'number'
+                    ? String(row.snapshotJson.gpsDistanceKm)
+                    : typeof row.snapshotJson?.gpsDistanceKm === 'string'
+                      ? row.snapshotJson.gpsDistanceKm
+                      : row.totalDistanceKm ?? '0'
+                }
                 readOnly={readOnly}
                 onUpdated={load}
                 onOpenTripsTab={openTripsTab}

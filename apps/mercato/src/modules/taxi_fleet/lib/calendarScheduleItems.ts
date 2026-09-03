@@ -7,6 +7,8 @@ export type CalendarAssignment = {
   teamMemberId: string
   resourceId: string
   assignmentDate: string
+  plannedShiftStart?: string | null
+  plannedShiftEnd?: string | null
   shiftStart?: string | null
   shiftEnd?: string | null
   status: string
@@ -14,6 +16,8 @@ export type CalendarAssignment = {
   team_member_id?: string | null
   resource_id?: string | null
   assignment_date?: string | null
+  planned_shift_start?: string | null
+  planned_shift_end?: string | null
   shift_start?: string | null
   shift_end?: string | null
 }
@@ -161,20 +165,37 @@ export function isTripHiddenFromCalendar(status: string | null | undefined): boo
 }
 
 function normalizeCalendarAssignment(assignment: CalendarAssignment): CalendarAssignment {
+  const plannedStart =
+    assignment.plannedShiftStart ??
+    assignment.planned_shift_start ??
+    assignment.shiftStart ??
+    assignment.shift_start ??
+    null
+  const plannedEnd =
+    assignment.plannedShiftEnd ??
+    assignment.planned_shift_end ??
+    assignment.shiftEnd ??
+    assignment.shift_end ??
+    null
   return {
     ...assignment,
     teamMemberId: assignment.teamMemberId || assignment.team_member_id || '',
     resourceId: assignment.resourceId || assignment.resource_id || '',
     assignmentDate: assignment.assignmentDate || assignment.assignment_date || '',
-    shiftStart: assignment.shiftStart ?? assignment.shift_start ?? null,
-    shiftEnd: assignment.shiftEnd ?? assignment.shift_end ?? null,
+    plannedShiftStart: plannedStart,
+    plannedShiftEnd: plannedEnd,
+    // Calendar displays planned window; keep shift* aliases for callers that read them.
+    shiftStart: plannedStart,
+    shiftEnd: plannedEnd,
   }
 }
 
 function resolveAssignmentWindow(assignment: CalendarAssignment): { start: Date; end: Date } {
-  if (assignment.shiftStart && assignment.shiftEnd) {
-    const start = new Date(assignment.shiftStart)
-    const end = new Date(assignment.shiftEnd)
+  const startRaw = assignment.plannedShiftStart ?? assignment.shiftStart
+  const endRaw = assignment.plannedShiftEnd ?? assignment.shiftEnd
+  if (startRaw && endRaw) {
+    const start = new Date(startRaw)
+    const end = new Date(endRaw)
     if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end > start) {
       return { start, end }
     }

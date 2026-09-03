@@ -94,8 +94,10 @@ async function findAssignmentVehicle(params: {
 
   const endedAt = params.endedAt ?? params.startedAt
   const overlapping = assignments.filter((assignment) => {
-    if (!assignment.shiftStart || !assignment.shiftEnd) return true
-    return assignment.shiftStart <= params.startedAt && assignment.shiftEnd >= endedAt
+    const windowStart = assignment.shiftStart ?? assignment.plannedShiftStart
+    const windowEnd = assignment.shiftEnd ?? assignment.plannedShiftEnd
+    if (!windowStart || !windowEnd) return true
+    return windowStart <= params.startedAt && windowEnd >= endedAt
   })
   const chosen = overlapping[0] ?? assignments[0]
   if (!chosen?.resourceId) return null

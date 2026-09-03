@@ -71,8 +71,11 @@ export async function GET(req: Request) {
           resourcePlate: info?.plate ?? null,
           assignmentDate: row.assignmentDate,
           status: row.status,
+          plannedShiftStart: row.plannedShiftStart?.toISOString() ?? null,
+          plannedShiftEnd: row.plannedShiftEnd?.toISOString() ?? null,
           shiftStart: row.shiftStart?.toISOString() ?? null,
           shiftEnd: row.shiftEnd?.toISOString() ?? null,
+          gpsDistanceKm: row.gpsDistanceKm ?? null,
         }
       }),
     })

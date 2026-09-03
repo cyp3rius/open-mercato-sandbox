@@ -106,6 +106,9 @@ export const assignmentCreateSchema = z.object({
   teamMemberId: uuid,
   resourceId: uuid,
   assignmentDate: dateOnly,
+  /** Planned schedule (preferred). Legacy clients may still send shiftStart/shiftEnd. */
+  plannedShiftStart: z.coerce.date().optional().nullable(),
+  plannedShiftEnd: z.coerce.date().optional().nullable(),
   shiftStart: z.coerce.date().optional().nullable(),
   shiftEnd: z.coerce.date().optional().nullable(),
   status: assignmentStatusSchema.optional().default('planned'),
@@ -117,6 +120,8 @@ export const assignmentUpdateSchema = z.object({
   teamMemberId: uuid.optional(),
   resourceId: uuid.optional(),
   assignmentDate: dateOnly.optional(),
+  plannedShiftStart: z.coerce.date().optional().nullable(),
+  plannedShiftEnd: z.coerce.date().optional().nullable(),
   shiftStart: z.coerce.date().optional().nullable(),
   shiftEnd: z.coerce.date().optional().nullable(),
   status: assignmentStatusSchema.optional(),
@@ -543,6 +548,8 @@ export const suggestDriversQuerySchema = z.object({
 export const taxiFleetSettingsPutSchema = z.object({
   resourceTypeId: z.string().uuid().nullable().optional(),
   defaultPayoutPercent: z.coerce.number().min(0).max(100),
+  hoursBeforeShift: z.coerce.number().int().min(0).max(48).optional().default(3),
+  hoursAfterShift: z.coerce.number().int().min(0).max(48).optional().default(3),
   customerEmailFrom: z.string().max(500).optional().default(''),
   tripStatuses: tripStatusDictionarySchema.optional(),
   paypal: z.object({

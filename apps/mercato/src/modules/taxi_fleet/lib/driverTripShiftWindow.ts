@@ -4,6 +4,8 @@ export type DriverShiftAssignmentLike = {
   status?: string | null
   shiftStart?: string | Date | null
   shiftEnd?: string | Date | null
+  plannedShiftStart?: string | Date | null
+  plannedShiftEnd?: string | Date | null
 }
 
 export type DriverShiftMatch = {
@@ -34,10 +36,15 @@ export function resolveDriverShiftBounds(
   now: Date = new Date(),
 ): { start: Date; end: Date; open: boolean } | null {
   if (assignment.status === 'cancelled') return null
-  const start = toDate(assignment.shiftStart ?? null)
+  // Prefer punch times; fall back to planned schedule for past-trip matching.
+  const punchStart = toDate(assignment.shiftStart ?? null)
+  const punchEnd = toDate(assignment.shiftEnd ?? null)
+  const plannedStart = toDate(assignment.plannedShiftStart ?? null)
+  const plannedEnd = toDate(assignment.plannedShiftEnd ?? null)
+  const start = punchStart ?? plannedStart
   if (!start) return null
-  const closedEnd = toDate(assignment.shiftEnd ?? null)
-  const open = !closedEnd
+  const open = Boolean(punchStart && !punchEnd)
+  const closedEnd = punchEnd ?? (!punchStart ? plannedEnd : null)
   const end = closedEnd ?? now
   if (end.getTime() < start.getTime()) return null
   return { start, end, open }

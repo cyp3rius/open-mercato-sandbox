@@ -6,6 +6,7 @@ import { TaxiFleetDriverProfile, TaxiFleetWeeklySettlement } from '../data/entit
 import type { SettlementUpdateInput } from '../data/validators'
 import { calculateWeeklySettlement } from './settlementCalculator'
 import { formatDistanceKm } from './settlementTripDistance'
+import { computeEmptyDistanceKm, resolveSettlementTotalDistanceKm } from './settlementGpsDistance'
 import { buildSettlementSnapshotJson } from './settlementSnapshot'
 import {
   parseSettlementCostExclusions,
@@ -43,11 +44,14 @@ function applySettlementTotals(
   row.cashExpected = numericToString(totals.cashExpected)
   row.transferAmount = numericToString(totals.transferAmount)
   row.computedDistanceKm = formatDistanceKm(totals.distance.computedDistanceKm)
-  row.totalDistanceKm = formatDistanceKm(totals.distance.computedDistanceKm)
+  row.totalDistanceKm = formatDistanceKm(totals.totalDistanceKm)
+  row.emptyDistanceKm = formatDistanceKm(totals.distance.emptyDistanceKm)
   row.snapshotJson = buildSettlementSnapshotJson({
     tripIds: totals.tripIds,
     trips: totals.distance.trips,
     computedDistanceKm: totals.distance.computedDistanceKm,
+    gpsDistanceKm: totals.distance.gpsDistanceKm,
+    emptyDistanceKm: totals.distance.emptyDistanceKm,
     revenueBreakdown: totals.revenueBreakdown,
     costBreakdown: totals.costs.costBreakdown,
     fuelCostNet: totals.fuelCostNet,
@@ -145,10 +149,16 @@ export async function applyWeeklySettlementRecalculation(
   },
 ): Promise<void> {
   const previousTotal = Number(row.totalDistanceKm)
+  const previousGps = Number(row.snapshotJson?.gpsDistanceKm)
   const previousComputed = Number(row.computedDistanceKm)
+  const autoTotal = resolveSettlementTotalDistanceKm(
+    Number.isFinite(previousGps) ? previousGps : 0,
+    Number.isFinite(previousComputed) ? previousComputed : 0,
+  )
   const shouldSyncTotal =
     options?.syncTotalDistance === true ||
-    (!Number.isFinite(previousTotal) || previousTotal === previousComputed)
+    !Number.isFinite(previousTotal) ||
+    Math.abs(previousTotal - autoTotal) < 0.005
   const totalDistanceKm = shouldSyncTotal ? undefined : previousTotal
 
   const excludedCosts = options?.excludedCosts ?? parseSettlementCostExclusions(row.snapshotJson)
@@ -181,6 +191,9 @@ export async function applyWeeklySettlementRecalculation(
 
   if (!shouldSyncTotal && totalDistanceKm != null) {
     row.totalDistanceKm = formatDistanceKm(totalDistanceKm)
+    row.emptyDistanceKm = formatDistanceKm(
+      computeEmptyDistanceKm(totalDistanceKm, Number(row.computedDistanceKm)),
+    )
   }
   recomputeSettlementTransfer(row)
 }

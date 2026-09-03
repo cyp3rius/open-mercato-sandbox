@@ -8,6 +8,11 @@ import {
 } from './settlementIncomeReconciliation'
 import { calculateSettlementRevenue, type SettlementRevenueBreakdown, type SettlementRevenueResult } from './settlementRevenue'
 import { calculateSettlementTripDistance, type SettlementDistanceResult } from './settlementTripDistance'
+import {
+  calculateSettlementGpsDistanceKm,
+  computeEmptyDistanceKm,
+  resolveSettlementTotalDistanceKm,
+} from './settlementGpsDistance'
 import { computeDriverPayoutAmount } from './settlementDriverPayout'
 import { computeTransferAmount } from './settlementTransfer'
 import {
@@ -29,6 +34,7 @@ export type SettlementTotals = {
   fuelCostNet: number
   fuelPerKm: number | null
   revenuePerKm: number | null
+  totalDistanceKm: number
   revenueBreakdown: SettlementRevenueBreakdown
   tripIds: string[]
   distance: SettlementDistanceResult
@@ -59,11 +65,18 @@ export async function calculateWeeklySettlement(
   params: CalculateWeeklySettlementParams,
 ): Promise<SettlementTotals> {
   const incomeTripIds = await loadIncomeTripIdsForWeek(em, params)
-  const [revenue, costs, distance] = await Promise.all([
+  const [revenue, costs, tripDistance, gpsDistanceKm] = await Promise.all([
     calculateSettlementRevenue(em, params),
     calculateSettlementCosts(em, { ...params, excludedEntryIds: params.excludedEntryIds }),
     calculateSettlementTripDistance(em, { ...params, incomeTripIds }),
+    calculateSettlementGpsDistanceKm(em, params),
   ])
+
+  const distance: SettlementDistanceResult = {
+    ...tripDistance,
+    gpsDistanceKm,
+    emptyDistanceKm: 0,
+  }
 
   const netAmount = revenue.revenueNet - costs.costsNet
   const payoutResolution = params.payoutSchedule
@@ -82,7 +95,10 @@ export async function calculateWeeklySettlement(
     bonusAmount: params.bonusAmount,
     compensationAmount: params.compensationAmount,
   })
-  const totalDistanceKm = params.totalDistanceKm ?? distance.computedDistanceKm
+  const totalDistanceKm =
+    params.totalDistanceKm ??
+    resolveSettlementTotalDistanceKm(distance.gpsDistanceKm, distance.computedDistanceKm)
+  distance.emptyDistanceKm = computeEmptyDistanceKm(totalDistanceKm, distance.computedDistanceKm)
   const indicators = computeSettlementIndicators({
     fuelCostNet: costs.fuelCostNet,
     revenueNet: revenue.revenueNet,
@@ -109,6 +125,7 @@ export async function calculateWeeklySettlement(
     fuelCostNet: costs.fuelCostNet,
     fuelPerKm: indicators.fuelPerKm,
     revenuePerKm: indicators.revenuePerKm,
+    totalDistanceKm,
     revenueBreakdown: revenue.breakdown,
     tripIds: [...new Set([...revenue.tripIds, ...distance.tripIds])],
     distance,

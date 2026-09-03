@@ -17,7 +17,26 @@ import {
 import { findAssignmentConflict } from '../lib/assignmentValidation'
 import { assertTeamMemberHasDriverProfile } from '../lib/driverProfileGuard'
 import { resolveDriverContext } from '../lib/driverContext'
+import { computeAssignmentGpsDistanceKm } from '../lib/computeAssignmentGpsDistance'
+import {
+  checkShiftEndGrace,
+  checkShiftStartGrace,
+  isAssignmentClockEligible,
+} from '../lib/shiftGraceWindow'
+import { loadTaxiFleetOrganizationSettings } from '../lib/taxiFleetOrganizationSettings'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
+
+function resolvePlannedTimes(input: {
+  plannedShiftStart?: Date | null
+  plannedShiftEnd?: Date | null
+  shiftStart?: Date | null
+  shiftEnd?: Date | null
+}): { plannedShiftStart: Date | null; plannedShiftEnd: Date | null } {
+  return {
+    plannedShiftStart: input.plannedShiftStart ?? input.shiftStart ?? null,
+    plannedShiftEnd: input.plannedShiftEnd ?? input.shiftEnd ?? null,
+  }
+}
 
 const createAssignmentCommand: CommandHandler<AssignmentCreateInput, { assignmentId: string }> = {
   id: 'taxi_fleet.assignments.create',
@@ -47,6 +66,7 @@ const createAssignmentCommand: CommandHandler<AssignmentCreateInput, { assignmen
           : translate('taxi_fleet.errors.resourceAssigned', 'Vehicle already assigned for this date.')
       throw new CrudHttpError(409, { error: message, code: 'ASSIGNMENT_CONFLICT' })
     }
+    const planned = resolvePlannedTimes(parsed)
     const now = new Date()
     const record = em.create(TaxiFleetDailyAssignment, {
       tenantId: parsed.tenantId,
@@ -54,8 +74,11 @@ const createAssignmentCommand: CommandHandler<AssignmentCreateInput, { assignmen
       teamMemberId: parsed.teamMemberId,
       resourceId: parsed.resourceId,
       assignmentDate: parsed.assignmentDate,
-      shiftStart: parsed.shiftStart ?? null,
-      shiftEnd: parsed.shiftEnd ?? null,
+      plannedShiftStart: planned.plannedShiftStart,
+      plannedShiftEnd: planned.plannedShiftEnd,
+      shiftStart: null,
+      shiftEnd: null,
+      gpsDistanceKm: null,
       status: parsed.status ?? 'planned',
       notes: parsed.notes ?? null,
       createdAt: now,
@@ -112,8 +135,19 @@ const updateAssignmentCommand: CommandHandler<AssignmentUpdateInput, { assignmen
     if (parsed.teamMemberId !== undefined) row.teamMemberId = parsed.teamMemberId
     if (parsed.resourceId !== undefined) row.resourceId = parsed.resourceId
     if (parsed.assignmentDate !== undefined) row.assignmentDate = parsed.assignmentDate
-    if (parsed.shiftStart !== undefined) row.shiftStart = parsed.shiftStart
-    if (parsed.shiftEnd !== undefined) row.shiftEnd = parsed.shiftEnd
+
+    // Operator schedule edits always go to planned*; never overwrite punch via CRUD.
+    if (parsed.plannedShiftStart !== undefined) {
+      row.plannedShiftStart = parsed.plannedShiftStart
+    } else if (parsed.shiftStart !== undefined) {
+      row.plannedShiftStart = parsed.shiftStart
+    }
+    if (parsed.plannedShiftEnd !== undefined) {
+      row.plannedShiftEnd = parsed.plannedShiftEnd
+    } else if (parsed.shiftEnd !== undefined) {
+      row.plannedShiftEnd = parsed.shiftEnd
+    }
+
     if (parsed.status !== undefined) row.status = parsed.status
     if (parsed.notes !== undefined) row.notes = parsed.notes
     await em.flush()
@@ -145,7 +179,15 @@ const deleteAssignmentCommand: CommandHandler<{ id: string }, { ok: true }> = {
 
 const shiftAssignmentCommand: CommandHandler<
   AssignmentShiftInput,
-  { assignmentId: string; shiftStart: string | null; shiftEnd: string | null; status: string }
+  {
+    assignmentId: string
+    shiftStart: string | null
+    shiftEnd: string | null
+    plannedShiftStart: string | null
+    plannedShiftEnd: string | null
+    gpsDistanceKm: string | null
+    status: string
+  }
 > = {
   id: 'taxi_fleet.assignments.shift',
   async execute(input, ctx) {
@@ -171,17 +213,58 @@ const shiftAssignmentCommand: CommandHandler<
       })
     }
 
-    const today = new Date().toISOString().slice(0, 10)
-    if (row.assignmentDate !== today) {
+    const settings = await loadTaxiFleetOrganizationSettings(em, {
+      tenantId: row.tenantId,
+      organizationId: row.organizationId,
+    })
+    const grace = {
+      hoursBeforeShift: settings.hoursBeforeShift,
+      hoursAfterShift: settings.hoursAfterShift,
+    }
+    const timeZone = settings.calendar.timezone || 'Europe/Warsaw'
+    const now = new Date()
+
+    if (
+      !isAssignmentClockEligible(
+        {
+          assignmentDate: row.assignmentDate,
+          plannedShiftStart: row.plannedShiftStart,
+          plannedShiftEnd: row.plannedShiftEnd,
+        },
+        now,
+        grace,
+        timeZone,
+      )
+    ) {
       throw new CrudHttpError(400, {
-        error: translate('taxi_fleet.errors.assignmentNotToday', 'Clock in/out is only allowed for today’s assignment.'),
+        error: translate(
+          'taxi_fleet.errors.assignmentNotToday',
+          'Clock in/out is only allowed for today’s assignment (or within the allowed early/late window).',
+        ),
       })
     }
 
-    const now = new Date()
     let mutated = false
     if (parsed.action === 'start') {
       if (!row.shiftStart) {
+        const startCheck = checkShiftStartGrace(
+          now,
+          { plannedShiftStart: row.plannedShiftStart, plannedShiftEnd: row.plannedShiftEnd },
+          grace,
+        )
+        if (!startCheck.ok) {
+          const message =
+            startCheck.code === 'SHIFT_TOO_EARLY'
+              ? translate(
+                  'taxi_fleet.errors.shiftTooEarly',
+                  'It is too early to start this shift. Try again closer to the planned start.',
+                )
+              : translate(
+                  'taxi_fleet.errors.shiftTooLate',
+                  'It is too late to start this shift.',
+                )
+          throw new CrudHttpError(400, { error: message, code: startCheck.code })
+        }
         row.shiftStart = now
         if (row.status === 'planned') row.status = 'confirmed'
         mutated = true
@@ -194,8 +277,27 @@ const shiftAssignmentCommand: CommandHandler<
         })
       }
       if (!row.shiftEnd) {
+        const endCheck = checkShiftEndGrace(
+          now,
+          { plannedShiftStart: row.plannedShiftStart, plannedShiftEnd: row.plannedShiftEnd },
+          grace,
+        )
+        if (!endCheck.ok) {
+          throw new CrudHttpError(400, {
+            error: translate(
+              'taxi_fleet.errors.shiftEndTooLate',
+              'It is too late to end this shift.',
+            ),
+            code: endCheck.code,
+          })
+        }
         row.shiftEnd = now
         row.status = 'completed'
+        const gps = await computeAssignmentGpsDistanceKm(em, row.id, {
+          tenantId: row.tenantId,
+          organizationId: row.organizationId,
+        })
+        row.gpsDistanceKm = gps.formatted
         mutated = true
       }
     }
@@ -216,6 +318,9 @@ const shiftAssignmentCommand: CommandHandler<
       assignmentId: row.id,
       shiftStart: row.shiftStart?.toISOString() ?? null,
       shiftEnd: row.shiftEnd?.toISOString() ?? null,
+      plannedShiftStart: row.plannedShiftStart?.toISOString() ?? null,
+      plannedShiftEnd: row.plannedShiftEnd?.toISOString() ?? null,
+      gpsDistanceKm: row.gpsDistanceKm ?? null,
       status: row.status,
     }
   },

@@ -296,6 +296,58 @@ export function TaxiFleetModuleSettings() {
               )}
             </p>
           </div>
+          <div className="space-y-1">
+            <Label className="text-sm font-medium">
+              {t('taxi_fleet.config.fleet.hoursBeforeShift', 'Hours before shift start')}
+            </Label>
+            <input
+              type="number"
+              min={0}
+              max={48}
+              step={1}
+              className="h-9 w-full rounded border px-2 text-sm"
+              value={String(settings.hoursBeforeShift)}
+              disabled={saving}
+              onChange={(event) =>
+                setSettings((current) => ({
+                  ...current,
+                  hoursBeforeShift: Math.min(48, Math.max(0, Number(event.target.value) || 0)),
+                }))
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'taxi_fleet.config.fleet.hoursBeforeShiftHelp',
+                'How many hours before the planned start a driver may clock in. Default: 3.',
+              )}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-sm font-medium">
+              {t('taxi_fleet.config.fleet.hoursAfterShift', 'Hours after shift end')}
+            </Label>
+            <input
+              type="number"
+              min={0}
+              max={48}
+              step={1}
+              className="h-9 w-full rounded border px-2 text-sm"
+              value={String(settings.hoursAfterShift)}
+              disabled={saving}
+              onChange={(event) =>
+                setSettings((current) => ({
+                  ...current,
+                  hoursAfterShift: Math.min(48, Math.max(0, Number(event.target.value) || 0)),
+                }))
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'taxi_fleet.config.fleet.hoursAfterShiftHelp',
+                'How many hours after the planned end a driver may clock out. Default: 3.',
+              )}
+            </p>
+          </div>
         </div>
       </SettingsSection>
 

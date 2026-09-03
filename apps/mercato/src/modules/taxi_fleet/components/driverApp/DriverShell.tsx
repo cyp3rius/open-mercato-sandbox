@@ -326,7 +326,7 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
             </span>
           ) : null}
         </div>
-        {gpsStatus !== 'ready' ? (
+        {gpsStatus === 'denied' ? (
           <div className="mx-auto w-full max-w-lg px-4 pb-3">
             <button
               type="button"
@@ -341,20 +341,10 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
                 {t('taxi_fleet.driverApp.gpsBannerTitle', 'Location access required')}
               </div>
               <div className="mt-0.5">
-                {gpsStatus === 'unavailable'
-                  ? t(
-                      'taxi_fleet.driverApp.gpsBannerUnavailable',
-                      'Location is unavailable in this browser. Open the app over HTTPS or allow Location for Safari in iOS Settings.',
-                    )
-                  : gpsStatus === 'denied'
-                    ? t(
-                        'taxi_fleet.driverApp.gpsBannerDenied',
-                        'Location was blocked. On iPhone: Settings → Safari (or this app) → Location → Allow, then tap here.',
-                      )
-                    : t(
-                        'taxi_fleet.driverApp.gpsBannerPrompt',
-                        'Tap here to allow GPS. Without it, live trip tracking will not work.',
-                      )}
+                {t(
+                  'taxi_fleet.driverApp.gpsBannerDenied',
+                  'Location was blocked. On iPhone: Settings → Safari (or this app) → Location → Allow, then tap here.',
+                )}
               </div>
             </button>
           </div>

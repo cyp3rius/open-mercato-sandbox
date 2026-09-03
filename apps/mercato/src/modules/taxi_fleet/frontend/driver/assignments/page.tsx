@@ -22,6 +22,8 @@ type AssignmentRow = {
   resourceId: string
   resourceLabel?: string | null
   resourcePlate?: string | null
+  plannedShiftStart?: string | null
+  plannedShiftEnd?: string | null
   shiftStart?: string | null
   shiftEnd?: string | null
 }
@@ -65,8 +67,9 @@ function isAssignmentInCurrentWeek(row: AssignmentRow, day = new Date()): boolea
 }
 
 function assignmentSortTime(row: AssignmentRow): number {
-  if (row.shiftStart) {
-    const shift = new Date(row.shiftStart).getTime()
+  const startRaw = row.plannedShiftStart ?? row.shiftStart
+  if (startRaw) {
+    const shift = new Date(startRaw).getTime()
     if (!Number.isNaN(shift)) return shift
   }
   const day = parseAssignmentDate(row.assignmentDate)
@@ -172,14 +175,14 @@ export default function DriverAssignmentsPage() {
                   </div>
                 ) : null}
                 <div className={`mt-2 ${driverMutedTextClass}`}>
-                  {row.shiftStart
-                    ? new Date(row.shiftStart).toLocaleTimeString([], {
+                  {(row.plannedShiftStart ?? row.shiftStart)
+                    ? new Date(row.plannedShiftStart ?? row.shiftStart!).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',
                       })
                     : '—'}
-                  {row.shiftEnd
-                    ? ` – ${new Date(row.shiftEnd).toLocaleTimeString([], {
+                  {(row.plannedShiftEnd ?? row.shiftEnd)
+                    ? ` – ${new Date(row.plannedShiftEnd ?? row.shiftEnd!).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',
                       })}`

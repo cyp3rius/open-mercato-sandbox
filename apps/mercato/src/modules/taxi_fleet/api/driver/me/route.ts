@@ -10,6 +10,8 @@ import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetDailyAssignment } from '@/modules/taxi_fleet/data/entities'
 import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
 import { resolveDriverResourceLabelInfo } from '@/modules/taxi_fleet/lib/resolveDriverResourceLabel'
+import { formatDateInTimeZone } from '@/modules/taxi_fleet/lib/shiftGraceWindow'
+import { loadTaxiFleetOrganizationSettings } from '@/modules/taxi_fleet/lib/taxiFleetOrganizationSettings'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['taxi_fleet.driver'] },
@@ -35,9 +37,13 @@ export async function GET(req: Request) {
     const context = await buildContext(req)
     const { translate } = await resolveTranslations()
     const driver = await resolveDriverContext(context, translate, { requireExternalApp: true })
-    const today = new Date().toISOString().slice(0, 10)
     const em = context.container.resolve('em') as EntityManager
-    const assignment = await findOneWithDecryption(
+    const settings = await loadTaxiFleetOrganizationSettings(em, {
+      tenantId: driver.teamMember.tenantId,
+      organizationId: driver.teamMember.organizationId,
+    })
+    const today = formatDateInTimeZone(new Date(), settings.calendar.timezone || 'Europe/Warsaw')
+    let assignment = await findOneWithDecryption(
       em,
       TaxiFleetDailyAssignment,
       {
@@ -49,6 +55,21 @@ export async function GET(req: Request) {
       undefined,
       { tenantId: driver.teamMember.tenantId, organizationId: driver.teamMember.organizationId },
     )
+    if (!assignment) {
+      assignment = await findOneWithDecryption(
+        em,
+        TaxiFleetDailyAssignment,
+        {
+          teamMemberId: driver.teamMemberId,
+          deletedAt: null,
+          shiftStart: { $ne: null },
+          shiftEnd: null,
+          status: { $ne: 'cancelled' },
+        },
+        { orderBy: { shiftStart: 'DESC' } },
+        { tenantId: driver.teamMember.tenantId, organizationId: driver.teamMember.organizationId },
+      )
+    }
     const scope = {
       tenantId: driver.teamMember.tenantId,
       organizationId: driver.teamMember.organizationId,
@@ -83,8 +104,11 @@ export async function GET(req: Request) {
             resourcePlate: resourceInfo?.plate ?? null,
             assignmentDate: assignment.assignmentDate,
             status: assignment.status,
+            plannedShiftStart: assignment.plannedShiftStart?.toISOString() ?? null,
+            plannedShiftEnd: assignment.plannedShiftEnd?.toISOString() ?? null,
             shiftStart: assignment.shiftStart?.toISOString() ?? null,
             shiftEnd: assignment.shiftEnd?.toISOString() ?? null,
+            gpsDistanceKm: assignment.gpsDistanceKm ?? null,
           }
         : null,
     })

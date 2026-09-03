@@ -27,6 +27,8 @@ export type SettlementTripSnapshot = {
 
 export type SettlementDistanceResult = {
   computedDistanceKm: number
+  gpsDistanceKm: number
+  emptyDistanceKm: number
   trips: SettlementTripSnapshot[]
   tripIds: string[]
   missingDistanceTripIds: string[]
@@ -112,6 +114,8 @@ export function buildSettlementDistanceFromTrips(
 
   return {
     computedDistanceKm,
+    gpsDistanceKm: 0,
+    emptyDistanceKm: 0,
     trips: snapshots,
     tripIds: snapshots.map((trip) => trip.id),
     missingDistanceTripIds,

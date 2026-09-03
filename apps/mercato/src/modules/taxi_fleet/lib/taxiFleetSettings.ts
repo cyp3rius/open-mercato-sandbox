@@ -132,6 +132,8 @@ export const taxiFleetPricingSettingsSchema = pricingConfigSchema
 export const taxiFleetSettingsSchema = z.object({
   resourceTypeId: z.string().uuid().nullable().optional().default(null),
   defaultPayoutPercent: z.coerce.number().min(0).max(100).default(0),
+  hoursBeforeShift: z.coerce.number().int().min(0).max(48).default(3),
+  hoursAfterShift: z.coerce.number().int().min(0).max(48).default(3),
   customerEmailFrom: z.string().max(500).optional().default(''),
   tripStatuses: tripStatusDictionarySchema.default(defaultTripStatusDictionary()),
   pricing: taxiFleetPricingSettingsSchema.default(defaultFleetPricingConfig() as never),
@@ -222,6 +224,8 @@ export function defaultTaxiFleetSettings(): TaxiFleetSettings {
   return taxiFleetSettingsSchema.parse({
     resourceTypeId: null,
     defaultPayoutPercent: 0,
+    hoursBeforeShift: 3,
+    hoursAfterShift: 3,
     customerEmailFrom: '',
     tripStatuses: defaultTripStatusDictionary(),
     pricing: defaultFleetPricingConfig(),

@@ -18,19 +18,17 @@ const ingestLocationPingsCommand: CommandHandler<DriverLocationBatchInput, { acc
     ensureOrganizationScope(ctx, driver.teamMember.organizationId)
     const em = (ctx.container.resolve('em') as EntityManager).fork()
 
-    const today = new Date().toISOString().slice(0, 10)
     const openShift = await findOneWithDecryption(
       em,
       TaxiFleetDailyAssignment,
       {
         teamMemberId: driver.teamMemberId,
-        assignmentDate: today,
         deletedAt: null,
         shiftStart: { $ne: null },
         shiftEnd: null,
         status: { $ne: 'cancelled' },
       },
-      undefined,
+      { orderBy: { shiftStart: 'DESC' } },
       { tenantId: driver.teamMember.tenantId, organizationId: driver.teamMember.organizationId },
     )
     if (!openShift) {

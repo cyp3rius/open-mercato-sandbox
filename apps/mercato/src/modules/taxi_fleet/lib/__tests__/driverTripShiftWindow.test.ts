@@ -35,6 +35,23 @@ describe('driverTripShiftWindow', () => {
     expect(bounds?.end.toISOString()).toBe(now.toISOString())
   })
 
+  it('falls back to planned times when punch is missing', () => {
+    const bounds = resolveDriverShiftBounds(
+      {
+        id: 'a1',
+        resourceId: 'r1',
+        plannedShiftStart: '2026-08-11T08:00:00.000Z',
+        plannedShiftEnd: '2026-08-11T16:00:00.000Z',
+        shiftStart: null,
+        shiftEnd: null,
+      },
+      now,
+    )
+    expect(bounds?.open).toBe(false)
+    expect(bounds?.start.toISOString()).toBe('2026-08-11T08:00:00.000Z')
+    expect(bounds?.end.toISOString()).toBe('2026-08-11T16:00:00.000Z')
+  })
+
   it('rejects cancelled and missing start', () => {
     expect(
       resolveDriverShiftBounds({

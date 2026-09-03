@@ -14,6 +14,8 @@ type SettlementTripDistancePanelProps = {
   trips: SettlementTripSnapshot[]
   computedDistanceKm: string
   totalDistanceKm: string
+  emptyDistanceKm?: string
+  gpsDistanceKm?: string
   readOnly: boolean
   onUpdated: () => Promise<void>
   onOpenTripsTab?: () => void
@@ -48,6 +50,8 @@ export function SettlementTripDistancePanel({
   trips,
   computedDistanceKm,
   totalDistanceKm,
+  emptyDistanceKm,
+  gpsDistanceKm,
   readOnly,
   onUpdated,
   onOpenTripsTab,
@@ -55,12 +59,16 @@ export function SettlementTripDistancePanel({
   const t = useT()
 
   const missingCount = trips.filter((trip) => trip.missingDistance).length
-  const computedNumeric = Number(computedDistanceKm)
   const totalNumeric = Number(totalDistanceKm)
+  const gpsNumeric = Number(gpsDistanceKm ?? totalDistanceKm)
+  const emptyNumeric =
+    emptyDistanceKm != null && Number.isFinite(Number(emptyDistanceKm))
+      ? Number(emptyDistanceKm)
+      : Math.max(0, (Number.isFinite(totalNumeric) ? totalNumeric : 0) - (Number(computedDistanceKm) || 0))
   const hasManualOverride =
-    Number.isFinite(computedNumeric) &&
     Number.isFinite(totalNumeric) &&
-    Math.abs(computedNumeric - totalNumeric) > 0.005
+    Number.isFinite(gpsNumeric) &&
+    Math.abs(totalNumeric - gpsNumeric) > 0.005
 
   const saveTotalDistance = async (next: string | null) => {
     const parsed = Number(String(next ?? '').replace(',', '.'))
@@ -98,7 +106,7 @@ export function SettlementTripDistancePanel({
           <p className="mt-1 text-sm text-muted-foreground">
             {t(
               'taxi_fleet.settlements.distance.panelHint',
-              'Sum of kilometres driven on trips this week vs. kilometres used for settlement.',
+              'Total GPS distance from shifts this week, trip kilometres, and empty (deadhead) kilometres.',
             )}
           </p>
         </div>
@@ -112,14 +120,22 @@ export function SettlementTripDistancePanel({
 
       {missingAlert}
 
-      <div className="grid gap-3 sm:grid-cols-2 sm:items-stretch">
+      <div className="grid gap-3 sm:grid-cols-3 sm:items-stretch">
         <SettlementDistanceMetricBox
           label={t('taxi_fleet.settlements.distance.computed', 'Computed from trips')}
           value={formatKm(computedDistanceKm)}
         />
+        <SettlementDistanceMetricBox
+          label={t('taxi_fleet.settlements.distance.empty', 'Empty distance')}
+          value={formatKm(emptyNumeric)}
+          hint={t(
+            'taxi_fleet.settlements.distance.emptyHint',
+            'Total GPS − trip kilometres (deadhead).',
+          )}
+        />
         {readOnly ? (
           <SettlementDistanceMetricBox
-            label={t('taxi_fleet.settlements.distance.totalEditable', 'Distance for settlement')}
+            label={t('taxi_fleet.settlements.distance.totalEditable', 'Total GPS distance')}
             value={formatKm(totalDistanceKm)}
             hint={
               hasManualOverride
@@ -130,7 +146,7 @@ export function SettlementTripDistancePanel({
         ) : (
           <div className="h-full min-h-0">
             <InlineTextEditor
-              label={t('taxi_fleet.settlements.distance.totalEditable', 'Distance for settlement')}
+              label={t('taxi_fleet.settlements.distance.totalEditable', 'Total GPS distance')}
               value={totalDistanceKm}
               emptyLabel="—"
               inputType="number"

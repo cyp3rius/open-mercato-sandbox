@@ -106,8 +106,12 @@ export function DriverAllocationsTab({
           openCreate({
             id: assignment.id,
             assignmentDate: assignment.assignmentDate,
-            shiftStart: assignment.shiftStart ? new Date(assignment.shiftStart) : null,
-            shiftEnd: assignment.shiftEnd ? new Date(assignment.shiftEnd) : null,
+            shiftStart: (assignment.plannedShiftStart ?? assignment.shiftStart)
+              ? new Date(assignment.plannedShiftStart ?? assignment.shiftStart!)
+              : null,
+            shiftEnd: (assignment.plannedShiftEnd ?? assignment.shiftEnd)
+              ? new Date(assignment.plannedShiftEnd ?? assignment.shiftEnd!)
+              : null,
             resourceId: assignment.resourceId,
           })
         }}

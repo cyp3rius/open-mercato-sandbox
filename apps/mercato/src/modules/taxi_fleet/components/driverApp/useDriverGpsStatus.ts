@@ -16,24 +16,44 @@ const GEO_OPTIONS: PositionOptions = {
   timeout: 20_000,
 }
 
-function readPermissionState(state: PermissionState): DriverGpsStatus {
-  if (state === 'granted') return 'ready'
-  if (state === 'denied') return 'denied'
-  return 'prompt'
+const SESSION_READY_KEY = 'taxi_fleet_driver_gps_ready'
+
+function readSessionReady(): boolean {
+  try {
+    return sessionStorage.getItem(SESSION_READY_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeSessionReady(): void {
+  try {
+    sessionStorage.setItem(SESSION_READY_KEY, '1')
+  } catch {
+    // ignore
+  }
 }
 
 /**
  * Geolocation readiness for the driver shell indicator.
- * Actively calls getCurrentPosition so iOS/Safari shows the system permission prompt
- * (Permissions API alone never triggers it).
+ * Once granted (`ready`), status stays sticky — timeouts / remount / Permissions
+ * API `prompt` quirks must not resurrect the denial banner.
  */
 export function useDriverGpsStatus(): DriverGpsController {
   const [status, setStatus] = React.useState<DriverGpsStatus>(() => {
     if (typeof navigator === 'undefined') return 'unavailable'
     if (!navigator.geolocation) return 'unavailable'
     if (typeof window !== 'undefined' && !window.isSecureContext) return 'unavailable'
+    if (typeof window !== 'undefined' && readSessionReady()) return 'ready'
     return 'prompt'
   })
+  const readyRef = React.useRef(status === 'ready')
+
+  const markReady = React.useCallback(() => {
+    readyRef.current = true
+    writeSessionReady()
+    setStatus('ready')
+  }, [])
 
   const requestAccess = React.useCallback(async (): Promise<DriverGpsStatus> => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -48,19 +68,29 @@ export function useDriverGpsStatus(): DriverGpsController {
     return await new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
         () => {
-          setStatus('ready')
+          markReady()
           resolve('ready')
         },
         (error) => {
-          const next: DriverGpsStatus =
-            error.code === error.PERMISSION_DENIED ? 'denied' : 'unavailable'
-          setStatus(next)
-          resolve(next)
+          if (error.code === error.PERMISSION_DENIED) {
+            readyRef.current = false
+            setStatus('denied')
+            resolve('denied')
+            return
+          }
+          // Timeout / POSITION_UNAVAILABLE: keep prior ready if we already had a fix.
+          if (readyRef.current) {
+            setStatus('ready')
+            resolve('ready')
+            return
+          }
+          setStatus('unavailable')
+          resolve('unavailable')
         },
         GEO_OPTIONS,
       )
     })
-  }, [])
+  }, [markReady])
 
   React.useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -75,17 +105,35 @@ export function useDriverGpsStatus(): DriverGpsController {
     let cancelled = false
     let permissionStatus: PermissionStatus | null = null
 
+    const applyPermissionState = (state: PermissionState) => {
+      if (cancelled) return
+      if (state === 'granted') {
+        markReady()
+        return
+      }
+      if (state === 'denied') {
+        readyRef.current = false
+        setStatus('denied')
+        return
+      }
+      // Permissions API `prompt` on iOS can flap after grant — never downgrade from ready.
+      if (readyRef.current) {
+        setStatus('ready')
+        return
+      }
+      setStatus('prompt')
+    }
+
     const syncFromPermissionApi = async () => {
       try {
         if (!navigator.permissions?.query) return null
         permissionStatus = await navigator.permissions.query({
           name: 'geolocation' as PermissionName,
         })
-        if (cancelled) return permissionStatus.state
-        setStatus(readPermissionState(permissionStatus.state))
+        applyPermissionState(permissionStatus.state)
         permissionStatus.onchange = () => {
           if (cancelled || !permissionStatus) return
-          setStatus(readPermissionState(permissionStatus.state))
+          applyPermissionState(permissionStatus.state)
         }
         return permissionStatus.state
       } catch {
@@ -94,24 +142,28 @@ export function useDriverGpsStatus(): DriverGpsController {
     }
 
     const bootstrap = async () => {
+      if (readyRef.current || readSessionReady()) {
+        markReady()
+        return
+      }
       const permissionState = await syncFromPermissionApi()
       if (cancelled) return
-      // Always call geolocation when not already granted — this is what shows the iOS prompt.
-      if (permissionState !== 'granted' && permissionState !== 'denied') {
-        await requestAccess()
-      } else if (permissionState === 'granted') {
-        setStatus('ready')
-      } else if (permissionState === 'denied') {
-        setStatus('denied')
-      } else {
-        // Permissions API missing (common on older iOS): still request to trigger the dialog.
-        await requestAccess()
+      if (permissionState === 'granted') {
+        markReady()
+        return
       }
+      if (permissionState === 'denied') {
+        setStatus('denied')
+        return
+      }
+      // Still need an explicit getCurrentPosition to trigger iOS prompt.
+      await requestAccess()
     }
 
     void bootstrap()
 
     const onVisible = () => {
+      if (readyRef.current) return
       void syncFromPermissionApi()
     }
     document.addEventListener('visibilitychange', onVisible)
@@ -121,7 +173,7 @@ export function useDriverGpsStatus(): DriverGpsController {
       document.removeEventListener('visibilitychange', onVisible)
       if (permissionStatus) permissionStatus.onchange = null
     }
-  }, [requestAccess])
+  }, [markReady, requestAccess])
 
   return { status, requestAccess }
 }

@@ -23,7 +23,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const commandBus = context.container.resolve('commandBus') as CommandBus
     const { result } = await commandBus.execute<
       typeof parsed,
-      { assignmentId: string; shiftStart: string | null; shiftEnd: string | null; status: string }
+      {
+        assignmentId: string
+        shiftStart: string | null
+        shiftEnd: string | null
+        plannedShiftStart: string | null
+        plannedShiftEnd: string | null
+        gpsDistanceKm: string | null
+        status: string
+      }
     >('taxi_fleet.assignments.shift', { input: parsed, ctx: context })
     if (!result?.assignmentId) {
       return NextResponse.json(
@@ -35,6 +43,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       id: result.assignmentId,
       shiftStart: result.shiftStart,
       shiftEnd: result.shiftEnd,
+      plannedShiftStart: result.plannedShiftStart,
+      plannedShiftEnd: result.plannedShiftEnd,
+      gpsDistanceKm: result.gpsDistanceKm,
       status: result.status,
     })
   } catch (err) {

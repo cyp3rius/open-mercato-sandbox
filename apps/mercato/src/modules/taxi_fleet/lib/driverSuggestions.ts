@@ -80,16 +80,11 @@ export async function suggestDriversForTripWindow(
       { tenantId: params.tenantId, organizationId: params.organizationId },
     )
     if (dayAssignment) {
-      if (
-        tripWithinAssignmentWindow(
-          params.startedAt,
-          params.endedAt,
-          dayAssignment.shiftStart,
-          dayAssignment.shiftEnd,
-        )
-      ) {
+      const windowStart = dayAssignment.shiftStart ?? dayAssignment.plannedShiftStart
+      const windowEnd = dayAssignment.shiftEnd ?? dayAssignment.plannedShiftEnd
+      if (tripWithinAssignmentWindow(params.startedAt, params.endedAt, windowStart, windowEnd)) {
         score += 50
-        reasons.push(dayAssignment.shiftStart && dayAssignment.shiftEnd ? 'within_assignment_hours' : 'has_daily_assignment')
+        reasons.push(windowStart && windowEnd ? 'within_assignment_hours' : 'has_daily_assignment')
       } else {
         score -= 60
         reasons.push('outside_assignment_hours')

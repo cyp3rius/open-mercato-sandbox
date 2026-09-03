@@ -9,6 +9,8 @@ export type SettlementSnapshotJson = {
   tripIds: string[]
   trips: SettlementTripSnapshot[]
   computedDistanceKm: number
+  gpsDistanceKm?: number
+  emptyDistanceKm?: number
   revenueBreakdown: SettlementRevenueBreakdown
   costBreakdown: SettlementCostBreakdown
   fuelCostNet: number
@@ -25,6 +27,8 @@ export function buildSettlementSnapshotJson(params: SettlementSnapshotJson): Rec
     tripIds: params.tripIds,
     trips: params.trips,
     computedDistanceKm: params.computedDistanceKm,
+    gpsDistanceKm: params.gpsDistanceKm ?? 0,
+    emptyDistanceKm: params.emptyDistanceKm ?? 0,
     revenueBreakdown: params.revenueBreakdown,
     costBreakdown: params.costBreakdown,
     fuelCostNet: params.fuelCostNet,
