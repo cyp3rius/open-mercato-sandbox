@@ -48,6 +48,12 @@ export class TaxiFleetDriverProfile {
   @Property({ name: 'payout_percent', type: 'numeric', precision: 5, scale: 2, default: 0 })
   payoutPercent: string = '0'
 
+  @Property({ name: 'payout_mode', type: 'text', default: 'fixed' })
+  payoutMode: string = 'fixed'
+
+  @Property({ name: 'payout_tiers_json', type: 'json', nullable: true })
+  payoutTiersJson?: Record<string, unknown>[] | null
+
   @Property({ name: 'default_resource_id', type: 'uuid', nullable: true })
   defaultResourceId?: string | null
 

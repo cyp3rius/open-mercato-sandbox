@@ -10,6 +10,11 @@ import { calculateSettlementRevenue, type SettlementRevenueBreakdown, type Settl
 import { calculateSettlementTripDistance, type SettlementDistanceResult } from './settlementTripDistance'
 import { computeDriverPayoutAmount } from './settlementDriverPayout'
 import { computeTransferAmount } from './settlementTransfer'
+import {
+  resolveSettlementPayoutPercent,
+  type DriverPayoutSchedule,
+  type ResolvedSettlementPayout,
+} from './settlementPayoutResolve'
 
 export type SettlementTotals = {
   revenueGross: number
@@ -17,6 +22,7 @@ export type SettlementTotals = {
   costsGross: number
   costsNet: number
   netAmount: number
+  payoutPercent: number
   payoutAmount: number
   cashExpected: number
   transferAmount: number
@@ -29,6 +35,7 @@ export type SettlementTotals = {
   costs: SettlementCostsResult
   revenue: SettlementRevenueResult
   incomeReconciliation: SettlementIncomeReconciliationSummary
+  payoutResolution: ResolvedSettlementPayout
 }
 
 export type CalculateWeeklySettlementParams = {
@@ -36,7 +43,9 @@ export type CalculateWeeklySettlementParams = {
   organizationId: string
   teamMemberId: string
   weekStart: string
-  payoutPercent: number
+  /** Used when payoutSchedule is omitted (locked rows / explicit percent). */
+  payoutPercent?: number
+  payoutSchedule?: DriverPayoutSchedule
   totalDistanceKm?: number
   cashCollected?: number
   bonusAmount?: number
@@ -57,9 +66,19 @@ export async function calculateWeeklySettlement(
   ])
 
   const netAmount = revenue.revenueNet - costs.costsNet
+  const payoutResolution = params.payoutSchedule
+    ? resolveSettlementPayoutPercent(params.payoutSchedule, netAmount)
+    : {
+        mode: 'fixed' as const,
+        percent: Number(params.payoutPercent ?? 0) || 0,
+        selectionNetAmount: netAmount,
+        tiers: null,
+        matchedTier: null,
+      }
+  const payoutPercent = payoutResolution.percent
   const payoutAmount = computeDriverPayoutAmount({
     netAmount,
-    payoutPercent: params.payoutPercent,
+    payoutPercent,
     bonusAmount: params.bonusAmount,
     compensationAmount: params.compensationAmount,
   })
@@ -83,6 +102,7 @@ export async function calculateWeeklySettlement(
     costsGross: costs.costsGross,
     costsNet: costs.costsNet,
     netAmount,
+    payoutPercent,
     payoutAmount,
     cashExpected: revenue.cashExpected,
     transferAmount,
@@ -95,5 +115,6 @@ export async function calculateWeeklySettlement(
     costs,
     revenue,
     incomeReconciliation: buildSettlementIncomeReconciliationSummary(distance.trips),
+    payoutResolution,
   }
 }

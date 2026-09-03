@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
+import { z } from 'zod'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
 import { createCrud } from '@open-mercato/ui/backend/utils/crud'
@@ -70,7 +71,7 @@ export default function TaxiFleetDriverCreatePage() {
             fields={fields}
             groups={groups}
             initialValues={defaultDriverProfileFormValues(settings.defaultPayoutPercent)}
-            schema={driverProfileCreateSchema()}
+            schema={driverProfileCreateSchema() as z.ZodType<DriverProfileFormValues>}
             onSubmit={async (values) => {
               if (!organizationId || !tenantId) throw new Error(t('taxi_fleet.errors.generic', 'Operation failed.'))
               const call = await createCrud<{ id?: string }>(

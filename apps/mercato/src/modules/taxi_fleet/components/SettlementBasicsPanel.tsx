@@ -8,19 +8,59 @@ import { SettlementStatusBadge } from './SettlementStatusBadge'
 import { formatWeekRange } from '../lib/weekUtils'
 
 type SettlementBasicsPanelProps = {
-  values: Pick<SettlementFormValues, 'teamMemberId' | 'weekStart' | 'status'>
+  values: Pick<SettlementFormValues, 'teamMemberId' | 'weekStart' | 'status' | 'payoutPercent'>
   resolveDriverName: (teamMemberId: string) => string
-  resolvePayoutPercent: (teamMemberId: string) => string | null
+  payoutMeta?: Record<string, unknown> | null
+}
+
+function parseTierAmount(value: unknown): number | null {
+  if (value == null || value === '') return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+function formatTierAmountPln(value: number, currency = 'PLN'): string {
+  const amount = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)
+  return `${amount} ${currency}`
+}
+
+/** Open lower (0/null) → `< to PLN`; open upper → `> from PLN`; else `from–to PLN`. */
+export function formatMatchedPayoutTierRange(
+  fromAmount: unknown,
+  toAmount: unknown,
+  currency = 'PLN',
+): string {
+  const from = parseTierAmount(fromAmount)
+  const to = parseTierAmount(toAmount)
+  const openFrom = from == null || from === 0
+  const openTo = to == null
+
+  if (openFrom && !openTo) {
+    return `< ${formatTierAmountPln(to, currency)}`
+  }
+  if (!openFrom && openTo) {
+    return `> ${formatTierAmountPln(from, currency)}`
+  }
+  if (openFrom && openTo) {
+    return ''
+  }
+  return `${formatTierAmountPln(from!, currency)}–${formatTierAmountPln(to!, currency)}`
 }
 
 export function SettlementBasicsPanel({
   values,
   resolveDriverName,
-  resolvePayoutPercent,
+  payoutMeta = null,
 }: SettlementBasicsPanelProps) {
   const t = useT()
-  const payoutPercent =
-    values.teamMemberId.length > 0 ? resolvePayoutPercent(values.teamMemberId) : null
+  const payoutPercent = values.payoutPercent
+  const mode = typeof payoutMeta?.mode === 'string' ? payoutMeta.mode : null
+  const matched = payoutMeta?.matchedTier
+  const matchedRecord =
+    matched && typeof matched === 'object' ? (matched as Record<string, unknown>) : null
 
   return (
     <section className="rounded-lg border bg-card px-4 py-3">
@@ -46,9 +86,22 @@ export function SettlementBasicsPanel({
             {t('taxi_fleet.settlements.payoutPercent', 'Payout percent')}
           </dt>
           <dd className="text-sm font-medium tabular-nums">
-            {payoutPercent != null && payoutPercent.trim().length > 0
+            {payoutPercent != null && String(payoutPercent).trim().length > 0
               ? formatPercentDisplay(payoutPercent)
               : '—'}
+            {mode === 'tiered' ? (
+              <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                {(() => {
+                  const range = matchedRecord
+                    ? formatMatchedPayoutTierRange(matchedRecord.fromAmount, matchedRecord.toAmount)
+                    : ''
+                  if (range) {
+                    return `${t('taxi_fleet.settlements.payoutMode.tieredMatched', 'Tier:')} ${range}`
+                  }
+                  return t('taxi_fleet.settlements.payoutMode.tiered', 'Tiered')
+                })()}
+              </span>
+            ) : null}
           </dd>
         </div>
         <div className="col-span-4 min-w-0 space-y-1">

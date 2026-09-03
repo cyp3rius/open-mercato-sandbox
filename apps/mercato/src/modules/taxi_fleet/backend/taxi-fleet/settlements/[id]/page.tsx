@@ -93,7 +93,7 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
   const router = useRouter()
   const settlementId = params?.id ?? ''
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
-  const { resolveName, resolvePayoutPercent } = useFleetDriverDirectory()
+  const { resolveName } = useFleetDriverDirectory()
   const { canManageSettlements } = useTaxiFleetPermissions()
   const { settings: fleetSettings } = useTaxiFleetSettings()
   const [row, setRow] = React.useState<SettlementRow | null>(null)
@@ -435,9 +435,14 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
                   teamMemberId: row.teamMemberId,
                   weekStart: row.weekStart,
                   status: row.status,
+                  payoutPercent: row.payoutPercent,
                 }}
                 resolveDriverName={resolveName}
-                resolvePayoutPercent={resolvePayoutPercent}
+                payoutMeta={
+                  row.snapshotJson?.payout && typeof row.snapshotJson.payout === 'object'
+                    ? (row.snapshotJson.payout as Record<string, unknown>)
+                    : null
+                }
               />
               <SettlementTripDistancePanel
                 settlementId={row.id}

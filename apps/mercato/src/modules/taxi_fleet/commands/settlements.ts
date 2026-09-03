@@ -27,7 +27,6 @@ import {
   isSettlementClosureUpdate,
   isSettlementStatusOnlyUpdate,
   recomputeSettlementTransfer,
-  syncSettlementPayoutPercentFromDriverProfile,
 } from '../lib/settlementRecalculation'
 import { isWeeklySettlementLocked } from '../lib/settlementLock'
 import { canDeleteWeeklySettlement, isAllowedWeeklySettlementStatusTransition } from '../lib/settlementStatusTransitions'
@@ -166,7 +165,6 @@ const generateSettlementCommand: CommandHandler<SettlementGenerateInput, { settl
       } as any)
       em.persist(record)
     }
-    await syncSettlementPayoutPercentFromDriverProfile(em, record)
     await applyWeeklySettlementRecalculation(em, record)
     record.cashCollected = record.cashExpected
     recomputeSettlementTransfer(record)
@@ -252,8 +250,6 @@ const updateSettlementCommand: CommandHandler<SettlementUpdateInput, { settlemen
       if (parsed.compensationAmount !== undefined) row.compensationAmount = numericToString(parsed.compensationAmount)
       if (parsed.airportA4Amount !== undefined) row.airportA4Amount = numericToString(parsed.airportA4Amount)
 
-      await syncSettlementPayoutPercentFromDriverProfile(em, row)
-
       const excludedCosts =
         parsed.excludedCosts !== undefined ? mergeSettlementCostExclusions(row, parsed.excludedCosts) : undefined
 
@@ -305,7 +301,6 @@ const submitSettlementCommand: CommandHandler<
       if (!row) throw new CrudHttpError(404, { error: 'Not found' })
     }
 
-    await syncSettlementPayoutPercentFromDriverProfile(em, row)
     await applyWeeklySettlementRecalculation(em, row)
 
     row.status = 'submitted'

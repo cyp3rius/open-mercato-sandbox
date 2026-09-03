@@ -17,6 +17,7 @@ export type SettlementSnapshotJson = {
   revenuePerKm: number | null
   incomeReconciliation: SettlementIncomeReconciliationSummary
   excludedCosts?: SettlementCostExclusion[]
+  payout?: Record<string, unknown> | null
 }
 
 export function buildSettlementSnapshotJson(params: SettlementSnapshotJson): Record<string, unknown> {
@@ -32,6 +33,7 @@ export function buildSettlementSnapshotJson(params: SettlementSnapshotJson): Rec
     revenuePerKm: params.revenuePerKm,
     incomeReconciliation: params.incomeReconciliation,
     excludedCosts: params.excludedCosts ?? [],
+    payout: params.payout ?? null,
   }
 }
 
@@ -50,4 +52,12 @@ export function parseSettlementRevenueBreakdown(
     free: Number(record.free) || 0,
     other: Number(record.other) || 0,
   }
+}
+
+export function parseSettlementPayoutMeta(
+  snapshotJson?: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  const raw = snapshotJson?.payout
+  if (!raw || typeof raw !== 'object') return null
+  return raw as Record<string, unknown>
 }

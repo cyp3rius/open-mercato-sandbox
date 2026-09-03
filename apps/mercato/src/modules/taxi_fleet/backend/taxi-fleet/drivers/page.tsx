@@ -26,7 +26,9 @@ const PAGE_SIZE = 20
 type DriverRow = {
   id: string
   teamMemberId: string
+  payoutMode?: string
   payoutPercent: string
+  payoutTiersJson?: unknown
   externalAppEnabled: boolean
 }
 
@@ -101,7 +103,16 @@ export default function TaxiFleetDriversPage() {
       {
         accessorKey: 'payoutPercent',
         header: t('taxi_fleet.drivers.payoutPercent', 'Payout'),
-        cell: ({ row }) => formatPercentDisplay(row.original.payoutPercent),
+        cell: ({ row }) => {
+          if (row.original.payoutMode === 'tiered') {
+            const count = Array.isArray(row.original.payoutTiersJson) ? row.original.payoutTiersJson.length : 0
+            return t('taxi_fleet.drivers.payoutMode.tieredSummary', 'Tiered ({count})').replace(
+              '{count}',
+              String(count),
+            )
+          }
+          return formatPercentDisplay(row.original.payoutPercent)
+        },
       },
       {
         accessorKey: 'externalAppEnabled',

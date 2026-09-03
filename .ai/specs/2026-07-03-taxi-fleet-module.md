@@ -53,7 +53,7 @@ Two settlement **types**:
 | **Weekly** | `taxi_fleet_weekly_settlements` | Per driver profile, ISO week (`week_start` = Monday) | Operator backend; future read-only in driver PWA |
 | **Monthly** | `taxi_fleet_monthly_settlements` | Fleet/org, calendar month (`month_start` = YYYY-MM-01) | Operator backend only |
 
-- Weekly: generated and displayed **per driver profile** (`team_member_id` + profile settings e.g. `payout_percent`).
+- Weekly settlements: generated per driver; **driver PWA** has read-only list/detail (`/driver/settlements`) with payout, revenue, costs. Submit remains available via API for future flows.
 - Monthly: **rollup of weekly settlements** whose `week_start` falls in the calendar month; not a replacement for weeklies. Operator generates via `POST /api/taxi_fleet/monthly-settlements/generate`, can recalculate from linked weeklies.
 - UI shows staff display name, not raw UUID.
 
@@ -87,7 +87,7 @@ When operator creates/receives a trip with `started_at` / `ended_at`:
 
 ## Data Models (Phase 1)
 
-- `taxi_fleet_driver_profiles` — `team_member_id`, `payout_percent`, `default_resource_id`, `external_app_enabled`
+- `taxi_fleet_driver_profiles` — `team_member_id`, `payout_mode` (`fixed`\|`tiered`), `payout_percent`, `payout_tiers_json`, `default_resource_id`, `external_app_enabled`
 - `taxi_fleet_daily_assignments` — date, `team_member_id`, `resource_id`, shift, status
 - `taxi_fleet_trips`, `taxi_fleet_trip_cost_lines`, `taxi_fleet_financial_entries` (paragony/faktury + koszty), `taxi_fleet_weekly_settlements`, `taxi_fleet_monthly_settlements`
 - Każdy przejazd wymaga powiązania z klientem CRM (`customer_person_id` lub `customer_company_id`); w API można przekazać `customerEntityId`.

@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
+import { z } from 'zod'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
 import { updateCrud, deleteCrud } from '@open-mercato/ui/backend/utils/crud'
@@ -74,7 +75,7 @@ export function DriverProfileBasicsPanel({
           fields={fields}
           groups={groups}
           initialValues={initialValues}
-          schema={driverProfileUpdateSchema()}
+          schema={driverProfileUpdateSchema() as z.ZodType<DriverProfileUpdateFormValues>}
           readOnly={readOnly}
           submitLabel={t('taxi_fleet.drivers.form.save', 'Save changes')}
           onDelete={readOnly ? undefined : handleDelete}

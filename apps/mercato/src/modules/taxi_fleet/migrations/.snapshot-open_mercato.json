@@ -56196,6 +56196,38 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "text"
+        },
+        "payout_mode": {
+          "name": "payout_mode",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'fixed'",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "payout_tiers_json": {
+          "name": "payout_tiers_json",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "json"
         }
       },
       "name": "taxi_fleet_driver_profiles",

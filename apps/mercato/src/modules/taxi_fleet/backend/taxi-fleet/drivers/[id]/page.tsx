@@ -24,7 +24,9 @@ import { mapDriverProfileRowToUpdateFormValues } from '../../../../components/dr
 type DriverRow = {
   id: string
   teamMemberId: string
+  payoutMode?: string
   payoutPercent: string
+  payoutTiersJson?: unknown
   defaultResourceId?: string | null
   externalAppEnabled: boolean
   boltDriverId?: string | null

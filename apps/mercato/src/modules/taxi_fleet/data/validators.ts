@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { localizedCustomerEmailTemplateSchema, settlementIndicatorRangesSchema } from '../lib/taxiFleetSettings'
 import { pricingConfigSchema } from '../lib/pricing/pricingConfigSchema'
 import { tripStatusDictionarySchema } from '../lib/tripStatuses'
+import { validatePayoutTiers } from '../lib/payoutTiers'
 
 const uuid = z.string().uuid()
 const optionalUuid = z.string().uuid().optional().nullable()
@@ -33,27 +34,69 @@ const optionalPlatformDriverId = z
     return trimmed.length ? trimmed : null
   })
 
-export const driverProfileCreateSchema = z.object({
-  tenantId: uuid,
-  organizationId: uuid,
-  teamMemberId: uuid,
-  payoutPercent: z.coerce.number().min(0).max(100).optional().default(0),
-  defaultResourceId: optionalUuid,
-  externalAppEnabled: z.boolean().optional().default(false),
-  boltDriverId: optionalPlatformDriverId,
-  uberDriverId: optionalPlatformDriverId,
-  freeDriverId: optionalPlatformDriverId,
+export const payoutModeSchema = z.enum(['fixed', 'tiered'])
+
+export const payoutTierSchema = z.object({
+  fromAmount: z.coerce.number().nullable().optional().transform((value) => (value == null || Number.isNaN(value) ? null : value)),
+  toAmount: z.coerce.number().nullable().optional().transform((value) => (value == null || Number.isNaN(value) ? null : value)),
+  percent: z.coerce.number().min(0).max(100),
 })
 
-export const driverProfileUpdateSchema = z.object({
-  id: uuid,
-  payoutPercent: z.coerce.number().min(0).max(100).optional(),
-  defaultResourceId: optionalUuid,
-  externalAppEnabled: z.boolean().optional(),
-  boltDriverId: optionalPlatformDriverId,
-  uberDriverId: optionalPlatformDriverId,
-  freeDriverId: optionalPlatformDriverId,
-})
+function refineDriverPayoutFields(
+  value: {
+    id?: string
+    payoutMode?: 'fixed' | 'tiered'
+    payoutPercent?: number
+    payoutTiers?: Array<{ fromAmount: number | null; toAmount: number | null; percent: number }> | null
+  },
+  ctx: z.RefinementCtx,
+) {
+  const mode = value.payoutMode ?? 'fixed'
+  if (mode !== 'tiered') return
+  // Partial update may omit tiers and keep existing profile tiers.
+  if (value.id && value.payoutTiers === undefined) return
+  const result = validatePayoutTiers(value.payoutTiers ?? [])
+  if (result.ok) return
+  const message =
+    result.issue === 'empty'
+      ? 'At least one payout tier is required'
+      : result.issue === 'overlap'
+        ? 'Payout tiers must not overlap'
+        : result.issue === 'invalid_range'
+          ? 'Each payout tier must have from < to'
+          : 'Payout tier percent must be between 0 and 100'
+  ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ['payoutTiers'] })
+}
+
+export const driverProfileCreateSchema = z
+  .object({
+    tenantId: uuid,
+    organizationId: uuid,
+    teamMemberId: uuid,
+    payoutMode: payoutModeSchema.optional().default('fixed'),
+    payoutPercent: z.coerce.number().min(0).max(100).optional().default(0),
+    payoutTiers: z.array(payoutTierSchema).optional().nullable(),
+    defaultResourceId: optionalUuid,
+    externalAppEnabled: z.boolean().optional().default(false),
+    boltDriverId: optionalPlatformDriverId,
+    uberDriverId: optionalPlatformDriverId,
+    freeDriverId: optionalPlatformDriverId,
+  })
+  .superRefine(refineDriverPayoutFields)
+
+export const driverProfileUpdateSchema = z
+  .object({
+    id: uuid,
+    payoutMode: payoutModeSchema.optional(),
+    payoutPercent: z.coerce.number().min(0).max(100).optional(),
+    payoutTiers: z.array(payoutTierSchema).optional().nullable(),
+    defaultResourceId: optionalUuid,
+    externalAppEnabled: z.boolean().optional(),
+    boltDriverId: optionalPlatformDriverId,
+    uberDriverId: optionalPlatformDriverId,
+    freeDriverId: optionalPlatformDriverId,
+  })
+  .superRefine(refineDriverPayoutFields)
 
 export const driverProfileDeleteSchema = z.object({ id: uuid })
 

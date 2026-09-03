@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import React from 'react'
-import { CalendarDays, CarFront, Fuel, Home, LogOut, Download } from 'lucide-react'
+import { CalendarDays, CarFront, Fuel, Home, LogOut, Download, Wallet } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -41,6 +41,12 @@ const NAV = [
   { href: '/driver', labelKey: 'taxi_fleet.driverApp.nav.home', fallback: 'Home', Icon: Home },
   { href: '/driver/trips', labelKey: 'taxi_fleet.driverApp.nav.trips', fallback: 'Trips', Icon: CarFront },
   { href: '/driver/expenses', labelKey: 'taxi_fleet.driverApp.nav.expenses', fallback: 'Costs', Icon: Fuel },
+  {
+    href: '/driver/settlements',
+    labelKey: 'taxi_fleet.driverApp.nav.settlements',
+    fallback: 'Pay',
+    Icon: Wallet,
+  },
   {
     href: '/driver/assignments',
     labelKey: 'taxi_fleet.driverApp.nav.assignments',
@@ -321,7 +327,7 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-[#F1F1F4] bg-white pb-[env(safe-area-inset-bottom)]">
-        <div className="mx-auto grid max-w-lg grid-cols-4">
+        <div className="mx-auto grid max-w-lg grid-cols-5">
           {NAV.map((item) => {
             const active =
               pathname === item.href || (item.href !== '/driver' && pathname.startsWith(item.href))
