@@ -20,6 +20,22 @@ export function earliestTripStartDate(
   return roundDateToFiveMinutes(new Date(reference.getTime() + minAdvanceHours * 60 * 60 * 1000))
 }
 
+/**
+ * True when `started` meets the booking lead-time rule.
+ * Allows one 5-minute step of slack so a form opened with the default start
+ * does not go stale as `min` / validation recompute against a later clock.
+ */
+export function isTripStartMeetingMinAdvance(
+  started: Date,
+  reference = new Date(),
+  minAdvanceHours = TRIP_MIN_ADVANCE_HOURS,
+): boolean {
+  if (Number.isNaN(started.getTime())) return false
+  const earliest = earliestTripStartDate(reference, minAdvanceHours)
+  const slackMs = DATETIME_LOCAL_FIVE_MINUTE_STEP_SECONDS * 1000
+  return started.getTime() + slackMs >= earliest.getTime()
+}
+
 export function normalizeDateTimeLocalInput(value: string): string {
   const parsed = parseDateTimeLocalValue(value)
   if (!parsed) return value

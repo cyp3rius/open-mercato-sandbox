@@ -1,13 +1,15 @@
 "use client"
 
 import * as React from 'react'
+import { Loader2, Trash2 } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeDetail } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Label } from '@open-mercato/ui/primitives/label'
 import { CRUD_FORM_TEXT_INPUT_CLASS } from '@open-mercato/ui/backend/CrudForm'
+import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { ResourceSearchField } from './ResourceSearchField'
-import { createCrud, updateCrud } from '@open-mercato/ui/backend/utils/crud'
+import { createCrud, deleteCrud, updateCrud } from '@open-mercato/ui/backend/utils/crud'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { format } from 'date-fns'
 import {
@@ -47,18 +49,20 @@ export function AllocationEditDialog({
   onSaved,
 }: AllocationEditDialogProps) {
   const t = useT()
+  const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const { organizationId, tenantId } = useOrganizationScopeDetail()
   const dialogContentRef = React.useRef<HTMLDivElement | null>(null)
-  const [assignmentDate, setAssignmentDate] = React.useState('')
   const [shiftStartLocal, setShiftStartLocal] = React.useState('')
   const [shiftEndLocal, setShiftEndLocal] = React.useState('')
   const [resourceId, setResourceId] = React.useState('')
   const [isSaving, setIsSaving] = React.useState(false)
+  const [isDeleting, setIsDeleting] = React.useState(false)
 
   React.useEffect(() => {
     if (!open) return
-    const date = seed?.assignmentDate ?? (seed?.shiftStart ? format(seed.shiftStart, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'))
-    setAssignmentDate(date)
+    const date =
+      seed?.assignmentDate ??
+      (seed?.shiftStart ? format(seed.shiftStart, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'))
     setShiftStartLocal(seed?.shiftStart ? toDateTimeLocalValue(seed.shiftStart) : `${date}T06:00`)
     setShiftEndLocal(seed?.shiftEnd ? toDateTimeLocalValue(seed.shiftEnd) : `${date}T22:00`)
     setResourceId(seed?.resourceId ?? defaultResourceId ?? '')
@@ -76,13 +80,23 @@ export function AllocationEditDialog({
       flash(t('taxi_fleet.allocations.vehicleRequired', 'Select a vehicle.'), 'error')
       return
     }
+    if (!shiftStartLocal.trim()) {
+      flash(t('taxi_fleet.allocations.fromRequired', 'Set the shift start time.'), 'error')
+      return
+    }
+    const shiftStart = new Date(shiftStartLocal)
+    if (Number.isNaN(shiftStart.getTime())) {
+      flash(t('taxi_fleet.allocations.fromInvalid', 'Enter a valid start date and time.'), 'error')
+      return
+    }
+    const assignmentDate = format(shiftStart, 'yyyy-MM-dd')
     setIsSaving(true)
     try {
       const payload = {
         teamMemberId,
         resourceId,
         assignmentDate,
-        shiftStart: shiftStartLocal ? new Date(shiftStartLocal).toISOString() : null,
+        shiftStart: shiftStart.toISOString(),
         shiftEnd: shiftEndLocal ? new Date(shiftEndLocal).toISOString() : null,
         status: 'planned' as const,
       }
@@ -106,15 +120,38 @@ export function AllocationEditDialog({
     } finally {
       setIsSaving(false)
     }
-  }, [assignmentDate, isEdit, onOpenChange, onSaved, organizationId, resourceId, seed?.id, shiftEndLocal, shiftStartLocal, t, teamMemberId, tenantId])
+  }, [isEdit, onOpenChange, onSaved, organizationId, resourceId, seed?.id, shiftEndLocal, shiftStartLocal, t, teamMemberId, tenantId])
+
+  const handleDelete = React.useCallback(async () => {
+    if (!seed?.id) return
+    const confirmed = await confirm({
+      title: t('taxi_fleet.allocations.deleteConfirm', 'Delete this allocation?'),
+      variant: 'destructive',
+    })
+    if (!confirmed) return
+    setIsDeleting(true)
+    try {
+      await deleteCrud('taxi_fleet/assignments', seed.id, {
+        errorMessage: t('taxi_fleet.allocations.deleteError', 'Could not delete allocation.'),
+      })
+      flash(t('taxi_fleet.allocations.deleted', 'Allocation deleted.'), 'success')
+      onOpenChange(false)
+      onSaved()
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [confirm, onOpenChange, onSaved, seed?.id, t])
+
+  const isBusy = isSaving || isDeleting
 
   const handleDialogKeyDown = useTaxiFleetDialogShortcuts({
     contentRef: dialogContentRef,
     onCancel: handleCancel,
-    canSubmit: !isSaving,
+    canSubmit: !isBusy,
   })
 
   return (
+    <>
     <TaxiFleetDialogFrame
       open={open}
       onOpenChange={onOpenChange}
@@ -134,16 +171,6 @@ export function AllocationEditDialog({
         }}
         body={(
           <>
-            <div className="space-y-1">
-              <Label className="block text-sm font-medium">{t('taxi_fleet.allocations.date', 'Date')}</Label>
-              <input
-                type="date"
-                value={assignmentDate}
-                onChange={(event) => setAssignmentDate(event.target.value)}
-                className={CRUD_FORM_TEXT_INPUT_CLASS}
-                disabled={isSaving}
-              />
-            </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label className="block text-sm font-medium">{t('taxi_fleet.allocations.from', 'From')}</Label>
@@ -152,7 +179,7 @@ export function AllocationEditDialog({
                   value={shiftStartLocal}
                   onChange={(event) => setShiftStartLocal(event.target.value)}
                   className={CRUD_FORM_TEXT_INPUT_CLASS}
-                  disabled={isSaving}
+                  disabled={isBusy}
                 />
               </div>
               <div className="space-y-1">
@@ -162,27 +189,49 @@ export function AllocationEditDialog({
                   value={shiftEndLocal}
                   onChange={(event) => setShiftEndLocal(event.target.value)}
                   className={CRUD_FORM_TEXT_INPUT_CLASS}
-                  disabled={isSaving}
+                  disabled={isBusy}
                 />
               </div>
             </div>
             <div className="space-y-1">
               <Label className="block text-sm font-medium">{t('taxi_fleet.assignments.vehicle', 'Vehicle')}</Label>
-              <ResourceSearchField value={resourceId} onChange={setResourceId} disabled={isSaving} />
+              <ResourceSearchField value={resourceId} onChange={setResourceId} disabled={isBusy} />
             </div>
           </>
         )}
         footer={(
-          <>
-            <Button type="button" variant="outline" onClick={handleCancel} disabled={isSaving}>
-              {t('common.cancel', 'Cancel')}
-            </Button>
-            <Button type="submit" disabled={isSaving}>
-              {t('common.save', 'Save')}
-            </Button>
-          </>
+          <div className="flex w-full flex-wrap items-center justify-between gap-2">
+            {isEdit ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleDelete()}
+                disabled={isBusy}
+                className="text-red-600 border-red-200 hover:bg-red-50"
+              >
+                {isDeleting ? (
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                ) : (
+                  <Trash2 className="size-4 mr-2" />
+                )}
+                {t('ui.forms.actions.delete', 'Delete')}
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" onClick={handleCancel} disabled={isBusy}>
+                {t('common.cancel', 'Cancel')}
+              </Button>
+              <Button type="submit" disabled={isBusy}>
+                {t('common.save', 'Save')}
+              </Button>
+            </div>
+          </div>
         )}
       />
     </TaxiFleetDialogFrame>
+    {ConfirmDialogElement}
+    </>
   )
 }

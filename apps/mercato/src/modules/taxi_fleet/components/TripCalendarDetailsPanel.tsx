@@ -8,6 +8,7 @@ import {
   MapPin,
   Pencil,
   Users,
+  Trash2,
   X,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
@@ -16,6 +17,9 @@ import { DictionaryAppearancePreview } from '@open-mercato/core/modules/dictiona
 import { LoadingMessage } from '@open-mercato/ui/backend/detail'
 import { IconButton } from '@open-mercato/ui/primitives/icon-button'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { deleteCrud } from '@open-mercato/ui/backend/utils/crud'
+import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
+import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { formatMoneyDisplay } from '@open-mercato/shared/lib/numeric'
 import { mapTripRowToFormValues, type TripFormValues } from './tripFormConfig'
@@ -24,6 +28,7 @@ import { useFleetDriverDirectory } from './useFleetDriverDirectory'
 import { useResourceLabels } from './useResourceLabels'
 import { useTaxiFleetLabels } from './useTaxiFleetLabels'
 import { useTripStatusDictionary } from './useTripStatusDictionary'
+import { useTaxiFleetPermissions } from './useTaxiFleetPermissions'
 
 type TripRow = {
   id: string
@@ -123,6 +128,8 @@ export type TripCalendarDetailsPanelProps = {
 export function TripCalendarDetailsPanel({ open, item, onOpenChange }: TripCalendarDetailsPanelProps) {
   const t = useT()
   const router = useRouter()
+  const { confirm, ConfirmDialogElement } = useConfirmDialog()
+  const { canManageTrips, isLoading: permissionsLoading } = useTaxiFleetPermissions()
   const { findDefinition } = useTripStatusDictionary()
   const { resolveName } = useFleetDriverDirectory()
   const { resolveTripTypeLabel } = useTaxiFleetLabels()
@@ -130,6 +137,28 @@ export function TripCalendarDetailsPanel({ open, item, onOpenChange }: TripCalen
   const [loading, setLoading] = React.useState(false)
   const [row, setRow] = React.useState<TripRow | null>(null)
   const [error, setError] = React.useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = React.useState(false)
+
+  const handleDeleteTrip = React.useCallback(async () => {
+    if (!tripIdFromItem) return
+    if (!permissionsLoading && !canManageTrips) return
+    const ok = await confirm({
+      title: t('taxi_fleet.trips.list.deleteConfirm', 'Delete this trip?'),
+      variant: 'destructive',
+    })
+    if (!ok) return
+    setIsDeleting(true)
+    try {
+      await deleteCrud('taxi_fleet/trips', tripIdFromItem, {
+        errorMessage: t('taxi_fleet.trips.list.deleteError', 'Failed to delete trip.'),
+      })
+      flash(t('taxi_fleet.trips.list.deleteSuccess', 'Trip deleted.'), 'success')
+      onOpenChange(false)
+      router.refresh()
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [canManageTrips, confirm, onOpenChange, permissionsLoading, router, t, tripIdFromItem])
 
   const resourceIds = React.useMemo(
     () => (row?.resourceId ? [row.resourceId] : []),
@@ -257,6 +286,19 @@ export function TripCalendarDetailsPanel({ open, item, onOpenChange }: TripCalen
                 }}
               >
                 <Pencil className="h-5 w-5" />
+              </IconButton>
+            ) : null}
+            {tripIdFromItem && (permissionsLoading || canManageTrips) ? (
+              <IconButton
+                type="button"
+                variant="outline"
+                size="lg"
+                aria-label={t('taxi_fleet.trips.list.deleteConfirm', 'Delete this trip?')}
+                className="border-red-200 text-red-600 hover:bg-red-50"
+                disabled={isDeleting}
+                onClick={() => void handleDeleteTrip()}
+              >
+                <Trash2 className="h-5 w-5" aria-hidden />
               </IconButton>
             ) : null}
             <IconButton
@@ -509,6 +551,7 @@ export function TripCalendarDetailsPanel({ open, item, onOpenChange }: TripCalen
           ) : null}
         </div>
       </div>
+      {ConfirmDialogElement}
     </>
   )
 }

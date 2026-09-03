@@ -16,6 +16,7 @@ import {
   defaultTripDateTimeLocalRange,
   earliestTripStartDate,
   isoToDateTimeLocalValue,
+  isTripStartMeetingMinAdvance,
   normalizeDateTimeLocalInput,
   roundDateToFiveMinutes,
   toDateTimeLocalValue,
@@ -78,6 +79,9 @@ export type TripFormOptions = {
   onAssignmentResolved?: (assignmentId: string | null) => void
   statusOptions?: Array<{ value: string; label: string }>
   defaultStatusCode?: string
+  /** Frozen when the create form opens — keeps min-advance / datetime `min` stable. */
+  minAdvanceReference?: Date
+  minAdvanceHours?: number
 }
 
 const TRIP_REQUEST_FIELD_IDS = new Set<string>([
@@ -190,13 +194,19 @@ function tripRequestSchemaShape() {
   }
 }
 
-export function tripFormSchema(
-  t: TranslateFn,
-  options?: { requireDriver?: boolean; enforceMinAdvance?: boolean; minAdvanceHours?: number },
-) {
+export type TripFormValidationOptions = {
+  requireDriver?: boolean
+  enforceMinAdvance?: boolean
+  minAdvanceHours?: number
+  /** Clock frozen at form open so default start stays valid while filling the form. */
+  minAdvanceReference?: Date
+}
+
+export function tripFormSchema(t: TranslateFn, options?: TripFormValidationOptions) {
   const requireDriver = options?.requireDriver ?? true
   const enforceMinAdvance = options?.enforceMinAdvance ?? false
   const minAdvanceHours = options?.minAdvanceHours ?? TRIP_MIN_ADVANCE_HOURS
+  const minAdvanceReference = options?.minAdvanceReference ?? new Date()
   return z
     .object({
       teamMemberId: requireDriver ? z.string().uuid() : z.string(),
@@ -231,8 +241,7 @@ export function tripFormSchema(
       }
 
       if (enforceMinAdvance && !Number.isNaN(started.getTime())) {
-        const earliest = earliestTripStartDate(new Date(), minAdvanceHours)
-        if (started.getTime() < earliest.getTime()) {
+        if (!isTripStartMeetingMinAdvance(started, minAdvanceReference, minAdvanceHours)) {
           ctx.addIssue({
             code: 'custom',
             message: t(
@@ -313,9 +322,46 @@ export function tripFormSchema(
 export function isTripFormSubmittable(
   values: TripFormValues,
   t: TranslateFn,
-  options?: { requireDriver?: boolean; enforceMinAdvance?: boolean; minAdvanceHours?: number },
+  options?: TripFormValidationOptions,
 ): boolean {
   return tripFormSchema(t, options).safeParse(values).success
+}
+
+/** Human-readable blockers for create UX (submit was previously disabled silently). */
+export function listTripFormBlockingIssues(
+  values: TripFormValues,
+  t: TranslateFn,
+  options?: TripFormValidationOptions,
+): string[] {
+  const parsed = tripFormSchema(t, options).safeParse(values)
+  if (parsed.success) return []
+  const issues: string[] = []
+  const seen = new Set<string>()
+  for (const issue of parsed.error.issues) {
+    const path = issue.path.map(String).join('.') || '_'
+    if (seen.has(path)) continue
+    seen.add(path)
+    if (path === 'fromAddress' || path === 'toAddress') {
+      issues.push(t('taxi_fleet.trips.form.errors.routeRequired', 'Enter pickup and drop-off addresses.'))
+      seen.add('fromAddress')
+      seen.add('toAddress')
+      continue
+    }
+    if (path === 'teamMemberId') {
+      issues.push(t('taxi_fleet.trips.form.errors.driverRequired', 'Select a driver.'))
+      continue
+    }
+    if (path === 'resourceId') {
+      issues.push(t('taxi_fleet.trips.form.errors.vehicleRequired', 'Select a vehicle.'))
+      continue
+    }
+    if (path === 'customerEntityId') {
+      issues.push(t('taxi_fleet.trips.form.errors.customerRequired', 'Customer is required for client trips.'))
+      continue
+    }
+    issues.push(issue.message)
+  }
+  return issues
 }
 
 const ROUTE_FIELD_IDS = [
@@ -472,6 +518,8 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
     onAssignmentResolved,
     statusOptions: statusOptionsInput,
     defaultStatusCode,
+    minAdvanceReference,
+    minAdvanceHours = TRIP_MIN_ADVANCE_HOURS,
   } = options
   const fieldLocked = (fieldId: string) =>
     readOnly || (Boolean(lockStatus) && !isTripDetailFieldEditable(lockStatus as string, fieldId))
@@ -486,6 +534,12 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
   const statusOptions = statusOptionsInput ?? []
   const lockedDisplayName =
     driverLocked && lockedTeamMemberId ? resolveDriverName(lockedTeamMemberId) : null
+  const createMinLocal =
+    mode === 'create'
+      ? toDateTimeLocalValue(
+          earliestTripStartDate(minAdvanceReference ?? new Date(), minAdvanceHours),
+        )
+      : undefined
 
   const assignmentFields: CrudField[] = []
 
@@ -559,11 +613,7 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
           disabled={disabled}
           readOnly={fieldReadOnly || fieldLocked('startedAtLocal')}
           autoFocus={autoFocus}
-          min={
-            mode === 'create'
-              ? toDateTimeLocalValue(earliestTripStartDate(new Date(), TRIP_MIN_ADVANCE_HOURS))
-              : undefined
-          }
+          min={createMinLocal}
         />
       ),
     },

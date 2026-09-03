@@ -9,7 +9,7 @@ import { taxiFleetDialogCrudTabbedBodyClass } from './TaxiFleetDialogShell'
 import {
   buildTripFormFields,
   buildTripFormGroups,
-  isTripFormSubmittable,
+  listTripFormBlockingIssues,
   tripFormSchema,
   TRIP_FORM_SYNC_GROUP_ID,
   type TripFormValues,
@@ -82,6 +82,9 @@ export function TripCrudForm(props: TripCrudFormProps) {
 
   const activeTab = layout === 'dialog' ? (props.activeTab ?? 'route') : null
 
+  // Freeze lead-time clock when the form instance mounts (or remounts via formKey).
+  const minAdvanceReference = React.useMemo(() => new Date(), [formKey])
+
   const fields = React.useMemo(
     () =>
       buildTripFormFields(t, {
@@ -96,6 +99,7 @@ export function TripCrudForm(props: TripCrudFormProps) {
         readOnly,
         lockStatus,
         allowDriverEdit,
+        minAdvanceReference,
       }),
     [
       allowDriverEdit,
@@ -104,6 +108,7 @@ export function TripCrudForm(props: TripCrudFormProps) {
       layout,
       lockStatus,
       lockedTeamMemberId,
+      minAdvanceReference,
       mode,
       onAssignmentResolved,
       readOnly,
@@ -136,33 +141,60 @@ export function TripCrudForm(props: TripCrudFormProps) {
   }, [activeTab, allGroups, layout, sidebarExtra])
 
   const enforceMinAdvance = mode === 'create'
-  const schema = React.useMemo(
-    () => tripFormSchema(t, { enforceMinAdvance }),
-    [enforceMinAdvance, t],
-  )
   const requireDriver = !(driverLocked && lockedTeamMemberId?.trim().length)
-
-  const resolveSubmittable = React.useCallback(
-    (values: TripFormValues) => isTripFormSubmittable(values, t, { requireDriver, enforceMinAdvance }),
-    [enforceMinAdvance, requireDriver, t],
+  const validationOptions = React.useMemo(
+    () => ({ requireDriver, enforceMinAdvance, minAdvanceReference }),
+    [enforceMinAdvance, minAdvanceReference, requireDriver],
   )
 
-  const [canSubmit, setCanSubmit] = React.useState(() => resolveSubmittable(initialValues))
+  const schema = React.useMemo(
+    () => tripFormSchema(t, validationOptions),
+    [t, validationOptions],
+  )
+
+  const [blockingIssues, setBlockingIssues] = React.useState<string[]>(() =>
+    listTripFormBlockingIssues(initialValues, t, validationOptions),
+  )
 
   React.useEffect(() => {
-    setCanSubmit(resolveSubmittable(initialValues))
-  }, [formKey, initialValues, resolveSubmittable])
+    const issues = listTripFormBlockingIssues(initialValues, t, validationOptions)
+    setBlockingIssues(issues)
+    onSubmitReadyChange?.(issues.length === 0)
+  }, [formKey, initialValues, onSubmitReadyChange, t, validationOptions])
 
   const handleValuesChange = React.useCallback(
     (values: TripFormValues) => {
-      const ready = resolveSubmittable(values)
-      setCanSubmit(ready)
-      onSubmitReadyChange?.(ready)
+      const issues = listTripFormBlockingIssues(values, t, validationOptions)
+      setBlockingIssues(issues)
+      onSubmitReadyChange?.(issues.length === 0)
     },
-    [onSubmitReadyChange, resolveSubmittable],
+    [onSubmitReadyChange, t, validationOptions],
   )
 
-  const submitDisabled = !canSubmit
+  const blockingHint =
+    !readOnly && mode === 'create' && blockingIssues.length > 0 ? (
+      <div
+        className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+        role="status"
+      >
+        <div className="font-medium">
+          {t('taxi_fleet.trips.form.incompleteTitle', 'Complete required fields to create the trip:')}
+        </div>
+        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+          {blockingIssues.map((issue) => (
+            <li key={issue}>{issue}</li>
+          ))}
+        </ul>
+        {layout === 'dialog' ? (
+          <p className="mt-1.5 text-xs text-amber-900/80">
+            {t(
+              'taxi_fleet.trips.form.incompleteTabsHint',
+              'Check the Route, Assignment, and Customer tabs.',
+            )}
+          </p>
+        ) : null}
+      </div>
+    ) : null
 
   const crudFormProps = {
     fields,
@@ -174,7 +206,8 @@ export function TripCrudForm(props: TripCrudFormProps) {
     readOnly,
     // Completed/cancelled trips must stay viewable (OCR sidebar, scroll) without CrudForm's frosted overlay.
     readOnlyOverlay: readOnly ? (false as const) : undefined,
-    submitDisabled,
+    // Keep submit clickable so Zod field errors surface; only gate on read-only.
+    submitDisabled: readOnly,
     onValuesChange: handleValuesChange,
     onSubmit,
   }
@@ -182,6 +215,7 @@ export function TripCrudForm(props: TripCrudFormProps) {
   if (layout === 'dialog') {
     return (
       <div className={taxiFleetDialogCrudTabbedBodyClass}>
+        {blockingHint}
         <CrudForm<TripFormValues>
           key={formKey}
           embedded
@@ -194,13 +228,16 @@ export function TripCrudForm(props: TripCrudFormProps) {
   const { title, backHref, cancelHref, onDelete } = props
 
   return (
-    <CrudForm<TripFormValues>
-      key={formKey}
-      title={title}
-      backHref={backHref}
-      cancelHref={readOnly ? undefined : cancelHref}
-      onDelete={onDelete}
-      {...crudFormProps}
-    />
+    <>
+      {blockingHint}
+      <CrudForm<TripFormValues>
+        key={formKey}
+        title={title}
+        backHref={backHref}
+        cancelHref={readOnly ? undefined : cancelHref}
+        onDelete={onDelete}
+        {...crudFormProps}
+      />
+    </>
   )
 }

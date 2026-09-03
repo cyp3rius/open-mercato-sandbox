@@ -3,6 +3,7 @@ import {
   defaultTripDateTimeLocalRange,
   earliestTripStartDate,
   endedAtLocalFromDuration,
+  isTripStartMeetingMinAdvance,
   normalizeDateTimeLocalInput,
   parseDateTimeLocalValue,
   roundDateToFiveMinutes,
@@ -51,6 +52,15 @@ describe('TRIP_MIN_ADVANCE_HOURS / booking lead time', () => {
     const range = defaultTripDateTimeLocalRange(reference, { minAdvanceHours: 0 })
     const started = parseDateTimeLocalValue(range.startedAtLocal)
     expect(started?.getTime()).toBe(roundDateToFiveMinutes(reference).getTime())
+  })
+
+  it('isTripStartMeetingMinAdvance tolerates one 5-minute clock drift', () => {
+    const openedAt = new Date('2026-09-03T14:32:00')
+    const started = earliestTripStartDate(openedAt, 24)
+    const threeMinutesLater = new Date(openedAt.getTime() + 3 * 60 * 1000)
+    expect(isTripStartMeetingMinAdvance(started, threeMinutesLater, 24)).toBe(true)
+    const tenMinutesLater = new Date(openedAt.getTime() + 10 * 60 * 1000)
+    expect(isTripStartMeetingMinAdvance(started, tenMinutesLater, 24)).toBe(false)
   })
 })
 
