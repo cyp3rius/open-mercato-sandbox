@@ -103,7 +103,7 @@ const crud = makeCrudRoute({
   },
   hooks: {
     afterList: async (payload, ctx) => {
-      const items = Array.isArray(payload.items) ? payload.items : []
+      const items: unknown[] = Array.isArray(payload.items) ? payload.items : []
       if (!items.length) return
 
       const scopeSource = (items[0] ?? {}) as Record<string, unknown>

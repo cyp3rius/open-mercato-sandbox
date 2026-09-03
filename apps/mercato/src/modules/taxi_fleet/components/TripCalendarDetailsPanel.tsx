@@ -162,12 +162,13 @@ export function TripCalendarDetailsPanel({ open, item, onOpenChange }: TripCalen
       setLoading(false)
       return
     }
+    const tripId = tripIdFromItem
     let cancelled = false
     async function load() {
       setLoading(true)
       setError(null)
       const call = await apiCall<{ items: TripRow[] }>(
-        `/api/taxi_fleet/trips?ids=${encodeURIComponent(tripIdFromItem)}&page=1&pageSize=1`,
+        `/api/taxi_fleet/trips?ids=${encodeURIComponent(tripId)}&page=1&pageSize=1`,
       )
       if (cancelled) return
       const loaded = Array.isArray(call.result?.items) ? call.result.items[0] ?? null : null

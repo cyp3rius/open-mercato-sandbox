@@ -85,6 +85,7 @@ export function SettlementGenerateDialog({
       setWeeksRevision(0)
       return
     }
+    const driverId = effectiveDriverId
     let cancelled = false
     setRecentWeeks([])
     setSettledWeekStarts(new Set())
@@ -94,7 +95,7 @@ export function SettlementGenerateDialog({
       const params = new URLSearchParams({
         page: '1',
         pageSize: '100',
-        teamMemberId: effectiveDriverId,
+        teamMemberId: driverId,
       })
       const call = await apiCall<{ items: SettlementListItem[] }>(`/api/taxi_fleet/settlements?${params}`)
       if (cancelled) return

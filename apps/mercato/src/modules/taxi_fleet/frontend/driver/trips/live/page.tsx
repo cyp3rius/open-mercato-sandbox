@@ -55,6 +55,7 @@ function emptyCommercial(): DriverCommercialValue {
   return {
     completionMode: 'manual',
     tripType: 'client',
+    platform: null,
     customerEntityId: '',
     customerLabel: '',
     revenueAmount: '0.00',

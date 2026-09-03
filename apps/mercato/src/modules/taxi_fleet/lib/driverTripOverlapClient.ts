@@ -20,7 +20,7 @@ export async function loadDriverTripsForOverlapCheck(): Promise<DriverTripOverla
       const { result } = await apiCall<{ items: DriverTripOverlapRow[] }>(
         '/api/taxi_fleet/driver/trips',
       )
-      const items = Array.isArray(result.items) ? result.items : []
+      const items = Array.isArray(result?.items) ? result.items : []
       await cacheDriverJson('driver/trips', { items })
       return items
     } catch {

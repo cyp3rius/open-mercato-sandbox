@@ -89,7 +89,7 @@ export default function DriverAssignmentsPage() {
       try {
         const { result } = await apiCall<{ items: AssignmentRow[] }>('/api/taxi_fleet/driver/assignments')
         if (!active) return
-        setItems(sortAssignmentsNewestFirst(result.items ?? []))
+        setItems(sortAssignmentsNewestFirst(result?.items ?? []))
       } catch {
         flash(t('taxi_fleet.driverApp.assignments.loadFailed', 'Could not load assignments.'), 'error')
       }

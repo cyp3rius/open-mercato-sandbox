@@ -21,7 +21,7 @@ export async function recalculateWeeklySettlementsForTrip(
   trip: {
     tenantId: string
     organizationId: string
-    teamMemberId: string | null
+    teamMemberId?: string | null
     startedAt?: Date | null
     endedAt?: Date | null
   },

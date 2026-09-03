@@ -102,7 +102,7 @@ async function loadAssignmentsAround(startedAt: Date, endedAt: Date): Promise<As
   const { result } = await apiCall<{ items: AssignmentListItem[] }>(
     `/api/taxi_fleet/driver/assignments?${params}`,
   )
-  return Array.isArray(result.items) ? result.items : []
+  return Array.isArray(result?.items) ? result.items : []
 }
 
 export default function DriverTripCreatePage() {
@@ -133,6 +133,7 @@ export default function DriverTripCreatePage() {
       profile: { defaultResourceId?: string | null; defaultResourceLabel?: string | null } | null
     }>('/api/taxi_fleet/driver/me')
       .then(({ result }) => {
+        if (!result) return
         const today = result.todayAssignment
         const open = isDriverOnOpenShift(today)
         setOnOpenShift(open)

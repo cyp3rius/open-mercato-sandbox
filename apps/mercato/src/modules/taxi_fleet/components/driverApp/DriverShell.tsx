@@ -129,7 +129,7 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
       } | null
     }>('/api/taxi_fleet/driver/me')
       .then(({ result }) => {
-        if (!active) return
+        if (!active || !result) return
         setDriverName(result.member?.displayName?.trim() || null)
         const assignment = result.todayAssignment
         const open = Boolean(assignment?.shiftStart && !assignment?.shiftEnd)
@@ -160,7 +160,7 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
           const { result } = await apiCall<{ items?: Array<{ id: string; status?: string }> }>(
             '/api/taxi_fleet/driver/trips',
           )
-          const inProgress = (result.items ?? []).find((row) => row.status === 'in_progress')
+          const inProgress = (result?.items ?? []).find((row) => row.status === 'in_progress')
           serverInProgressId = inProgress?.id ?? null
         } catch {
           serverInProgressId = null

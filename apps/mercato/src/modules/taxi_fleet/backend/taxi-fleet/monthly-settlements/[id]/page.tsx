@@ -147,9 +147,9 @@ function buildMonthlyDetailFields(t: ReturnType<typeof useT>, readOnly: boolean)
       readOnly: true,
       component: ({ values }) => {
         const total =
-          Number(values.transferAmount ?? 0) +
-          Number(values.compensationAmount ?? 0) +
-          Number(values.bonusAmount ?? 0)
+          Number(values?.transferAmount ?? 0) +
+          Number(values?.compensationAmount ?? 0) +
+          Number(values?.bonusAmount ?? 0)
         return <p className="text-lg font-semibold tabular-nums">{formatMoney(total)}</p>
       },
     },

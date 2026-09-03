@@ -123,7 +123,7 @@ export default function DriverTripsPage() {
       todayAssignment: { shiftStart: string | null; shiftEnd: string | null } | null
     }>('/api/taxi_fleet/driver/me')
       .then(({ result }) => {
-        if (!active) return
+        if (!active || !result) return
         const open = isDriverOnOpenShift(result.todayAssignment)
         setOnOpenShift(open)
         setFilter(open ? 'today' : 'all')
@@ -153,7 +153,7 @@ export default function DriverTripsPage() {
       try {
         const { result } = await apiCall<{ items: TripRow[] }>('/api/taxi_fleet/driver/trips')
         if (!active) return
-        const next = sortTripsByStartedAtDesc(result.items ?? [])
+        const next = sortTripsByStartedAtDesc(result?.items ?? [])
         setItems(next)
         await cacheDriverJson('driver/trips', next)
       } catch {
@@ -174,7 +174,7 @@ export default function DriverTripsPage() {
 
   const reloadTrips = React.useCallback(async () => {
     const { result } = await apiCall<{ items: TripRow[] }>('/api/taxi_fleet/driver/trips')
-    const next = sortTripsByStartedAtDesc(result.items ?? [])
+    const next = sortTripsByStartedAtDesc(result?.items ?? [])
     setItems(next)
     await cacheDriverJson('driver/trips', next)
   }, [])

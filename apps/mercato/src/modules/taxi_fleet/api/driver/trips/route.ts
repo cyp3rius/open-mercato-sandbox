@@ -254,8 +254,12 @@ export async function POST(req: Request) {
       })
     }
 
+    const platformRaw =
+      body && typeof body === 'object' && 'platform' in body
+        ? (body as { platform?: unknown }).platform
+        : null
     const platform = normalizeTripPlatform(
-      body && typeof body === 'object' && 'platform' in body ? (body as { platform?: unknown }).platform : null,
+      typeof platformRaw === 'string' || platformRaw == null ? platformRaw : null,
     )
     const revenueAmountPreview =
       typeof (body as { revenueAmount?: unknown }).revenueAmount === 'number'

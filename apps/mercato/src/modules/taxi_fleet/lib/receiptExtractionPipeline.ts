@@ -31,6 +31,8 @@ import { syncFinancialEntryDocumentDuplicates } from './documentDuplicates'
 import { mergeReceiptTripDistance, readTripRouteDistanceKm } from './receiptTripDistanceApply'
 import { formatDistanceKm } from './settlementTripDistance'
 
+const STALE_PROCESSING_MS = 2 * 60 * 1000
+
 function mergeTripMetadata(
   trip: TaxiFleetTrip,
   patch: Record<string, unknown>,
@@ -114,6 +116,7 @@ async function syncTripIncomeFromReceiptExtraction(
     vatRatePercent: '23',
     currencyCode: trip.currencyCode ?? 'PLN',
     documentNumber: documentNumber ?? null,
+    isDocumentDuplicate: false,
     occurredAt: trip.startedAt ?? trip.endedAt ?? now,
     receiptAttachmentId: row.attachmentId ?? null,
     notes: trip.notes ?? null,

@@ -64,6 +64,7 @@ const createFinancialEntryCommand: CommandHandler<FinancialEntryCreateInput, { e
       ),
       currencyCode: parsed.currencyCode ?? 'PLN',
       documentNumber: parsed.documentNumber ?? null,
+      isDocumentDuplicate: false,
       occurredAt: parsed.occurredAt,
       receiptAttachmentId: parsed.receiptAttachmentId ?? null,
       notes: parsed.notes ?? null,

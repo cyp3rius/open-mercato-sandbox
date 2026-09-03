@@ -151,7 +151,7 @@ export default function DriverTripDetailPage({
     }
     try {
       const { result } = await apiCall<{ items: TripRow[] }>('/api/taxi_fleet/driver/trips')
-      const items = result.items ?? []
+      const items = result?.items ?? []
       await cacheDriverJson('driver/trips', items)
       const found = findTrip(items, tripId)
       setTrip(found)

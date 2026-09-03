@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import type { z } from 'zod'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
 import type { FleetDriverProfile } from './useFleetDriverDirectory'
@@ -167,7 +168,7 @@ export function TripCrudForm(props: TripCrudFormProps) {
     fields,
     groups,
     initialValues,
-    schema,
+    schema: schema as z.ZodType<TripFormValues>,
     submitLabel,
     extraActions,
     readOnly,

@@ -72,7 +72,7 @@ const generateMonthlySettlementCommand: CommandHandler<MonthlySettlementGenerate
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
-    })
+    } as any)
     applyMonthlyTotals(record, totals)
     await em.persistAndFlush(record)
     return { settlementId: record.id }

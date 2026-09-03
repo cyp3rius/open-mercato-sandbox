@@ -339,8 +339,6 @@ export function buildSettlementCorrectionsFields(t: TranslateFn, readOnly: boole
       label: t('taxi_fleet.settlements.compensationAmount', 'Compensations'),
       layout: 'half',
       readOnly,
-      min: 0,
-      step: 0.01,
     },
     {
       id: 'bonusAmount',
@@ -348,8 +346,6 @@ export function buildSettlementCorrectionsFields(t: TranslateFn, readOnly: boole
       label: t('taxi_fleet.settlements.bonusAmount', 'Bonuses'),
       layout: 'half',
       readOnly,
-      min: 0,
-      step: 0.01,
     },
   ]
 }
@@ -362,8 +358,6 @@ export function buildSettlementCashFields(t: TranslateFn, readOnly: boolean): Cr
       label: t('taxi_fleet.settlements.cashSummary.transferredInput', 'Cash handed to central'),
       layout: 'half',
       readOnly,
-      min: 0,
-      step: 0.01,
     },
     {
       id: 'airportA4Amount',
@@ -371,8 +365,6 @@ export function buildSettlementCashFields(t: TranslateFn, readOnly: boolean): Cr
       label: t('taxi_fleet.settlements.airportA4Amount', 'Airport + A4'),
       layout: 'half',
       readOnly,
-      min: 0,
-      step: 0.01,
     },
   ]
 }

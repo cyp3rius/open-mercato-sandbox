@@ -6,6 +6,7 @@ import {
   CalendarDays,
   CircleDashed,
   Ellipsis,
+  Smartphone,
   UserRound,
   Users,
   type LucideIcon,
@@ -25,6 +26,7 @@ const TRIP_TYPE_ICONS: Record<TaxiFleetTripType, LucideIcon> = {
   empty: CircleDashed,
   event: CalendarDays,
   other: Ellipsis,
+  platform: Smartphone,
 }
 
 type Props = {

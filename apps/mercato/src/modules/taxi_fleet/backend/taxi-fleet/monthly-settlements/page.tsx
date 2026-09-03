@@ -149,15 +149,18 @@ export default function TaxiFleetMonthlySettlementsPage() {
           }}
           filters={filters}
           filterValues={filterValues}
-          onFilterChange={setFilterValues}
+          onFiltersApply={(values) => {
+            setFilterValues(values)
+            setPage(1)
+          }}
+          onFiltersClear={() => {
+            setFilterValues({})
+            setPage(1)
+          }}
           columns={columns}
           data={rows}
           isLoading={isLoading}
-          page={page}
-          totalPages={totalPages}
-          total={total}
-          pageSize={PAGE_SIZE}
-          onPageChange={setPage}
+          pagination={{ page, totalPages, total, pageSize: PAGE_SIZE, onPageChange: setPage }}
           onRowClick={(row) => router.push(detailHref(row.id))}
           rowActions={(row) => (
             <RowActions

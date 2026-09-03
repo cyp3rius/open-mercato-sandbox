@@ -8,7 +8,7 @@ import type { PlatformTripUpsertInput } from '../../data/validators'
 import { loadTaxiFleetOrganizationSettings } from '../taxiFleetOrganizationSettings'
 import type { TaxiFleetTripPlatform } from '../tripPlatforms'
 import { resolvePlatformTripAdapter } from './adapters'
-import { PlatformTripAdapterError } from './adapters/types'
+import { PlatformTripAdapterError, type PlatformTripAdapterRow } from './adapters/types'
 import {
   parsePlatformTripCsv,
   PLATFORM_TRIP_CSV_CHUNK_SIZE,
@@ -153,7 +153,7 @@ async function upsertPlatformTripBatch(params: {
   ctx: CommandRuntimeContext
   tenantId: string
   organizationId: string
-  rows: Array<Omit<PlatformTripUpsertInput, 'tenantId' | 'organizationId'>>
+  rows: PlatformTripAdapterRow[]
   ingestSource: PlatformTripIngestSource
   rowOffset?: number
   seenExternalTripIds?: Set<string>

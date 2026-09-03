@@ -136,7 +136,7 @@ export default function TaxiFleetAssignmentsPage() {
         options: vehicleFilterOptions,
         formatValue: (id) => resolveResourceLabel(id),
         loadOptions: async (query) => {
-          const rows = await remoteSearchFleetResources(query, resourceTypeId)
+          const rows = await remoteSearchFleetResources(query ?? '', resourceTypeId)
           return rows.map((row) => ({ value: row.value, label: row.label }))
         },
         placeholder: t('taxi_fleet.assignments.filterVehicle', 'Select vehicle…'),

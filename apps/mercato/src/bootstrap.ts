@@ -69,19 +69,19 @@ runBootstrapRegistrations()
 
 // Bootstrap factory from shared package
 import { createBootstrap, isBootstrapped } from '@open-mercato/shared/lib/bootstrap'
+import type { OrmEntity } from '@open-mercato/shared/lib/bootstrap/types'
 
-function mergeTaxiFleetOrmEntities(entities: unknown[]): unknown[] {
+function mergeTaxiFleetOrmEntities(entities: OrmEntity[]): OrmEntity[] {
   const withoutTaxiFleet = entities.filter(
-    (entity) => typeof entity !== 'function' || !entity.name?.startsWith('TaxiFleet'),
+    (entity) => typeof entity !== 'function' || !('name' in entity) || !String(entity.name).startsWith('TaxiFleet'),
   )
   const taxiFleetEntities = Object.values(TaxiFleetOrmEntities).filter(
-    (value): value is new () => unknown =>
-      typeof value === 'function' && value.name.startsWith('TaxiFleet'),
-  )
+    (value) => typeof value === 'function' && value.name.startsWith('TaxiFleet'),
+  ) as OrmEntity[]
   return [...withoutTaxiFleet, ...taxiFleetEntities]
 }
 
-const entities = mergeTaxiFleetOrmEntities(generatedEntities)
+const entities = mergeTaxiFleetOrmEntities(generatedEntities as OrmEntity[])
 
 // Create bootstrap function with app's generated data
 export const bootstrap = createBootstrap({

@@ -84,7 +84,7 @@ export function SettlementCashSummaryPanel({
               }}
               onSave={saveCashCollected}
               renderDisplay={({ value }) => (
-                <span className="whitespace-nowrap text-lg font-semibold tabular-nums">{formatMoney(value)}</span>
+                <span className="whitespace-nowrap text-lg font-semibold tabular-nums">{formatMoney(value ?? '')}</span>
               )}
             />
           ) : (

@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeDetail } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
-import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
+import { CrudForm, type CrudField } from '@open-mercato/ui/backend/CrudForm'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { TAXI_FLEET_BASE } from '../backend/taxi-fleet/paths'
@@ -91,42 +91,63 @@ export function MonthlySettlementGenerateDialog({
     }
   }, [open, t])
 
-  const fields = React.useMemo(
-    () => [
+  const fields = React.useMemo((): CrudField[] => {
+    if (loadingMonths) {
+      return [
+        {
+          id: 'monthStart',
+          type: 'custom',
+          label: t('taxi_fleet.monthlySettlements.monthStart', 'Month'),
+          description: t(
+            'taxi_fleet.monthlySettlements.generateMonthHint',
+            'Select the first day of the calendar month (YYYY-MM-01).',
+          ),
+          required: true,
+          layout: 'full',
+          component: () => (
+            <p className="text-sm text-muted-foreground">{t('common.loading', 'Loading…')}</p>
+          ),
+        },
+      ]
+    }
+    if (availableMonths.length === 0) {
+      return [
+        {
+          id: 'monthStart',
+          type: 'custom',
+          label: t('taxi_fleet.monthlySettlements.monthStart', 'Month'),
+          description: t(
+            'taxi_fleet.monthlySettlements.generateMonthHint',
+            'Select the first day of the calendar month (YYYY-MM-01).',
+          ),
+          required: true,
+          layout: 'full',
+          component: () => (
+            <p className="text-sm text-muted-foreground">
+              {t('taxi_fleet.monthlySettlements.noAvailableMonths', 'All recent months already have settlements.')}
+            </p>
+          ),
+        },
+      ]
+    }
+    return [
       {
         id: 'monthStart',
-        type: loadingMonths ? ('custom' as const) : availableMonths.length === 0 ? ('custom' as const) : ('select' as const),
+        type: 'select',
         label: t('taxi_fleet.monthlySettlements.monthStart', 'Month'),
         description: t(
           'taxi_fleet.monthlySettlements.generateMonthHint',
           'Select the first day of the calendar month (YYYY-MM-01).',
         ),
         required: true,
-        layout: 'full' as const,
-        ...(loadingMonths
-          ? {
-              component: () => (
-                <p className="text-sm text-muted-foreground">{t('common.loading', 'Loading…')}</p>
-              ),
-            }
-          : availableMonths.length === 0
-            ? {
-                component: () => (
-                  <p className="text-sm text-muted-foreground">
-                    {t('taxi_fleet.monthlySettlements.noAvailableMonths', 'All recent months already have settlements.')}
-                  </p>
-                ),
-              }
-            : {
-                options: availableMonths.map((monthStart) => ({
-                  value: monthStart,
-                  label: monthStart.slice(0, 7),
-                })),
-              }),
+        layout: 'full',
+        options: availableMonths.map((monthStart) => ({
+          value: monthStart,
+          label: monthStart.slice(0, 7),
+        })),
       },
-    ],
-    [availableMonths, loadingMonths, t],
-  )
+    ]
+  }, [availableMonths, loadingMonths, t])
 
   const initialValues = React.useMemo(
     (): MonthlyGenerateFormValues => ({ monthStart: availableMonths[0] ?? '' }),

@@ -1,5 +1,5 @@
 export type TripTimeRange = {
-  startedAt: Date | string | null | undefined
+  startedAt?: Date | string | null | undefined
   endedAt?: Date | string | null | undefined
   status?: string | null
   id?: string | null

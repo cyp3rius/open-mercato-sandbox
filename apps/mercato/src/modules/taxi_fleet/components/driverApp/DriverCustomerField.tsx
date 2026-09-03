@@ -51,7 +51,7 @@ export function DriverCustomerField({ value, label, onChange, disabled = false }
             `/api/taxi_fleet/driver/customers?${params.toString()}`,
           )
           if (!active) return
-          setOptions(result.items ?? [])
+          setOptions(result?.items ?? [])
         } catch {
           if (active) setOptions([])
         } finally {
@@ -80,6 +80,9 @@ export function DriverCustomerField({ value, label, onChange, disabled = false }
           }),
         },
       )
+      if (!result?.id) {
+        throw new Error('missing customer id')
+      }
       onChange({ id: result.id, label: result.label })
       setCreateOpen(false)
       setCreateName('')

@@ -171,7 +171,10 @@ export async function attachVehicleResourceTypesToVehicleFieldset(
     // Prefer attaching on tenant-wide config when it already owns the fieldsets,
     // instead of creating an empty org-scoped row that would shadow them.
     if (tenantConfig && parentFieldsets.length > 0) {
-      const tenantCurrent = mergeEntityFieldsetConfig(tenantConfig.configJson ?? null, {})
+      const tenantCurrent = mergeEntityFieldsetConfig(
+        normalizeEntityFieldsetConfig(tenantConfig.configJson ?? null),
+        {},
+      )
       tenantConfig.configJson = mergeEntityFieldsetConfig(tenantCurrent, { fieldsets })
       tenantConfig.updatedAt = now
       em.persist(tenantConfig)
@@ -195,7 +198,10 @@ export async function attachVehicleResourceTypesToVehicleFieldset(
     return
   }
 
-  const current = mergeEntityFieldsetConfig(orgConfig.configJson ?? null, {})
+  const current = mergeEntityFieldsetConfig(
+    normalizeEntityFieldsetConfig(orgConfig.configJson ?? null),
+    {},
+  )
   orgConfig.configJson = mergeEntityFieldsetConfig(current, {
     fieldsets,
     singleFieldsetPerRecord: current.singleFieldsetPerRecord,

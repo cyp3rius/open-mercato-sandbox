@@ -18,7 +18,7 @@ export function DriverLastKnownLocationChip({ teamMemberId }: Props) {
       latest: { recordedAt: string; lat: number; lon: number; accuracyM?: number | null } | null
     }>(`/api/taxi_fleet/location/latest?teamMemberId=${encodeURIComponent(teamMemberId)}`)
       .then(({ result }) => {
-        if (!active) return
+        if (!active || !result) return
         const latest = result.latest
         if (!latest) {
           setLabel(null)

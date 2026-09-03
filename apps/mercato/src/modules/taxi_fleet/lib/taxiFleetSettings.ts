@@ -134,7 +134,7 @@ export const taxiFleetSettingsSchema = z.object({
   defaultPayoutPercent: z.coerce.number().min(0).max(100).default(0),
   customerEmailFrom: z.string().max(500).optional().default(''),
   tripStatuses: tripStatusDictionarySchema.default(defaultTripStatusDictionary()),
-  pricing: taxiFleetPricingSettingsSchema.default(defaultFleetPricingConfig()),
+  pricing: taxiFleetPricingSettingsSchema.default(defaultFleetPricingConfig() as never),
   paypal: taxiFleetPaypalSettingsSchema,
   calendar: taxiFleetCalendarSettingsSchema,
   platformSync: taxiFleetPlatformSyncSettingsSchema,

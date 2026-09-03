@@ -96,20 +96,19 @@ export function findOpenDriverShift(
   assignments: DriverShiftAssignmentLike[],
   now: Date = new Date(),
 ): DriverShiftMatch | null {
-  const open = assignments
-    .map((assignment) => {
-      if (!assignment.id || !assignment.resourceId) return null
-      const bounds = resolveDriverShiftBounds(assignment, now)
-      if (!bounds?.open) return null
-      return {
-        assignmentId: assignment.id,
-        resourceId: assignment.resourceId,
-        shiftStart: bounds.start,
-        shiftEnd: bounds.end,
-        open: true as const,
-      }
+  const open: DriverShiftMatch[] = []
+  for (const assignment of assignments) {
+    if (!assignment.id || !assignment.resourceId) continue
+    const bounds = resolveDriverShiftBounds(assignment, now)
+    if (!bounds?.open) continue
+    open.push({
+      assignmentId: assignment.id,
+      resourceId: assignment.resourceId,
+      shiftStart: bounds.start,
+      shiftEnd: bounds.end,
+      open: true,
     })
-    .filter((row): row is DriverShiftMatch => row != null)
+  }
   if (!open.length) return null
   open.sort((left, right) => right.shiftStart.getTime() - left.shiftStart.getTime())
   return open[0] ?? null

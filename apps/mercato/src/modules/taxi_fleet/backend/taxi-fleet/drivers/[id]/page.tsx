@@ -149,8 +149,6 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
                 tabs={tabs}
                 activeTab={tab}
                 onTabChange={setTab}
-                sectionAction={null}
-                onSectionAction={() => {}}
                 navAriaLabel={t('taxi_fleet.drivers.tabs.nav', 'Driver sections')}
                 panelContentKey={tab}
               >

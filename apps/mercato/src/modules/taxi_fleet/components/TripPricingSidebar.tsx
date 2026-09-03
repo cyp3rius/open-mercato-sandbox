@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { formatMoneyDisplay } from '@open-mercato/shared/lib/numeric'
 import { MoneyInputField } from '@open-mercato/ui/backend/inputs/MoneyInputField'
-import type { TripFormValues } from '../tripFormConfig'
+import type { TripFormValues } from './tripFormConfig'
 
 type QuoteSnapshot = {
   currency?: string

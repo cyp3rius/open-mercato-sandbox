@@ -182,7 +182,7 @@ export function PlatformSyncRunsPanel({
       </div>
 
       {loading ? (
-        <LoadingMessage message={t('common.loading', 'Loading…')} />
+        <LoadingMessage label={t('common.loading', 'Loading…')} />
       ) : rows.length === 0 ? (
         <p className="mt-4 text-sm text-muted-foreground">
           {t('taxi_fleet.platformSync.runs.empty', 'No sync runs yet.')}

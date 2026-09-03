@@ -42,5 +42,5 @@ export const pricingConfigSchema = z
   .passthrough()
 
 export function parsePricingConfig(raw: unknown): PricingConfig {
-  return pricingConfigSchema.parse(raw) as PricingConfig
+  return pricingConfigSchema.parse(raw) as unknown as PricingConfig
 }

@@ -4,7 +4,11 @@ import { normalizeTripStatus } from './tripStatuses'
 import { normalizeTripPlatform, type TaxiFleetTripPlatform } from './tripPlatforms'
 import { revenueGrossToNet } from './settlementVat'
 import { loadDriverWeekTrips } from './settlementTripDistance'
-import { emptySettlementRevenueBreakdown } from './settlementRevenueBreakdown'
+import {
+  emptySettlementRevenueBreakdown,
+  type SettlementRevenueBreakdown,
+  type SettlementRevenueLineKey,
+} from './settlementRevenueBreakdown'
 
 export type { SettlementRevenueBreakdown, SettlementRevenueLineKey } from './settlementRevenueBreakdown'
 export { SETTLEMENT_REVENUE_LINE_KEYS, emptySettlementRevenueBreakdown } from './settlementRevenueBreakdown'

@@ -1,5 +1,5 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
+import { findOneWithDecryption, findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetFinancialEntry, TaxiFleetWeeklySettlement } from '../data/entities'
 import { normalizeNipDigits } from '@open-mercato/core/modules/customers/lib/nip'
 import {
@@ -72,7 +72,7 @@ async function excludeDuplicateFromSettlement(
 ): Promise<void> {
   if (entry.kind !== 'expense') return
   const weekStart = resolveFinancialEntryWeekStart(entry.occurredAt)
-  const settlement = await findWithDecryption(
+  const settlement = await findOneWithDecryption(
     em,
     TaxiFleetWeeklySettlement,
     {

@@ -163,7 +163,7 @@ const generateSettlementCommand: CommandHandler<SettlementGenerateInput, { settl
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
-      })
+      } as any)
       em.persist(record)
     }
     await syncSettlementPayoutPercentFromDriverProfile(em, record)

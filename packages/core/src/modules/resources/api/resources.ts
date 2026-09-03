@@ -339,7 +339,6 @@ const crud = makeCrudRoute({
         }
       })
     },
-    decorateCustomFields: { entityIds: [E.resources.resources_resource] },
   },
   actions: {
     create: {
