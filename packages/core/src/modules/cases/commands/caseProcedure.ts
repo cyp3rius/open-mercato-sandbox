@@ -29,7 +29,10 @@ import {
   CASES_PROCEDURE_NOTIFY_OWNER_MESSAGE_TYPE,
 } from '../lib/procedureNotifyMessageTypes'
 import { caseCrudEvents } from '../lib/crud'
-import { resolveInvokeProcedureOwner } from '../lib/resolveProcedureOwner'
+import {
+  resolveInvokeProcedureOwner,
+  resolveStartOrAssignProcedureOwner,
+} from '../lib/resolveProcedureOwner'
 import { scheduleNextRecurrenceOnClose } from '../lib/scheduleNextRecurrenceOnClose'
 import { resolveProcedureActionEntry } from '../../playbooks/lib/resolveProcedureActionEntry'
 import { notifyPersonalFromType } from '../../notifications/lib/moduleNotificationDelivery'
@@ -51,6 +54,16 @@ export const casePlaybookStartSchema = z.object({
   tenantId: uuid,
   organizationId: uuid,
   caseId: uuid,
+  ownerUserId: uuid.optional(),
+})
+
+export const casePlaybookAssignProcedureOwnerSchema = z.object({
+  tenantId: uuid,
+  organizationId: uuid,
+  caseId: uuid,
+  ownerUserId: uuid,
+  /** When true (`cases.edit`), replace an already-set procedure owner (take-over). */
+  replaceExisting: z.boolean().optional(),
 })
 
 export const casePlaybookNextSchema = casePlaybookStartSchema.extend({
@@ -325,10 +338,33 @@ async function resolveCase(em: EntityManager, ctx: CommandRuntimeContext, caseId
 
 function assertProcedureActor(caseRow: ServiceCase, run: CasePlaybookRunMetadata | null, ctx: CommandRuntimeContext) {
   const uid = typeof ctx.auth?.sub === 'string' ? ctx.auth.sub.trim() : ''
-  const oid = run?.procedureOwnerUserId?.trim() || caseRow.ownerUserId?.trim() || ''
-  if (!uid.length || uid !== oid) {
+  const procedureOwner = run?.procedureOwnerUserId?.trim() || ''
+  if (!procedureOwner.length) {
+    throw new CrudHttpError(400, { error: 'cases.procedure.needsProcedureOwner' })
+  }
+  if (!uid.length || uid !== procedureOwner) {
     throw new CrudHttpError(403, { error: 'cases.procedure.ownerOnly' })
   }
+}
+
+async function actorHasCasesEdit(
+  ctx: CommandRuntimeContext,
+  tenantId: string,
+  organizationId: string,
+): Promise<boolean> {
+  const actorUserId = typeof ctx.auth?.sub === 'string' ? ctx.auth.sub.trim() : ''
+  if (!actorUserId.length) return false
+  const rbacService = ctx.container.resolve('rbacService') as {
+    userHasAllFeatures: (
+      userId: string,
+      features: string[],
+      scope: { tenantId: string | null; organizationId: string | null },
+    ) => Promise<boolean>
+  }
+  return rbacService.userHasAllFeatures(actorUserId, ['cases.edit'], {
+    tenantId,
+    organizationId,
+  })
 }
 
 async function finishOrResumeProcedure(
@@ -401,9 +437,17 @@ const startPlaybookCommand: CommandHandler<z.infer<typeof casePlaybookStartSchem
     if (run.startedAt) {
       throw new CrudHttpError(400, { error: 'cases.procedure.alreadyStarted' })
     }
-    const ownerUserId = caseRow.ownerUserId?.trim()
+    const mayEdit = await actorHasCasesEdit(ctx, parsed.tenantId, parsed.organizationId)
+    const ownerUserId = resolveStartOrAssignProcedureOwner({
+      mayEdit,
+      requestedOwnerUserId: parsed.ownerUserId,
+      caseOwnerUserId: caseRow.ownerUserId,
+    })
     if (!ownerUserId) {
       throw new CrudHttpError(400, { error: 'cases.procedure.ownerRequired' })
+    }
+    if (!caseRow.ownerUserId?.trim()) {
+      caseRow.ownerUserId = ownerUserId
     }
     const pb = await ensurePlaybook(em, run.playbookId, parsed.tenantId, parsed.organizationId)
     const def = loadDefinition(pb)
@@ -519,24 +563,23 @@ const nextPlaybookStepCommand: CommandHandler<
         typeof run.actionTaskByActionBlockId?.[block.id] === 'string'
           ? run.actionTaskByActionBlockId[block.id].trim()
           : ''
-      if (!tid.length) {
-        throw new CrudHttpError(400, { error: 'cases.procedure.scheduleTaskBeforeNext' })
-      }
-      const taskRow = await em.findOne(OperationsTask, {
-        id: tid,
-        tenantId: caseRow.tenantId,
-        organizationId: caseRow.organizationId,
-        deletedAt: null,
-      })
-      if (
-        !taskRow ||
-        taskRow.contextType !== OPERATIONS_TASK_CONTEXT_CASE_SERVICE ||
-        taskRow.contextId !== caseRow.id
-      ) {
-        throw new CrudHttpError(400, { error: 'cases.procedure.linkedTaskMissing' })
-      }
-      if (taskRow.taskStatus !== 'done') {
-        throw new CrudHttpError(400, { error: 'cases.procedure.taskMustBeDoneBeforeNext' })
+      if (tid.length) {
+        const taskRow = await em.findOne(OperationsTask, {
+          id: tid,
+          tenantId: caseRow.tenantId,
+          organizationId: caseRow.organizationId,
+          deletedAt: null,
+        })
+        if (
+          !taskRow ||
+          taskRow.contextType !== OPERATIONS_TASK_CONTEXT_CASE_SERVICE ||
+          taskRow.contextId !== caseRow.id
+        ) {
+          throw new CrudHttpError(400, { error: 'cases.procedure.linkedTaskMissing' })
+        }
+        if (taskRow.taskStatus !== 'done') {
+          throw new CrudHttpError(400, { error: 'cases.procedure.taskMustBeDoneBeforeNext' })
+        }
       }
     }
     if (block.kind === 'action') {
@@ -594,6 +637,9 @@ const answerConditionCommand: CommandHandler<
     const run = readCasePlaybookRun(meta)
     if (!run?.startedAt || !run.playbookId || !run.currentBlockId) {
       throw new CrudHttpError(400, { error: 'cases.procedure.notRunning' })
+    }
+    if (!run.procedureOwnerUserId?.trim()) {
+      throw new CrudHttpError(400, { error: 'cases.procedure.needsProcedureOwner' })
     }
     const pb = await ensurePlaybook(em, run.playbookId, parsed.tenantId, parsed.organizationId)
     const def = loadDefinition(pb)
@@ -900,6 +946,64 @@ const scheduleProcedureTaskCommand: CommandHandler<
   },
 }
 
+const assignProcedureOwnerCommand: CommandHandler<
+  z.infer<typeof casePlaybookAssignProcedureOwnerSchema>,
+  { ok: true }
+> = {
+  id: 'cases.playbook.assignProcedureOwner',
+  async execute(input, ctx) {
+    const parsed = casePlaybookAssignProcedureOwnerSchema.parse(input)
+    ensureTenantScope(ctx, parsed.tenantId)
+    ensureOrganizationScope(ctx, parsed.organizationId)
+    const mayEdit = await actorHasCasesEdit(ctx, parsed.tenantId, parsed.organizationId)
+    if (!mayEdit) {
+      throw new CrudHttpError(403, { error: 'cases.procedure.ownerAssignForbidden' })
+    }
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const caseRow = await resolveCase(em, ctx, parsed.caseId)
+    const meta = getMetaObject(caseRow)
+    const run = readCasePlaybookRun(meta)
+    if (!run?.startedAt || !run.playbookId) {
+      throw new CrudHttpError(400, { error: 'cases.procedure.notRunning' })
+    }
+    const existingOwner = run.procedureOwnerUserId?.trim() || ''
+    if (existingOwner.length && !parsed.replaceExisting) {
+      throw new CrudHttpError(400, { error: 'cases.procedure.procedureOwnerAlreadySet' })
+    }
+    const ownerUserId = resolveStartOrAssignProcedureOwner({
+      mayEdit: true,
+      requestedOwnerUserId: parsed.ownerUserId,
+      caseOwnerUserId: caseRow.ownerUserId,
+    })
+    if (!ownerUserId) {
+      throw new CrudHttpError(400, { error: 'cases.procedure.ownerRequired' })
+    }
+    if (!caseRow.ownerUserId?.trim()) {
+      caseRow.ownerUserId = ownerUserId
+    }
+    const nextRun: CasePlaybookRunMetadata = { ...run, procedureOwnerUserId: ownerUserId }
+    caseRow.metadata = writeCasePlaybookRun(meta, nextRun)
+    caseRow.updatedAt = new Date()
+    await em.flush()
+    const uid = typeof ctx.auth?.sub === 'string' ? ctx.auth.sub.trim() : null
+    await appendSystemTimeline(
+      em,
+      caseRow,
+      existingOwner.length
+        ? 'cases.timeline.system.procedure_owner_taken'
+        : 'cases.timeline.system.procedure_owner_assigned',
+      uid,
+      {
+        kind: existingOwner.length ? 'procedure_owner_taken' : 'procedure_owner_assigned',
+        ownerUserId,
+        ...(existingOwner.length ? { previousOwnerUserId: existingOwner } : {}),
+      },
+    )
+    await em.flush()
+    return { ok: true as const }
+  },
+}
+
 function normalizePlaybookSlug(raw: string): string {
   return raw.trim().toLowerCase()
 }
@@ -1137,6 +1241,7 @@ const selectEntityPlaybookStepCommand: CommandHandler<
 
 registerCommand(selectPlaybookCommand)
 registerCommand(startPlaybookCommand)
+registerCommand(assignProcedureOwnerCommand)
 registerCommand(launchInvokeProcedureCommand)
 registerCommand(scheduleProcedureTaskCommand)
 registerCommand(nextPlaybookStepCommand)

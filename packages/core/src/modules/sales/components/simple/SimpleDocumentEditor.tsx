@@ -63,6 +63,16 @@ function datePickerToIsoEnd(value: string): string | null {
   return `${trimmed}T23:59:59.999Z`
 }
 
+/** Document header dates use date-only (`YYYY-MM-DD`) on update APIs. */
+function datePickerToDateOnly(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const dateOnly = trimmed.slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) return null
+  if (Number.isNaN(new Date(dateOnly).getTime())) return null
+  return dateOnly
+}
+
 function isoToDateInput(value: unknown): string {
   if (typeof value !== 'string' || !value.trim()) return ''
   return value.slice(0, 10)
@@ -519,7 +529,7 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
         statusEntryId: values.statusEntryId || undefined,
       }
       if (kind === 'order') {
-        header.placedAt = datePickerToIsoStart(values.documentDate)
+        header.placedAt = datePickerToDateOnly(values.documentDate)
         if (values.documentNumber.trim()) header.orderNumber = values.documentNumber.trim()
         header.ownerUserId = values.ownerUserId.trim() ? values.ownerUserId.trim() : null
         header.referringPartnerEntityId = values.referringPartnerEntityId.trim()
@@ -566,7 +576,7 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
             : `From quote ${prefillSourceOfferId}`
         }
       } else {
-        header.validFrom = datePickerToIsoStart(values.documentDate)
+        header.validFrom = datePickerToDateOnly(values.documentDate)
         if (values.documentNumber.trim()) header.quoteNumber = values.documentNumber.trim()
         header.ownerUserId = values.ownerUserId.trim() ? values.ownerUserId.trim() : null
         header.referringPartnerEntityId = values.referringPartnerEntityId.trim()

@@ -110,6 +110,13 @@ flowchart LR
 - Empty owner is not allowed for procedure progress (align UI with existing `assertOwner`).
 - Later ownership changes: normal case update, gated by permissions (e.g. `cases.edit` / `cases.owner.assign`) — not a special invoke flag.
 
+**A2. Assign procedure owner when missing (`cases.edit`)**
+- `cases.playbook.start` accepts optional `ownerUserId`: when the actor has `cases.edit`, use the body value; otherwise fall back to case `ownerUserId`. Still fail with `cases.procedure.ownerRequired` if unresolved.
+- UI at start: user picker defaulting to case owner (operator may pick another user before start).
+- Mid-run: if `procedureOwnerUserId` is **empty**, `cases.playbook.assignProcedureOwner` sets it (and case `ownerUserId` when the case has no owner). Fail closed if procedure owner is **already set** (no mid-run reassign via this path).
+- While `needsProcedureOwner` (started && no `procedureOwnerUserId`), procedure step actions (`next`, schedule task, notify, answer, invoke) stay blocked until assign.
+- Invoke-stage override remains gated by `cases.owner.assign` (unchanged).
+
 **B. Recommended guardians on the process (playbook)**
 - Playbook metadata: ordered `recommendedOwnerUserIds: string[]` (Q3 default).
 - UI: suggest these users first in pickers; **does not restrict** selecting someone else when the actor has assign permission.
@@ -489,3 +496,4 @@ Feature IDs (additive): reuse `cases.*`, `playbooks.settings.manage`; add `cases
 | 2026-07-18 | **Q12 = (a)** empty recommended list → parent/case owner as stage owner. |
 | 2026-07-18 | Open Questions Q1–Q12 fully resolved; implementation gates cleared. |
 | 2026-07-18 | Implemented P0–P4: flow loops; call-stack invoke + stage owners; action dictionary seed/settings; SLA + overdue worker/notify; recurrence create/start workers; UI for owners/SLA/recurrence/invoke assign. |
+| 2026-09-04 | **Assign when missing:** start accepts `ownerUserId` (`cases.edit`); mid-run `assignProcedureOwner` only when `procedureOwnerUserId` empty; no reassign when already set; UI pickers default to case owner. |

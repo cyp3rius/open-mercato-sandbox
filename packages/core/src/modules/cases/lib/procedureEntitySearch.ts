@@ -8,7 +8,10 @@ import {
 import {
   remoteSearchInsurancePoliciesForCaseCustomer,
   remoteSearchResourcesForCaseCustomer,
+  type ResourceProcedureSearchScope,
 } from './caseRelationsSearch'
+
+export type { ResourceProcedureSearchScope }
 
 function readItems(payload: Record<string, unknown> | null | undefined): unknown[] {
   const items = payload?.items
@@ -141,7 +144,10 @@ export type ProcedureEntityKindAdapter = {
   syncCaseField: 'customerEntityId' | 'resourceId' | 'insurancePolicyId' | null
   onRemoteSearch: (
     query: string,
-    context: { customerEntityId?: string | null },
+    context: {
+      customerEntityId?: string | null
+      resourceScope?: ResourceProcedureSearchScope
+    },
   ) => Promise<EntitySearchComboboxOption[]>
 }
 
@@ -169,7 +175,11 @@ const ADAPTERS: Record<ProcedureEntityKind, ProcedureEntityKindAdapter> = {
     createInNewTabHref: '/backend/resources/resources/create',
     syncCaseField: 'resourceId',
     onRemoteSearch: async (query, ctx) =>
-      remoteSearchResourcesForCaseCustomer(ctx.customerEntityId ?? undefined, query),
+      remoteSearchResourcesForCaseCustomer(
+        ctx.customerEntityId ?? undefined,
+        query,
+        ctx.resourceScope ?? 'customer',
+      ),
   },
   sales_order: {
     entityKind: 'sales_order',

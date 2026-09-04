@@ -445,13 +445,20 @@ const currencyCodeSchema = z
   .toUpperCase()
   .regex(/^[A-Z]{3}$/, { message: "currency_code_invalid" });
 
-const dateOnlySchema = z
+const dateOnlySchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+  // Accept ISO datetimes from clients and normalize to YYYY-MM-DD.
+  if (/^\d{4}-\d{2}-\d{2}T/.test(trimmed)) return trimmed.slice(0, 10);
+  return trimmed;
+}, z
   .string()
   .trim()
   .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "invalid_date" })
   .refine((value) => !Number.isNaN(new Date(value).getTime()), {
     message: "invalid_date",
-  });
+  }));
 
 const addressSnapshotSchema = z
   .record(z.string(), z.unknown())
