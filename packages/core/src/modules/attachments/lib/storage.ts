@@ -1,31 +1,9 @@
-import { promises as fs } from 'fs'
-import path from 'path'
-import { randomUUID } from 'crypto'
-import { resolvePartitionEnvKey } from './partitionEnv'
+import { getStorageDriverFactory } from './drivers/driverFactory'
+import { resolveLocalAbsolutePath } from './drivers/localDriver'
+import { resolveLegacyPublicAbsolutePath } from './drivers/legacyPublicDriver'
+import { resolvePartitionRoot } from './partitionRoot'
 
-export function resolvePartitionRoot(code: string): string {
-  const envKey = resolvePartitionEnvKey(code)
-  const envPath = process.env[envKey]
-  if (envPath && envPath.trim().length > 0) {
-    return path.resolve(envPath)
-  }
-  return path.join(process.cwd(), 'storage', 'attachments', code)
-}
-
-function sanitizeFileName(fileName: string): string {
-  if (!fileName) return 'file'
-  return fileName.replace(/[^a-zA-Z0-9._-]/g, '_')
-}
-
-function resolveOrgSegment(orgId: string | null | undefined): string {
-  if (typeof orgId === 'string' && orgId.trim().length > 0) return `org_${orgId}`
-  return 'org_shared'
-}
-
-function resolveTenantSegment(tenantId: string | null | undefined): string {
-  if (typeof tenantId === 'string' && tenantId.trim().length > 0) return `tenant_${tenantId}`
-  return 'tenant_shared'
-}
+export { resolvePartitionRoot }
 
 export type StorePartitionFilePayload = {
   partitionCode: string
@@ -41,52 +19,44 @@ export type StoredPartitionFile = {
   fileName: string
 }
 
+/**
+ * @deprecated Prefer `getStorageDriverFactory().resolveDefault(...).store(...)`.
+ * Kept for external callers (e.g. sync packages). Always uses the local driver path layout.
+ */
 export async function storePartitionFile(payload: StorePartitionFilePayload): Promise<StoredPartitionFile> {
-  const root = resolvePartitionRoot(payload.partitionCode)
-  const orgSegment = resolveOrgSegment(payload.orgId ?? null)
-  const tenantSegment = resolveTenantSegment(payload.tenantId ?? null)
-  const safeName = sanitizeFileName(payload.fileName || 'file')
-  const uniqueSuffix = randomUUID().replace(/-/g, '').slice(0, 12)
-  const storedName = `${Date.now()}_${uniqueSuffix}_${safeName}`
-  const relativePath = path.join(orgSegment, tenantSegment, storedName)
-  const absolutePath = path.join(root, relativePath)
-  await fs.mkdir(path.dirname(absolutePath), { recursive: true })
-  await fs.writeFile(absolutePath, payload.buffer)
+  const driver = getStorageDriverFactory().resolve('local')
+  const stored = await driver.store(payload)
+  const { filePath } = await driver.toLocalPath(payload.partitionCode, stored.storagePath)
+  const fileName = stored.storagePath.split('/').pop() || payload.fileName
   return {
-    storagePath: relativePath.replace(/\\/g, '/'),
-    absolutePath,
-    fileName: storedName,
+    storagePath: stored.storagePath,
+    absolutePath: filePath,
+    fileName,
   }
 }
 
+/**
+ * @deprecated Prefer `getStorageDriverFactory().resolve(driver).toLocalPath(...)` or `.read(...)`.
+ */
 export function resolveAttachmentAbsolutePath(
   partitionCode: string,
   storagePath: string,
   storageDriver?: string | null
 ): string {
-  // Remove leading slashes first
-  let safeRelative = storagePath.replace(/^\/*/, '')
-  // Remove all ../ (and ..\) path traversal segments, repeatedly until gone
-  do {
-    var prev = safeRelative
-    safeRelative = safeRelative.replace(/\.\.(\/|\\)/g, '')
-  } while (safeRelative !== prev)
   if (storageDriver === 'legacyPublic') {
-    return path.join(process.cwd(), safeRelative)
+    return resolveLegacyPublicAbsolutePath(storagePath)
   }
-  const root = resolvePartitionRoot(partitionCode)
-  return path.join(root, safeRelative)
+  return resolveLocalAbsolutePath(partitionCode, storagePath)
 }
 
+/**
+ * @deprecated Prefer `getStorageDriverFactory().resolve(driver).delete(...)`.
+ */
 export async function deletePartitionFile(
   partitionCode: string,
   storagePath: string,
   storageDriver?: string | null
 ): Promise<void> {
-  const absolutePath = resolveAttachmentAbsolutePath(partitionCode, storagePath, storageDriver)
-  try {
-    await fs.unlink(absolutePath)
-  } catch {
-    // best-effort removal
-  }
+  const driver = getStorageDriverFactory().resolve(storageDriver)
+  await driver.delete(partitionCode, storagePath)
 }

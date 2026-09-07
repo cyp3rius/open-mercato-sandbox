@@ -5,7 +5,7 @@ import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { Attachment, AttachmentPartition } from '@open-mercato/core/modules/attachments/data/entities'
-import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attachments/lib/storage'
+import { getStorageDriverFactory } from '@open-mercato/core/modules/attachments/lib/drivers'
 import {
   buildThumbnailCacheKey,
   readThumbnailCache,
@@ -13,7 +13,6 @@ import {
 } from '@open-mercato/core/modules/attachments/lib/thumbnailCache'
 import { checkAttachmentAccess } from '@open-mercato/core/modules/attachments/lib/access'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { promises as fs } from 'fs'
 import { attachmentsTag, imageQuerySchema, attachmentErrorSchema } from '../../../openapi'
 
 const querySchema = z.object({
@@ -65,11 +64,6 @@ export async function GET(
     return NextResponse.json({ error: message }, { status: access.status })
   }
 
-  const filePath = resolveAttachmentAbsolutePath(
-    attachment.partitionCode,
-    attachment.storagePath,
-    attachment.storageDriver
-  )
   const cacheKey = buildThumbnailCacheKey(width, height, cropType)
   try {
     let buffer: Buffer | null = null
@@ -77,7 +71,8 @@ export async function GET(
       buffer = await readThumbnailCache(attachment.partitionCode, attachment.id, cacheKey)
     }
     if (!buffer) {
-      const input = await fs.readFile(filePath)
+      const driver = getStorageDriverFactory().resolve(attachment.storageDriver)
+      const { buffer: input } = await driver.read(attachment.partitionCode, attachment.storagePath)
       let transformer = sharp(input)
       if (width || height) {
         const resizeOptions: sharp.ResizeOptions = {

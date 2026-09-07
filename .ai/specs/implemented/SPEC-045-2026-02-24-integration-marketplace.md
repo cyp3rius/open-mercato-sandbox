@@ -78,7 +78,7 @@ See [SPEC-045a §1.2](./SPEC-045a-foundation.md#12-integration-bundles) for the 
 | `shipping` | `shipping_carriers` | `ShippingAdapter` | 3 | DHL, UPS, InPost |
 | `communication` | `communication_channels` | `ChannelAdapter` | 4 | WhatsApp, Twilio |
 | `notification` | `notification_providers` | `NotificationTransportAdapter` | 4 | SendGrid, Mailgun |
-| `storage` | `storage_providers` | `StorageAdapter` | 5a | S3, MinIO, local | See [SPEC-045i](./SPEC-045i-storage-hub.md) |
+| `storage` | `storage_providers` | `StorageAdapter` | 5a | S3, MinIO, local | See [SPEC-045i](../2026-09-07-storage-providers-hub.md) |
 | `data_sync` | `data_sync` | `DataSyncAdapter` | 2 | MedusaJS, CSV, Shopify |
 | `webhook` | `webhook_endpoints` | `WebhookEndpointAdapter` | 5b | Custom, Zapier | See [SPEC-057](./SPEC-057-2026-03-04-webhooks-module.md) |
 
@@ -101,7 +101,7 @@ The full spec is split into focused phase documents:
 | **2** | [SPEC-045b — Data Sync Hub](./SPEC-045b-data-sync-hub.md) | `data_sync` hub with delta-based streaming, queue processing, resumable imports, progress tracking, error logging. MedusaJS bundle as reference implementation |
 | **3** | [SPEC-045c — Payment & Shipping Hubs](./SPEC-045c-payment-shipping-hubs.md) | Align SPEC-044 with marketplace + build `shipping_carriers` hub |
 | **4** | [SPEC-045d — Communication & Notification Hubs](./SPEC-045d-communication-notification-hubs.md) | `communication_channels` hub (align PR #674) + `notification_providers` hub |
-| **5a** | [SPEC-045i — Storage Providers Hub](./SPEC-045i-storage-hub.md) | `storage_providers` hub with pluggable drivers (local, S3, database) |
+| **5a** | [SPEC-045i — Storage Providers Hub](../2026-09-07-storage-providers-hub.md) | `storage_providers` hub with pluggable drivers (local, S3, database) |
 | **5b** | [SPEC-045e — Webhook Endpoints Hub](./SPEC-045e-webhook-hub.md) | `webhook_endpoints` hub (delegates to [SPEC-057](./SPEC-057-2026-03-04-webhooks-module.md)) |
 | **6** | [SPEC-045f — Health Monitoring](./SPEC-045f-health-monitoring.md) | Scheduled health checks, marketplace search/filtering, usage analytics |
 

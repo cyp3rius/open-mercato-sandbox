@@ -1,0 +1,8 @@
+# Local provider secrets — do not commit real values.
+# Copy *.example.* → matching filename without ".example".
+*
+!.gitignore
+!*.example.json
+!*.example.ts
+!env.ts
+!README.md

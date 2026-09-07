@@ -1,8 +1,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
-import { resolvePartitionRoot } from './storage'
 
-const CACHE_ROOT_SEGMENTS = ['.cache', 'thumbnails']
+const CACHE_ROOT = path.join(process.cwd(), 'storage', '.cache', 'thumbnails')
 
 function sanitizeSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -21,12 +20,11 @@ export function buildThumbnailCacheKey(
 }
 
 function resolveCachePath(partitionCode: string, attachmentId: string, cacheKey: string): string {
-  const root = resolvePartitionRoot(partitionCode)
   return path.join(
-    root,
-    ...CACHE_ROOT_SEGMENTS,
+    CACHE_ROOT,
+    sanitizeSegment(partitionCode),
     sanitizeSegment(attachmentId),
-    sanitizeSegment(cacheKey)
+    sanitizeSegment(cacheKey),
   )
 }
 
@@ -55,8 +53,7 @@ export async function writeThumbnailCache(
 }
 
 export async function clearAttachmentThumbnailCache(partitionCode: string, attachmentId: string): Promise<void> {
-  const root = resolvePartitionRoot(partitionCode)
-  const dir = path.join(root, ...CACHE_ROOT_SEGMENTS, sanitizeSegment(attachmentId))
+  const dir = path.join(CACHE_ROOT, sanitizeSegment(partitionCode), sanitizeSegment(attachmentId))
   try {
     await fs.rm(dir, { recursive: true, force: true })
   } catch {

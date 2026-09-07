@@ -40,6 +40,7 @@
     "@open-mercato/scheduler": "workspace:*",
     "@open-mercato/search": "workspace:*",
     "@open-mercato/shared": "workspace:*",
+    "@open-mercato/storage-google-drive": "workspace:*",
     "@open-mercato/sync-akeneo": "workspace:*",
     "@open-mercato/ui": "workspace:*",
     "@open-mercato/webhooks": "workspace:*",

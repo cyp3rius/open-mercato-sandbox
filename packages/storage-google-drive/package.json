@@ -1,0 +1,56 @@
+{
+  "name": "@open-mercato/storage-google-drive",
+  "version": "0.4.10",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node watch.mjs",
+    "test": "jest --config jest.config.cjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./storage-driver": {
+      "require": "./dist/storage-driver.cjs",
+      "import": "./dist/storage-driver.js",
+      "default": "./dist/storage-driver.cjs"
+    },
+    "./*": {
+      "types": "./src/*.ts",
+      "default": "./dist/*.js"
+    },
+    "./*/*": {
+      "types": "./src/*/*.ts",
+      "default": "./dist/*/*.js"
+    },
+    "./*/*/*": {
+      "types": "./src/*/*/*.ts",
+      "default": "./dist/*/*/*.js"
+    },
+    "./*/*/*/*": {
+      "types": "./src/*/*/*/*.ts",
+      "default": "./dist/*/*/*/*.js"
+    }
+  },
+  "dependencies": {
+    "@open-mercato/core": "workspace:*",
+    "google-auth-library": "^9.15.1",
+    "googleapis": "^148.0.0",
+    "tsx": "^4.21.0"
+  },
+  "peerDependencies": {
+    "@open-mercato/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@open-mercato/shared": "workspace:*",
+    "@types/jest": "^30.0.0",
+    "esbuild": "^0.25.2",
+    "glob": "^11.0.3",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

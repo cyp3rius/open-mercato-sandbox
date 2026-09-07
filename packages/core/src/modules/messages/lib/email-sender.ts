@@ -1,6 +1,5 @@
 import * as React from 'react'
 import crypto from 'node:crypto'
-import { promises as fs } from 'fs'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { loadDictionary } from '@open-mercato/shared/lib/i18n/server'
 import { emailDefaultLocale, type Locale } from '@open-mercato/shared/lib/i18n/config'
@@ -17,7 +16,7 @@ import {
 import type { Message, MessageObject } from '../data/entities'
 import { MessageAccessToken } from '../data/entities'
 import MessageEmail from '../emails/MessageEmail'
-import { resolveAttachmentAbsolutePath } from '../../attachments/lib/storage'
+import { getStorageDriverFactory } from '../../attachments/lib/drivers'
 import { sendTransactionalEmailWithResolver } from '../../notifications/lib/transactionalEmailDelivery'
 import type { MessageEmailAttachment } from './attachments'
 
@@ -80,15 +79,12 @@ async function mapAttachmentsForEmail(
   let totalBytes = 0
 
   for (const attachment of attachments.slice(0, MAX_EMAIL_ATTACHMENTS)) {
-    const absolutePath = resolveAttachmentAbsolutePath(
-      attachment.partitionCode,
-      attachment.storagePath,
-      attachment.storageDriver,
-    )
-
     let buffer: Buffer
     try {
-      buffer = await fs.readFile(absolutePath)
+      const result = await getStorageDriverFactory()
+        .resolve(attachment.storageDriver)
+        .read(attachment.partitionCode, attachment.storagePath)
+      buffer = result.buffer
     } catch (error) {
       logDebug('Attachment skipped: file read failed', {
         messageId,
