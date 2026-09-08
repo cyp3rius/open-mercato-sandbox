@@ -90,7 +90,7 @@ export function parseGoogleDriveStorageConfig(
 
   let credentialsFile = resolveCredentialsFilePath(
     firstNonEmpty(fileConfig?.credentialsFile, config.credentialsFile, config.serviceAccountFile),
-    configFilePath,
+    configFilePath ?? undefined,
     cwd,
   )
 
