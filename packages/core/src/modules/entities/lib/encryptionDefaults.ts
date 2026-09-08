@@ -68,6 +68,8 @@ export const DEFAULT_ENCRYPTION_MAPS: Array<{ entityId: string; fields: Array<{ 
       { field: 'domain' },
       { field: 'website_url' },
       { field: 'industry' },
+      { field: 'bank_name' },
+      { field: 'iban' },
     ],
   },
   {

@@ -537,6 +537,8 @@ export async function GET(_req: Request, ctx: { params?: { id?: string } }) {
           annualRevenue: profile.annualRevenue,
           nip: profile.nip ?? null,
           regon: profile.regon ?? null,
+          bankName: profile.bankName ?? null,
+          iban: profile.iban ?? null,
         }
       : null,
     customFields,
@@ -741,6 +743,8 @@ const companyDetailResponseSchema = z.object({
       annualRevenue: z.number().nullable().optional(),
       nip: z.string().nullable().optional(),
       regon: z.string().nullable().optional(),
+      bankName: z.string().nullable().optional(),
+      iban: z.string().nullable().optional(),
     })
     .nullable(),
   customFields: z.record(z.string(), z.unknown()),

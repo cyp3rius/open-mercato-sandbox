@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isValidPhoneNumber } from '@open-mercato/shared/lib/phone'
+import { normalizeIbanForStorage } from '../lib/iban'
 import { isValidNip, normalizeNipDigits } from '../lib/nip'
 import { isValidPesel, normalizePeselDigits } from '../lib/pesel'
 import { isValidRegon, normalizeRegonDigits } from '../lib/regon'
@@ -156,6 +157,17 @@ const personDetailsSchema = {
 const personFirstNameSchema = z.string().trim().min(1).max(120)
 const personLastNameSchema = z.string().trim().min(1).max(120)
 
+const optionalIbanField = z
+  .union([z.string(), z.null(), z.undefined()])
+  .transform((v) => {
+    if (v === undefined) return undefined
+    if (v === null || v === '') return null
+    return normalizeIbanForStorage(String(v))
+  })
+  .refine((v) => v === undefined || v === null || (typeof v === 'string' && v.length <= 64), {
+    message: 'IBAN is too long',
+  })
+
 const companyDetailsSchema = {
   legalName: z.string().trim().max(200).optional(),
   brandName: z.string().trim().max(200).optional(),
@@ -166,6 +178,8 @@ const companyDetailsSchema = {
   annualRevenue: z.coerce.number().min(0).optional(),
   nip: optionalNipField.optional(),
   regon: optionalRegonField.optional(),
+  bankName: z.string().trim().max(200).optional().nullable(),
+  iban: optionalIbanField.optional(),
 }
 
 export const personCreateSchema = scopedSchema

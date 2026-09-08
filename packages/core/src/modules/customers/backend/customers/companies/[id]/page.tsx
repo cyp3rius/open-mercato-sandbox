@@ -104,6 +104,8 @@ type CompanyOverview = {
     annualRevenue?: string | null
     nip?: string | null
     regon?: string | null
+    bankName?: string | null
+    iban?: string | null
   } | null
   customFields: Record<string, unknown>
   tags: TagSummary[]
@@ -496,7 +498,9 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
         | 'domain'
         | 'sizeBucket'
         | 'nip'
-        | 'regon',
+        | 'regon'
+        | 'bankName'
+        | 'iban',
       next: string | null,
     ) => {
       const send = typeof next === 'string' ? next : ''
@@ -899,6 +903,24 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
       emptyLabel: t('customers.companies.detail.noValue', 'Not provided'),
       validator: validators.regon,
       onSave: (value) => updateProfileField('regon', value),
+    },
+    {
+      key: 'bankName',
+      kind: 'text',
+      label: t('customers.companies.form.bankName', 'Bank'),
+      value: profile?.bankName ?? null,
+      placeholder: t('customers.companies.form.bankNamePlaceholder', 'Bank name'),
+      emptyLabel: t('customers.companies.detail.noValue', 'Not provided'),
+      onSave: (value) => updateProfileField('bankName', value),
+    },
+    {
+      key: 'iban',
+      kind: 'text',
+      label: t('customers.companies.form.iban', 'IBAN / account number'),
+      value: profile?.iban ?? null,
+      placeholder: t('customers.companies.form.ibanPlaceholder', 'PL00 0000 0000 0000 0000 0000 0000'),
+      emptyLabel: t('customers.companies.detail.noValue', 'Not provided'),
+      onSave: (value) => updateProfileField('iban', value),
     },
     {
       key: 'description',

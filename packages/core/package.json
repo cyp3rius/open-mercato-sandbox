@@ -53,6 +53,10 @@
       "types": "./src/modules/customers/lib/regon.ts",
       "default": "./dist/modules/customers/lib/regon.js"
     },
+    "./modules/customers/lib/iban": {
+      "types": "./src/modules/customers/lib/iban.ts",
+      "default": "./dist/modules/customers/lib/iban.js"
+    },
     "./modules/customers/lib/mfVatRegistry": {
       "types": "./src/modules/customers/lib/mfVatRegistry.ts",
       "default": "./dist/modules/customers/lib/mfVatRegistry.js"
