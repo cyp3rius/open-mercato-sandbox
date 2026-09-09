@@ -4,20 +4,59 @@ function normalizePlateKey(value: string): string {
   return value.replace(/[\s-]/g, '').toUpperCase()
 }
 
+/** Removes a trailing plate (and optional ` · `/` - ` separator) from a vehicle name. */
+export function stripPlateFromVehicleName(
+  name: string | null | undefined,
+  plate: string | null | undefined,
+): string {
+  const trimmedName = typeof name === 'string' ? name.trim() : ''
+  const trimmedPlate = typeof plate === 'string' ? plate.trim() : ''
+  if (!trimmedName) return ''
+  if (!trimmedPlate) return trimmedName
+
+  const plateKey = normalizePlateKey(trimmedPlate)
+  if (!plateKey.length) return trimmedName
+
+  const nameKey = normalizePlateKey(trimmedName)
+  if (nameKey === plateKey) return ''
+
+  // Strip trailing " · PLATE" / " - PLATE" / " PLATE" (spacing variants).
+  const escapedPlate = trimmedPlate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*')
+  const trailing = new RegExp(
+    `(?:\\s*[·\\-|–—]\\s*|\\s+)${escapedPlate}\\s*$`,
+    'i',
+  )
+  let cleaned = trimmedName.replace(trailing, '').trim()
+  if (normalizePlateKey(cleaned) === plateKey) return ''
+
+  // If plate appears anywhere after normalization (e.g. "Toyota KK3666G"), drop the plate token from the end.
+  if (normalizePlateKey(cleaned).endsWith(plateKey) && cleaned.length > trimmedPlate.length) {
+    const withoutPlate = cleaned
+      .replace(new RegExp(`${escapedPlate}\\s*$`, 'i'), '')
+      .replace(/[\s·\-–—]+$/g, '')
+      .trim()
+    if (withoutPlate && normalizePlateKey(withoutPlate) !== plateKey) {
+      cleaned = withoutPlate
+    }
+  }
+
+  return cleaned
+}
+
 export function formatVehicleResourceLabel(
   name: string | null | undefined,
   plate: string | null | undefined,
 ): string {
   const trimmedName = typeof name === 'string' ? name.trim() : ''
   const trimmedPlate = typeof plate === 'string' ? plate.trim() : ''
-  if (trimmedName && trimmedPlate) {
-    const nameKey = normalizePlateKey(trimmedName)
-    const plateKey = normalizePlateKey(trimmedPlate)
-    if (!plateKey.length) return trimmedName
-    if (nameKey === plateKey || nameKey.includes(plateKey)) return trimmedName
-    return `${trimmedName} · ${trimmedPlate}`
+  const cleanedName = stripPlateFromVehicleName(name, plate)
+  if (cleanedName && trimmedPlate) return `${cleanedName} · ${trimmedPlate}`
+  if (cleanedName) return cleanedName
+  // Name was only the plate (possibly different spacing) — keep one representation.
+  if (trimmedName && trimmedPlate && normalizePlateKey(trimmedName) === normalizePlateKey(trimmedPlate)) {
+    return trimmedName
   }
-  return trimmedName || trimmedPlate
+  return trimmedPlate || trimmedName
 }
 
 export function readVehiclePlateFromResourceRow(row: Record<string, unknown> | null | undefined): string | null {

@@ -13,6 +13,7 @@ import {
   type DriverProfileUpdateInput,
 } from '../data/validators'
 import { resolveDriverPayoutPercent } from '../lib/driverPayoutPercent'
+import { normalizeDriverDefaultResources } from '../lib/driverDefaultResources'
 import { loadTaxiFleetOrganizationSettings } from '../lib/taxiFleetOrganizationSettings'
 import { ensureOrganizationScope, ensureTenantScope, numericToString } from './shared'
 
@@ -54,6 +55,10 @@ const createDriverProfileCommand: CommandHandler<DriverProfileCreateInput, { pro
       profilePayoutPercent: parsed.payoutPercent,
       defaultPayoutPercent: settings.defaultPayoutPercent,
     })
+    const defaults = normalizeDriverDefaultResources({
+      defaultResourceIds: parsed.defaultResourceIds,
+      defaultResourceId: parsed.defaultResourceId,
+    })
     const now = new Date()
     const record = em.create(TaxiFleetDriverProfile, {
       tenantId: parsed.tenantId,
@@ -62,7 +67,8 @@ const createDriverProfileCommand: CommandHandler<DriverProfileCreateInput, { pro
       payoutMode,
       payoutPercent: numericToString(payoutPercent),
       payoutTiersJson: payoutMode === 'tiered' ? serializePayoutTiers(parsed.payoutTiers) : null,
-      defaultResourceId: parsed.defaultResourceId ?? null,
+      defaultResourceId: defaults.defaultResourceId,
+      defaultResourceIds: defaults.defaultResourceIds,
       externalAppEnabled: parsed.externalAppEnabled ?? false,
       boltDriverId: parsed.boltDriverId ?? null,
       uberDriverId: parsed.uberDriverId ?? null,
@@ -105,7 +111,24 @@ const updateDriverProfileCommand: CommandHandler<DriverProfileUpdateInput, { pro
         row.payoutTiersJson = null
       }
     }
-    if (parsed.defaultResourceId !== undefined) row.defaultResourceId = parsed.defaultResourceId
+    if (parsed.defaultResourceId !== undefined || parsed.defaultResourceIds !== undefined) {
+      const defaults = normalizeDriverDefaultResources({
+        defaultResourceIds:
+          parsed.defaultResourceIds !== undefined
+            ? parsed.defaultResourceIds
+            : parsed.defaultResourceId !== undefined
+              ? parsed.defaultResourceId
+                ? [parsed.defaultResourceId]
+                : []
+              : row.defaultResourceIds,
+        defaultResourceId:
+          parsed.defaultResourceIds !== undefined
+            ? undefined
+            : parsed.defaultResourceId,
+      })
+      row.defaultResourceId = defaults.defaultResourceId
+      row.defaultResourceIds = defaults.defaultResourceIds
+    }
     if (parsed.externalAppEnabled !== undefined) row.externalAppEnabled = parsed.externalAppEnabled
     if (parsed.boltDriverId !== undefined) row.boltDriverId = parsed.boltDriverId
     if (parsed.uberDriverId !== undefined) row.uberDriverId = parsed.uberDriverId

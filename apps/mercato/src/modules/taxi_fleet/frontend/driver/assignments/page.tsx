@@ -8,12 +8,23 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { DriverShell } from '../../../components/driverApp/DriverShell'
 import {
+  DriverShiftVehiclePicker,
+  buildShiftVehicleOptions,
+  useShiftVehicleSelection,
+  type DriverDefaultVehicleOption,
+} from '../../../components/driverApp/DriverShiftVehiclePicker'
+import {
   driverBadgeNeutralClass,
+  driverBadgeSuccessClass,
   driverCardClass,
   driverMutedTextClass,
   driverPrimaryActionClass,
   driverSecondaryActionClass,
+  driverSectionDescClass,
+  driverSectionTitleClass,
 } from '../../../components/driverApp/driverUi'
+import { enqueueDriverMutation } from '../../../lib/driverOffline/outbox'
+import { formatVehicleResourceLabel, stripPlateFromVehicleName } from '../../../lib/vehicleResourceLabel'
 
 type AssignmentRow = {
   id: string
@@ -21,11 +32,18 @@ type AssignmentRow = {
   status: string
   resourceId: string
   resourceLabel?: string | null
+  resourceName?: string | null
   resourcePlate?: string | null
   plannedShiftStart?: string | null
   plannedShiftEnd?: string | null
   shiftStart?: string | null
   shiftEnd?: string | null
+}
+
+type MeResponse = {
+  today?: string
+  profile: { defaultResourceIds?: DriverDefaultVehicleOption[] } | null
+  todayAssignment: AssignmentRow | null
 }
 
 type AssignmentFilter = 'all' | 'week'
@@ -80,19 +98,191 @@ function sortAssignmentsNewestFirst(items: AssignmentRow[]): AssignmentRow[] {
   return [...items].sort((left, right) => assignmentSortTime(right) - assignmentSortTime(left))
 }
 
+function formatClock(value: string | null | undefined): string {
+  if (!value) return '—'
+  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function vehicleLine(row: AssignmentRow, t: (key: string, fallback: string) => string) {
+  const plate = row.resourcePlate?.trim() || null
+  const name =
+    stripPlateFromVehicleName(row.resourceName || row.resourceLabel, plate) || null
+  const singleLine = formatVehicleResourceLabel(name, plate)
+  if (!singleLine) return null
+  return (
+    <div className="mt-2 text-sm font-medium text-[#071437]">
+      {name && plate ? (
+        <>
+          <div>
+            {t('taxi_fleet.driverApp.vehicle', 'Vehicle')}: {name}
+          </div>
+          <div className="text-xs font-medium text-[#4B5675]">
+            {t('taxi_fleet.driverApp.vehiclePlate', 'Plate')}: {plate}
+          </div>
+        </>
+      ) : (
+        <div>
+          {t('taxi_fleet.driverApp.vehicle', 'Vehicle')}: {singleLine}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TodayShiftStartCard({
+  todayAssignment,
+  defaults,
+  busy,
+  onStartPlanned,
+  onStartAdHoc,
+}: {
+  todayAssignment: AssignmentRow | null
+  defaults: DriverDefaultVehicleOption[]
+  busy: boolean
+  onStartPlanned: (assignmentId: string, resourceId: string) => void
+  onStartAdHoc: (resourceId: string) => void
+}) {
+  const t = useT()
+  const canStartPlanned = Boolean(todayAssignment && !todayAssignment.shiftStart)
+  const canStartAdHoc = !todayAssignment || Boolean(todayAssignment.shiftEnd)
+  const shiftVehicles = React.useMemo(
+    () =>
+      buildShiftVehicleOptions({
+        defaults,
+        // Only seed planned unstarted assignment vehicle; ended → fresh ad-hoc pick.
+        assignment:
+          canStartPlanned && todayAssignment
+            ? {
+                resourceId: todayAssignment.resourceId,
+                resourceLabel: todayAssignment.resourceLabel,
+                resourceName: todayAssignment.resourceName,
+                resourcePlate: todayAssignment.resourcePlate,
+              }
+            : null,
+      }),
+    [canStartPlanned, defaults, todayAssignment],
+  )
+  const { selectedResourceId, setSelectedResourceId, needsVehiclePick } = useShiftVehicleSelection(
+    shiftVehicles,
+    todayAssignment?.resourceId,
+  )
+
+  if (!canStartPlanned && !canStartAdHoc) return null
+  if (!needsVehiclePick && canStartAdHoc) {
+    const hasDefaultsButNoneFree = defaults.length > 0
+    return (
+      <div className={driverCardClass}>
+        <div className={driverSectionTitleClass}>
+          {t('taxi_fleet.driverApp.home.noAssignment', 'No assignment today')}
+        </div>
+        <p className={driverSectionDescClass}>
+          {hasDefaultsButNoneFree
+            ? t(
+                'taxi_fleet.driverApp.home.noAvailableVehicles',
+                'All your default vehicles are already assigned for today.',
+              )
+            : t(
+                'taxi_fleet.driverApp.home.noAssignmentHint',
+                'Ask dispatch to assign a vehicle for today, or set default vehicles on your profile.',
+              )}
+        </p>
+      </div>
+    )
+  }
+  if (!needsVehiclePick) {
+    if (canStartPlanned && defaults.length > 0) {
+      return (
+        <div className={driverCardClass}>
+          <div className={driverSectionTitleClass}>
+            {t('taxi_fleet.driverApp.home.todayShift', 'Today’s shift')}
+          </div>
+          <p className={driverSectionDescClass}>
+            {t(
+              'taxi_fleet.driverApp.home.noAvailableVehicles',
+              'All your default vehicles are already assigned for today.',
+            )}
+          </p>
+        </div>
+      )
+    }
+    return null
+  }
+  return (
+    <div className={`${driverCardClass} space-y-3`}>
+      <div className={driverSectionTitleClass}>
+        {canStartPlanned
+          ? t('taxi_fleet.driverApp.home.todayShift', 'Today’s shift')
+          : t('taxi_fleet.driverApp.home.clockInAdHoc', 'Start ad-hoc shift')}
+      </div>
+      <p className={driverSectionDescClass}>
+        {canStartPlanned
+          ? t(
+              'taxi_fleet.driverApp.shift.selectVehicle',
+              'Confirm vehicle for this shift',
+            )
+          : t(
+              'taxi_fleet.driverApp.home.adHocHint',
+              'No planned shift for today. Pick a default vehicle to start an ad-hoc shift.',
+            )}
+      </p>
+      <DriverShiftVehiclePicker
+        vehicles={shiftVehicles}
+        assignmentResourceId={todayAssignment?.resourceId}
+        value={selectedResourceId}
+        onChange={setSelectedResourceId}
+        disabled={busy}
+      />
+      <Button
+        type="button"
+        className={driverPrimaryActionClass}
+        disabled={busy || !selectedResourceId}
+        onClick={() => {
+          if (!selectedResourceId) return
+          if (canStartPlanned && todayAssignment) {
+            onStartPlanned(todayAssignment.id, selectedResourceId)
+            return
+          }
+          onStartAdHoc(selectedResourceId)
+        }}
+      >
+        {busy
+          ? t('taxi_fleet.driverApp.home.starting', 'Starting…')
+          : canStartPlanned
+            ? t('taxi_fleet.driverApp.home.clockIn', 'Start shift')
+            : t('taxi_fleet.driverApp.home.clockInAdHoc', 'Start ad-hoc shift')}
+      </Button>
+    </div>
+  )
+}
+
 export default function DriverAssignmentsPage() {
   const t = useT()
   const [items, setItems] = React.useState<AssignmentRow[]>([])
+  const [me, setMe] = React.useState<MeResponse | null>(null)
   const [filter, setFilter] = React.useState<AssignmentFilter>('week')
   const [page, setPage] = React.useState(0)
+  const [busyId, setBusyId] = React.useState<string | null>(null)
+
+  const reload = React.useCallback(async () => {
+    const [assignmentsCall, meCall] = await Promise.all([
+      apiCall<{ items: AssignmentRow[] }>('/api/taxi_fleet/driver/assignments'),
+      apiCall<MeResponse>('/api/taxi_fleet/driver/me'),
+    ])
+    setItems(sortAssignmentsNewestFirst(assignmentsCall.result?.items ?? []))
+    setMe(meCall.result ?? null)
+  }, [])
 
   React.useEffect(() => {
     let active = true
     ;(async () => {
       try {
-        const { result } = await apiCall<{ items: AssignmentRow[] }>('/api/taxi_fleet/driver/assignments')
+        const [assignmentsCall, meCall] = await Promise.all([
+          apiCall<{ items: AssignmentRow[] }>('/api/taxi_fleet/driver/assignments'),
+          apiCall<MeResponse>('/api/taxi_fleet/driver/me'),
+        ])
         if (!active) return
-        setItems(sortAssignmentsNewestFirst(result?.items ?? []))
+        setItems(sortAssignmentsNewestFirst(assignmentsCall.result?.items ?? []))
+        setMe(meCall.result ?? null)
       } catch {
         flash(t('taxi_fleet.driverApp.assignments.loadFailed', 'Could not load assignments.'), 'error')
       }
@@ -122,9 +312,106 @@ export default function DriverAssignmentsPage() {
     setPage(0)
   }
 
+  async function endShift(row: AssignmentRow) {
+    if (row.status === 'cancelled') return
+    setBusyId(row.id)
+    try {
+      if (!navigator.onLine) {
+        await enqueueDriverMutation({
+          type: 'assignment.shift',
+          payload: { assignmentId: row.id, action: 'end' },
+        })
+        setItems((current) =>
+          current.map((item) =>
+            item.id !== row.id
+              ? item
+              : {
+                  ...item,
+                  shiftEnd: new Date().toISOString(),
+                  status: 'completed',
+                },
+          ),
+        )
+        flash(t('taxi_fleet.driverApp.assignments.shiftEnded', 'Shift ended.'), 'success')
+        return
+      }
+      await apiCall(`/api/taxi_fleet/driver/assignments/${row.id}/shift`, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'end' }),
+      })
+      await reload()
+      flash(t('taxi_fleet.driverApp.assignments.shiftEnded', 'Shift ended.'), 'success')
+    } catch {
+      flash(t('taxi_fleet.driverApp.home.shiftFailed', 'Could not update shift.'), 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function startPlanned(assignmentId: string, resourceId: string) {
+    setBusyId(assignmentId)
+    try {
+      if (!navigator.onLine) {
+        await enqueueDriverMutation({
+          type: 'assignment.shift',
+          payload: { assignmentId, action: 'start', resourceId },
+        })
+        await reload()
+        flash(t('taxi_fleet.driverApp.assignments.shiftStarted', 'Shift started.'), 'success')
+        return
+      }
+      await apiCall(`/api/taxi_fleet/driver/assignments/${assignmentId}/shift`, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'start', resourceId }),
+      })
+      await reload()
+      flash(t('taxi_fleet.driverApp.assignments.shiftStarted', 'Shift started.'), 'success')
+    } catch {
+      flash(t('taxi_fleet.driverApp.home.shiftFailed', 'Could not update shift.'), 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function startAdHoc(resourceId: string) {
+    setBusyId('adhoc')
+    try {
+      if (!navigator.onLine) {
+        await enqueueDriverMutation({
+          type: 'assignment.self_start',
+          payload: { resourceId },
+        })
+        await reload()
+        flash(t('taxi_fleet.driverApp.assignments.shiftStarted', 'Shift started.'), 'success')
+        return
+      }
+      await apiCall('/api/taxi_fleet/driver/assignments/start', {
+        method: 'POST',
+        body: JSON.stringify({ resourceId }),
+      })
+      await reload()
+      flash(t('taxi_fleet.driverApp.assignments.shiftStarted', 'Shift started.'), 'success')
+    } catch {
+      flash(t('taxi_fleet.driverApp.home.shiftFailed', 'Could not update shift.'), 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const todayAssignment = me?.todayAssignment ?? null
+  const defaults = me?.profile?.defaultResourceIds ?? []
+  const startBusy = busyId === 'adhoc' || (todayAssignment != null && busyId === todayAssignment.id)
+
   return (
     <DriverShell title={t('taxi_fleet.driverApp.assignments.title', 'Assignments')}>
       <div className="space-y-3">
+        <TodayShiftStartCard
+          todayAssignment={todayAssignment}
+          defaults={defaults}
+          busy={startBusy}
+          onStartPlanned={(id, resourceId) => void startPlanned(id, resourceId)}
+          onStartAdHoc={(resourceId) => void startAdHoc(resourceId)}
+        />
 
         <div className="grid grid-cols-2 gap-2">
           <Button
@@ -159,37 +446,53 @@ export default function DriverAssignmentsPage() {
           </div>
         ) : (
           <>
-            {pageItems.map((row) => (
-              <div key={row.id} className={driverCardClass}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="text-base font-semibold text-[#071437]">{row.assignmentDate}</div>
-                  <span className={`${driverBadgeNeutralClass} shrink-0 capitalize`}>{row.status}</span>
-                </div>
-                {row.resourceLabel?.trim() ? (
-                  <div className="mt-2 text-sm font-medium text-[#071437]">
-                    {t('taxi_fleet.driverApp.vehicle', 'Vehicle')}: {row.resourceLabel.trim()}
+            {pageItems.map((row) => {
+              const canEnd = row.status !== 'cancelled' && Boolean(row.shiftStart) && !row.shiftEnd
+              const onShift = Boolean(row.shiftStart) && !row.shiftEnd
+              const busy = busyId === row.id
+              return (
+                <div key={row.id} className={driverCardClass}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-base font-semibold text-[#071437]">{row.assignmentDate}</div>
+                    <span
+                      className={`${onShift ? driverBadgeSuccessClass : driverBadgeNeutralClass} shrink-0 capitalize`}
+                    >
+                      {onShift
+                        ? t('taxi_fleet.driverApp.onShift', 'On shift')
+                        : row.status}
+                    </span>
                   </div>
-                ) : row.resourcePlate?.trim() ? (
-                  <div className="mt-2 text-sm font-medium text-[#071437]">
-                    {t('taxi_fleet.driverApp.vehiclePlate', 'Plate')}: {row.resourcePlate.trim()}
+                  {vehicleLine(row, t)}
+                  <div className={`mt-2 ${driverMutedTextClass}`}>
+                    {t('taxi_fleet.driverApp.assignments.planned', 'Planned')}:{' '}
+                    {formatClock(row.plannedShiftStart ?? null)}
+                    {row.plannedShiftEnd ? ` – ${formatClock(row.plannedShiftEnd)}` : ''}
                   </div>
-                ) : null}
-                <div className={`mt-2 ${driverMutedTextClass}`}>
-                  {(row.plannedShiftStart ?? row.shiftStart)
-                    ? new Date(row.plannedShiftStart ?? row.shiftStart!).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                    : '—'}
-                  {(row.plannedShiftEnd ?? row.shiftEnd)
-                    ? ` – ${new Date(row.plannedShiftEnd ?? row.shiftEnd!).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}`
-                    : ''}
+                  {row.shiftStart ? (
+                    <div className={`mt-1 ${driverMutedTextClass}`}>
+                      {t('taxi_fleet.driverApp.home.started', 'Started')}: {formatClock(row.shiftStart)}
+                      {row.shiftEnd
+                        ? ` · ${t('taxi_fleet.driverApp.home.ended', 'Ended')}: ${formatClock(row.shiftEnd)}`
+                        : ''}
+                    </div>
+                  ) : null}
+                  {canEnd ? (
+                    <div className="mt-3">
+                      <Button
+                        type="button"
+                        className={driverPrimaryActionClass}
+                        disabled={busy}
+                        onClick={() => void endShift(row)}
+                      >
+                        {busy
+                          ? t('taxi_fleet.driverApp.trips.saving', 'Saving…')
+                          : t('taxi_fleet.driverApp.home.clockOut', 'End shift')}
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
-              </div>
-            ))}
+              )
+            })}
 
             {pageCount > 1 ? (
               <div className="flex items-center justify-between gap-3 pt-1">

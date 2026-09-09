@@ -82,15 +82,20 @@ const createTripCommand: CommandHandler<TripCreateInput, { tripId: string }> = {
     let resourceId = parsed.resourceId
     let assignmentId = parsed.assignmentId ?? null
     if (actor?.role === 'driver') {
-      const requireOpenShift = initialStatus === 'in_progress'
+      const initialMode =
+        initialStatus === 'in_progress'
+          ? 'live'
+          : initialStatus === 'scheduled'
+            ? 'scheduled'
+            : 'past'
       const shiftMatch = await assertDriverTripShift({
         em,
         tenantId: parsed.tenantId,
         organizationId: parsed.organizationId,
         teamMemberId,
-        startedAt: parsed.startedAt ?? (requireOpenShift ? now : null),
+        startedAt: parsed.startedAt ?? (initialMode === 'live' ? now : null),
         endedAt: parsed.endedAt ?? null,
-        requireOpenShift,
+        mode: initialMode,
         translate,
         now,
       })

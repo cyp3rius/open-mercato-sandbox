@@ -38,7 +38,10 @@ describe('buildDriverTripPayload', () => {
         durationText: '40 min',
       },
       commercial: {
+        completionMode: 'manual',
         tripType: 'private',
+        platform: null,
+        paymentType: 'cash',
         customerEntityId: '',
         customerLabel: '',
         revenueAmount: '40.00',
@@ -54,9 +57,72 @@ describe('buildDriverTripPayload', () => {
     expect(payload.status).toBe('completed')
     expect(payload.distanceKm).toBe(12.5)
     expect(payload.endedAt).toBe('2026-08-11T08:40:00.000Z')
-    const metadata = payload.metadata as { tripRequest?: { fromAddress?: string; waypointAddresses?: string } }
+    const metadata = payload.metadata as {
+      tripRequest?: { fromAddress?: string; waypointAddresses?: string; paymentType?: string }
+    }
     expect(metadata.tripRequest?.fromAddress).toBe('Warszawa Centrum')
     expect(metadata.tripRequest?.waypointAddresses).toContain('Mokotow')
+    expect(metadata.tripRequest?.paymentType).toBe('cash')
+  })
+
+  it('persists selected payment type including transfer', () => {
+    const payload = buildDriverTripPayload({
+      route: {
+        from: { address: 'A' },
+        to: { address: 'B' },
+        waypoints: [],
+        startedAt: '2026-08-11T08:00:00.000Z',
+        endedAt: '2026-08-11T08:40:00.000Z',
+        distanceKm: 3,
+      },
+      commercial: {
+        completionMode: 'manual',
+        tripType: 'client',
+        platform: null,
+        paymentType: 'transfer',
+        customerEntityId: '94f1f812-4fc7-4f5a-a30d-314d95a73681',
+        customerLabel: 'Firma',
+        revenueAmount: '120.00',
+        receiptDocumentNumber: '',
+        receiptAttachmentId: null,
+        receiptAttachmentName: null,
+        receiptBlobId: null,
+        notes: '',
+      },
+      status: 'completed',
+    })
+    const metadata = payload.metadata as { tripRequest?: { paymentType?: string } }
+    expect(metadata.tripRequest?.paymentType).toBe('transfer')
+  })
+
+  it('supports scheduled status for future trips', () => {
+    const payload = buildDriverTripPayload({
+      route: {
+        from: { address: 'A' },
+        to: { address: 'B' },
+        waypoints: [],
+        startedAt: '2026-09-12T09:00:00.000Z',
+        endedAt: '',
+        distanceKm: null,
+      },
+      commercial: {
+        completionMode: 'manual',
+        tripType: 'client',
+        platform: null,
+        paymentType: 'cash',
+        customerEntityId: '94f1f812-4fc7-4f5a-a30d-314d95a73681',
+        customerLabel: 'Klient',
+        revenueAmount: '0.00',
+        receiptDocumentNumber: '',
+        receiptAttachmentId: null,
+        receiptAttachmentName: null,
+        receiptBlobId: null,
+        notes: '',
+      },
+      status: 'scheduled',
+    })
+    expect(payload.status).toBe('scheduled')
+    expect(payload.endedAt).toBeNull()
   })
 })
 

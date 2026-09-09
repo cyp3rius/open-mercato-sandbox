@@ -40,13 +40,21 @@ export function DriverCustomerField({ value, label, onChange, disabled = false }
   const [createBusy, setCreateBusy] = React.useState(false)
   const [createError, setCreateError] = React.useState<string | null>(null)
 
+  const minSearchLength = 3
+
   React.useEffect(() => {
+    const trimmed = query.trim()
+    if (trimmed.length < minSearchLength) {
+      setOptions([])
+      setSearching(false)
+      return
+    }
     let active = true
     const handle = window.setTimeout(() => {
       void (async () => {
         setSearching(true)
         try {
-          const params = new URLSearchParams({ search: query.trim() })
+          const params = new URLSearchParams({ search: trimmed })
           const { result } = await apiCall<{ items: CustomerOption[] }>(
             `/api/taxi_fleet/driver/customers?${params.toString()}`,
           )
@@ -135,49 +143,63 @@ export function DriverCustomerField({ value, label, onChange, disabled = false }
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t('taxi_fleet.driverApp.trips.customerSearch', 'Search customer…')}
               className={driverFieldClass}
+              autoComplete="off"
             />
           </div>
-          <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-[#F1F1F4] bg-white p-1">
-            {searching ? (
-              <div className="px-3 py-2 text-sm text-[#78829D]">
-                {t('taxi_fleet.driverApp.loading', 'Loading…')}
-              </div>
-            ) : null}
-            {!searching && options.length === 0 ? (
-              <div className="px-3 py-2 text-sm text-[#78829D]">
-                {t('taxi_fleet.driverApp.trips.customerEmpty', 'No customers found.')}
-              </div>
-            ) : null}
-            {options.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                disabled={disabled}
-                className="flex w-full items-start gap-2 rounded-md px-3 py-2 text-left hover:bg-[#F9F9F9] active:bg-[#F1F1F4]"
-                onClick={() => {
-                  setCreateOpen(false)
-                  setCreateError(null)
-                  onChange({ id: option.id, label: option.label })
-                }}
-              >
-                <span className="mt-0.5 text-[#78829D]">
-                  {option.kind === 'company' ? (
-                    <Building2 className="size-4" aria-hidden />
-                  ) : (
-                    <UserRound className="size-4" aria-hidden />
+          {query.trim().length > 0 ? (
+            <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-[#F1F1F4] bg-white p-1">
+              {query.trim().length < minSearchLength ? (
+                <div className="px-3 py-2 text-sm text-[#78829D]">
+                  {t(
+                    'taxi_fleet.driverApp.trips.customerMinChars',
+                    'Type at least {count} characters…',
+                    { count: String(minSearchLength) },
                   )}
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-[#071437]">
-                    {option.label}
+                </div>
+              ) : null}
+              {query.trim().length >= minSearchLength && searching ? (
+                <div className="px-3 py-2 text-sm text-[#78829D]">
+                  {t('taxi_fleet.driverApp.loading', 'Loading…')}
+                </div>
+              ) : null}
+              {query.trim().length >= minSearchLength && !searching && options.length === 0 ? (
+                <div className="px-3 py-2 text-sm text-[#78829D]">
+                  {t('taxi_fleet.driverApp.trips.customerEmpty', 'No customers found.')}
+                </div>
+              ) : null}
+              {options.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  disabled={disabled}
+                  className="flex w-full items-start gap-2 rounded-md px-3 py-2 text-left hover:bg-[#F9F9F9] active:bg-[#F1F1F4]"
+                  onClick={() => {
+                    setCreateOpen(false)
+                    setCreateError(null)
+                    setQuery('')
+                    setOptions([])
+                    onChange({ id: option.id, label: option.label })
+                  }}
+                >
+                  <span className="mt-0.5 text-[#78829D]">
+                    {option.kind === 'company' ? (
+                      <Building2 className="size-4" aria-hidden />
+                    ) : (
+                      <UserRound className="size-4" aria-hidden />
+                    )}
                   </span>
-                  {option.description ? (
-                    <span className="block truncate text-xs text-[#78829D]">{option.description}</span>
-                  ) : null}
-                </span>
-              </button>
-            ))}
-          </div>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-[#071437]">
+                      {option.label}
+                    </span>
+                    {option.description ? (
+                      <span className="block truncate text-xs text-[#78829D]">{option.description}</span>
+                    ) : null}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </>
       )}
 

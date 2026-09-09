@@ -68,6 +68,7 @@ export async function GET(req: Request) {
           id: row.id,
           resourceId: row.resourceId,
           resourceLabel: info?.label ?? null,
+          resourceName: info?.name ?? null,
           resourcePlate: info?.plate ?? null,
           assignmentDate: row.assignmentDate,
           status: row.status,

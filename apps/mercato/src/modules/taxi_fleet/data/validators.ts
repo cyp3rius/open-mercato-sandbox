@@ -77,6 +77,7 @@ export const driverProfileCreateSchema = z
     payoutPercent: z.coerce.number().min(0).max(100).optional().default(0),
     payoutTiers: z.array(payoutTierSchema).optional().nullable(),
     defaultResourceId: optionalUuid,
+    defaultResourceIds: z.array(uuid).max(20).optional().nullable(),
     externalAppEnabled: z.boolean().optional().default(false),
     boltDriverId: optionalPlatformDriverId,
     uberDriverId: optionalPlatformDriverId,
@@ -91,6 +92,7 @@ export const driverProfileUpdateSchema = z
     payoutPercent: z.coerce.number().min(0).max(100).optional(),
     payoutTiers: z.array(payoutTierSchema).optional().nullable(),
     defaultResourceId: optionalUuid,
+    defaultResourceIds: z.array(uuid).max(20).optional().nullable(),
     externalAppEnabled: z.boolean().optional(),
     boltDriverId: optionalPlatformDriverId,
     uberDriverId: optionalPlatformDriverId,
@@ -135,6 +137,14 @@ export const assignmentShiftActionSchema = z.enum(['start', 'end'])
 export const assignmentShiftSchema = z.object({
   id: uuid,
   action: assignmentShiftActionSchema,
+  /** Vehicle confirm/change on shift start (allowlist = planned vehicle ∪ defaults). */
+  resourceId: optionalUuid,
+  clientMutationId: z.string().trim().min(1).max(191).optional(),
+})
+
+/** Ad-hoc clock-in when the driver has no daily assignment for today. */
+export const assignmentSelfStartSchema = z.object({
+  resourceId: uuid,
   clientMutationId: z.string().trim().min(1).max(191).optional(),
 })
 
@@ -614,6 +624,7 @@ export type DriverProfileUpdateInput = z.infer<typeof driverProfileUpdateSchema>
 export type AssignmentCreateInput = z.infer<typeof assignmentCreateSchema>
 export type AssignmentUpdateInput = z.infer<typeof assignmentUpdateSchema>
 export type AssignmentShiftInput = z.infer<typeof assignmentShiftSchema>
+export type AssignmentSelfStartInput = z.infer<typeof assignmentSelfStartSchema>
 export type DriverLocationBatchInput = z.infer<typeof driverLocationBatchSchema>
 export type TripInjectInput = z.infer<typeof tripInjectSchema>
 export type TripCreateInput = z.infer<typeof tripCreateSchema>

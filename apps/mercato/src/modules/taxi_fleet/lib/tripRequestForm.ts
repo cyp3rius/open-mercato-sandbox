@@ -6,8 +6,8 @@ export type TripServiceType = (typeof TRIP_SERVICE_TYPES)[number]
 export const TRIP_REQUEST_PAYMENT_TYPES = ['electronic', 'cash', 'card', 'transfer', 'other'] as const
 export type TripRequestPaymentType = (typeof TRIP_REQUEST_PAYMENT_TYPES)[number]
 
-/** Payment options offered in the trip create/edit form. */
-export const TRIP_FORM_PAYMENT_OPTIONS = ['electronic', 'cash', 'card'] as const
+/** Payment options offered in the trip create/edit form and driver app. */
+export const TRIP_FORM_PAYMENT_OPTIONS = ['electronic', 'cash', 'card', 'transfer'] as const
 export type TripFormPaymentOption = (typeof TRIP_FORM_PAYMENT_OPTIONS)[number]
 
 export const TRIP_CONTACT_TYPES = ['private', 'company'] as const

@@ -12,6 +12,16 @@ describe('driver shift and location validators', () => {
     expect(
       assignmentShiftSchema.parse({
         id: '11111111-1111-4111-8111-111111111111',
+        action: 'start',
+        resourceId: '22222222-2222-4222-8222-222222222222',
+      }),
+    ).toMatchObject({
+      action: 'start',
+      resourceId: '22222222-2222-4222-8222-222222222222',
+    })
+    expect(
+      assignmentShiftSchema.parse({
+        id: '11111111-1111-4111-8111-111111111111',
         action: 'end',
       }),
     ).toMatchObject({ action: 'end' })

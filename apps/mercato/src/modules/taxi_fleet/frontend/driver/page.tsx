@@ -10,6 +10,12 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { DriverShell } from '../../components/driverApp/DriverShell'
 import {
+  DriverShiftVehiclePicker,
+  buildShiftVehicleOptions,
+  useShiftVehicleSelection,
+  type DriverDefaultVehicleOption,
+} from '../../components/driverApp/DriverShiftVehiclePicker'
+import {
   enableDriverTripsBypass,
   hasDriverTripsBypass,
 } from '../../components/driverApp/driverTripAccess'
@@ -24,14 +30,21 @@ import {
   driverSectionTitleClass,
 } from '../../components/driverApp/driverUi'
 import { cacheDriverJson, enqueueDriverMutation, readCachedDriverJson } from '../../lib/driverOffline/outbox'
+import { formatVehicleResourceLabel, stripPlateFromVehicleName } from '../../lib/vehicleResourceLabel'
 
 type MeResponse = {
   member: { id: string; displayName: string }
-  profile: { externalAppEnabled: boolean; defaultResourceId?: string | null } | null
+  today?: string
+  profile: {
+    externalAppEnabled: boolean
+    defaultResourceId?: string | null
+    defaultResourceIds?: DriverDefaultVehicleOption[]
+  } | null
   todayAssignment: {
     id: string
     resourceId: string
     resourceLabel?: string | null
+    resourceName?: string | null
     resourcePlate?: string | null
     status: string
     shiftStart: string | null
@@ -87,27 +100,33 @@ function ShiftTimes({
 
 function ShiftVehicle({
   label,
+  vehicleName,
   vehicleLabel,
   vehiclePlate,
 }: {
   label: string
+  vehicleName?: string | null
   vehicleLabel: string | null | undefined
   vehiclePlate?: string | null
 }) {
   const plate = vehiclePlate?.trim() || null
-  const primary = vehicleLabel?.trim() || null
-  if (!primary && !plate) return null
+  const name =
+    stripPlateFromVehicleName(vehicleName || vehicleLabel, plate) || null
+  const singleLine = formatVehicleResourceLabel(name, plate)
+  if (!singleLine) return null
   return (
     <div className="mt-3 flex items-center gap-2 rounded-lg border border-[#F1F1F4] bg-[#F9F9F9] px-3 py-2.5">
       <CarFront className="size-4 shrink-0 text-[#78829D]" aria-hidden />
       <div className="min-w-0">
         <div className="text-xs font-medium text-[#78829D]">{label}</div>
-        <div className="truncate text-sm font-semibold text-[#071437]">
-          {primary || plate}
-        </div>
-        {primary && plate && !primary.includes(plate) ? (
-          <div className="truncate text-xs font-medium text-[#4B5675]">{plate}</div>
-        ) : null}
+        {name && plate ? (
+          <>
+            <div className="truncate text-sm font-semibold text-[#071437]">{name}</div>
+            <div className="truncate text-xs font-medium text-[#4B5675]">{plate}</div>
+          </>
+        ) : (
+          <div className="truncate text-sm font-semibold text-[#071437]">{singleLine}</div>
+        )}
       </div>
     </div>
   )
@@ -150,22 +169,69 @@ export default function DriverHomePage() {
   const assignment = me?.todayAssignment ?? null
   const homeState = loaded ? resolveHomeState(assignment) : 'loading'
   const shiftActive = homeState === 'on_shift'
+  const profileDefaults = me?.profile?.defaultResourceIds ?? []
+  const shiftVehicles = React.useMemo(
+    () =>
+      buildShiftVehicleOptions({
+        defaults: profileDefaults,
+        assignment:
+          assignment && !assignment.shiftStart
+            ? {
+                resourceId: assignment.resourceId,
+                resourceLabel: assignment.resourceLabel,
+                resourceName: assignment.resourceName,
+                resourcePlate: assignment.resourcePlate,
+              }
+            : null,
+      }),
+    [assignment, profileDefaults],
+  )
+  const {
+    selectedResourceId,
+    setSelectedResourceId,
+    needsVehiclePick,
+  } = useShiftVehicleSelection(
+    shiftVehicles,
+    assignment && !assignment.shiftStart ? assignment.resourceId : null,
+  )
+  const hasDefaultsButNoneFree = profileDefaults.length > 0 && !needsVehiclePick
 
   async function runShift(action: 'start' | 'end') {
     if (!assignment) return
+    if (action === 'start' && !selectedResourceId) {
+      flash(
+        t('taxi_fleet.driverApp.shift.vehicleRequired', 'Select a vehicle before starting your shift.'),
+        'error',
+      )
+      return
+    }
     setBusy(true)
     try {
+      const resourceId = action === 'start' ? selectedResourceId : null
       if (!navigator.onLine) {
         await enqueueDriverMutation({
           type: 'assignment.shift',
-          payload: { assignmentId: assignment.id, action },
+          payload: {
+            assignmentId: assignment.id,
+            action,
+            ...(resourceId ? { resourceId } : {}),
+          },
         })
+        const picked = resourceId ? shiftVehicles.find((v) => v.id === resourceId) : null
         setMe((prev) =>
           prev && prev.todayAssignment
             ? {
                 ...prev,
                 todayAssignment: {
                   ...prev.todayAssignment,
+                  ...(resourceId
+                    ? {
+                        resourceId,
+                        resourceLabel: picked?.label ?? prev.todayAssignment.resourceLabel,
+                        resourceName: picked?.name ?? prev.todayAssignment.resourceName,
+                        resourcePlate: picked?.plate ?? prev.todayAssignment.resourcePlate,
+                      }
+                    : {}),
                   shiftStart:
                     action === 'start' ? new Date().toISOString() : prev.todayAssignment.shiftStart,
                   shiftEnd:
@@ -179,7 +245,57 @@ export default function DriverHomePage() {
       }
       await apiCall(`/api/taxi_fleet/driver/assignments/${assignment.id}/shift`, {
         method: 'POST',
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({
+          action,
+          ...(resourceId ? { resourceId } : {}),
+        }),
+      })
+      await load()
+    } catch {
+      flash(t('taxi_fleet.driverApp.home.shiftFailed', 'Could not update shift.'), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function startAdHocShift() {
+    if (!selectedResourceId) {
+      flash(
+        t('taxi_fleet.driverApp.shift.vehicleRequired', 'Select a vehicle before starting your shift.'),
+        'error',
+      )
+      return
+    }
+    setBusy(true)
+    try {
+      if (!navigator.onLine) {
+        await enqueueDriverMutation({
+          type: 'assignment.self_start',
+          payload: { resourceId: selectedResourceId },
+        })
+        const picked = shiftVehicles.find((v) => v.id === selectedResourceId)
+        setMe((prev) =>
+          prev
+            ? {
+                ...prev,
+                todayAssignment: {
+                  id: `local-${selectedResourceId}`,
+                  resourceId: selectedResourceId,
+                  resourceLabel: picked?.label ?? null,
+                  resourceName: picked?.name ?? null,
+                  resourcePlate: picked?.plate ?? null,
+                  status: 'confirmed',
+                  shiftStart: new Date().toISOString(),
+                  shiftEnd: null,
+                },
+              }
+            : prev,
+        )
+        return
+      }
+      await apiCall('/api/taxi_fleet/driver/assignments/start', {
+        method: 'POST',
+        body: JSON.stringify({ resourceId: selectedResourceId }),
       })
       await load()
     } catch {
@@ -215,11 +331,45 @@ export default function DriverHomePage() {
                 {t('taxi_fleet.driverApp.home.noAssignment', 'No assignment today')}
               </div>
               <p className={driverSectionDescClass}>
-                {t(
-                  'taxi_fleet.driverApp.home.noAssignmentHint',
-                  'Ask dispatch to assign a vehicle for today.',
-                )}
+                {needsVehiclePick
+                  ? t(
+                      'taxi_fleet.driverApp.home.adHocHint',
+                      'No planned shift for today. Pick a default vehicle to start an ad-hoc shift.',
+                    )
+                  : hasDefaultsButNoneFree
+                    ? t(
+                        'taxi_fleet.driverApp.home.noAvailableVehicles',
+                        'All your default vehicles are already assigned for today.',
+                      )
+                    : t(
+                        'taxi_fleet.driverApp.home.noAssignmentHint',
+                        'Ask dispatch to assign a vehicle for today, or set default vehicles on your profile.',
+                      )}
               </p>
+              {needsVehiclePick ? (
+                <div className="mt-4">
+                  <DriverShiftVehiclePicker
+                    vehicles={shiftVehicles}
+                    value={selectedResourceId}
+                    onChange={setSelectedResourceId}
+                    disabled={busy}
+                  />
+                </div>
+              ) : null}
+              {needsVehiclePick ? (
+                <div className="mt-4">
+                  <Button
+                    type="button"
+                    className={driverPrimaryActionClass}
+                    disabled={busy || !selectedResourceId}
+                    onClick={() => void startAdHocShift()}
+                  >
+                    {busy
+                      ? t('taxi_fleet.driverApp.home.starting', 'Starting…')
+                      : t('taxi_fleet.driverApp.home.clockInAdHoc', 'Start ad-hoc shift')}
+                  </Button>
+                </div>
+              ) : null}
             </div>
             <Link href="/driver/assignments" className={`${driverSecondaryActionClass} gap-2`}>
               <CalendarDays className="size-4" aria-hidden />
@@ -254,21 +404,45 @@ export default function DriverHomePage() {
                 shiftStart={assignment.shiftStart}
                 shiftEnd={assignment.shiftEnd}
               />
-              <ShiftVehicle
-                label={t('taxi_fleet.driverApp.vehicle', 'Vehicle')}
-                vehicleLabel={assignment.resourceLabel}
-                vehiclePlate={assignment.resourcePlate}
-              />
-              <div className="mt-4">
-                <Button
-                  type="button"
-                  className={driverPrimaryActionClass}
-                  disabled={busy}
-                  onClick={() => void runShift('start')}
-                >
-                  {t('taxi_fleet.driverApp.home.clockIn', 'Clock in')}
-                </Button>
-              </div>
+              {!needsVehiclePick ? (
+                hasDefaultsButNoneFree ? (
+                  <p className={`mt-4 ${driverSectionDescClass}`}>
+                    {t(
+                      'taxi_fleet.driverApp.home.noAvailableVehicles',
+                      'All your default vehicles are already assigned for today.',
+                    )}
+                  </p>
+                ) : (
+                  <ShiftVehicle
+                    label={t('taxi_fleet.driverApp.vehicle', 'Vehicle')}
+                    vehicleName={assignment.resourceName}
+                    vehicleLabel={assignment.resourceLabel}
+                    vehiclePlate={assignment.resourcePlate}
+                  />
+                )
+              ) : (
+                <div className="mt-4">
+                  <DriverShiftVehiclePicker
+                    vehicles={shiftVehicles}
+                    assignmentResourceId={assignment.resourceId}
+                    value={selectedResourceId}
+                    onChange={setSelectedResourceId}
+                    disabled={busy}
+                  />
+                </div>
+              )}
+              {needsVehiclePick ? (
+                <div className="mt-4">
+                  <Button
+                    type="button"
+                    className={driverPrimaryActionClass}
+                    disabled={busy || !selectedResourceId}
+                    onClick={() => void runShift('start')}
+                  >
+                    {t('taxi_fleet.driverApp.home.clockIn', 'Clock in')}
+                  </Button>
+                </div>
+              ) : null}
             </div>
             <Button type="button" className={driverSecondaryActionClass} onClick={previewTripsWithoutClockIn}>
               {t('taxi_fleet.driverApp.home.previewTrips', 'Preview trips only')}
@@ -312,6 +486,7 @@ export default function DriverHomePage() {
               />
               <ShiftVehicle
                 label={t('taxi_fleet.driverApp.vehicle', 'Vehicle')}
+                vehicleName={assignment.resourceName}
                 vehicleLabel={assignment.resourceLabel}
                 vehiclePlate={assignment.resourcePlate}
               />
@@ -363,10 +538,49 @@ export default function DriverHomePage() {
               />
               <ShiftVehicle
                 label={t('taxi_fleet.driverApp.vehicle', 'Vehicle')}
+                vehicleName={assignment.resourceName}
                 vehicleLabel={assignment.resourceLabel}
                 vehiclePlate={assignment.resourcePlate}
               />
             </div>
+            {needsVehiclePick ? (
+              <div className={`${driverCardClass} space-y-3`}>
+                <div className={driverSectionTitleClass}>
+                  {t('taxi_fleet.driverApp.home.startAnother', 'Start another shift')}
+                </div>
+                <p className={driverSectionDescClass}>
+                  {t(
+                    'taxi_fleet.driverApp.home.startAnotherHint',
+                    'Pick a default vehicle to start a new ad-hoc shift.',
+                  )}
+                </p>
+                <DriverShiftVehiclePicker
+                  vehicles={shiftVehicles}
+                  value={selectedResourceId}
+                  onChange={setSelectedResourceId}
+                  disabled={busy}
+                />
+                <Button
+                  type="button"
+                  className={driverPrimaryActionClass}
+                  disabled={busy || !selectedResourceId}
+                  onClick={() => void startAdHocShift()}
+                >
+                  {busy
+                    ? t('taxi_fleet.driverApp.home.starting', 'Starting…')
+                    : t('taxi_fleet.driverApp.home.clockInAdHoc', 'Start ad-hoc shift')}
+                </Button>
+              </div>
+            ) : hasDefaultsButNoneFree ? (
+              <div className={driverCardClass}>
+                <p className={driverSectionDescClass}>
+                  {t(
+                    'taxi_fleet.driverApp.home.noAvailableVehicles',
+                    'All your default vehicles are already assigned for today.',
+                  )}
+                </p>
+              </div>
+            ) : null}
             <Link href="/driver/trips" className={`${driverSecondaryActionClass} gap-2`}>
               <CarFront className="size-4" aria-hidden />
               {t('taxi_fleet.driverApp.home.viewTrips', 'View trips')}

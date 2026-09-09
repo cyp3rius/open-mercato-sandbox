@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Check, ChevronLeft, ChevronRight, History, Play } from 'lucide-react'
+import { CalendarClock, Check, ChevronLeft, ChevronRight, History, Play } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { parseNumericValue } from '@open-mercato/shared/lib/numeric'
@@ -50,7 +50,7 @@ import {
 } from '../../../../lib/driverTripShiftWindow'
 import { findDriverTripOverlap } from '../../../../lib/driverTripOverlapClient'
 
-type Mode = 'choose' | 'past-route' | 'past-commercial'
+type Mode = 'choose' | 'past-route' | 'past-commercial' | 'schedule-route' | 'schedule-commercial'
 
 type AssignmentListItem = DriverShiftAssignmentLike & {
   assignmentDate?: string
@@ -62,6 +62,7 @@ function emptyCommercial(): DriverCommercialValue {
     completionMode: 'manual',
     tripType: 'client',
     platform: null,
+    paymentType: 'cash',
     customerEntityId: '',
     customerLabel: '',
     revenueAmount: '0.00',
@@ -81,6 +82,18 @@ function emptyRoute(): DriverRouteStepValue {
     waypoints: [],
     startedAtLocal: now,
     endedAtLocal: now,
+    distanceKm: '',
+    durationText: '',
+  }
+}
+
+function emptyScheduleRoute(): DriverRouteStepValue {
+  const start = new Date()
+  start.setHours(start.getHours() + 1, 0, 0, 0)
+  return {
+    ...emptyRoute(),
+    startedAtLocal: toDateTimeLocalValue(start),
+    endedAtLocal: '',
     distanceKm: '',
     durationText: '',
   }
@@ -130,7 +143,11 @@ export default function DriverTripCreatePage() {
         shiftStart: string | null
         shiftEnd: string | null
       } | null
-      profile: { defaultResourceId?: string | null; defaultResourceLabel?: string | null } | null
+      profile: {
+        defaultResourceId?: string | null
+        defaultResourceLabel?: string | null
+        defaultResourceIds?: { id: string; label: string; plate?: string | null }[]
+      } | null
     }>('/api/taxi_fleet/driver/me')
       .then(({ result }) => {
         if (!result) return
@@ -143,10 +160,12 @@ export default function DriverTripCreatePage() {
           setResourceLabel(today.resourceLabel?.trim() || null)
           return
         }
-        setResourceId(today?.resourceId || result.profile?.defaultResourceId || '')
+        const primaryDefault = result.profile?.defaultResourceIds?.[0]
+        setResourceId(today?.resourceId || primaryDefault?.id || result.profile?.defaultResourceId || '')
         setAssignmentId(today?.id ?? null)
         setResourceLabel(
           today?.resourceLabel?.trim() ||
+            primaryDefault?.label?.trim() ||
             result.profile?.defaultResourceLabel?.trim() ||
             null,
         )
@@ -419,6 +438,138 @@ export default function DriverTripCreatePage() {
     }
   }
 
+  function validateScheduleCommercial(): string | null {
+    if (commercial.tripType === 'client' && !commercial.customerEntityId) {
+      return t(
+        'taxi_fleet.driverApp.trips.customerRequired',
+        'Select or create a customer for client trips.',
+      )
+    }
+    const revenue = parseNumericValue(commercial.revenueAmount)
+    if (revenue === null || revenue < 0) {
+      return t('taxi_fleet.driverApp.trips.revenueInvalid', 'Enter a valid revenue amount.')
+    }
+    return null
+  }
+
+  async function submitSchedule() {
+    const commercialError = validateScheduleCommercial()
+    if (commercialError) {
+      flash(commercialError, 'error')
+      return
+    }
+    if (!route.from.address.trim() || !route.to.address.trim()) {
+      flash(t('taxi_fleet.driverApp.trips.routeRequired', 'From and to addresses are required.'), 'error')
+      return
+    }
+    if (!route.startedAtLocal) {
+      flash(t('taxi_fleet.driverApp.trips.startRequired', 'Start time is required.'), 'error')
+      return
+    }
+    const startedAt = fromDateTimeLocalValue(route.startedAtLocal)
+    const startedMs = new Date(startedAt).getTime()
+    if (Number.isNaN(startedMs) || startedMs <= Date.now()) {
+      flash(
+        t(
+          'taxi_fleet.driverApp.trips.scheduleFutureRequired',
+          'Scheduled trips must start in the future.',
+        ),
+        'error',
+      )
+      return
+    }
+    let endedAt = ''
+    if (route.endedAtLocal.trim()) {
+      endedAt = fromDateTimeLocalValue(route.endedAtLocal)
+      const endedMs = new Date(endedAt).getTime()
+      if (Number.isNaN(endedMs) || endedMs <= startedMs) {
+        flash(
+          t(
+            'taxi_fleet.driverApp.trips.invalidTimes',
+            'Trip end time must be after start time.',
+          ),
+          'error',
+        )
+        return
+      }
+    }
+    const overlap = await findDriverTripOverlap({
+      startedAt,
+      endedAt: endedAt || null,
+      now: new Date(),
+    })
+    if (overlap) {
+      flash(
+        t(
+          'taxi_fleet.driverApp.trips.overlap',
+          'This trip overlaps another registered trip.',
+        ),
+        'error',
+      )
+      return
+    }
+    const distance = parseNumericValue(route.distanceKm)
+    setBusy(true)
+    try {
+      const payload = buildDriverTripPayload({
+        route: {
+          from: route.from,
+          to: route.to,
+          waypoints: route.waypoints,
+          startedAt,
+          endedAt,
+          distanceKm: distance,
+          durationText: route.durationText,
+        },
+        commercial: { ...commercial, completionMode: 'manual' },
+        resourceId: resourceId || undefined,
+        assignmentId: assignmentId || undefined,
+        status: 'scheduled',
+      })
+      const clientMutationId = newClientId()
+      if (!navigator.onLine) {
+        await enqueueDriverMutation({ type: 'trip.create', payload, clientMutationId })
+        await appendPendingTripToCache({
+          id: clientMutationId,
+          tripType: commercial.tripType,
+          status: 'scheduled',
+          startedAt: payload.startedAt,
+          endedAt: payload.endedAt,
+          distanceKm: payload.distanceKm,
+          revenueAmount: payload.revenueAmount,
+          notes: commercial.notes,
+          pending: true,
+        })
+        flash(
+          t('taxi_fleet.driverApp.trips.scheduleSavedOffline', 'Trip scheduled offline. It will sync when you are online.'),
+          'success',
+        )
+        router.replace('/driver/trips')
+        return
+      }
+      const { result } = await apiCall<{ id?: string }>('/api/taxi_fleet/driver/trips', {
+        method: 'POST',
+        body: JSON.stringify({ ...payload, clientMutationId }),
+      })
+      flash(t('taxi_fleet.driverApp.trips.scheduleSaved', 'Trip scheduled.'), 'success')
+      if (result?.id) {
+        router.replace(`/driver/trips/${result.id}`)
+        return
+      }
+      router.replace('/driver/trips')
+    } catch (err) {
+      const message =
+        (err as { body?: { error?: string }; message?: string } | null)?.body?.error ||
+        (err as { message?: string } | null)?.message
+      flash(
+        message || t('taxi_fleet.driverApp.trips.saveFailed', 'Could not save trip.'),
+        'error',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <DriverTripGate title={t('taxi_fleet.driverApp.trips.new', 'New trip')}>
       <div className="space-y-4">
@@ -433,11 +584,11 @@ export default function DriverTripCreatePage() {
                 {canLive
                   ? t(
                       'taxi_fleet.driverApp.trips.chooseModeHint',
-                      'Log a finished trip, or start a live trip and finish it later.',
+                      'Start a live trip, schedule a future one, or log a finished trip.',
                     )
                   : t(
-                      'taxi_fleet.driverApp.trips.chooseModeHintPastOnly',
-                      'You are off shift. You can only add a finished trip from a past or current shift window.',
+                      'taxi_fleet.driverApp.trips.chooseModeHintOffShift',
+                      'You are off shift. You can schedule a future trip or add a finished trip from a past shift.',
                     )}
               </p>
               {onOpenShift && resourceLabel ? (
@@ -460,6 +611,19 @@ export default function DriverTripCreatePage() {
                   : t('taxi_fleet.driverApp.trips.modeLive', 'Start live trip')}
               </Button>
             ) : null}
+            <Button
+              type="button"
+              className={`${driverSecondaryActionClass} gap-2`}
+              disabled={busy}
+              onClick={() => {
+                setRoute(emptyScheduleRoute())
+                setCommercial(emptyCommercial())
+                setMode('schedule-route')
+              }}
+            >
+              <CalendarClock className="size-4" aria-hidden />
+              {t('taxi_fleet.driverApp.trips.modeSchedule', 'Schedule trip')}
+            </Button>
             <Button
               type="button"
               className={`${driverSecondaryActionClass} gap-2`}
@@ -614,6 +778,149 @@ export default function DriverTripCreatePage() {
               className={`${driverSecondaryActionClass} gap-2`}
               disabled={busy}
               onClick={() => setMode('past-route')}
+            >
+              <ChevronLeft className="size-4" aria-hidden />
+              {t('taxi_fleet.driverApp.trips.back', 'Back')}
+            </Button>
+          </div>
+        ) : null}
+
+        {mode === 'schedule-route' ? (
+          <div className="space-y-4">
+            <div className={driverCardClass}>
+              <div className={driverSectionTitleClass}>
+                {t('taxi_fleet.driverApp.trips.scheduleRouteStep', 'Route and schedule')}
+              </div>
+              <p className={driverSectionDescClass}>
+                {t(
+                  'taxi_fleet.driverApp.trips.scheduleRouteHint',
+                  'Set a future start time, addresses, and optional planned end.',
+                )}
+              </p>
+              <div className="mt-5">
+                <DriverRouteStep
+                  value={route}
+                  disabled={busy}
+                  requireEndedAt={false}
+                  onChange={setRoute}
+                  onError={(message) => flash(message, 'error')}
+                />
+              </div>
+            </div>
+            <Button
+              type="button"
+              className={`${driverPrimaryActionClass} gap-2`}
+              disabled={busy}
+              onClick={() => {
+                if (!route.from.address.trim() || !route.to.address.trim()) {
+                  flash(
+                    t('taxi_fleet.driverApp.trips.routeRequired', 'From and to addresses are required.'),
+                    'error',
+                  )
+                  return
+                }
+                if (!route.startedAtLocal) {
+                  flash(t('taxi_fleet.driverApp.trips.startRequired', 'Start time is required.'), 'error')
+                  return
+                }
+                const startedAt = fromDateTimeLocalValue(route.startedAtLocal)
+                const startedMs = new Date(startedAt).getTime()
+                if (Number.isNaN(startedMs) || startedMs <= Date.now()) {
+                  flash(
+                    t(
+                      'taxi_fleet.driverApp.trips.scheduleFutureRequired',
+                      'Scheduled trips must start in the future.',
+                    ),
+                    'error',
+                  )
+                  return
+                }
+                if (route.endedAtLocal.trim()) {
+                  const endedMs = new Date(fromDateTimeLocalValue(route.endedAtLocal)).getTime()
+                  if (Number.isNaN(endedMs) || endedMs <= startedMs) {
+                    flash(
+                      t(
+                        'taxi_fleet.driverApp.trips.invalidTimes',
+                        'Trip end time must be after start time.',
+                      ),
+                      'error',
+                    )
+                    return
+                  }
+                }
+                void (async () => {
+                  const overlap = await findDriverTripOverlap({
+                    startedAt,
+                    endedAt: route.endedAtLocal.trim()
+                      ? fromDateTimeLocalValue(route.endedAtLocal)
+                      : null,
+                    now: new Date(),
+                  })
+                  if (overlap) {
+                    flash(
+                      t(
+                        'taxi_fleet.driverApp.trips.overlap',
+                        'This trip overlaps another registered trip.',
+                      ),
+                      'error',
+                    )
+                    return
+                  }
+                  setMode('schedule-commercial')
+                })()
+              }}
+            >
+              {t('taxi_fleet.driverApp.trips.nextCommercial', 'Next: trip details')}
+              <ChevronRight className="size-4" aria-hidden />
+            </Button>
+            <Button
+              type="button"
+              className={`${driverSecondaryActionClass} gap-2`}
+              disabled={busy}
+              onClick={() => setMode('choose')}
+            >
+              <ChevronLeft className="size-4" aria-hidden />
+              {t('taxi_fleet.driverApp.trips.back', 'Back')}
+            </Button>
+          </div>
+        ) : null}
+
+        {mode === 'schedule-commercial' ? (
+          <div className="space-y-4">
+            <div className={driverCardClass}>
+              <DriverCommercialStep
+                value={commercial}
+                disabled={busy}
+                receiptDraftRecordId={receiptDraftRecordId}
+                onChange={setCommercial}
+                onReceiptFileOffline={async (file) => {
+                  const dataBase64 = await fileToBase64(file)
+                  const row = await saveReceiptBlob({
+                    draftRecordId: receiptDraftRecordId,
+                    fileName: file.name,
+                    mime: file.type || 'application/octet-stream',
+                    dataBase64,
+                  })
+                  return { blobId: row.id, fileName: row.fileName }
+                }}
+              />
+            </div>
+            <Button
+              type="button"
+              className={`${driverPrimaryActionClass} gap-2`}
+              disabled={busy}
+              onClick={() => void submitSchedule()}
+            >
+              <Check className="size-4" aria-hidden />
+              {busy
+                ? t('taxi_fleet.driverApp.trips.saving', 'Saving…')
+                : t('taxi_fleet.driverApp.trips.scheduleSave', 'Schedule trip')}
+            </Button>
+            <Button
+              type="button"
+              className={`${driverSecondaryActionClass} gap-2`}
+              disabled={busy}
+              onClick={() => setMode('schedule-route')}
             >
               <ChevronLeft className="size-4" aria-hidden />
               {t('taxi_fleet.driverApp.trips.back', 'Back')}

@@ -56,6 +56,7 @@ function emptyCommercial(): DriverCommercialValue {
     completionMode: 'manual',
     tripType: 'client',
     platform: null,
+    paymentType: 'cash',
     customerEntityId: '',
     customerLabel: '',
     revenueAmount: '0.00',
@@ -90,10 +91,29 @@ function DriverLiveTripPageInner() {
 
   React.useEffect(() => {
     if (!draftId) return
-    void getLiveTripDraft(draftId).then((row) => {
+    void getLiveTripDraft(draftId).then(async (row) => {
       if (!row) {
         router.replace('/driver/trips/new')
         return
+      }
+      if (row.serverTripId && navigator.onLine) {
+        try {
+          const { result } = await apiCall<{ items?: Array<{ id: string; status?: string }> }>(
+            '/api/taxi_fleet/driver/trips',
+          )
+          const serverTrip = (result?.items ?? []).find((item) => item.id === row.serverTripId)
+          if (!serverTrip || serverTrip.status !== 'in_progress') {
+            await clearLiveTripDraft(row.id)
+            flash(
+              t('taxi_fleet.driverApp.trips.liveGone', 'This trip is no longer available.'),
+              'warning',
+            )
+            router.replace('/driver/trips')
+            return
+          }
+        } catch {
+          // keep local draft when the check fails (offline / transient error)
+        }
       }
       setDraft(row)
       if (row.phase === 'ended' || row.phase === 'finishing') {
@@ -109,7 +129,7 @@ function DriverLiveTripPageInner() {
         })
       }
     })
-  }, [draftId, router])
+  }, [draftId, router, t])
 
   // Track GPS while active
   React.useEffect(() => {

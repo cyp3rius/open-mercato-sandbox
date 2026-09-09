@@ -14,8 +14,9 @@ import { useDriverOnlineStatus } from './useDriverOnlineStatus'
 import { useDriverGpsStatus } from './useDriverGpsStatus'
 import { useDriverPwa } from './useDriverPwa'
 import { useDriverForcedLightTheme } from './useDriverForcedLightTheme'
+import { clearDriverLocalData } from '../../lib/driverOffline/clearDriverLocalData'
 import { flushDriverOutbox, getPendingOutboxCount } from '../../lib/driverOffline/outbox'
-import { getActiveLiveTripDraft } from '../../lib/driverOffline/tripDrafts'
+import { clearLiveTripDraft, getActiveLiveTripDraft } from '../../lib/driverOffline/tripDrafts'
 import { useDriverTracking } from './useDriverTracking'
 import {
   driverBadgeInfoClass,
@@ -175,15 +176,27 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
     let active = true
     const refresh = async () => {
       const count = await getPendingOutboxCount()
-      const live = await getActiveLiveTripDraft()
+      let live = await getActiveLiveTripDraft()
       let serverInProgressId: string | null = null
-      if (!live && navigator.onLine) {
+      if (navigator.onLine) {
         try {
           const { result } = await apiCall<{ items?: Array<{ id: string; status?: string }> }>(
             '/api/taxi_fleet/driver/trips',
           )
-          const inProgress = (result?.items ?? []).find((row) => row.status === 'in_progress')
-          serverInProgressId = inProgress?.id ?? null
+          const items = result?.items ?? []
+          if (live?.serverTripId) {
+            const serverTripId = live.serverTripId
+            const draftId = live.id
+            const serverTrip = items.find((row) => row.id === serverTripId)
+            if (!serverTrip || serverTrip.status !== 'in_progress') {
+              await clearLiveTripDraft(draftId)
+              live = null
+            }
+          }
+          if (!live) {
+            const inProgress = items.find((row) => row.status === 'in_progress')
+            serverInProgressId = inProgress?.id ?? null
+          }
         } catch {
           serverInProgressId = null
         }
@@ -214,7 +227,11 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
   }, [])
 
   async function logout() {
+    await clearDriverLocalData().catch(() => undefined)
     await apiCall('/api/auth/logout', { method: 'POST' }).catch(() => undefined)
+    setLiveTripId(null)
+    setServerInProgressTripId(null)
+    setPending(0)
     router.replace('/driver/login')
   }
 

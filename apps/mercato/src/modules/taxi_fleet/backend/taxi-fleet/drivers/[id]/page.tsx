@@ -20,6 +20,7 @@ import { DriverTripsTab } from '../../../../components/driver/DriverTripsTab'
 import { DriverAllocationsTab } from '../../../../components/driver/DriverAllocationsTab'
 import { DriverSettlementsTab } from '../../../../components/driver/DriverSettlementsTab'
 import { mapDriverProfileRowToUpdateFormValues } from '../../../../components/driverProfileFormConfig'
+import { resolveDriverDefaultResourceIds } from '../../../../lib/driverDefaultResources'
 
 type DriverRow = {
   id: string
@@ -28,6 +29,7 @@ type DriverRow = {
   payoutPercent: string
   payoutTiersJson?: unknown
   defaultResourceId?: string | null
+  defaultResourceIds?: string[] | null
   externalAppEnabled: boolean
   boltDriverId?: string | null
   uberDriverId?: string | null
@@ -68,10 +70,10 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
     void load()
   }, [load])
 
-  const resourceIds = React.useMemo(() => {
-    const id = row?.defaultResourceId
-    return id ? [id] : []
-  }, [row?.defaultResourceId])
+  const resourceIds = React.useMemo(
+    () => (row ? resolveDriverDefaultResourceIds(row) : []),
+    [row],
+  )
   const { resolveLabel: resolveResourceLabel } = useResourceLabels(resourceIds)
 
   const displayName = row ? resolveName(row.teamMemberId) : t('taxi_fleet.drivers.detail.title', 'Driver profile')
@@ -80,7 +82,7 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
     if (!row) {
       return mapDriverProfileRowToUpdateFormValues({
         payoutPercent: 0,
-        defaultResourceId: '',
+        defaultResourceIds: [],
         externalAppEnabled: false,
         boltDriverId: '',
         uberDriverId: '',
@@ -157,7 +159,7 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
                 {tab === 'trips' ? (
                   <DriverTripsTab
                     teamMemberId={row.teamMemberId}
-                    defaultResourceId={row.defaultResourceId}
+                    defaultResourceId={resolveDriverDefaultResourceIds(row)[0] ?? null}
                     driverProfiles={profiles}
                     resolveDriverName={resolveName}
                     resolveResourceLabel={resolveResourceLabel}
@@ -167,7 +169,7 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
                 {tab === 'allocations' ? (
                   <DriverAllocationsTab
                     teamMemberId={row.teamMemberId}
-                    defaultResourceId={row.defaultResourceId}
+                    defaultResourceId={resolveDriverDefaultResourceIds(row)[0] ?? null}
                     resolveDriverName={resolveName}
                     resolveResourceLabel={resolveResourceLabel}
                     canManageAssignments={canManageAssignments}

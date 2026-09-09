@@ -4,25 +4,28 @@ import { requireId } from '@open-mercato/shared/lib/commands/helpers'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import { TaxiFleetDailyAssignment } from '../data/entities'
+import { TaxiFleetDailyAssignment, TaxiFleetDriverProfile } from '../data/entities'
 import {
   assignmentCreateSchema,
   assignmentDeleteSchema,
+  assignmentSelfStartSchema,
   assignmentShiftSchema,
   assignmentUpdateSchema,
   type AssignmentCreateInput,
+  type AssignmentSelfStartInput,
   type AssignmentShiftInput,
   type AssignmentUpdateInput,
 } from '../data/validators'
-import { findAssignmentConflict } from '../lib/assignmentValidation'
+import { findAssignmentConflict, findAssignedResourceIdsForDate, findAssignmentUniqueBlockers, resolveSelfStartAssignmentRow } from '../lib/assignmentValidation'
 import { assertTeamMemberHasDriverProfile } from '../lib/driverProfileGuard'
 import { resolveDriverContext } from '../lib/driverContext'
 import { computeAssignmentGpsDistanceKm } from '../lib/computeAssignmentGpsDistance'
 import {
-  checkShiftEndGrace,
-  checkShiftStartGrace,
-  isAssignmentClockEligible,
-} from '../lib/shiftGraceWindow'
+  buildShiftStartAllowlist,
+  resolveDriverDefaultResourceIds,
+  resolveShiftStartVehicle,
+} from '../lib/driverDefaultResources'
+import { formatDateInTimeZone } from '../lib/shiftGraceWindow'
 import { loadTaxiFleetOrganizationSettings } from '../lib/taxiFleetOrganizationSettings'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
 
@@ -187,6 +190,7 @@ const shiftAssignmentCommand: CommandHandler<
     plannedShiftEnd: string | null
     gpsDistanceKm: string | null
     status: string
+    resourceId: string
   }
 > = {
   id: 'taxi_fleet.assignments.shift',
@@ -213,57 +217,74 @@ const shiftAssignmentCommand: CommandHandler<
       })
     }
 
-    const settings = await loadTaxiFleetOrganizationSettings(em, {
-      tenantId: row.tenantId,
-      organizationId: row.organizationId,
-    })
-    const grace = {
-      hoursBeforeShift: settings.hoursBeforeShift,
-      hoursAfterShift: settings.hoursAfterShift,
-    }
-    const timeZone = settings.calendar.timezone || 'Europe/Warsaw'
     const now = new Date()
-
-    if (
-      !isAssignmentClockEligible(
-        {
-          assignmentDate: row.assignmentDate,
-          plannedShiftStart: row.plannedShiftStart,
-          plannedShiftEnd: row.plannedShiftEnd,
-        },
-        now,
-        grace,
-        timeZone,
-      )
-    ) {
-      throw new CrudHttpError(400, {
-        error: translate(
-          'taxi_fleet.errors.assignmentNotToday',
-          'Clock in/out is only allowed for today’s assignment (or within the allowed early/late window).',
-        ),
-      })
-    }
 
     let mutated = false
     if (parsed.action === 'start') {
       if (!row.shiftStart) {
-        const startCheck = checkShiftStartGrace(
-          now,
-          { plannedShiftStart: row.plannedShiftStart, plannedShiftEnd: row.plannedShiftEnd },
-          grace,
+        const profile = await findOneWithDecryption(
+          em,
+          TaxiFleetDriverProfile,
+          { teamMemberId: driver.teamMemberId, deletedAt: null },
+          undefined,
+          { tenantId: row.tenantId, organizationId: row.organizationId },
         )
-        if (!startCheck.ok) {
-          const message =
-            startCheck.code === 'SHIFT_TOO_EARLY'
-              ? translate(
-                  'taxi_fleet.errors.shiftTooEarly',
-                  'It is too early to start this shift. Try again closer to the planned start.',
-                )
-              : translate(
-                  'taxi_fleet.errors.shiftTooLate',
-                  'It is too late to start this shift.',
-                )
-          throw new CrudHttpError(400, { error: message, code: startCheck.code })
+        const defaults = resolveDriverDefaultResourceIds(profile ?? {})
+        const busyResourceIds = await findAssignedResourceIdsForDate(em, {
+          tenantId: row.tenantId,
+          organizationId: row.organizationId,
+          assignmentDate: row.assignmentDate,
+          resourceIds: defaults,
+          excludeAssignmentId: row.id,
+        })
+        const allowlist = buildShiftStartAllowlist({
+          defaultResourceIds: defaults,
+          busyResourceIds,
+        })
+        const vehiclePick = resolveShiftStartVehicle({
+          allowlist,
+          requestedResourceId: parsed.resourceId,
+        })
+        if (!vehiclePick.ok) {
+          if (vehiclePick.code === 'SHIFT_VEHICLE_REQUIRED') {
+            throw new CrudHttpError(400, {
+              error: translate(
+                allowlist.length
+                  ? 'taxi_fleet.errors.shiftVehicleRequired'
+                  : 'taxi_fleet.errors.noAvailableDefaultVehicles',
+                allowlist.length
+                  ? 'Select a vehicle before starting your shift.'
+                  : 'No available default vehicles. All are already assigned for today.',
+              ),
+              code: allowlist.length ? 'SHIFT_VEHICLE_REQUIRED' : 'NO_AVAILABLE_DEFAULT_VEHICLES',
+            })
+          }
+          throw new CrudHttpError(400, {
+            error: translate(
+              'taxi_fleet.errors.shiftVehicleNotAllowed',
+              'Selected vehicle is not allowed for this shift.',
+            ),
+            code: 'SHIFT_VEHICLE_NOT_ALLOWED',
+          })
+        }
+        if (vehiclePick.resourceId !== row.resourceId) {
+          const conflict = await findAssignmentConflict(em, {
+            tenantId: row.tenantId,
+            organizationId: row.organizationId,
+            assignmentDate: row.assignmentDate,
+            teamMemberId: row.teamMemberId,
+            resourceId: vehiclePick.resourceId,
+            excludeId: row.id,
+          })
+          if (conflict === 'resource') {
+            throw new CrudHttpError(409, {
+              error: translate(
+                'taxi_fleet.errors.resourceAssigned',
+                'This vehicle is already assigned for that day.',
+              ),
+            })
+          }
+          row.resourceId = vehiclePick.resourceId
         }
         row.shiftStart = now
         if (row.status === 'planned') row.status = 'confirmed'
@@ -277,20 +298,6 @@ const shiftAssignmentCommand: CommandHandler<
         })
       }
       if (!row.shiftEnd) {
-        const endCheck = checkShiftEndGrace(
-          now,
-          { plannedShiftStart: row.plannedShiftStart, plannedShiftEnd: row.plannedShiftEnd },
-          grace,
-        )
-        if (!endCheck.ok) {
-          throw new CrudHttpError(400, {
-            error: translate(
-              'taxi_fleet.errors.shiftEndTooLate',
-              'It is too late to end this shift.',
-            ),
-            code: endCheck.code,
-          })
-        }
         row.shiftEnd = now
         row.status = 'completed'
         const gps = await computeAssignmentGpsDistanceKm(em, row.id, {
@@ -322,6 +329,257 @@ const shiftAssignmentCommand: CommandHandler<
       plannedShiftEnd: row.plannedShiftEnd?.toISOString() ?? null,
       gpsDistanceKm: row.gpsDistanceKm ?? null,
       status: row.status,
+      resourceId: row.resourceId,
+    }
+  },
+}
+
+type ShiftResult = {
+  assignmentId: string
+  shiftStart: string | null
+  shiftEnd: string | null
+  plannedShiftStart: string | null
+  plannedShiftEnd: string | null
+  gpsDistanceKm: string | null
+  status: string
+  resourceId: string
+}
+
+const selfStartAssignmentCommand: CommandHandler<AssignmentSelfStartInput, ShiftResult> = {
+  id: 'taxi_fleet.assignments.self_start',
+  async execute(input, ctx) {
+    const parsed = assignmentSelfStartSchema.parse(input)
+    const { translate } = await resolveTranslations()
+    const driver = await resolveDriverContext(ctx, translate, { requireExternalApp: true })
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const tenantId = driver.teamMember.tenantId
+    const organizationId = driver.teamMember.organizationId
+    const settings = await loadTaxiFleetOrganizationSettings(em, { tenantId, organizationId })
+    const today = formatDateInTimeZone(new Date(), settings.calendar.timezone || 'Europe/Warsaw')
+
+    const openShift = await findOneWithDecryption(
+      em,
+      TaxiFleetDailyAssignment,
+      {
+        teamMemberId: driver.teamMemberId,
+        deletedAt: null,
+        shiftStart: { $ne: null },
+        shiftEnd: null,
+        status: { $ne: 'cancelled' },
+      },
+      { orderBy: { shiftStart: 'DESC' } },
+      { tenantId, organizationId },
+    )
+    if (openShift) {
+      throw new CrudHttpError(409, {
+        error: translate(
+          'taxi_fleet.errors.shiftAlreadyOpen',
+          'You already have an open shift. End it before starting another.',
+        ),
+        code: 'SHIFT_ALREADY_OPEN',
+      })
+    }
+
+    const existingToday = await findOneWithDecryption(
+      em,
+      TaxiFleetDailyAssignment,
+      {
+        teamMemberId: driver.teamMemberId,
+        assignmentDate: today,
+        deletedAt: null,
+        status: { $ne: 'cancelled' },
+      },
+      undefined,
+      { tenantId, organizationId },
+    )
+    if (existingToday) {
+      // Open shift already covered above; unstarted planned → normal clock-in.
+      if (existingToday.shiftStart && !existingToday.shiftEnd) {
+        throw new CrudHttpError(409, {
+          error: translate(
+            'taxi_fleet.errors.shiftAlreadyOpen',
+            'You already have an open shift. End it before starting another.',
+          ),
+          code: 'SHIFT_ALREADY_OPEN',
+        })
+      }
+      if (!existingToday.shiftStart) {
+        return shiftAssignmentCommand.execute(
+          {
+            id: existingToday.id,
+            action: 'start',
+            resourceId: parsed.resourceId,
+            clientMutationId: parsed.clientMutationId,
+          },
+          ctx,
+        )
+      }
+      // Completed today: soft-delete so a new ad-hoc shift can reclaim the unique slots.
+      existingToday.deletedAt = new Date()
+      existingToday.updatedAt = new Date()
+      await em.flush()
+    }
+
+    const profile = await findOneWithDecryption(
+      em,
+      TaxiFleetDriverProfile,
+      { teamMemberId: driver.teamMemberId, deletedAt: null },
+      undefined,
+      { tenantId, organizationId },
+    )
+    const defaults = resolveDriverDefaultResourceIds(profile ?? {})
+    const busyResourceIds = await findAssignedResourceIdsForDate(em, {
+      tenantId,
+      organizationId,
+      assignmentDate: today,
+      resourceIds: defaults,
+    })
+    const allowlist = buildShiftStartAllowlist({
+      defaultResourceIds: defaults,
+      busyResourceIds,
+    })
+    const vehiclePick = resolveShiftStartVehicle({
+      allowlist,
+      requestedResourceId: parsed.resourceId,
+    })
+    if (!vehiclePick.ok) {
+      if (!defaults.length) {
+        throw new CrudHttpError(400, {
+          error: translate(
+            'taxi_fleet.errors.noDefaultVehicles',
+            'No default vehicles on your profile. Ask dispatch to set them or create an assignment.',
+          ),
+          code: 'NO_DEFAULT_VEHICLES',
+        })
+      }
+      if (!allowlist.length) {
+        throw new CrudHttpError(400, {
+          error: translate(
+            'taxi_fleet.errors.noAvailableDefaultVehicles',
+            'No available default vehicles. All are already assigned for today.',
+          ),
+          code: 'NO_AVAILABLE_DEFAULT_VEHICLES',
+        })
+      }
+      if (vehiclePick.code === 'SHIFT_VEHICLE_REQUIRED') {
+        throw new CrudHttpError(400, {
+          error: translate(
+            'taxi_fleet.errors.shiftVehicleRequired',
+            'Select a vehicle before starting your shift.',
+          ),
+          code: 'SHIFT_VEHICLE_REQUIRED',
+        })
+      }
+      throw new CrudHttpError(400, {
+        error: translate(
+          'taxi_fleet.errors.shiftVehicleNotAllowed',
+          'Selected vehicle is not in your default vehicles list.',
+        ),
+        code: 'SHIFT_VEHICLE_NOT_ALLOWED',
+      })
+    }
+
+    const conflict = await findAssignmentConflict(em, {
+      tenantId,
+      organizationId,
+      assignmentDate: today,
+      teamMemberId: driver.teamMemberId,
+      resourceId: vehiclePick.resourceId,
+    })
+    if (conflict) {
+      const message =
+        conflict === 'member'
+          ? translate('taxi_fleet.errors.memberAssigned', 'Driver already assigned for this date.')
+          : translate('taxi_fleet.errors.resourceAssigned', 'Vehicle already assigned for this date.')
+      throw new CrudHttpError(409, { error: message, code: 'ASSIGNMENT_CONFLICT' })
+    }
+
+    const now = new Date()
+    const blockers = await findAssignmentUniqueBlockers(em, {
+      tenantId,
+      organizationId,
+      assignmentDate: today,
+      teamMemberId: driver.teamMemberId,
+      resourceId: vehiclePick.resourceId,
+    })
+    const claim = resolveSelfStartAssignmentRow({
+      blockers,
+      teamMemberId: driver.teamMemberId,
+      resourceId: vehiclePick.resourceId,
+    })
+    if (!claim.ok) {
+      const message =
+        claim.conflict === 'member'
+          ? translate('taxi_fleet.errors.memberAssigned', 'Driver already assigned for this date.')
+          : translate('taxi_fleet.errors.resourceAssigned', 'Vehicle already assigned for this date.')
+      throw new CrudHttpError(409, { error: message, code: 'ASSIGNMENT_CONFLICT' })
+    }
+
+    for (const ghost of claim.remove) {
+      em.remove(ghost)
+    }
+
+    let record: TaxiFleetDailyAssignment
+    if (claim.row) {
+      record = claim.row
+      record.deletedAt = null
+      record.teamMemberId = driver.teamMemberId
+      record.resourceId = vehiclePick.resourceId
+      record.plannedShiftStart = null
+      record.plannedShiftEnd = null
+      record.shiftStart = now
+      record.shiftEnd = null
+      record.gpsDistanceKm = null
+      record.status = 'confirmed'
+      record.notes = null
+      record.updatedAt = now
+    } else {
+      record = em.create(TaxiFleetDailyAssignment, {
+        tenantId,
+        organizationId,
+        teamMemberId: driver.teamMemberId,
+        resourceId: vehiclePick.resourceId,
+        assignmentDate: today,
+        plannedShiftStart: null,
+        plannedShiftEnd: null,
+        shiftStart: now,
+        shiftEnd: null,
+        gpsDistanceKm: null,
+        status: 'confirmed',
+        notes: null,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+      })
+      em.persist(record)
+    }
+    await em.flush()
+    const eventBus = ctx.container.resolve('eventBus') as {
+      emitEvent: (event: string, data: unknown) => Promise<void>
+    }
+    await eventBus.emitEvent('taxi_fleet.assignment.created', {
+      id: record.id,
+      tenantId: record.tenantId,
+      organizationId: record.organizationId,
+      adHoc: true,
+      restored: Boolean(claim.row),
+    })
+    await eventBus.emitEvent('taxi_fleet.assignment.updated', {
+      id: record.id,
+      tenantId: record.tenantId,
+      organizationId: record.organizationId,
+      shiftAction: 'start',
+      adHoc: true,
+    })
+    return {
+      assignmentId: record.id,
+      shiftStart: record.shiftStart?.toISOString() ?? null,
+      shiftEnd: null,
+      plannedShiftStart: null,
+      plannedShiftEnd: null,
+      gpsDistanceKm: null,
+      status: record.status,
+      resourceId: record.resourceId,
     }
   },
 }
@@ -330,3 +588,4 @@ registerCommand(createAssignmentCommand)
 registerCommand(updateAssignmentCommand)
 registerCommand(deleteAssignmentCommand)
 registerCommand(shiftAssignmentCommand)
+registerCommand(selfStartAssignmentCommand)

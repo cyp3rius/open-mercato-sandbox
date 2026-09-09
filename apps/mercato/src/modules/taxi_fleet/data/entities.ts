@@ -57,6 +57,10 @@ export class TaxiFleetDriverProfile {
   @Property({ name: 'default_resource_id', type: 'uuid', nullable: true })
   defaultResourceId?: string | null
 
+  /** Allowlist of default fleet vehicles (UUID strings). Primary = first / defaultResourceId. */
+  @Property({ name: 'default_resource_ids', type: 'json', nullable: true })
+  defaultResourceIds?: string[] | null
+
   @Property({ name: 'external_app_enabled', type: 'boolean', default: false })
   externalAppEnabled: boolean = false
 

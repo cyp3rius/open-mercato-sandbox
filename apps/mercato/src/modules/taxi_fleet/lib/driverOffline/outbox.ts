@@ -3,7 +3,7 @@ import { deleteReceiptBlob, getReceiptBlob } from './tripDrafts'
 export type DriverOutboxItem = {
   id: string
   clientMutationId: string
-  type: 'assignment.shift' | 'trip.create' | 'trip.update' | 'location.batch' | 'expense.create'
+  type: 'assignment.shift' | 'assignment.self_start' | 'trip.create' | 'trip.update' | 'location.batch' | 'expense.create'
   payload: Record<string, unknown>
   createdAt: string
   retryCount: number
@@ -180,10 +180,23 @@ export async function flushDriverOutbox(): Promise<void> {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             action: item.payload.action,
+            ...(typeof item.payload.resourceId === 'string' && item.payload.resourceId
+              ? { resourceId: item.payload.resourceId }
+              : {}),
             clientMutationId: item.clientMutationId,
           }),
         })
         if (!res.ok) throw new Error(`shift ${res.status}`)
+      } else if (item.type === 'assignment.self_start') {
+        const res = await fetch('/api/taxi_fleet/driver/assignments/start', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            resourceId: item.payload.resourceId,
+            clientMutationId: item.clientMutationId,
+          }),
+        })
+        if (!res.ok) throw new Error(`self_start ${res.status}`)
       } else if (item.type === 'trip.create') {
         const payload = await resolveReceiptAttachment(item.payload)
         const res = await fetch('/api/taxi_fleet/driver/trips', {

@@ -9,6 +9,9 @@ import type { CommandBus, CommandRuntimeContext } from '@open-mercato/shared/lib
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
+import { hashToken, tokenizeText } from '@open-mercato/shared/lib/search/tokenize'
+import { resolveSearchConfig } from '@open-mercato/shared/lib/search/config'
+import { E } from '@/.mercato/generated/entities.ids.generated'
 import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
 
 export const metadata = {
@@ -24,6 +27,12 @@ const createCustomerSchema = z.object({
   primaryPhone: z.string().trim().max(50).optional().nullable(),
   primaryEmail: z.string().trim().email().max(320).optional().nullable().or(z.literal('')),
 })
+
+const CUSTOMER_SEARCH_ENTITY_TYPES = [
+  E.customers.customer_entity,
+  E.customers.customer_person_profile,
+  E.customers.customer_company_profile,
+] as const
 
 async function buildContext(req: Request): Promise<CommandRuntimeContext> {
   const container = await createRequestContainer()
@@ -56,6 +65,69 @@ function splitDisplayName(value: string): { firstName: string; lastName: string;
   return { firstName: collapsed, lastName: collapsed, displayName: collapsed }
 }
 
+function looksEncryptedLabel(value: string): boolean {
+  // AES-GCM payloads are colon-separated ciphertext chunks, not display names.
+  return value.includes(':') && value.length > 40
+}
+
+async function findCustomerEntityIdsBySearchTokens(
+  em: EntityManager,
+  params: { tenantId: string; organizationId: string; search: string; limit: number },
+): Promise<string[]> {
+  const config = resolveSearchConfig()
+  const { tokens } = tokenizeText(params.search, config)
+  if (!tokens.length) return []
+  // Use the longest token so "Kwiat" matches indexed legal_name/last_name/etc.,
+  // not only sparse customer_entity.display_name tokens.
+  const primary = tokens.reduce((best, token) => (token.length >= best.length ? token : best))
+  const primaryHash = hashToken(primary, config)
+  const knex = em.getConnection().getKnex()
+
+  const tokenRows = await knex('search_tokens')
+    .select('entity_type', 'entity_id')
+    .distinct()
+    .where({
+      token_hash: primaryHash,
+      tenant_id: params.tenantId,
+      organization_id: params.organizationId,
+    })
+    .whereIn('entity_type', [...CUSTOMER_SEARCH_ENTITY_TYPES])
+    .limit(Math.max(params.limit * 8, 40))
+
+  const entityIds = new Set<string>()
+  const personProfileIds: string[] = []
+  const companyProfileIds: string[] = []
+  for (const row of tokenRows as Array<{ entity_type?: unknown; entity_id?: unknown }>) {
+    const entityType = typeof row.entity_type === 'string' ? row.entity_type : ''
+    const recordId = typeof row.entity_id === 'string' ? row.entity_id : ''
+    if (!recordId) continue
+    if (entityType === E.customers.customer_entity) entityIds.add(recordId)
+    else if (entityType === E.customers.customer_person_profile) personProfileIds.push(recordId)
+    else if (entityType === E.customers.customer_company_profile) companyProfileIds.push(recordId)
+  }
+
+  if (personProfileIds.length) {
+    const people = await knex('customer_people')
+      .select('entity_id')
+      .whereIn('id', personProfileIds)
+      .andWhere({ tenant_id: params.tenantId, organization_id: params.organizationId })
+    for (const row of people as Array<{ entity_id?: unknown }>) {
+      if (typeof row.entity_id === 'string' && row.entity_id) entityIds.add(row.entity_id)
+    }
+  }
+  if (companyProfileIds.length) {
+    const companies = await knex('customer_companies')
+      .select('entity_id')
+      .whereIn('id', companyProfileIds)
+      .andWhere({ tenant_id: params.tenantId, organization_id: params.organizationId })
+    for (const row of companies as Array<{ entity_id?: unknown }>) {
+      if (typeof row.entity_id === 'string' && row.entity_id) entityIds.add(row.entity_id)
+    }
+  }
+
+  return [...entityIds].slice(0, params.limit)
+}
+
 export async function GET(req: Request) {
   try {
     const context = await buildContext(req)
@@ -63,40 +135,65 @@ export async function GET(req: Request) {
     const driver = await resolveDriverContext(context, translate, { requireExternalApp: true })
     const url = new URL(req.url)
     const search = (url.searchParams.get('search') ?? '').trim()
+    const minLen = resolveSearchConfig().minTokenLength
+    if (search.length < minLen) {
+      return NextResponse.json({ items: [] })
+    }
+
     const em = context.container.resolve('em') as EntityManager
-    const scope = {
-      tenantId: driver.teamMember.tenantId,
-      organizationId: driver.teamMember.organizationId,
+    const tenantId = driver.teamMember.tenantId
+    const organizationId = driver.teamMember.organizationId
+    const matchedIds = await findCustomerEntityIdsBySearchTokens(em, {
+      tenantId,
+      organizationId,
+      search,
+      limit: 20,
+    })
+    if (!matchedIds.length) {
+      return NextResponse.json({ items: [] })
     }
-    const where: Record<string, unknown> = {
-      tenantId: scope.tenantId,
-      organizationId: scope.organizationId,
-      deletedAt: null,
-      kind: { $in: ['person', 'company'] },
-    }
-    if (search.length) {
-      const pattern = `%${search}%`
-      where.$or = [
-        { displayName: { $ilike: pattern } },
-        { primaryEmail: { $ilike: pattern } },
-        { primaryPhone: { $ilike: pattern } },
-      ]
-    }
+
+    const scope = { tenantId, organizationId }
     const rows = await findWithDecryption(
       em,
       CustomerEntity,
-      where,
-      { limit: 20, orderBy: { displayName: 'asc' } },
+      {
+        id: { $in: matchedIds },
+        tenantId,
+        organizationId,
+        deletedAt: null,
+        kind: { $in: ['person', 'company'] },
+      },
+      { limit: 20 },
       scope,
     )
-    return NextResponse.json({
-      items: rows.map((row) => ({
-        id: row.id,
-        kind: row.kind,
-        label: row.displayName,
-        description: row.primaryPhone || row.primaryEmail || undefined,
-      })),
-    })
+    const order = new Map(matchedIds.map((id, index) => [id, index]))
+    const items = rows
+      .slice()
+      .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
+      .map((row) => {
+        const label = row.displayName?.trim() || row.id
+        if (looksEncryptedLabel(label)) {
+          return null
+        }
+        const phone = row.primaryPhone?.trim() || ''
+        const email = row.primaryEmail?.trim() || ''
+        const description =
+          phone && !looksEncryptedLabel(phone)
+            ? phone
+            : email && !looksEncryptedLabel(email)
+              ? email
+              : undefined
+        return {
+          id: row.id,
+          kind: row.kind,
+          label,
+          description,
+        }
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+
+    return NextResponse.json({ items })
   } catch (err) {
     if (err instanceof CrudHttpError) return NextResponse.json(err.body, { status: err.status })
     console.error('taxi_fleet.driver.customers.list failed', err)
@@ -190,7 +287,7 @@ export const openApi = {
   GET: { summary: 'Search customers for driver trip form', tags: ['Taxi fleet driver'] },
   POST: {
     summary: 'Create customer for driver trip form',
-    tags: ['Taxi fleet driver'],
     requestBody: { schema: createCustomerSchema },
+    tags: ['Taxi fleet driver'],
   },
 }

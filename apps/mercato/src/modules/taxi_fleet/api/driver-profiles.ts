@@ -52,6 +52,7 @@ const crud = makeCrudRoute({
       'payout_percent',
       'payout_tiers_json',
       'default_resource_id',
+      'default_resource_ids',
       'external_app_enabled',
       'bolt_driver_id',
       'uber_driver_id',

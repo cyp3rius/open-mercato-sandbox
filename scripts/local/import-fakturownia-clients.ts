@@ -75,6 +75,7 @@ type PlannedRecord = {
     lastName?: string
     primaryEmail?: string
     primaryPhone?: string
+    websiteUrl?: string
     description?: string
     nip?: string
     regon?: string
@@ -167,6 +168,21 @@ function normalizeEmail(raw: string): { email?: string; warning?: string } {
     return { warning: `Pominięto e-mail (nieprawidłowy): ${raw}` }
   }
   return { email }
+}
+
+function normalizeWebsite(raw: string): { websiteUrl?: string; warning?: string } {
+  const trimmed = raw.trim()
+  if (!trimmed) return {}
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+  try {
+    const url = new URL(withProtocol)
+    if (!url.hostname.includes('.')) {
+      return { warning: `Pominięto stronę WWW (nieprawidłowa): ${raw}` }
+    }
+    return { websiteUrl: url.toString() }
+  } catch {
+    return { warning: `Pominięto stronę WWW (nieprawidłowa): ${raw}` }
+  }
 }
 
 function mapBankFields(row: ParsedRow): { bankName?: string; iban?: string } {
@@ -265,6 +281,8 @@ function planRow(row: ParsedRow): PlannedRecord {
   if (emailInfo.warning) warnings.push(emailInfo.warning)
   const phoneInfo = normalizePhone(row.phone || row.mobile)
   if (phoneInfo.warning) warnings.push(phoneInfo.warning)
+  const websiteInfo = normalizeWebsite(row.website)
+  if (websiteInfo.warning) warnings.push(websiteInfo.warning)
 
   const bank = mapBankFields(row)
   const description = buildDescription(row, Boolean(bank.bankName || bank.iban))
@@ -288,6 +306,7 @@ function planRow(row: ParsedRow): PlannedRecord {
         legalName,
         primaryEmail: emailInfo.email,
         primaryPhone: phoneInfo.phone,
+        websiteUrl: websiteInfo.websiteUrl,
         description,
         nip,
         bankName: bank.bankName,
@@ -545,6 +564,7 @@ async function createOne(
       description: plan.payload.description ?? null,
       primaryEmail: plan.payload.primaryEmail ?? null,
       primaryPhone: plan.payload.primaryPhone ?? null,
+      status: 'customer',
       source: SOURCE,
       isActive: true,
       createdAt: now,
@@ -557,7 +577,7 @@ async function createOne(
       legalName: plan.payload.legalName ?? null,
       brandName: null,
       domain: null,
-      websiteUrl: null,
+      websiteUrl: plan.payload.websiteUrl ?? null,
       industry: null,
       sizeBucket: null,
       annualRevenue: null,
@@ -586,6 +606,7 @@ async function createOne(
     description: plan.payload.description ?? null,
     primaryEmail: plan.payload.primaryEmail ?? null,
     primaryPhone: plan.payload.primaryPhone ?? null,
+    status: 'customer',
     source: SOURCE,
     isActive: true,
     createdAt: now,

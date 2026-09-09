@@ -5,6 +5,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { parseNumericValue, sanitizePercentTypingInput } from '@open-mercato/shared/lib/numeric'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { DriverCustomerField } from './DriverCustomerField'
+import { DriverPaymentTypePicker } from './DriverPaymentTypePicker'
 import { DriverReceiptFields } from './DriverReceiptFields'
 import { DriverTripTypePicker } from './DriverTripTypePicker'
 import { DriverPlatformPicker } from './DriverPlatformPicker'
@@ -19,12 +20,14 @@ import {
 import type { TaxiFleetTripType } from '../useTaxiFleetLabels'
 import type { TaxiFleetTripPlatform } from '../../lib/tripPlatforms'
 import type { DriverTripCompletionMode } from '../../lib/driverTripReceiptStatus'
+import type { TripFormPaymentOption } from '../../lib/tripRequestForm'
 import { tripRequiresIncomeReceipt } from '../../lib/tripIncomeReceiptRules'
 
 export type DriverCommercialValue = {
   completionMode: DriverTripCompletionMode
   tripType: TaxiFleetTripType
   platform: TaxiFleetTripPlatform | null
+  paymentType: TripFormPaymentOption
   customerEntityId: string
   customerLabel: string
   revenueAmount: string
@@ -193,6 +196,12 @@ export function DriverCommercialStep({
               }
             />
           ) : null}
+
+          <DriverPaymentTypePicker
+            value={value.paymentType}
+            disabled={disabled}
+            onChange={(paymentType) => onChange({ ...value, paymentType })}
+          />
 
           <div>
             <label htmlFor="revenueAmount" className={driverLabelClass}>

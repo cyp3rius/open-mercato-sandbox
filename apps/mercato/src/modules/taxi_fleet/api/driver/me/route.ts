@@ -8,8 +8,10 @@ import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetDailyAssignment } from '@/modules/taxi_fleet/data/entities'
+import { findAssignedResourceIdsForDate } from '@/modules/taxi_fleet/lib/assignmentValidation'
 import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
 import { resolveDriverResourceLabelInfo } from '@/modules/taxi_fleet/lib/resolveDriverResourceLabel'
+import { resolveDriverDefaultResourceIds } from '@/modules/taxi_fleet/lib/driverDefaultResources'
 import { formatDateInTimeZone } from '@/modules/taxi_fleet/lib/shiftGraceWindow'
 import { loadTaxiFleetOrganizationSettings } from '@/modules/taxi_fleet/lib/taxiFleetOrganizationSettings'
 
@@ -77,22 +79,47 @@ export async function GET(req: Request) {
     const resourceInfo = assignment
       ? await resolveDriverResourceLabelInfo(em, assignment.resourceId, scope)
       : null
-    const defaultResourceInfo = driver.profile?.defaultResourceId
-      ? await resolveDriverResourceLabelInfo(em, driver.profile.defaultResourceId, scope)
-      : null
+    const defaultIds = resolveDriverDefaultResourceIds(driver.profile ?? {})
+    const busyResourceIds = await findAssignedResourceIdsForDate(em, {
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      assignmentDate: today,
+      resourceIds: defaultIds,
+      // Own today assignment does not block its vehicle for clock-in.
+      excludeAssignmentId: assignment?.assignmentDate === today ? assignment.id : null,
+    })
+    const defaultResourceInfos = await Promise.all(
+      defaultIds.map(async (id) => {
+        const info = await resolveDriverResourceLabelInfo(em, id, scope)
+        const available = !busyResourceIds.has(id)
+        return {
+          id,
+          label: info?.label ?? id,
+          name: info?.name ?? null,
+          plate: info?.plate ?? null,
+          available,
+        }
+      }),
+    )
+    const availableDefaults = defaultResourceInfos.filter((row) => row.available)
+    const primaryDefault = availableDefaults[0] ?? defaultResourceInfos[0] ?? null
     return NextResponse.json({
       member: {
         id: driver.teamMember.id,
         displayName: driver.teamMember.displayName,
         userId: driver.teamMember.userId ?? null,
       },
+      today,
       profile: driver.profile
         ? {
             id: driver.profile.id,
             payoutPercent: driver.profile.payoutPercent,
-            defaultResourceId: driver.profile.defaultResourceId ?? null,
-            defaultResourceLabel: defaultResourceInfo?.label ?? null,
-            defaultResourcePlate: defaultResourceInfo?.plate ?? null,
+            defaultResourceId: primaryDefault?.id ?? null,
+            defaultResourceLabel: primaryDefault?.label ?? null,
+            defaultResourceName: primaryDefault?.name ?? null,
+            defaultResourcePlate: primaryDefault?.plate ?? null,
+            defaultResourceIds: defaultResourceInfos,
+            availableDefaultResourceIds: availableDefaults,
             externalAppEnabled: driver.profile.externalAppEnabled,
           }
         : null,
@@ -101,6 +128,7 @@ export async function GET(req: Request) {
             id: assignment.id,
             resourceId: assignment.resourceId,
             resourceLabel: resourceInfo?.label ?? null,
+            resourceName: resourceInfo?.name ?? null,
             resourcePlate: resourceInfo?.plate ?? null,
             assignmentDate: assignment.assignmentDate,
             status: assignment.status,

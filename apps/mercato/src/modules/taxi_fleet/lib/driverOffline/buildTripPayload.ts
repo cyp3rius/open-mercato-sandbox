@@ -16,7 +16,7 @@ export function buildDriverTripPayload(input: {
   commercial: DriverCommercialValue
   resourceId?: string | null
   assignmentId?: string | null
-  status?: 'completed' | 'in_progress'
+  status?: 'completed' | 'in_progress' | 'scheduled'
   serverTripId?: string | null
 }) {
   const details = defaultTripRequestDetails()
@@ -31,6 +31,7 @@ export function buildDriverTripPayload(input: {
       ? String(input.route.distanceKm)
       : ''
   details.durationText = input.route.durationText?.trim() || ''
+  details.paymentType = input.commercial.paymentType
 
   const metadata = buildTripRequestMetadata(details)
   if (input.route.distanceKm != null && Number.isFinite(input.route.distanceKm) && input.route.distanceKm > 0) {

@@ -7,17 +7,18 @@ import type { CrudField, CrudFormGroup } from '@open-mercato/ui/backend/CrudForm
 import { formatPercentInputValue, parseNumericValue } from '@open-mercato/shared/lib/numeric'
 import { StaffTeamMemberSearchField } from './StaffTeamMemberSearchField'
 import { PercentInputField } from '@open-mercato/ui/backend/inputs/PercentInputField'
-import { ResourceSearchField } from './ResourceSearchField'
+import { DefaultResourcesField } from './DefaultResourcesField'
 import { MobileAppAccessSwitchField } from './MobileAppAccessSwitchField'
 import { PayoutTiersEditor } from './PayoutTiersEditor'
 import { validatePayoutTiers, type PayoutMode, type PayoutTier } from '../lib/payoutTiers'
+import { resolveDriverDefaultResourceIds } from '../lib/driverDefaultResources'
 
 export type DriverProfileFormValues = {
   teamMemberId: string
   payoutMode: PayoutMode
   payoutPercent: string
   payoutTiers: PayoutTier[]
-  defaultResourceId: string
+  defaultResourceIds: string[]
   externalAppEnabled: boolean
   boltDriverId: string
   uberDriverId: string
@@ -29,7 +30,7 @@ export type DriverProfileUpdateFormValues = Pick<
   | 'payoutMode'
   | 'payoutPercent'
   | 'payoutTiers'
-  | 'defaultResourceId'
+  | 'defaultResourceIds'
   | 'externalAppEnabled'
   | 'boltDriverId'
   | 'uberDriverId'
@@ -45,7 +46,7 @@ export type DriverProfileFormOptions = {
   surface?: DriverProfileFormSurface
 }
 
-const resourceIdSchema = z.union([z.string().uuid(), z.literal('')])
+const resourceIdsSchema = z.array(z.string().uuid()).max(20)
 
 function payoutPercentFieldSchema() {
   return z.string().refine((value) => {
@@ -73,7 +74,7 @@ export function defaultDriverProfileFormValues(defaultPayoutPercent = 0): Driver
     payoutMode: 'fixed',
     payoutPercent: formatPercentInputValue(defaultPayoutPercent),
     payoutTiers: [{ fromAmount: null, toAmount: null, percent: defaultPayoutPercent }],
-    defaultResourceId: '',
+    defaultResourceIds: [],
     externalAppEnabled: false,
     boltDriverId: '',
     uberDriverId: '',
@@ -86,6 +87,7 @@ export function mapDriverProfileRowToUpdateFormValues(row: {
   payoutPercent: string | number
   payoutTiersJson?: unknown
   defaultResourceId?: string | null
+  defaultResourceIds?: string[] | null
   externalAppEnabled: boolean
   boltDriverId?: string | null
   uberDriverId?: string | null
@@ -95,7 +97,7 @@ export function mapDriverProfileRowToUpdateFormValues(row: {
     payoutMode: row.payoutMode === 'tiered' ? 'tiered' : 'fixed',
     payoutPercent: formatPercentInputValue(row.payoutPercent),
     payoutTiers: parseStoredTiers(row.payoutTiersJson),
-    defaultResourceId: row.defaultResourceId ?? '',
+    defaultResourceIds: resolveDriverDefaultResourceIds(row),
     externalAppEnabled: row.externalAppEnabled,
     boltDriverId: row.boltDriverId ?? '',
     uberDriverId: row.uberDriverId ?? '',
@@ -109,6 +111,7 @@ export function mapDriverProfileRowToFormValues(row: {
   payoutPercent: string | number
   payoutTiersJson?: unknown
   defaultResourceId?: string | null
+  defaultResourceIds?: string[] | null
   externalAppEnabled: boolean
   boltDriverId?: string | null
   uberDriverId?: string | null
@@ -143,7 +146,7 @@ export function driverProfileCreateSchema() {
     .object({
       teamMemberId: z.string().uuid(),
       ...payoutFieldsSchema(),
-      defaultResourceId: resourceIdSchema,
+      defaultResourceIds: resourceIdsSchema,
       externalAppEnabled: z.boolean(),
       boltDriverId: platformDriverIdSchema,
       uberDriverId: platformDriverIdSchema,
@@ -161,7 +164,7 @@ export function driverProfileUpdateSchema() {
   return z
     .object({
       ...payoutFieldsSchema(),
-      defaultResourceId: resourceIdSchema,
+      defaultResourceIds: resourceIdsSchema,
       externalAppEnabled: z.boolean(),
       boltDriverId: platformDriverIdSchema,
       uberDriverId: platformDriverIdSchema,
@@ -191,7 +194,7 @@ export function buildDriverProfileFormGroups(t: TranslateFn): CrudFormGroup[] {
         'payoutMode',
         'payoutPercent',
         'payoutTiers',
-        'defaultResourceId',
+        'defaultResourceIds',
         'externalAppEnabled',
         'boltDriverId',
         'uberDriverId',
@@ -206,9 +209,8 @@ function resolveFieldLayout(surface: DriverProfileFormSurface): 'full' | 'half' 
   return surface === 'page' ? 'half' : 'full'
 }
 
-function resolveDefaultVehicleLayout(surface: DriverProfileFormSurface): 'full' | 'half' | 'third' {
-  if (surface === 'sidebar') return 'half'
-  return surface === 'page' ? 'half' : 'full'
+function resolveDefaultVehicleLayout(_surface: DriverProfileFormSurface): 'full' | 'half' | 'third' {
+  return 'full'
 }
 
 export function buildDriverProfileFormFields(t: TranslateFn, options: DriverProfileFormOptions): CrudField[] {
@@ -277,13 +279,13 @@ export function buildDriverProfileFormFields(t: TranslateFn, options: DriverProf
       ),
     },
     {
-      id: 'defaultResourceId',
+      id: 'defaultResourceIds',
       type: 'custom',
-      label: t('taxi_fleet.drivers.defaultVehicle', 'Default vehicle'),
+      label: t('taxi_fleet.drivers.defaultVehicles', 'Default vehicles'),
       layout: resolveDefaultVehicleLayout(surface),
       component: ({ value, setValue, disabled }) => (
-        <ResourceSearchField
-          value={typeof value === 'string' ? value : ''}
+        <DefaultResourcesField
+          value={Array.isArray(value) ? (value as string[]) : []}
           onChange={(next) => setValue(next)}
           disabled={disabled || readOnly}
         />
@@ -337,7 +339,6 @@ export function driverProfileFormValuesToCreatePayload(
   values: DriverProfileFormValues,
   scope: { tenantId: string; organizationId: string },
 ) {
-  const resourceId = values.defaultResourceId.trim()
   return {
     tenantId: scope.tenantId,
     organizationId: scope.organizationId,
@@ -345,7 +346,8 @@ export function driverProfileFormValuesToCreatePayload(
     payoutMode: values.payoutMode,
     payoutPercent: parseNumericValue(values.payoutPercent) ?? 0,
     payoutTiers: values.payoutMode === 'tiered' ? values.payoutTiers : null,
-    defaultResourceId: resourceId.length ? resourceId : null,
+    defaultResourceIds: values.defaultResourceIds,
+    defaultResourceId: values.defaultResourceIds[0] ?? null,
     externalAppEnabled: values.externalAppEnabled,
     boltDriverId: normalizePlatformDriverId(values.boltDriverId),
     uberDriverId: normalizePlatformDriverId(values.uberDriverId),
@@ -357,13 +359,13 @@ export function driverProfileFormValuesToUpdatePayload(
   id: string,
   values: DriverProfileUpdateFormValues,
 ) {
-  const resourceId = values.defaultResourceId.trim()
   return {
     id,
     payoutMode: values.payoutMode,
     payoutPercent: parseNumericValue(values.payoutPercent) ?? 0,
     payoutTiers: values.payoutMode === 'tiered' ? values.payoutTiers : null,
-    defaultResourceId: resourceId.length ? resourceId : null,
+    defaultResourceIds: values.defaultResourceIds,
+    defaultResourceId: values.defaultResourceIds[0] ?? null,
     externalAppEnabled: values.externalAppEnabled,
     boltDriverId: normalizePlatformDriverId(values.boltDriverId),
     uberDriverId: normalizePlatformDriverId(values.uberDriverId),
