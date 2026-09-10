@@ -2,6 +2,7 @@ import { generateText, type LanguageModel } from 'ai'
 import { z } from 'zod'
 import fs from 'fs/promises'
 import path from 'path'
+import { sanitizeReceiptOcrFields } from './receiptOcrSanitize'
 
 const receiptOcrFieldsSchema = z.object({
   documentNumber: z.string().nullable().optional(),
@@ -20,15 +21,23 @@ export type ReceiptOcrProviderId = 'openai' | 'anthropic'
 
 const PROMPT = `You extract fields from a Polish fiscal receipt (paragon fiskalny) or invoice photo/PDF.
 Return ONLY valid JSON with keys:
-documentNumber (string|null) — receipt/invoice number,
-grossAmount (number|null) — total gross amount PLN,
-distanceKm (number|null) — trip distance in kilometers if printed on the receipt (look for "Dystans", "km", "kilometry", "przebieg"),
-vatRatePercent (number|null) — VAT rate percent as shown on the document (typically 8 or 23 in Poland),
-buyerNip (string|null) — buyer NIP digits only if present,
-sellerNip (string|null) — seller NIP digits only if present,
-occurredAt (ISO date or datetime string|null) — document issue date (prefer full ISO if time is readable),
+documentNumber (string|null) — receipt/invoice NUMBER only (e.g. W001776, FV/12/2026). NEVER put a NIP here.
+grossAmount (number|null) — total gross amount PLN after discounts if shown (DO ZAPŁATY / SUMA after Obniżka), else SUMA / RAZEM,
+distanceKm (number|null) — trip distance in kilometers if printed (Odległość / Dystans / km),
+vatRatePercent (number|null) — VAT rate percent (typically 8 or 23),
+buyerNip (string|null) — buyer (nabywca) NIP when printed. Accept dashed or compact form (701-053-39-02 or 7010533902); prefer digits-only in JSON. Look carefully near the BOTTOM for "NIP nabywcy". This is NOT the header NIP.
+sellerNip (string|null) — seller/issuer (sprzedawca) NIP; accept dashed or compact (945-218-91-52 or 9452189152); prefer digits-only. On taxi fiscal receipts this is the HEADER NIP near company name/address,
+occurredAt (ISO date or datetime string|null) — course/document date-time (Początek kursu / print time). Polish dates are DD-MM-YYYY,
 confidence (0..1),
-rawExcerpt (short string of key lines).
+rawExcerpt (short string of key lines — MUST include header NIP and "NIP nabywcy" lines when visible).
+
+Critical rules for Polish taxi fiscal receipts (paragon fiskalny) and invoices:
+- The company block at the TOP (name, address, NIP) is the SELLER/issuer. Put that NIP in sellerNip, NOT documentNumber and NOT buyerNip.
+- NIP may be printed as 945-218-91-52 OR 9452189152 — both are valid; return digits only (9452189152) when possible.
+- NIP 945-218-91-52 / 9452189152 is always the fleet issuer sellerNip on RS Moto receipts — never the document number, never buyerNip.
+- documentNumber is typically a short code in a corner (often top-right), e.g. W001776 — not the NIP.
+- buyerNip is often present on card/invoice-style taxi receipts as "NIP nabywcy: XXX-XXX-XX-XX" near the footer. Do NOT skip it. It is different from the header seller NIP.
+- Do not confuse NIP with documentNumber even if NIP is the most prominent number on the page.
 If a field is unreadable, use null.`
 
 const DEFAULT_MODELS: Record<ReceiptOcrProviderId, string> = {
@@ -53,15 +62,21 @@ function normalizeEnv(value: string | undefined): string | null {
   return trimmed
 }
 
-function isPdfMimeType(mimeType: string | null, filePath: string): boolean {
-  const normalized = (mimeType || '').toLowerCase()
-  if (normalized === 'application/pdf') return true
-  return path.extname(filePath).toLowerCase() === '.pdf'
+/** Disk-backed drivers: OCR may use resolveAttachmentAbsolutePath + fs.readFile. */
+export function isLocalAttachmentStorageDriver(key: string | null | undefined): boolean {
+  const normalized = (key || 'local').trim()
+  return normalized === 'local' || normalized === 'legacyPublic'
 }
 
-function getImageMediaType(mimeType: string | null, filePath: string): string {
+function isPdfMimeType(mimeType: string | null, pathHint: string): boolean {
+  const normalized = (mimeType || '').toLowerCase()
+  if (normalized === 'application/pdf') return true
+  return path.extname(pathHint).toLowerCase() === '.pdf'
+}
+
+function getImageMediaType(mimeType: string | null, pathHint: string): string {
   if (mimeType && mimeType.startsWith('image/')) return mimeType
-  const ext = path.extname(filePath).toLowerCase()
+  const ext = path.extname(pathHint).toLowerCase()
   const map: Record<string, string> = {
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
@@ -175,7 +190,7 @@ async function createReceiptOcrModel(
 async function runReceiptOcrWithProvider(params: {
   provider: ReceiptOcrProviderId
   model?: string
-  filePath: string
+  pathHint: string
   mimeType: string | null
   fileBuffer: Buffer
   fileName: string
@@ -189,7 +204,7 @@ async function runReceiptOcrWithProvider(params: {
     messages: [
       {
         role: 'user',
-        content: isPdfMimeType(params.mimeType, params.filePath)
+        content: isPdfMimeType(params.mimeType, params.pathHint)
           ? [
               {
                 type: 'file',
@@ -202,7 +217,7 @@ async function runReceiptOcrWithProvider(params: {
           : [
               {
                 type: 'image',
-                image: `data:${getImageMediaType(params.mimeType, params.filePath)};base64,${base64}`,
+                image: `data:${getImageMediaType(params.mimeType, params.pathHint)};base64,${base64}`,
               },
               { type: 'text', text: PROMPT },
             ],
@@ -211,21 +226,41 @@ async function runReceiptOcrWithProvider(params: {
   })
 
   const parsed = receiptOcrFieldsSchema.parse(extractJsonObject(result.text))
-  return { fields: parsed, model, provider: params.provider }
+  return { fields: sanitizeReceiptOcrFields(parsed), model, provider: params.provider }
 }
 
-export async function extractReceiptFieldsFromImage(params: {
-  filePath: string
+export type ExtractReceiptFieldsFromImageParams = {
   mimeType: string | null
   model?: string
-}): Promise<{ fields: ReceiptOcrFields; model: string; provider: ReceiptOcrProviderId }> {
+} & (
+  | { filePath: string; fileBuffer?: undefined; fileName?: undefined }
+  | { fileBuffer: Buffer; fileName?: string; filePath?: undefined }
+)
+
+export async function extractReceiptFieldsFromImage(
+  params: ExtractReceiptFieldsFromImageParams,
+): Promise<{ fields: ReceiptOcrFields; model: string; provider: ReceiptOcrProviderId }> {
   const chain = resolveReceiptOcrProviderChain()
   if (chain.length === 0) {
     throw new Error('Receipt OCR requires OPENAI_API_KEY or ANTHROPIC_API_KEY')
   }
 
-  const fileBuffer = await fs.readFile(params.filePath)
-  const fileName = path.basename(params.filePath) || 'receipt.pdf'
+  let fileBuffer: Buffer
+  let fileName: string
+  let pathHint: string
+
+  if ('fileBuffer' in params && params.fileBuffer) {
+    fileBuffer = params.fileBuffer
+    fileName = params.fileName?.trim() || 'receipt.bin'
+    pathHint = fileName
+  } else if ('filePath' in params && params.filePath) {
+    fileBuffer = await fs.readFile(params.filePath)
+    fileName = path.basename(params.filePath) || 'receipt.pdf'
+    pathHint = params.filePath
+  } else {
+    throw new Error('Receipt OCR requires filePath or fileBuffer')
+  }
+
   let lastError: unknown = null
 
   for (let index = 0; index < chain.length; index += 1) {
@@ -240,7 +275,7 @@ export async function extractReceiptFieldsFromImage(params: {
       return await runReceiptOcrWithProvider({
         provider,
         model: params.model,
-        filePath: params.filePath,
+        pathHint,
         mimeType: params.mimeType,
         fileBuffer,
         fileName,

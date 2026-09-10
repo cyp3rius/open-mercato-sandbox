@@ -10,8 +10,6 @@ import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { parseScopedCommandInput } from '@open-mercato/shared/lib/api/scoped'
 import { findOneWithDecryption, findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetReceiptExtraction, TaxiFleetTrip } from '@/modules/taxi_fleet/data/entities'
-import { tripRequiresIncomeReceipt } from '@/modules/taxi_fleet/lib/tripIncomeReceiptRules'
-import { normalizeTripPlatform } from '@/modules/taxi_fleet/lib/tripPlatforms'
 import { tripCreateSchema, tripUpdateSchema } from '@/modules/taxi_fleet/data/validators'
 import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
 import { resolveDriverTripUpdateInput } from '@/modules/taxi_fleet/lib/driverTripExecution'
@@ -254,24 +252,12 @@ export async function POST(req: Request) {
       })
     }
 
-    const platformRaw =
-      body && typeof body === 'object' && 'platform' in body
-        ? (body as { platform?: unknown }).platform
-        : null
-    const platform = normalizeTripPlatform(
-      typeof platformRaw === 'string' || platformRaw == null ? platformRaw : null,
-    )
-    const revenueAmountPreview =
-      typeof (body as { revenueAmount?: unknown }).revenueAmount === 'number'
-        ? (body as { revenueAmount: number }).revenueAmount
-        : Number((body as { revenueAmount?: unknown }).revenueAmount ?? 0)
-    if (
-      !receiptOnly &&
-      tripRequiresIncomeReceipt({ platform }) &&
-      Number.isFinite(revenueAmountPreview) &&
-      revenueAmountPreview > 0 &&
-      !receiptAttachmentId
-    ) {
+    const requestedStatus =
+      typeof (body as { status?: unknown }).status === 'string'
+        ? String((body as { status: string }).status)
+        : 'completed'
+    const isScheduledCreate = requestedStatus === 'scheduled'
+    if (!receiptOnly && !isScheduledCreate && !receiptAttachmentId) {
       throw new CrudHttpError(400, {
         error: translate(
           'taxi_fleet.driverApp.receipt.photoRequired',

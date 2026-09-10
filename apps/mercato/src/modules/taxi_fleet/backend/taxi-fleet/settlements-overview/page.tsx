@@ -26,7 +26,10 @@ export default function TaxiFleetSettlementsOverviewPage() {
           >
             <div className="text-sm font-medium">{t('taxi_fleet.settlements.weeklyTitle', 'Weekly settlements')}</div>
             <div className="mt-1 text-sm text-muted-foreground">
-              {t('taxi_fleet.hub.settlementsHelp', 'Weekly driver settlements and payouts.')}
+              {t(
+                'taxi_fleet.hub.settlementsHelp',
+                'Weekly control settlements (no payout).',
+              )}
             </div>
           </Link>
 
@@ -36,7 +39,10 @@ export default function TaxiFleetSettlementsOverviewPage() {
           >
             <div className="text-sm font-medium">{t('taxi_fleet.monthlySettlements.title', 'Monthly settlements')}</div>
             <div className="mt-1 text-sm text-muted-foreground">
-              {t('taxi_fleet.hub.monthlySettlementsHelp', 'Fleet monthly rollup from weekly settlements.')}
+              {t(
+                'taxi_fleet.hub.monthlySettlementsHelp',
+                'Per-driver monthly settlements used for payout.',
+              )}
             </div>
           </Link>
         </div>

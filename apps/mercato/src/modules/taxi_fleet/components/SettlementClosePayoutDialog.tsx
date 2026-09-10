@@ -30,6 +30,10 @@ type SettlementClosePayoutDialogProps = {
   cashExpected: string
   cashCollected: string
   airportA4Amount?: string
+  /** CRUD resource path under /api/ — default weekly settlements. */
+  crudResource?: string
+  /** Monthly: close as full transfer payout only (no cash return path). */
+  transferOnlyPayout?: boolean
   onSaved: () => Promise<void>
 }
 
@@ -46,6 +50,8 @@ export function SettlementClosePayoutDialog({
   cashExpected,
   cashCollected,
   airportA4Amount = '0',
+  crudResource = 'taxi_fleet/settlements',
+  transferOnlyPayout = false,
   onSaved,
 }: SettlementClosePayoutDialogProps) {
   const t = useT()
@@ -54,16 +60,22 @@ export function SettlementClosePayoutDialog({
   const [closureAmount, setClosureAmount] = React.useState('0')
   const [isSaving, setIsSaving] = React.useState(false)
 
-  const payoutDisplay = React.useMemo(
-    () =>
-      computeSettlementPayoutDisplay({
-        payoutAmount: Number(payoutAmount ?? 0),
-        cashExpected: Number(cashExpected ?? 0),
-        cashCollected: Number(cashCollected ?? 0),
-        airportA4Amount: Number(airportA4Amount ?? 0),
-      }),
-    [airportA4Amount, cashCollected, cashExpected, payoutAmount],
-  )
+  const payoutDisplay = React.useMemo(() => {
+    if (transferOnlyPayout) {
+      const payout = Math.max(0, Number(payoutAmount ?? 0))
+      return {
+        cashPayout: 0,
+        transferPayout: payout > 0.005 ? payout : null,
+        driverReturnDue: null,
+      }
+    }
+    return computeSettlementPayoutDisplay({
+      payoutAmount: Number(payoutAmount ?? 0),
+      cashExpected: Number(cashExpected ?? 0),
+      cashCollected: Number(cashCollected ?? 0),
+      airportA4Amount: Number(airportA4Amount ?? 0),
+    })
+  }, [airportA4Amount, cashCollected, cashExpected, payoutAmount, transferOnlyPayout])
 
   const payoutAvailable = isSettlementClosureTypeAvailable('payout', payoutDisplay)
   const returnAvailable = isSettlementClosureTypeAvailable('cash_return', payoutDisplay)
@@ -120,7 +132,7 @@ export function SettlementClosePayoutDialog({
     setIsSaving(true)
     try {
       await updateCrud(
-        'taxi_fleet/settlements',
+        crudResource,
         {
           id: settlementId,
           status: 'paid',
@@ -135,7 +147,7 @@ export function SettlementClosePayoutDialog({
     } finally {
       setIsSaving(false)
     }
-  }, [closureAmount, closureType, onOpenChange, onSaved, payoutAvailable, returnAvailable, settlementId, t])
+  }, [closureAmount, closureType, crudResource, onOpenChange, onSaved, payoutAvailable, returnAvailable, settlementId, t])
 
   const handleDialogKeyDown = useTaxiFleetDialogShortcuts({
     contentRef,
@@ -169,13 +181,18 @@ export function SettlementClosePayoutDialog({
         body={
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              {t(
-                'taxi_fleet.settlements.close.hint',
-                'Record the payout to the driver or the cash return received. Saving closes the settlement.',
-              )}
+              {transferOnlyPayout
+                ? t(
+                    'taxi_fleet.monthlySettlements.close.hint',
+                    'Record the bank transfer payout to the driver. Saving closes the monthly settlement.',
+                  )
+                : t(
+                    'taxi_fleet.settlements.close.hint',
+                    'Record the payout to the driver or the cash return received. Saving closes the settlement.',
+                  )}
             </p>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className={`grid gap-3 ${transferOnlyPayout ? '' : 'sm:grid-cols-2'}`}>
               <label
                 className={optionClass(closureType === 'payout', !payoutAvailable || isSaving)}
                 htmlFor="settlement-close-type-payout"
@@ -201,6 +218,7 @@ export function SettlementClosePayoutDialog({
                 </span>
               </label>
 
+              {!transferOnlyPayout ? (
               <label
                 className={optionClass(closureType === 'cash_return', !returnAvailable || isSaving)}
                 htmlFor="settlement-close-type-return"
@@ -225,6 +243,7 @@ export function SettlementClosePayoutDialog({
                   </span>
                 </span>
               </label>
+              ) : null}
             </div>
 
             <div className="space-y-1">

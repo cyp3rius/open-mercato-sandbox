@@ -9,6 +9,7 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { CRUD_FORM_TEXT_INPUT_CLASS } from '@open-mercato/ui/backend/CrudForm'
 import { Label } from '@open-mercato/ui/primitives/label'
+import { formatReceiptOcrWarningLabel } from '../lib/receiptOcrWarningLabel'
 
 type ExtractionItem = {
   id: string
@@ -41,24 +42,6 @@ const statusClass: Record<string, string> = {
   needs_review: 'border-amber-400 bg-amber-50 text-amber-950',
   failed: 'border-destructive/40 bg-destructive/10 text-destructive',
   applied: 'border-emerald-300 bg-emerald-50 text-emerald-950',
-}
-
-function formatWarningLabel(
-  t: ReturnType<typeof useT>,
-  warning: Record<string, unknown>,
-): string {
-  const code = String(warning.code ?? '')
-  if (code === 'distance_mismatch_trip') {
-    return t(
-      'taxi_fleet.receiptOcr.warnings.distanceMismatch',
-      'Receipt distance differs from route/calculated distance ({route} km → {ocr} km)',
-      {
-        route: String(warning.driverValue ?? '—'),
-        ocr: String(warning.ocrValue ?? '—'),
-      },
-    )
-  }
-  return code
 }
 
 export function TripReceiptOcrPanel({ tripId, canManage }: TripReceiptOcrPanelProps) {
@@ -216,7 +199,9 @@ export function TripReceiptOcrPanel({ tripId, canManage }: TripReceiptOcrPanelPr
       {item.warnings?.length ? (
         <ul className="list-disc space-y-1 pl-5 text-xs text-amber-800">
           {item.warnings.map((warning, index) => (
-            <li key={`${String(warning.code)}-${index}`}>{formatWarningLabel(t, warning)}</li>
+            <li key={`${String(warning.code)}-${String(warning.field ?? '')}-${index}`}>
+              {formatReceiptOcrWarningLabel(t, warning)}
+            </li>
           ))}
         </ul>
       ) : null}

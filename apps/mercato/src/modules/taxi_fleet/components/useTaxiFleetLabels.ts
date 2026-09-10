@@ -3,7 +3,16 @@
 import { useCallback } from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
-export const TAXI_FLEET_TRIP_TYPES = ['client', 'private', 'internal', 'empty', 'event', 'other', 'platform'] as const
+export const TAXI_FLEET_TRIP_TYPES = [
+  'client',
+  'private',
+  'internal',
+  'empty',
+  'event',
+  'other',
+  'platform',
+  'street_hail',
+] as const
 export type TaxiFleetTripType = (typeof TAXI_FLEET_TRIP_TYPES)[number]
 
 export function useTaxiFleetLabels() {

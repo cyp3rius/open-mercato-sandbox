@@ -24,6 +24,7 @@ import { useTaxiFleetLabels } from './useTaxiFleetLabels'
 import { DriverFinancialEntryDialog, type FinancialEntryRow } from './DriverFinancialEntryDialog'
 import { SettlementExpenseReceiptOcrBadge } from './SettlementExpenseReceiptOcrBadge'
 import type { DriverExpenseWarning } from '../lib/driverExpenses'
+import { formatReceiptOcrWarningLabel } from '../lib/receiptOcrWarningLabel'
 import {
   TaxiFleetDialogForm,
   TaxiFleetDialogFrame,
@@ -47,13 +48,10 @@ type SettlementExpenseRow = {
 }
 
 function expenseWarningLabel(
-  t: (key: string, fallback?: string) => string,
+  t: (key: string, fallback?: string, params?: Record<string, string | number>) => string,
   warning: DriverExpenseWarning,
 ): string {
-  return t(
-    `taxi_fleet.driverApp.expenses.warnings.${warning.code}`,
-    warning.message || warning.code,
-  )
+  return formatReceiptOcrWarningLabel(t, warning)
 }
 
 function SettlementExpenseReceiptCell({

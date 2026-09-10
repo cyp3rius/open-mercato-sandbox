@@ -217,20 +217,14 @@ const updateSettlementCommand: CommandHandler<SettlementUpdateInput, { settlemen
       }
     }
 
-    if (closureUpdate) {
-      if (row.status !== 'approved') {
-        const { translate } = await resolveTranslations()
-        throw new CrudHttpError(409, {
-          error: translate(
-            'taxi_fleet.errors.settlementCloseNotApproved',
-            'Only approved settlements can be closed and paid out.',
-          ),
-        })
-      }
-      row.closureType = parsed.closureType ?? null
-      row.closureAmount = numericToString(parsed.closureAmount)
-      row.closedAt = new Date()
-      applySettlementStatusChange(row, 'paid', ctx)
+    if (closureUpdate || parsed.status === 'paid') {
+      const { translate } = await resolveTranslations()
+      throw new CrudHttpError(409, {
+        error: translate(
+          'taxi_fleet.errors.weeklySettlementNoPayout',
+          'Weekly settlements are control-only. Close payout on the monthly settlement instead.',
+        ),
+      })
     } else if (!statusOnly && isWeeklySettlementLocked(row.status)) {
       const { translate } = await resolveTranslations()
       throw new CrudHttpError(409, {

@@ -26,9 +26,16 @@ type Props = {
   label?: string
   onChange: (next: { id: string; label: string }) => void
   disabled?: boolean
+  required?: boolean
 }
 
-export function DriverCustomerField({ value, label, onChange, disabled = false }: Props) {
+export function DriverCustomerField({
+  value,
+  label,
+  onChange,
+  disabled = false,
+  required = false,
+}: Props) {
   const t = useT()
   const [query, setQuery] = React.useState('')
   const [options, setOptions] = React.useState<CustomerOption[]>([])
@@ -37,10 +44,15 @@ export function DriverCustomerField({ value, label, onChange, disabled = false }
   const [createKind, setCreateKind] = React.useState<'person' | 'company'>('person')
   const [createName, setCreateName] = React.useState('')
   const [createPhone, setCreatePhone] = React.useState('')
+  const [createNip, setCreateNip] = React.useState('')
   const [createBusy, setCreateBusy] = React.useState(false)
   const [createError, setCreateError] = React.useState<string | null>(null)
 
   const minSearchLength = 3
+  const phoneOk = createPhone.trim().length >= 5
+  const nipDigits = createNip.replace(/\D/g, '')
+  const nipOk = nipDigits.length === 10
+  const createReady = phoneOk && (createKind === 'person' || nipOk)
 
   React.useEffect(() => {
     const trimmed = query.trim()
@@ -74,6 +86,18 @@ export function DriverCustomerField({ value, label, onChange, disabled = false }
   }, [query])
 
   async function createCustomer() {
+    if (!phoneOk) {
+      setCreateError(
+        t('taxi_fleet.driverApp.customers.phoneRequired', 'Phone number is required.'),
+      )
+      return
+    }
+    if (createKind === 'company' && !nipOk) {
+      setCreateError(
+        t('taxi_fleet.driverApp.customers.nipRequired', 'NIP is required (10 digits).'),
+      )
+      return
+    }
     setCreateBusy(true)
     setCreateError(null)
     try {
@@ -83,8 +107,9 @@ export function DriverCustomerField({ value, label, onChange, disabled = false }
           method: 'POST',
           body: JSON.stringify({
             kind: createKind,
-            displayName: createName,
-            primaryPhone: createPhone || undefined,
+            displayName: createName.trim() || undefined,
+            primaryPhone: createPhone.trim(),
+            ...(createKind === 'company' ? { nip: createNip.trim() } : {}),
           }),
         },
       )
@@ -95,6 +120,7 @@ export function DriverCustomerField({ value, label, onChange, disabled = false }
       setCreateOpen(false)
       setCreateName('')
       setCreatePhone('')
+      setCreateNip('')
       setQuery('')
     } catch {
       setCreateError(
@@ -104,6 +130,8 @@ export function DriverCustomerField({ value, label, onChange, disabled = false }
       setCreateBusy(false)
     }
   }
+
+  const customerLabel = t('taxi_fleet.driverApp.trips.customer', 'Customer')
 
   return (
     <div className="space-y-3">
@@ -133,7 +161,8 @@ export function DriverCustomerField({ value, label, onChange, disabled = false }
         <>
           <div>
             <label htmlFor="driver-customer-search" className={driverLabelClass}>
-              {t('taxi_fleet.driverApp.trips.customer', 'Customer')}
+              {customerLabel}
+              {required ? <span className="text-red-600"> *</span> : null}
             </label>
             <input
               id="driver-customer-search"
@@ -141,7 +170,10 @@ export function DriverCustomerField({ value, label, onChange, disabled = false }
               value={query}
               disabled={disabled}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('taxi_fleet.driverApp.trips.customerSearch', 'Search customer…')}
+              placeholder={t(
+                'taxi_fleet.driverApp.trips.customerSearchHint',
+                'Search by name, phone, or NIP…',
+              )}
               className={driverFieldClass}
               autoComplete="off"
             />
@@ -211,6 +243,7 @@ export function DriverCustomerField({ value, label, onChange, disabled = false }
             disabled={disabled}
             onClick={() => {
               setCreateKind('person')
+              setCreateNip('')
               setCreateOpen(true)
             }}
           >
@@ -240,6 +273,38 @@ export function DriverCustomerField({ value, label, onChange, disabled = false }
               : t('taxi_fleet.driverApp.customers.createPerson', 'New person')}
           </div>
           <div>
+            <label htmlFor="driver-customer-phone" className={driverLabelClass}>
+              {t('taxi_fleet.driverApp.customers.phone', 'Phone')}
+              <span className="text-red-600"> *</span>
+            </label>
+            <input
+              id="driver-customer-phone"
+              value={createPhone}
+              onChange={(event) => setCreatePhone(event.target.value)}
+              className={driverFieldClass}
+              inputMode="tel"
+              required
+              autoComplete="tel"
+            />
+          </div>
+          {createKind === 'company' ? (
+            <div>
+              <label htmlFor="driver-customer-nip" className={driverLabelClass}>
+                {t('taxi_fleet.driverApp.customers.nip', 'NIP')}
+                <span className="text-red-600"> *</span>
+              </label>
+              <input
+                id="driver-customer-nip"
+                value={createNip}
+                onChange={(event) => setCreateNip(event.target.value)}
+                className={driverFieldClass}
+                inputMode="numeric"
+                required
+                autoComplete="off"
+              />
+            </div>
+          ) : null}
+          <div>
             <label htmlFor="driver-customer-name" className={driverLabelClass}>
               {t('taxi_fleet.driverApp.customers.name', 'Name')}
             </label>
@@ -248,19 +313,7 @@ export function DriverCustomerField({ value, label, onChange, disabled = false }
               value={createName}
               onChange={(event) => setCreateName(event.target.value)}
               className={driverFieldClass}
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="driver-customer-phone" className={driverLabelClass}>
-              {t('taxi_fleet.driverApp.customers.phone', 'Phone')}
-            </label>
-            <input
-              id="driver-customer-phone"
-              value={createPhone}
-              onChange={(event) => setCreatePhone(event.target.value)}
-              className={driverFieldClass}
-              inputMode="tel"
+              autoComplete="name"
             />
           </div>
           {createError ? <div className="text-sm text-red-600">{createError}</div> : null}
@@ -279,7 +332,7 @@ export function DriverCustomerField({ value, label, onChange, disabled = false }
             <Button
               type="button"
               className={driverPrimaryActionClass}
-              disabled={createBusy || !createName.trim()}
+              disabled={createBusy || !createReady}
               onClick={() => void createCustomer()}
             >
               {createBusy

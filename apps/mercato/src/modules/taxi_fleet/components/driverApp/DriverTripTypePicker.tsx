@@ -3,30 +3,26 @@
 import React from 'react'
 import {
   Briefcase,
-  CalendarDays,
+  CarTaxiFront,
   CircleDashed,
   Ellipsis,
-  Smartphone,
   UserRound,
   Users,
   type LucideIcon,
 } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
-import {
-  TAXI_FLEET_TRIP_TYPES,
-  type TaxiFleetTripType,
-} from '../useTaxiFleetLabels'
+import { type TaxiFleetTripType } from '../useTaxiFleetLabels'
+import { DRIVER_COMMERCIAL_TRIP_TYPES } from '../../lib/driverTripCommercialFields'
 import { driverLabelClass } from './driverUi'
 
-const TRIP_TYPE_ICONS: Record<TaxiFleetTripType, LucideIcon> = {
+const TRIP_TYPE_ICONS: Record<(typeof DRIVER_COMMERCIAL_TRIP_TYPES)[number], LucideIcon> = {
   client: Users,
   private: UserRound,
   internal: Briefcase,
   empty: CircleDashed,
-  event: CalendarDays,
   other: Ellipsis,
-  platform: Smartphone,
+  street_hail: CarTaxiFront,
 }
 
 type Props = {
@@ -37,6 +33,11 @@ type Props = {
 
 export function DriverTripTypePicker({ value, disabled = false, onChange }: Props) {
   const t = useT()
+  const selectedValue = DRIVER_COMMERCIAL_TRIP_TYPES.includes(
+    value as (typeof DRIVER_COMMERCIAL_TRIP_TYPES)[number],
+  )
+    ? value
+    : 'client'
 
   return (
     <div>
@@ -46,9 +47,9 @@ export function DriverTripTypePicker({ value, disabled = false, onChange }: Prop
         role="radiogroup"
         aria-label={t('taxi_fleet.driverApp.trips.type', 'Type')}
       >
-        {TAXI_FLEET_TRIP_TYPES.map((type) => {
+        {DRIVER_COMMERCIAL_TRIP_TYPES.map((type) => {
           const Icon = TRIP_TYPE_ICONS[type]
-          const selected = value === type
+          const selected = selectedValue === type
           return (
             <Button
               key={type}

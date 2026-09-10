@@ -12,12 +12,27 @@ export type SettlementCostLine = {
 
 export type SettlementCostBreakdown = Record<TaxiFleetCostType | 'unknown', SettlementCostLine>
 
+export type SettlementCostEntrySnapshot = {
+  id: string
+  costType: string | null
+  tripId: string | null
+  amount: number
+  vatRatePercent: number
+  netAmount: number
+  currencyCode: string
+  documentNumber: string | null
+  occurredAt: string | null
+  notes: string | null
+  receiptAttachmentId: string | null
+}
+
 export type SettlementCostsResult = {
   costsGross: number
   costsNet: number
   fuelCostGross: number
   fuelCostNet: number
   costBreakdown: SettlementCostBreakdown
+  entries: SettlementCostEntrySnapshot[]
 }
 
 export function emptySettlementCostBreakdown(): SettlementCostBreakdown {
@@ -41,11 +56,17 @@ export async function calculateSettlementCosts(
     tenantId: string
     organizationId: string
     teamMemberId: string
-    weekStart: string
+    weekStart?: string
+    dateFrom?: string
+    dateTo?: string
     excludedEntryIds?: ReadonlySet<string>
   },
 ): Promise<SettlementCostsResult> {
-  const weekEnd = getWeekEnd(params.weekStart)
+  const dateFrom = params.dateFrom ?? params.weekStart
+  if (!dateFrom) {
+    throw new Error('calculateSettlementCosts requires weekStart or dateFrom')
+  }
+  const dateTo = params.dateTo ?? (params.weekStart ? getWeekEnd(params.weekStart) : dateFrom)
   const entries = await findWithDecryption(
     em,
     TaxiFleetFinancialEntry,
@@ -56,8 +77,8 @@ export async function calculateSettlementCosts(
       kind: 'expense',
       deletedAt: null,
       occurredAt: {
-        $gte: new Date(`${params.weekStart}T00:00:00`),
-        $lte: new Date(`${weekEnd}T23:59:59`),
+        $gte: new Date(`${dateFrom}T00:00:00`),
+        $lte: new Date(`${dateTo}T23:59:59`),
       },
     },
     undefined,
@@ -69,6 +90,7 @@ export async function calculateSettlementCosts(
   let fuelCostGross = 0
   let fuelCostNet = 0
   const costBreakdown = emptySettlementCostBreakdown()
+  const includedEntries: SettlementCostEntrySnapshot[] = []
 
   for (const entry of entries) {
     if (params.excludedEntryIds?.has(entry.id)) continue
@@ -87,7 +109,33 @@ export async function calculateSettlementCosts(
       fuelCostGross += gross
       fuelCostNet += net
     }
+    includedEntries.push({
+      id: entry.id,
+      costType: entry.costType ?? null,
+      tripId: entry.tripId ?? null,
+      amount: gross,
+      vatRatePercent: vatRate,
+      netAmount: net,
+      currencyCode: entry.currencyCode || 'PLN',
+      documentNumber: entry.documentNumber ?? null,
+      occurredAt: entry.occurredAt ? entry.occurredAt.toISOString() : null,
+      notes: entry.notes ?? null,
+      receiptAttachmentId: entry.receiptAttachmentId ?? null,
+    })
   }
 
-  return { costsGross, costsNet, fuelCostGross, fuelCostNet, costBreakdown }
+  includedEntries.sort((left, right) => {
+    const leftDate = left.occurredAt ?? ''
+    const rightDate = right.occurredAt ?? ''
+    return leftDate.localeCompare(rightDate)
+  })
+
+  return {
+    costsGross,
+    costsNet,
+    fuelCostGross,
+    fuelCostNet,
+    costBreakdown,
+    entries: includedEntries,
+  }
 }

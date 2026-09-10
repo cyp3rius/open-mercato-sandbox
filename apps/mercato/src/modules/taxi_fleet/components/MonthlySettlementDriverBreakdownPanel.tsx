@@ -4,11 +4,12 @@ import * as React from 'react'
 import Link from 'next/link'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { TAXI_FLEET_BASE } from '../backend/taxi-fleet/paths'
-import type { MonthlyDriverBreakdownLine } from '../lib/monthlySettlementCalculator'
+import type { MonthlyDriverBreakdownLine } from '../lib/monthlySettlementSnapshot'
 
 type MonthlySettlementDriverBreakdownPanelProps = {
   driverBreakdown: MonthlyDriverBreakdownLine[]
   resolveDriverName: (teamMemberId: string) => string
+  resolveDriverProfileId?: (teamMemberId: string) => string | null
 }
 
 function formatMoney(value: number): string {
@@ -36,6 +37,7 @@ export function parseMonthlyDriverBreakdown(
 export function MonthlySettlementDriverBreakdownPanel({
   driverBreakdown,
   resolveDriverName,
+  resolveDriverProfileId,
 }: MonthlySettlementDriverBreakdownPanelProps) {
   const t = useT()
 
@@ -73,27 +75,35 @@ export function MonthlySettlementDriverBreakdownPanel({
               </tr>
             </thead>
             <tbody>
-              {driverBreakdown.map((line) => (
-                <tr key={line.teamMemberId}>
-                  <td className="px-3 py-2">
-                    <Link
-                      href={`${TAXI_FLEET_BASE}/drivers/${encodeURIComponent(line.teamMemberId)}`}
-                      className="font-medium text-primary hover:underline"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {resolveDriverName(line.teamMemberId)}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{formatMoney(line.revenueNet)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{formatMoney(line.costsNet)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{formatMoney(line.payoutAmount)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{formatMoney(line.transferAmount)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold">{formatMoney(line.totalAmount)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{formatKm(line.totalDistanceKm)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{line.weeklyCount}</td>
-                </tr>
-              ))}
+              {driverBreakdown.map((line) => {
+                const profileId = resolveDriverProfileId?.(line.teamMemberId) ?? null
+                const name = resolveDriverName(line.teamMemberId)
+                return (
+                  <tr key={line.teamMemberId}>
+                    <td className="px-3 py-2">
+                      {profileId ? (
+                        <Link
+                          href={`${TAXI_FLEET_BASE}/drivers/${encodeURIComponent(profileId)}`}
+                          className="font-medium text-primary hover:underline"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {name}
+                        </Link>
+                      ) : (
+                        <span className="font-medium">{name}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatMoney(line.revenueNet)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatMoney(line.costsNet)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatMoney(line.payoutAmount)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatMoney(line.transferAmount)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold">{formatMoney(line.totalAmount)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatKm(line.totalDistanceKm)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{line.weeklyCount}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Banknote, Check, Loader2, Trash2 } from 'lucide-react'
+import { Check, Loader2, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { ApplyBreadcrumb } from '@open-mercato/ui/backend/AppShell'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
@@ -20,7 +20,6 @@ import { useTaxiFleetPermissions } from '../../../../components/useTaxiFleetPerm
 import { SettlementBasicsPanel } from '../../../../components/SettlementBasicsPanel'
 import { SettlementDriverNameLink } from '../../../../components/SettlementDriverNameLink'
 import { SettlementAdjustmentsDialog } from '../../../../components/SettlementAdjustmentsDialog'
-import { SettlementClosePayoutDialog } from '../../../../components/SettlementClosePayoutDialog'
 import { SettlementCashPanel } from '../../../../components/SettlementCashPanel'
 import { SettlementTripDistancePanel } from '../../../../components/SettlementTripDistancePanel'
 import { SettlementRevenueBreakdownPanel } from '../../../../components/SettlementRevenueBreakdownPanel'
@@ -39,7 +38,6 @@ import { defaultSettlementDetailValues, type SettlementFormValues } from '../../
 import { isWeeklySettlementLocked } from '../../../../lib/settlementLock'
 import {
   canApproveWeeklySettlement,
-  canCloseWeeklySettlementPayout,
   canDeleteWeeklySettlement,
 } from '../../../../lib/settlementStatusTransitions'
 import { formatWeekRange } from '../../../../lib/weekUtils'
@@ -94,7 +92,7 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
   const router = useRouter()
   const settlementId = params?.id ?? ''
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
-  const { resolveName } = useFleetDriverDirectory()
+  const { resolveName, resolveDriverProfileId } = useFleetDriverDirectory()
   const { canManageSettlements } = useTaxiFleetPermissions()
   const { settings: fleetSettings } = useTaxiFleetSettings()
   const [row, setRow] = React.useState<SettlementRow | null>(null)
@@ -103,7 +101,6 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
   const [tab, setTab] = React.useState<SettlementDetailTabId>('summary')
   const [isApproving, setIsApproving] = React.useState(false)
   const [isDeleting, setIsDeleting] = React.useState(false)
-  const [closePayoutOpen, setClosePayoutOpen] = React.useState(false)
   const [adjustmentsOpen, setAdjustmentsOpen] = React.useState(false)
 
   const load = React.useCallback(async () => {
@@ -137,7 +134,7 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
   const titleNode = row ? (
     <span className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
       <SettlementDriverNameLink
-        teamMemberId={row.teamMemberId}
+        driverProfileId={resolveDriverProfileId(row.teamMemberId)}
         displayName={resolveName(row.teamMemberId)}
         className="text-lg md:text-2xl font-semibold text-foreground hover:text-primary"
       />
@@ -214,7 +211,6 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
   }, [])
 
   const canApprove = canManageSettlements && row != null && canApproveWeeklySettlement(row.status)
-  const canClosePayout = canManageSettlements && row != null && canCloseWeeklySettlementPayout(row.status)
   const canDelete = canManageSettlements && row != null && canDeleteWeeklySettlement(row.status)
 
   const openAdjustments = React.useCallback(() => {
@@ -244,10 +240,6 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
     }
   }, [load, row, t])
 
-  const openClosePayout = React.useCallback(() => {
-    setClosePayoutOpen(true)
-  }, [])
-
   const deleteSettlement = React.useCallback(async () => {
     if (!row) return
     const ok = await confirm({
@@ -268,7 +260,7 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
   }, [confirm, row, router, t])
 
   const headerActions = React.useMemo(() => {
-    if (!canApprove && !canClosePayout && !canDelete) return null
+    if (!canApprove && !canDelete) return null
     return (
       <div className="flex w-full flex-wrap items-center justify-end gap-2 md:ml-auto md:w-auto">
         {canDelete ? (
@@ -296,15 +288,9 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
             {t('taxi_fleet.settlements.approve', 'Approve')}
           </Button>
         ) : null}
-        {canClosePayout ? (
-          <Button type="button" onClick={openClosePayout}>
-            <Banknote className="mr-2 size-4" aria-hidden />
-            {t('taxi_fleet.settlements.closePayout', 'Close / Payout')}
-          </Button>
-        ) : null}
       </div>
     )
-  }, [approveSettlement, canApprove, canClosePayout, canDelete, deleteSettlement, isApproving, isDeleting, openClosePayout, t])
+  }, [approveSettlement, canApprove, canDelete, deleteSettlement, isApproving, isDeleting, t])
 
   const tabs = React.useMemo(
     () => [
@@ -439,6 +425,7 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
                   payoutPercent: row.payoutPercent,
                 }}
                 resolveDriverName={resolveName}
+                resolveDriverProfileId={resolveDriverProfileId}
                 payoutMeta={
                   row.snapshotJson?.payout && typeof row.snapshotJson.payout === 'object'
                     ? (row.snapshotJson.payout as Record<string, unknown>)
@@ -499,16 +486,6 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
             settlementId={row.id}
             initialValues={initialValues}
             readOnly={readOnly}
-            onSaved={load}
-          />
-          <SettlementClosePayoutDialog
-            open={closePayoutOpen}
-            onOpenChange={setClosePayoutOpen}
-            settlementId={row.id}
-            payoutAmount={String(row.payoutAmount ?? '0')}
-            cashExpected={String(row.cashExpected ?? '0')}
-            cashCollected={String(row.cashCollected ?? '0')}
-            airportA4Amount={String(row.airportA4Amount ?? '0')}
             onSaved={load}
           />
           {ConfirmDialogElement}

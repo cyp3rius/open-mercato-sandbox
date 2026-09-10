@@ -50,11 +50,11 @@ Two settlement **types**:
 
 | Type | Entity | Scope | Visibility |
 |------|--------|-------|------------|
-| **Weekly** | `taxi_fleet_weekly_settlements` | Per driver profile, ISO week (`week_start` = Monday) | Operator backend; future read-only in driver PWA |
-| **Monthly** | `taxi_fleet_monthly_settlements` | Fleet/org, calendar month (`month_start` = YYYY-MM-01) | Operator backend only |
+| **Weekly** | `taxi_fleet_weekly_settlements` | Per driver profile, ISO week (`week_start` = Monday) | Operator + driver PWA (control-only; **no payout**) |
+| **Monthly** | `taxi_fleet_monthly_settlements` | Per driver, calendar month (`month_start` = YYYY-MM-01) | Operator (full flow + payout); driver PWA read-only from `approved` |
 
-- Weekly settlements: generated per driver; **driver PWA** has read-only list/detail (`/driver/settlements`) with payout, revenue, costs. Submit remains available via API for future flows.
-- Monthly: **rollup of weekly settlements** whose `week_start` falls in the calendar month; not a replacement for weeklies. Operator generates via `POST /api/taxi_fleet/monthly-settlements/generate`, can recalculate from linked weeklies.
+- Weekly: mid-month **control** view; statuses `draft|submitted|approved` (no `paid` / close payout).
+- Monthly: **actual payout** document; hybrid aggregation (calendar non-platform/costs/cash + platform from weeklies whose Monday falls in month, with `platformTripIds` dedupe across months). See `.ai/specs/2026-09-09-taxi-fleet-monthly-driver-settlement.md`.
 - UI shows staff display name, not raw UUID.
 
 #### Monthly reconciliation roadmap (Phase 2 — RS Moto ops checklist)
@@ -172,6 +172,9 @@ When operator creates/receives a trip with `started_at` / `ended_at`:
 Preferencje użytkownika: `/backend/profile/notifications` (`NotificationPreferencesEditor`).
 
 ## Changelog
+
+### 2026-09-09
+- Monthly settlements become **per-driver payout** documents (hybrid calendar + platform-from-weeklies with trip-ID dedupe). Weeklies are control-only (no close payout). Driver PWA gains monthly read-only preview. Spec: `.ai/specs/2026-09-09-taxi-fleet-monthly-driver-settlement.md`.
 
 ### 2026-09-03
 - Driver shift: planned vs punch times (`planned_shift_*` / `shift_*`), configurable grace hours, GPS distance on assignments, weekly empty km (`empty_distance_km`), GPS banner only on denial. See `.ai/specs/2026-09-03-taxi-fleet-driver-shift-gps-distance.md`.

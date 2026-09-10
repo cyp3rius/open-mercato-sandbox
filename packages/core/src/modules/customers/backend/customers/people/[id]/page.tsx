@@ -73,6 +73,7 @@ type PersonOverview = {
     displayName: string
     description?: string | null
     ownerUserId?: string | null
+    ownerUserName?: string | null
     primaryEmail?: string | null
     primaryPhone?: string | null
     status?: string | null
@@ -199,9 +200,14 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
 
   const personId = data?.person?.id ?? null
   const ownerUserId = data?.person?.ownerUserId?.trim() ?? ''
+  const ownerUserNameFromApi = data?.person?.ownerUserName?.trim() || null
   React.useEffect(() => {
     if (!ownerUserId) {
       setOwnerLabel(null)
+      return
+    }
+    if (ownerUserNameFromApi) {
+      setOwnerLabel(ownerUserNameFromApi)
       return
     }
     let cancelled = false
@@ -215,7 +221,7 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
     return () => {
       cancelled = true
     }
-  }, [ownerUserId])
+  }, [ownerUserId, ownerUserNameFromApi])
   const ownerOptions = React.useMemo(
     () => mergeEntitySearchOption([], ownerUserId, ownerLabel ?? ownerUserId),
     [ownerLabel, ownerUserId],
@@ -421,6 +427,8 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
     async (next: string | null) => {
       const normalized = typeof next === 'string' ? next.trim() : ''
       if (!normalized) throw new Error(t('customers.form.ownerRequired', 'Guardian is required.'))
+      const knownLabel = ownerOptions.find((option) => option.value === normalized)?.label
+      if (knownLabel && knownLabel !== normalized) setOwnerLabel(knownLabel)
       await savePerson(
         { ownerUserId: normalized },
         (prev) => ({
@@ -428,11 +436,16 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
           person: {
             ...prev.person,
             ownerUserId: normalized,
+            ownerUserName: knownLabel && knownLabel !== normalized ? knownLabel : null,
           },
         }),
       )
+      if (!knownLabel || knownLabel === normalized) {
+        const resolved = await resolveUserDisplayLabel(normalized)
+        if (resolved) setOwnerLabel(resolved)
+      }
     },
-    [savePerson, t],
+    [ownerOptions, savePerson, t],
   )
 
   const updateProfileField = React.useCallback(

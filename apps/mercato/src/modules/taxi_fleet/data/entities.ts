@@ -165,7 +165,7 @@ export class TaxiFleetTrip {
   assignmentId?: string | null
 
   @Property({ name: 'trip_type', type: 'text' })
-  tripType!: 'client' | 'private' | 'internal' | 'empty' | 'event' | 'other' | 'platform'
+  tripType!: 'client' | 'private' | 'internal' | 'empty' | 'event' | 'other' | 'platform' | 'street_hail'
 
   @Property({ type: 'text', nullable: true })
   platform?: 'uber' | 'bolt' | 'free' | null
@@ -450,7 +450,7 @@ export class TaxiFleetWeeklySettlement {
 }
 
 @Entity({ tableName: 'taxi_fleet_monthly_settlements' })
-@Unique({ properties: ['tenantId', 'organizationId', 'monthStart'] })
+@Unique({ properties: ['tenantId', 'organizationId', 'teamMemberId', 'monthStart'] })
 @Index({ name: 'taxi_fleet_monthly_settlements_scope_idx', properties: ['tenantId', 'organizationId'] })
 export class TaxiFleetMonthlySettlement {
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
@@ -461,6 +461,9 @@ export class TaxiFleetMonthlySettlement {
 
   @Property({ name: 'organization_id', type: 'uuid' })
   organizationId!: string
+
+  @Property({ name: 'team_member_id', type: 'uuid' })
+  teamMemberId!: string
 
   @Property({ name: 'month_start', type: 'date' })
   monthStart!: string
@@ -480,11 +483,20 @@ export class TaxiFleetMonthlySettlement {
   @Property({ name: 'net_amount', type: 'numeric', precision: 14, scale: 2, default: 0 })
   netAmount: string = '0'
 
+  @Property({ name: 'payout_percent', type: 'numeric', precision: 5, scale: 2, default: 0 })
+  payoutPercent: string = '0'
+
   @Property({ name: 'payout_amount', type: 'numeric', precision: 14, scale: 2, default: 0 })
   payoutAmount: string = '0'
 
+  @Property({ name: 'computed_distance_km', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  computedDistanceKm: string = '0'
+
   @Property({ name: 'total_distance_km', type: 'numeric', precision: 12, scale: 2, default: 0 })
   totalDistanceKm: string = '0'
+
+  @Property({ name: 'empty_distance_km', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  emptyDistanceKm: string = '0'
 
   @Property({ name: 'cash_expected', type: 'numeric', precision: 14, scale: 2, default: 0 })
   cashExpected: string = '0'
@@ -507,11 +519,15 @@ export class TaxiFleetMonthlySettlement {
   @Property({ name: 'weekly_count', type: 'integer', default: 0 })
   weeklyCount: number = 0
 
+  /** @deprecated Fleet rollup field; unused for per-driver monthly. Kept for migration compatibility. */
   @Property({ name: 'driver_count', type: 'integer', default: 0 })
   driverCount: number = 0
 
   @Property({ type: 'text', default: 'draft' })
-  status: 'draft' | 'approved' | 'closed' = 'draft'
+  status: 'draft' | 'submitted' | 'approved' | 'paid' = 'draft'
+
+  @Property({ name: 'submitted_at', type: Date, nullable: true })
+  submittedAt?: Date | null
 
   @Property({ name: 'approved_by_user_id', type: 'uuid', nullable: true })
   approvedByUserId?: string | null
@@ -519,11 +535,69 @@ export class TaxiFleetMonthlySettlement {
   @Property({ name: 'approved_at', type: Date, nullable: true })
   approvedAt?: Date | null
 
+  @Property({ name: 'closure_type', type: 'text', nullable: true })
+  closureType?: 'payout' | 'cash_return' | null
+
+  @Property({ name: 'closure_amount', type: 'numeric', precision: 14, scale: 2, nullable: true })
+  closureAmount?: string | null
+
+  @Property({ name: 'closed_at', type: Date, nullable: true })
+  closedAt?: Date | null
+
   @Property({ type: 'text', nullable: true })
   notes?: string | null
 
   @Property({ name: 'snapshot_json', type: 'json', nullable: true })
   snapshotJson?: Record<string, unknown> | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
+export const MONTHLY_SETTLEMENT_DOCUMENT_KINDS = ['cash_register', 'fuel', 'treasury', 'other'] as const
+export type MonthlySettlementDocumentKind = (typeof MONTHLY_SETTLEMENT_DOCUMENT_KINDS)[number]
+
+@Entity({ tableName: 'taxi_fleet_monthly_settlement_documents' })
+@Index({ name: 'taxi_fleet_monthly_settlement_documents_scope_idx', properties: ['tenantId', 'organizationId', 'monthStart'] })
+export class TaxiFleetMonthlySettlementDocument {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'month_start', type: 'date' })
+  monthStart!: string
+
+  @Property({ type: 'text' })
+  kind!: MonthlySettlementDocumentKind
+
+  @Property({ name: 'resource_id', type: 'uuid', nullable: true })
+  resourceId?: string | null
+
+  @Property({ name: 'attachment_id', type: 'uuid', nullable: true })
+  attachmentId?: string | null
+
+  @Property({ name: 'file_name', type: 'text', nullable: true })
+  fileName?: string | null
+
+  @Property({ name: 'parsed_json', type: 'json', nullable: true })
+  parsedJson?: Record<string, unknown> | null
+
+  @Property({ type: 'text', nullable: true })
+  notes?: string | null
+
+  @Property({ name: 'uploaded_by_user_id', type: 'uuid', nullable: true })
+  uploadedByUserId?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

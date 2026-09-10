@@ -9,7 +9,16 @@ const optionalUuid = z.string().uuid().optional().nullable()
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 
 export const assignmentStatusSchema = z.enum(['planned', 'confirmed', 'completed', 'cancelled'])
-export const tripTypeSchema = z.enum(['client', 'private', 'internal', 'empty', 'event', 'other', 'platform'])
+export const tripTypeSchema = z.enum([
+  'client',
+  'private',
+  'internal',
+  'empty',
+  'event',
+  'other',
+  'platform',
+  'street_hail',
+])
 export const tripStatusSchema = z.string().trim().min(1).max(64)
 export const tripCancelSourceSchema = z.enum(['customer', 'operator', 'driver'])
 export const tripPaymentMethodSchema = z.enum(['paypal', 'cash', 'transfer', 'other'])
@@ -317,7 +326,12 @@ export const tripCreateSchema = z
         path: ['customerEntityId'],
       })
     }
-    if (data.tripType === 'client' && !hasPerson && !hasCompany && !hasEntity) {
+    if (
+      (data.tripType === 'client' || data.tripType === 'other') &&
+      !hasPerson &&
+      !hasCompany &&
+      !hasEntity
+    ) {
       ctx.addIssue({
         code: 'custom',
         message: 'taxi_fleet.trips.errors.customerRequired',
@@ -532,7 +546,7 @@ export const settlementSubmitSchema = z.object({
   weekStart: dateOnly,
 })
 
-export const monthlySettlementStatusSchema = z.enum(['draft', 'approved', 'closed'])
+export const monthlySettlementStatusSchema = z.enum(['draft', 'submitted', 'approved', 'paid'])
 
 export const monthlySettlementGenerateSchema = z.object({
   tenantId: uuid,
@@ -540,14 +554,52 @@ export const monthlySettlementGenerateSchema = z.object({
   monthStart: dateOnly.refine((value) => value.endsWith('-01'), {
     message: 'taxi_fleet.monthlySettlements.errors.monthStartInvalid',
   }),
+  teamMemberId: uuid.optional(),
 })
 
 export const monthlySettlementUpdateSchema = z.object({
   id: uuid,
   status: monthlySettlementStatusSchema.optional(),
+  closureType: settlementClosureTypeSchema.optional(),
+  closureAmount: z.coerce.number().min(0).optional(),
   notes: z.string().max(20000).optional().nullable(),
   recalculateSettlement: z.boolean().optional(),
+  cashCollected: z.coerce.number().min(0).optional(),
+  bonusAmount: z.coerce.number().min(0).optional(),
+  compensationAmount: z.coerce.number().min(0).optional(),
+  airportA4Amount: z.coerce.number().min(0).optional(),
+  totalDistanceKm: z.coerce.number().min(0).optional(),
 })
+
+export const monthlySettlementDeleteSchema = z.object({ id: uuid })
+
+export const monthlySettlementDocumentKindSchema = z.enum(['cash_register', 'fuel', 'treasury', 'other'])
+
+export const monthlySettlementDocumentCreateSchema = z
+  .object({
+    tenantId: uuid,
+    organizationId: uuid,
+    monthStart: dateOnly.refine((value) => value.endsWith('-01'), {
+      message: 'taxi_fleet.monthlySettlements.errors.monthStartInvalid',
+    }),
+    kind: monthlySettlementDocumentKindSchema,
+    resourceId: uuid.optional().nullable(),
+    attachmentId: uuid.optional().nullable(),
+    fileName: z.string().max(500).optional().nullable(),
+    notes: z.string().max(20000).optional().nullable(),
+    parsedJson: z.record(z.string(), z.unknown()).optional().nullable(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.kind === 'cash_register' && !value.resourceId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'taxi_fleet.monthlySettlements.documents.errors.resourceRequired',
+        path: ['resourceId'],
+      })
+    }
+  })
+
+export const monthlySettlementDocumentDeleteSchema = z.object({ id: uuid })
 
 export const suggestDriversQuerySchema = z.object({
   startedAt: z.coerce.date(),
@@ -790,3 +842,6 @@ export type SettlementDeleteInput = z.infer<typeof settlementDeleteSchema>
 export type SettlementSubmitInput = z.infer<typeof settlementSubmitSchema>
 export type MonthlySettlementGenerateInput = z.infer<typeof monthlySettlementGenerateSchema>
 export type MonthlySettlementUpdateInput = z.infer<typeof monthlySettlementUpdateSchema>
+export type MonthlySettlementDeleteInput = z.infer<typeof monthlySettlementDeleteSchema>
+export type MonthlySettlementDocumentCreateInput = z.infer<typeof monthlySettlementDocumentCreateSchema>
+export type MonthlySettlementDocumentDeleteInput = z.infer<typeof monthlySettlementDocumentDeleteSchema>

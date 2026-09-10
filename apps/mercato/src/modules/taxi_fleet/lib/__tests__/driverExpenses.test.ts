@@ -15,8 +15,8 @@ describe('driverExpenses helpers', () => {
         { code: 'field_conflict', field: 'amount' },
       ]),
     ).toEqual([
-      { code: 'document_duplicate', field: null, message: null },
-      { code: 'field_conflict', field: 'amount', message: null },
+      { code: 'document_duplicate', field: null, message: null, driverValue: null, ocrValue: null },
+      { code: 'field_conflict', field: 'amount', message: null, driverValue: null, ocrValue: null },
     ])
   })
 

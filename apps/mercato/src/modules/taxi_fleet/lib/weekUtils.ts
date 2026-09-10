@@ -109,6 +109,19 @@ export function getMonthEnd(monthStart: string): string {
   return date.toISOString().slice(0, 10)
 }
 
+/** True when the calendar month has fully ended (Europe/Warsaw "today"). */
+export function isMonthFullyCompleted(monthStart: string, now: Date = new Date()): boolean {
+  if (!isMonthStart(monthStart)) return false
+  const today = normalizeDateOnly(now)
+  return getMonthEnd(monthStart) < today
+}
+
+export function formatMonthLabel(monthStart: string | null | undefined): string {
+  const normalized = normalizeDateOnly(monthStart)
+  if (!normalized || !isMonthStart(normalized)) return '—'
+  return `${normalized.slice(0, 7)} (${normalized} – ${getMonthEnd(normalized)})`
+}
+
 export function getMonthDays(monthStart: string): string[] {
   const end = getMonthEnd(monthStart)
   const days: string[] = []

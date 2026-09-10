@@ -27,6 +27,8 @@ type SettlementWeeklyZestawieniePanelProps = {
   closureType?: SettlementClosureType | string | null
   closureAmount?: string | null
   readOnly?: boolean
+  /** Monthly payout: bank transfer only (no cash payout / return-due rows). */
+  transferOnlyPayout?: boolean
   onOpenAdjustments?: () => void
 }
 
@@ -90,6 +92,7 @@ export function SettlementWeeklyZestawieniePanel({
   closureType = null,
   closureAmount = null,
   readOnly = false,
+  transferOnlyPayout = false,
   onOpenAdjustments,
 }: SettlementWeeklyZestawieniePanelProps) {
   const t = useT()
@@ -105,12 +108,18 @@ export function SettlementWeeklyZestawieniePanel({
     bonusAmount: parsedBonus,
   })
 
-  const payoutDisplay = computeSettlementPayoutDisplay({
-    payoutAmount: parsedPayout,
-    cashExpected: Number(cashExpected ?? 0),
-    cashCollected: Number(cashCollected ?? 0),
-    airportA4Amount: Number(airportA4Amount ?? 0),
-  })
+  const payoutDisplay = transferOnlyPayout
+    ? {
+        cashPayout: 0,
+        transferPayout: Math.max(0, parsedPayout) > 0.005 ? Math.max(0, parsedPayout) : null,
+        driverReturnDue: null,
+      }
+    : computeSettlementPayoutDisplay({
+        payoutAmount: parsedPayout,
+        cashExpected: Number(cashExpected ?? 0),
+        cashCollected: Number(cashCollected ?? 0),
+        airportA4Amount: Number(airportA4Amount ?? 0),
+      })
 
   const closure = parseSettlementClosureRecord(
     status === 'paid' ? { closureType, closureAmount } : null,
@@ -174,24 +183,28 @@ export function SettlementWeeklyZestawieniePanel({
               value={formatMoney(payoutAmount)}
               emphasized
             />
-            <SummaryRow
-              label={t('taxi_fleet.settlements.list.cashPayout', 'Wypłata (gotówka)')}
-              value={formatMoney(payoutDisplay.cashPayout)}
-            />
-            <SummaryRow
-              label={t('taxi_fleet.settlements.list.transferPayout', 'Wypłata (przelew)')}
-              value={
-                payoutDisplay.transferPayout != null
-                  ? formatMoney(payoutDisplay.transferPayout)
-                  : formatMoney(0)
-              }
-            />
-            <SummaryRow
-              label={t('taxi_fleet.settlements.list.driverReturnDue', 'Do zwrotu przez kierowcę (gotówka)')}
-              valueNode={
-                <SettlementReturnDueValue amount={payoutDisplay.driverReturnDue ?? 0} align="right" />
-              }
-            />
+            {!transferOnlyPayout ? (
+              <>
+                <SummaryRow
+                  label={t('taxi_fleet.settlements.list.cashPayout', 'Wypłata (gotówka)')}
+                  value={formatMoney(payoutDisplay.cashPayout)}
+                />
+                <SummaryRow
+                  label={t('taxi_fleet.settlements.list.transferPayout', 'Wypłata (przelew)')}
+                  value={
+                    payoutDisplay.transferPayout != null
+                      ? formatMoney(payoutDisplay.transferPayout)
+                      : formatMoney(0)
+                  }
+                />
+                <SummaryRow
+                  label={t('taxi_fleet.settlements.list.driverReturnDue', 'Do zwrotu przez kierowcę (gotówka)')}
+                  valueNode={
+                    <SettlementReturnDueValue amount={payoutDisplay.driverReturnDue ?? 0} align="right" />
+                  }
+                />
+              </>
+            ) : null}
 
             {closure ? (
               <>

@@ -568,9 +568,16 @@ export async function GET(_req: Request, ctx: { params?: { id?: string } }) {
       }
     }
     if (viewerUserId) authorIds.add(viewerUserId)
+    if (person.ownerUserId) authorIds.add(person.ownerUserId)
 
     if (authorIds.size) {
-      const users = await em.find(User, { id: { $in: Array.from(authorIds) } })
+      const users = await findWithDecryption(
+        em,
+        User,
+        { id: { $in: Array.from(authorIds) } },
+        undefined,
+        { tenantId: person.tenantId ?? auth.tenantId ?? null, organizationId: null },
+      )
       userMap = new Map(
         users.map((user) => [
           user.id,
@@ -635,6 +642,11 @@ export async function GET(_req: Request, ctx: { params?: { id?: string } }) {
     profiler.mark('custom_fields_merged', { keys: Object.keys(customFields).length })
 
     const viewerUserIdFinal = viewerUserId
+    const ownerInfo = person.ownerUserId ? userMap.get(person.ownerUserId) : null
+    const ownerUserLabel =
+      (ownerInfo?.name && ownerInfo.name.trim()) ||
+      (ownerInfo?.email && ownerInfo.email.trim()) ||
+      null
     const response = NextResponse.json({
       interactionMode,
       person: {
@@ -644,6 +656,7 @@ export async function GET(_req: Request, ctx: { params?: { id?: string } }) {
         displayName: person.displayName,
         description: person.description,
         ownerUserId: person.ownerUserId,
+        ownerUserName: ownerUserLabel,
         primaryEmail: person.primaryEmail,
         primaryPhone: person.primaryPhone,
         status: person.status,

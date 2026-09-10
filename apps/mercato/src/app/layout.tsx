@@ -25,8 +25,15 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: documentTitle,
     description: 'AI-supportive, modular ERP foundation for product & service companies',
+    applicationName: 'RSMoto CRM',
+    appleWebApp: {
+      capable: true,
+      title: 'RSMoto CRM',
+      statusBarStyle: 'default',
+    },
     icons: {
       icon: faviconSrc,
+      apple: '/brand/apple-touch-icon.png',
     },
   }
 }

@@ -20,6 +20,7 @@ type SettlementAdjustmentsDialogProps = {
   settlementId: string
   initialValues: SettlementFormValues
   readOnly: boolean
+  crudResource?: string
   onSaved: () => Promise<void>
 }
 
@@ -29,6 +30,7 @@ export function SettlementAdjustmentsDialog({
   settlementId,
   initialValues,
   readOnly,
+  crudResource = 'taxi_fleet/settlements',
   onSaved,
 }: SettlementAdjustmentsDialogProps) {
   const t = useT()
@@ -62,7 +64,7 @@ export function SettlementAdjustmentsDialog({
     setIsSaving(true)
     try {
       await updateCrud(
-        'taxi_fleet/settlements',
+        crudResource,
         {
           id: settlementId,
           bonusAmount: parsedBonus,
@@ -76,7 +78,7 @@ export function SettlementAdjustmentsDialog({
     } finally {
       setIsSaving(false)
     }
-  }, [bonusAmount, compensationAmount, onOpenChange, onSaved, settlementId, t])
+  }, [bonusAmount, compensationAmount, crudResource, onOpenChange, onSaved, settlementId, t])
 
   const handleDialogKeyDown = useTaxiFleetDialogShortcuts({
     contentRef,

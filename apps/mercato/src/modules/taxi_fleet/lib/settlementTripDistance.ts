@@ -132,7 +132,26 @@ export async function loadDriverWeekTrips(
   },
 ): Promise<TaxiFleetTrip[]> {
   const weekEnd = getWeekEnd(params.weekStart)
-  const rows = await findWithDecryption(
+  return loadDriverTripsInDateRange(em, {
+    tenantId: params.tenantId,
+    organizationId: params.organizationId,
+    teamMemberId: params.teamMemberId,
+    dateFrom: params.weekStart,
+    dateTo: weekEnd,
+  }).then((rows) => rows.filter((trip) => tripBelongsToSettlementWeek(trip, params.weekStart)))
+}
+
+export async function loadDriverTripsInDateRange(
+  em: EntityManager,
+  params: {
+    tenantId: string
+    organizationId: string
+    teamMemberId: string
+    dateFrom: string
+    dateTo: string
+  },
+): Promise<TaxiFleetTrip[]> {
+  return findWithDecryption(
     em,
     TaxiFleetTrip,
     {
@@ -143,15 +162,15 @@ export async function loadDriverWeekTrips(
       $or: [
         {
           startedAt: {
-            $gte: new Date(`${params.weekStart}T00:00:00`),
-            $lte: new Date(`${weekEnd}T23:59:59`),
+            $gte: new Date(`${params.dateFrom}T00:00:00`),
+            $lte: new Date(`${params.dateTo}T23:59:59`),
           },
         },
         {
           startedAt: null,
           endedAt: {
-            $gte: new Date(`${params.weekStart}T00:00:00`),
-            $lte: new Date(`${weekEnd}T23:59:59`),
+            $gte: new Date(`${params.dateFrom}T00:00:00`),
+            $lte: new Date(`${params.dateTo}T23:59:59`),
           },
         },
       ],
@@ -159,7 +178,6 @@ export async function loadDriverWeekTrips(
     undefined,
     { tenantId: params.tenantId, organizationId: params.organizationId },
   )
-  return rows.filter((trip) => tripBelongsToSettlementWeek(trip, params.weekStart))
 }
 
 export async function calculateSettlementTripDistance(

@@ -81,6 +81,7 @@ type CompanyOverview = {
     referralCode?: string | null
     description?: string | null
     ownerUserId?: string | null
+    ownerUserName?: string | null
     primaryEmail?: string | null
     primaryPhone?: string | null
     status?: string | null
@@ -143,12 +144,17 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
   const [ownerLabel, setOwnerLabel] = React.useState<string | null>(null)
   const currentCompanyId = data?.company?.id ?? null
   const ownerUserId = data?.company?.ownerUserId?.trim() ?? ''
+  const ownerUserNameFromApi = data?.company?.ownerUserName?.trim() || null
   React.useEffect(() => {
     setActiveTab(initialTab)
   }, [initialTab])
   React.useEffect(() => {
     if (!ownerUserId) {
       setOwnerLabel(null)
+      return
+    }
+    if (ownerUserNameFromApi) {
+      setOwnerLabel(ownerUserNameFromApi)
       return
     }
     let cancelled = false
@@ -162,7 +168,7 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
     return () => {
       cancelled = true
     }
-  }, [ownerUserId])
+  }, [ownerUserId, ownerUserNameFromApi])
   const ownerOptions = React.useMemo(
     () => mergeEntitySearchOption([], ownerUserId, ownerLabel ?? ownerUserId),
     [ownerLabel, ownerUserId],
@@ -420,6 +426,8 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
     async (next: string | null) => {
       const normalized = typeof next === 'string' ? next.trim() : ''
       if (!normalized) throw new Error(t('customers.form.ownerRequired', 'Guardian is required.'))
+      const knownLabel = ownerOptions.find((option) => option.value === normalized)?.label
+      if (knownLabel && knownLabel !== normalized) setOwnerLabel(knownLabel)
       await saveCompany(
         { ownerUserId: normalized },
         (prev) => ({
@@ -427,11 +435,16 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
           company: {
             ...prev.company,
             ownerUserId: normalized,
+            ownerUserName: knownLabel && knownLabel !== normalized ? knownLabel : null,
           },
         }),
       )
+      if (!knownLabel || knownLabel === normalized) {
+        const resolved = await resolveUserDisplayLabel(normalized)
+        if (resolved) setOwnerLabel(resolved)
+      }
     },
-    [saveCompany, t],
+    [ownerOptions, saveCompany, t],
   )
 
   const updateCompanyField = React.useCallback(

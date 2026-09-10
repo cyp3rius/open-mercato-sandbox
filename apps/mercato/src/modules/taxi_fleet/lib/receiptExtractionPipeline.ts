@@ -1,8 +1,9 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { after } from 'next/server'
 import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
+import { getStorageDriverFactory } from '@open-mercato/core/modules/attachments/lib/drivers'
 import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attachments/lib/storage'
-import { isValidNip, normalizeNipDigits } from '@open-mercato/core/modules/customers/lib/nip'
+import { normalizeReceiptOcrNip } from '@/modules/taxi_fleet/lib/receiptOcrSanitize'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import {
   TaxiFleetDailyAssignment,
@@ -24,7 +25,15 @@ import {
   snapExpenseOccurredAtToDriverShift,
 } from './receiptExpenseFieldApply'
 import { normalizeExpenseVatRatePercent } from './expenseVat'
-import { extractReceiptFieldsFromImage, hasAnthropicReceiptOcrKey, hasOpenAiReceiptOcrKey, isTaxiFleetReceiptOcrEnabled, resolveReceiptOcrModel, resolveReceiptOcrProvider } from './receiptOcrExtract'
+import {
+  extractReceiptFieldsFromImage,
+  hasAnthropicReceiptOcrKey,
+  hasOpenAiReceiptOcrKey,
+  isLocalAttachmentStorageDriver,
+  isTaxiFleetReceiptOcrEnabled,
+  resolveReceiptOcrModel,
+  resolveReceiptOcrProvider,
+} from './receiptOcrExtract'
 import { ensureTaxiFleetDriverReceiptsPartition } from './receiptPartition'
 import { recalculateWeeklySettlementsForFinancialEntry, recalculateWeeklySettlementsForTrip } from './settlementWeekScope'
 import { syncFinancialEntryDocumentDuplicates } from './documentDuplicates'
@@ -300,21 +309,49 @@ export async function processReceiptExtraction(
   try {
     const attachment = await em.findOne(Attachment, { id: row.attachmentId })
     if (!attachment) throw new Error('Attachment not found')
-    const filePath = resolveAttachmentAbsolutePath(
-      attachment.partitionCode,
-      attachment.storagePath,
-      attachment.storageDriver,
-    )
-    console.info('[taxi_fleet.receipt_ocr] calling vision model', {
-      extractionId,
-      attachmentId: attachment.id,
-      mimeType: attachment.mimeType,
-      filePath,
-    })
-    const { fields, model, provider } = await extractReceiptFieldsFromImage({
-      filePath,
-      mimeType: attachment.mimeType,
-    })
+    const storageDriverKey = attachment.storageDriver || 'local'
+    const mimeType = attachment.mimeType
+
+    let ocrResult: Awaited<ReturnType<typeof extractReceiptFieldsFromImage>>
+    if (isLocalAttachmentStorageDriver(storageDriverKey)) {
+      const filePath = resolveAttachmentAbsolutePath(
+        attachment.partitionCode,
+        attachment.storagePath,
+        storageDriverKey,
+      )
+      console.info('[taxi_fleet.receipt_ocr] calling vision model', {
+        extractionId,
+        attachmentId: attachment.id,
+        mimeType,
+        storageDriver: storageDriverKey,
+        filePath,
+      })
+      ocrResult = await extractReceiptFieldsFromImage({
+        filePath,
+        mimeType,
+      })
+    } else {
+      const driver = getStorageDriverFactory().resolve(storageDriverKey)
+      const { buffer } = await driver.read(attachment.partitionCode, attachment.storagePath)
+      const fileName =
+        attachment.fileName?.trim() ||
+        attachment.storagePath.split('/').pop() ||
+        'receipt.bin'
+      console.info('[taxi_fleet.receipt_ocr] calling vision model', {
+        extractionId,
+        attachmentId: attachment.id,
+        mimeType,
+        storageDriver: storageDriverKey,
+        source: 'storage_driver.read',
+        bytes: buffer.length,
+      })
+      ocrResult = await extractReceiptFieldsFromImage({
+        fileBuffer: buffer,
+        fileName,
+        mimeType,
+      })
+    }
+    const { fields, model, provider } = ocrResult
 
     const warnings: ReceiptOcrWarning[] = []
     let resolvedCompanyId: string | null = null
@@ -326,8 +363,8 @@ export async function processReceiptExtraction(
         organizationId: row.organizationId,
         buyerNip: fields.buyerNip,
       })
-      const digits = normalizeNipDigits(fields.buyerNip)
-      normalizedBuyerNip = digits && isValidNip(digits) ? digits : null
+      // Store OCR NIP as 10 digits (dashed or compact input both OK); CRM lookup may still warn on checksum
+      normalizedBuyerNip = normalizeReceiptOcrNip(fields.buyerNip)
       if (ensured.companyEntityId) {
         resolvedCompanyId = ensured.companyEntityId
         console.info('[taxi_fleet.receipt_ocr] CRM company resolved by NIP', {
@@ -340,7 +377,7 @@ export async function processReceiptExtraction(
         warnings.push({
           code: ensured.warningCode,
           field: 'buyerNip',
-          ocrValue: fields.buyerNip,
+          ocrValue: normalizedBuyerNip ?? fields.buyerNip,
         })
       }
     }
@@ -376,7 +413,7 @@ export async function processReceiptExtraction(
         ? String(normalizeExpenseVatRatePercent(fields.vatRatePercent))
         : null
     row.ocrBuyerNip = normalizedBuyerNip
-    row.ocrSellerNip = fields.sellerNip ? normalizeNipDigits(fields.sellerNip) || null : null
+    row.ocrSellerNip = normalizeReceiptOcrNip(fields.sellerNip)
     row.ocrOccurredAt = fields.occurredAt ? new Date(fields.occurredAt) : null
     if (row.ocrOccurredAt && Number.isNaN(row.ocrOccurredAt.getTime())) row.ocrOccurredAt = null
     row.confidence =

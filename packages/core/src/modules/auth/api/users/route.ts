@@ -186,6 +186,7 @@ const userUpdateSchema = z.object({
 const userListItemSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
+  name: z.string().nullable().optional(),
   organizationId: z.string().uuid().nullable(),
   organizationName: z.string().nullable(),
   tenantId: z.string().uuid().nullable(),
@@ -410,6 +411,7 @@ export async function GET(req: Request) {
     return {
       id: uid,
       email: String(u.email),
+      name: typeof u.name === 'string' && u.name.trim() ? u.name.trim() : null,
       organizationId: orgId,
       organizationName: orgId ? orgMap[orgId] ?? orgId : null,
       tenantId: u.tenantId ? String(u.tenantId) : null,

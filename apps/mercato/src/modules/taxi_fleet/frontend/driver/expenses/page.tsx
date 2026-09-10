@@ -23,6 +23,7 @@ import type {
   DriverExpenseSortField,
   DriverExpenseWarning,
 } from '../../../lib/driverExpenses'
+import { formatReceiptOcrWarningLabel } from '../../../lib/receiptOcrWarningLabel'
 
 const PAGE_SIZE = 10
 
@@ -48,13 +49,10 @@ function formatOccurredAt(value: string | null): string {
 }
 
 function warningLabel(
-  t: (key: string, fallback?: string) => string,
+  t: (key: string, fallback?: string, params?: Record<string, string | number>) => string,
   warning: DriverExpenseWarning,
 ): string {
-  return t(
-    `taxi_fleet.driverApp.expenses.warnings.${warning.code}`,
-    warning.message || warning.code,
-  )
+  return formatReceiptOcrWarningLabel(t, warning)
 }
 
 function isExpenseOcrProcessing(item: DriverExpenseListItem): boolean {

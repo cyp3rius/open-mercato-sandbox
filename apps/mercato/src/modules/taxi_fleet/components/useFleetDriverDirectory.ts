@@ -104,7 +104,20 @@ export function useFleetDriverDirectory() {
     [profiles],
   )
 
-  return { profiles, nameByMemberId, resolveName, resolvePayoutPercent, isLoading, reload }
+  const resolveDriverProfileId = React.useCallback(
+    (teamMemberId: string) => profiles.find((profile) => profile.teamMemberId === teamMemberId)?.id ?? null,
+    [profiles],
+  )
+
+  return {
+    profiles,
+    nameByMemberId,
+    resolveName,
+    resolvePayoutPercent,
+    resolveDriverProfileId,
+    isLoading,
+    reload,
+  }
 }
 
 /** Loads display names for team-member IDs that are not yet in the shared directory cache. */

@@ -1,3 +1,5 @@
+import { looksLikeNipAsDocumentNumber } from './receiptOcrSanitize'
+
 export const RECEIPT_EXTRACTION_STATUSES = [
   'pending',
   'processing',
@@ -70,13 +72,20 @@ export function mergeReceiptDocumentNumber(params: {
   ocrDocumentNumber?: string | null
 }): Pick<ReceiptFieldMergeResult, 'documentNumber' | 'documentNumberSource' | 'warnings' | 'needsReview'> {
   const driver = normalizeDocumentNumber(params.driverDocumentNumber)
-  const ocr = normalizeDocumentNumber(params.ocrDocumentNumber)
+  // OCR sometimes returns seller NIP as documentNumber — treat as missing OCR number
+  const ocrRaw = normalizeDocumentNumber(params.ocrDocumentNumber)
+  const ocr =
+    ocrRaw && looksLikeNipAsDocumentNumber(ocrRaw) ? null : ocrRaw
   const warnings: ReceiptOcrWarning[] = []
 
   if (!driver && ocr) {
     return { documentNumber: ocr, documentNumberSource: 'ocr', warnings, needsReview: false }
   }
   if (driver && !ocr) {
+    if (ocrRaw && looksLikeNipAsDocumentNumber(ocrRaw)) {
+      // Silent: OCR mistook issuer NIP for document number; keep driver value without conflict
+      return { documentNumber: driver, documentNumberSource: 'driver', warnings, needsReview: false }
+    }
     warnings.push({
       code: 'ocr_missing_field',
       field: 'documentNumber',

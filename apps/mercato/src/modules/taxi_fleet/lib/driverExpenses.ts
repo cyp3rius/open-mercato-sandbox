@@ -7,6 +7,8 @@ export type DriverExpenseWarning = {
   code: ReceiptOcrWarningCode | 'document_duplicate'
   field?: string | null
   message?: string | null
+  driverValue?: string | null
+  ocrValue?: string | null
 }
 
 export type DriverExpenseListItem = {
@@ -46,6 +48,8 @@ export function parseDriverExpenseWarnings(
       code: code as DriverExpenseWarning['code'],
       field: typeof item.field === 'string' ? item.field : null,
       message: typeof item.message === 'string' ? item.message : null,
+      driverValue: typeof item.driverValue === 'string' ? item.driverValue : item.driverValue == null ? null : String(item.driverValue),
+      ocrValue: typeof item.ocrValue === 'string' ? item.ocrValue : item.ocrValue == null ? null : String(item.ocrValue),
     })
   }
   return out

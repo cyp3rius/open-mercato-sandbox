@@ -527,7 +527,7 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
     id: profile.teamMemberId,
     title: resolveDriverName(profile.teamMemberId),
   }))
-  const tripTypeOptions = TAXI_FLEET_TRIP_TYPES.map((type) => ({
+  const tripTypeOptions = TAXI_FLEET_TRIP_TYPES.filter((type) => type !== 'event').map((type) => ({
     value: type,
     label: t(`taxi_fleet.trips.types.${type}`, type),
   }))

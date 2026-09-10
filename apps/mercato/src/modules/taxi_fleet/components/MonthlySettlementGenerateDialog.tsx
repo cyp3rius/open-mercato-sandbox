@@ -8,7 +8,7 @@ import { CrudForm, type CrudField } from '@open-mercato/ui/backend/CrudForm'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { TAXI_FLEET_BASE } from '../backend/taxi-fleet/paths'
-import { listUnsettledMonths, normalizeDateOnly } from '../lib/weekUtils'
+import { isMonthFullyCompleted, listRecentMonthStarts } from '../lib/weekUtils'
 import {
   TaxiFleetDialogFrame,
   taxiFleetDialogCrudBodyClass,
@@ -20,10 +20,6 @@ type MonthlySettlementGenerateDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onGenerated?: () => void
-}
-
-type MonthlySettlementListItem = {
-  monthStart?: string
 }
 
 type MonthlyGenerateFormValues = {
@@ -59,37 +55,12 @@ export function MonthlySettlementGenerateDialog({
 
   React.useEffect(() => {
     if (!open) return
-    let cancelled = false
-    async function loadMonths() {
-      setLoadingMonths(true)
-      const call = await apiCall<{ items: MonthlySettlementListItem[] }>(
-        '/api/taxi_fleet/monthly-settlements?page=1&pageSize=100',
-      )
-      if (cancelled) return
-      if (!call.ok) {
-        setAvailableMonths([])
-        setLoadingMonths(false)
-        flash(
-          (call.result as { error?: string } | null)?.error ??
-            t('taxi_fleet.monthlySettlements.loadMonthsError', 'Could not load existing monthly settlements.'),
-          'error',
-        )
-        return
-      }
-      const existing = new Set(
-        (Array.isArray(call.result?.items) ? call.result.items : [])
-          .map((item) => normalizeDateOnly(item.monthStart))
-          .filter((value) => value.length > 0),
-      )
-      setAvailableMonths(listUnsettledMonths(existing))
-      setFormKey((value) => value + 1)
-      setLoadingMonths(false)
-    }
-    void loadMonths()
-    return () => {
-      cancelled = true
-    }
-  }, [open, t])
+    setLoadingMonths(true)
+    const pastMonths = listRecentMonthStarts(24).filter((monthStart) => isMonthFullyCompleted(monthStart))
+    setAvailableMonths(pastMonths)
+    setFormKey((value) => value + 1)
+    setLoadingMonths(false)
+  }, [open])
 
   const fields = React.useMemo((): CrudField[] => {
     if (loadingMonths) {
@@ -124,7 +95,10 @@ export function MonthlySettlementGenerateDialog({
           layout: 'full',
           component: () => (
             <p className="text-sm text-muted-foreground">
-              {t('taxi_fleet.monthlySettlements.noAvailableMonths', 'All recent months already have settlements.')}
+              {t(
+                'taxi_fleet.monthlySettlements.noAvailableMonths',
+                'No completed calendar months are available yet.',
+              )}
             </p>
           ),
         },
@@ -170,26 +144,45 @@ export function MonthlySettlementGenerateDialog({
         throw new Error(t('taxi_fleet.errors.generic', 'Operation failed.'))
       }
       if (!values.monthStart || !availableMonths.includes(values.monthStart)) {
-        throw new Error(t('taxi_fleet.monthlySettlements.monthAlreadySettled', 'This month already has a settlement.'))
+        throw new Error(
+          t(
+            'taxi_fleet.monthlySettlements.errors.monthNotCompleted',
+            'Monthly settlement can only be generated after the calendar month has ended.',
+          ),
+        )
       }
-      const call = await apiCall<{ id?: string | null }>('/api/taxi_fleet/monthly-settlements/generate', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          monthStart: values.monthStart,
-          tenantId,
-          organizationId,
-        }),
-      })
+      const call = await apiCall<{ id?: string | null; ids?: string[] }>(
+        '/api/taxi_fleet/monthly-settlements/generate',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            monthStart: values.monthStart,
+            tenantId,
+            organizationId,
+          }),
+        },
+      )
       if (!call.ok) {
         throw new Error(
           (call.result as { error?: string } | null)?.error ??
             t('taxi_fleet.monthlySettlements.form.saveError', 'Could not generate monthly settlement.'),
         )
       }
-      const newId = typeof call.result?.id === 'string' ? call.result.id : ''
+      const ids = Array.isArray(call.result?.ids) ? call.result.ids : []
+      const newId =
+        typeof call.result?.id === 'string' && call.result.id
+          ? call.result.id
+          : typeof ids[0] === 'string'
+            ? ids[0]
+            : ''
       if (!newId) throw new Error(t('taxi_fleet.settlements.form.missingId', 'No id returned.'))
-      flash(t('taxi_fleet.monthlySettlements.generated', 'Monthly settlement generated.'), 'success')
+      flash(
+        t('taxi_fleet.monthlySettlements.generatedBatch', 'Generated {count} monthly settlement(s).', {
+          count: Math.max(ids.length, 1),
+        }),
+        'success',
+      )
       onOpenChange(false)
       onGenerated?.()
       router.push(`${TAXI_FLEET_BASE}/monthly-settlements/${encodeURIComponent(newId)}`)

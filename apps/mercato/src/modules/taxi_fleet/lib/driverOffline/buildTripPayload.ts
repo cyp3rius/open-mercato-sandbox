@@ -40,28 +40,27 @@ export function buildDriverTripPayload(input: {
   }
   const revenue = parseNumericValue(input.commercial.revenueAmount) ?? 0
   const documentNumber = input.commercial.receiptDocumentNumber.trim()
-
-  const isReceiptCompletion = input.commercial.completionMode === 'receipt'
+  const includeCustomer =
+    Boolean(input.commercial.customerEntityId) &&
+    (input.commercial.tripType === 'client' ||
+      input.commercial.tripType === 'other' ||
+      input.commercial.tripType === 'street_hail')
 
   const base: Record<string, unknown> = {
-    completionMode: input.commercial.completionMode,
-    tripType: isReceiptCompletion ? 'other' : input.commercial.tripType,
-    platform: isReceiptCompletion ? null : input.commercial.platform,
+    completionMode: 'manual',
+    tripType: input.commercial.tripType,
+    platform: input.commercial.platform,
     startedAt: input.route.startedAt,
     endedAt: input.route.endedAt || null,
     distanceKm: input.route.distanceKm,
-    revenueAmount: isReceiptCompletion ? 0 : revenue,
+    revenueAmount: revenue,
     currencyCode: 'PLN',
     notes: input.commercial.notes,
     resourceId: input.resourceId || undefined,
     assignmentId: input.assignmentId || undefined,
     status: input.status ?? 'completed',
     metadata,
-    ...(!isReceiptCompletion &&
-    input.commercial.tripType === 'client' &&
-    input.commercial.customerEntityId
-      ? { customerEntityId: input.commercial.customerEntityId }
-      : {}),
+    ...(includeCustomer ? { customerEntityId: input.commercial.customerEntityId } : {}),
     ...(documentNumber ? { receiptDocumentNumber: documentNumber } : {}),
     ...(input.commercial.receiptAttachmentId
       ? { receiptAttachmentId: input.commercial.receiptAttachmentId }

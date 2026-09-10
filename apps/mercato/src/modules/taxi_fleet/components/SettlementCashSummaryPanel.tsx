@@ -12,6 +12,7 @@ type SettlementCashSummaryPanelProps = {
   embedded?: boolean
   settlementId?: string
   readOnly?: boolean
+  crudResource?: string
   onUpdated?: () => Promise<void>
 }
 
@@ -27,6 +28,7 @@ export function SettlementCashSummaryPanel({
   embedded = false,
   settlementId,
   readOnly = true,
+  crudResource = 'taxi_fleet/settlements',
   onUpdated,
 }: SettlementCashSummaryPanelProps) {
   const t = useT()
@@ -43,7 +45,7 @@ export function SettlementCashSummaryPanel({
       throw new Error(t('taxi_fleet.settlements.cashSummary.invalidAmount', 'Enter a valid amount.'))
     }
     await updateCrud(
-      'taxi_fleet/settlements',
+      crudResource,
       { id: settlementId, cashCollected: parsed },
       { errorMessage: t('taxi_fleet.settlements.form.saveError', 'Could not save settlement.') },
     )

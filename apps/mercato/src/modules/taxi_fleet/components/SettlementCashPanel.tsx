@@ -8,6 +8,7 @@ type SettlementCashPanelProps = {
   cashExpected: string
   cashCollected: string
   readOnly: boolean
+  crudResource?: string
   onUpdated: () => Promise<void>
 }
 
@@ -16,6 +17,7 @@ export function SettlementCashPanel({
   cashExpected,
   cashCollected,
   readOnly,
+  crudResource = 'taxi_fleet/settlements',
   onUpdated,
 }: SettlementCashPanelProps) {
   const t = useT()
@@ -30,6 +32,7 @@ export function SettlementCashPanel({
         cashExpected={cashExpected}
         cashCollected={cashCollected}
         readOnly={readOnly}
+        crudResource={crudResource}
         onUpdated={onUpdated}
         embedded
       />

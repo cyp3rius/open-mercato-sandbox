@@ -35,11 +35,17 @@ export async function POST(req: Request) {
     const { translate } = await resolveTranslations()
     const parsed = parseScopedCommandInput(monthlySettlementGenerateSchema, body, context, translate)
     const commandBus = context.container.resolve('commandBus') as CommandBus
-    const { result } = await commandBus.execute<typeof parsed, { settlementId: string }>(
-      'taxi_fleet.monthly_settlements.generate_month',
-      { input: parsed, ctx: context },
+    const { result } = await commandBus.execute<
+      typeof parsed,
+      { settlementId?: string; settlementIds: string[] }
+    >('taxi_fleet.monthly_settlements.generate_month', { input: parsed, ctx: context })
+    return NextResponse.json(
+      {
+        id: result?.settlementId ?? result?.settlementIds?.[0] ?? null,
+        ids: result?.settlementIds ?? [],
+      },
+      { status: 201 },
     )
-    return NextResponse.json({ id: result?.settlementId ?? null }, { status: 201 })
   } catch (err) {
     if (err instanceof CrudHttpError) return NextResponse.json(err.body, { status: err.status })
     console.error('taxi_fleet.monthly_settlements.generate failed', err)

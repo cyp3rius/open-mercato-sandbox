@@ -10,6 +10,7 @@ import { formatWeekRange } from '../lib/weekUtils'
 type SettlementBasicsPanelProps = {
   values: Pick<SettlementFormValues, 'teamMemberId' | 'weekStart' | 'status' | 'payoutPercent'>
   resolveDriverName: (teamMemberId: string) => string
+  resolveDriverProfileId: (teamMemberId: string) => string | null
   payoutMeta?: Record<string, unknown> | null
 }
 
@@ -53,6 +54,7 @@ export function formatMatchedPayoutTierRange(
 export function SettlementBasicsPanel({
   values,
   resolveDriverName,
+  resolveDriverProfileId,
   payoutMeta = null,
 }: SettlementBasicsPanelProps) {
   const t = useT()
@@ -73,7 +75,7 @@ export function SettlementBasicsPanel({
           <dd className="text-sm">
             {values.teamMemberId ? (
               <SettlementDriverNameLink
-                teamMemberId={values.teamMemberId}
+                driverProfileId={resolveDriverProfileId(values.teamMemberId)}
                 displayName={resolveDriverName(values.teamMemberId)}
               />
             ) : (

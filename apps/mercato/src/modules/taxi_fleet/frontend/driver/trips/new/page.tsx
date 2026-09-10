@@ -439,17 +439,7 @@ export default function DriverTripCreatePage() {
   }
 
   function validateScheduleCommercial(): string | null {
-    if (commercial.tripType === 'client' && !commercial.customerEntityId) {
-      return t(
-        'taxi_fleet.driverApp.trips.customerRequired',
-        'Select or create a customer for client trips.',
-      )
-    }
-    const revenue = parseNumericValue(commercial.revenueAmount)
-    if (revenue === null || revenue < 0) {
-      return t('taxi_fleet.driverApp.trips.revenueInvalid', 'Enter a valid revenue amount.')
-    }
-    return null
+    return validateCommercialStep(commercial, t, { requireReceiptPhoto: false })
   }
 
   async function submitSchedule() {

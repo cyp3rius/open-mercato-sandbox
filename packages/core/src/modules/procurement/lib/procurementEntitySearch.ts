@@ -217,9 +217,14 @@ export async function remoteSearchAuthUsers(query: string): Promise<EntitySearch
     if (!item || typeof item !== 'object') continue
     const row = item as Record<string, unknown>
     const id = typeof row.id === 'string' ? row.id : ''
+    const name = typeof row.name === 'string' ? row.name.trim() : ''
     const email = typeof row.email === 'string' ? row.email.trim() : ''
-    if (!id || !email) continue
-    out.push({ value: id, label: email, description: email })
+    if (!id || (!name && !email)) continue
+    out.push({
+      value: id,
+      label: name || email,
+      description: name && email && name !== email ? email : undefined,
+    })
   }
   return out
 }
@@ -336,13 +341,22 @@ export async function resolveUserDisplayLabel(id: string): Promise<string | null
   const call = await apiCall<Record<string, unknown>>(
     `/api/auth/users?id=${encodeURIComponent(trimmed)}&pageSize=1`,
   )
+  if (!call.ok) return null
   const items = readItems(call.result ?? undefined)
-  const row = items[0]
+  const row =
+    items.find(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        (item as Record<string, unknown>).id === trimmed,
+    ) ?? items[0]
   if (!row || typeof row !== 'object') return null
   const r = row as Record<string, unknown>
   const name = typeof r.name === 'string' ? r.name.trim() : ''
   const email = typeof r.email === 'string' ? r.email.trim() : ''
-  return name.length ? name : email.length ? email : typeof r.id === 'string' ? r.id : null
+  if (name.length) return name
+  if (email.length) return email
+  return null
 }
 
 export type ProcurementCustomerAssociationPreview = {
@@ -503,6 +517,22 @@ export function mergeEntitySearchOption(
 ): EntitySearchComboboxOption[] {
   const v = value.trim()
   if (!v.length) return options
-  if (options.some((o) => o.value === v)) return options
-  return [{ value: v, label: label.trim() || v, description: description ?? undefined }, ...options]
+  const nextLabel = label.trim() || v
+  const existing = options.find((o) => o.value === v)
+  if (existing) {
+    // Upgrade placeholder labels (often the raw UUID) once a real name is known
+    if (existing.label === v && nextLabel !== v) {
+      return options.map((option) =>
+        option.value === v
+          ? {
+              ...option,
+              label: nextLabel,
+              description: description ?? option.description,
+            }
+          : option,
+      )
+    }
+    return options
+  }
+  return [{ value: v, label: nextLabel, description: description ?? undefined }, ...options]
 }
