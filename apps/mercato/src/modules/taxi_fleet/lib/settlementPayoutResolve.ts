@@ -15,7 +15,8 @@ export type DriverPayoutSchedule = {
 }
 
 export type ResolvedSettlementPayout = {
-  mode: PayoutMode
+  /** `weekly_remainder` is monthly-only (leading straddle); not a driver schedule mode. */
+  mode: PayoutMode | 'weekly_remainder'
   percent: number
   selectionNetAmount: number
   tiers: PayoutTier[] | null

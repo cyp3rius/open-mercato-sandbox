@@ -191,7 +191,7 @@ export default function TaxiFleetMonthlySettlementsPage() {
           columns={columns}
           data={rows}
           isLoading={isLoading}
-          pagination={{ page, totalPages, onPageChange: setPage, total }}
+          pagination={{ page, totalPages, total, pageSize: PAGE_SIZE, onPageChange: setPage }}
           perspective={{ tableId: 'taxi-fleet-monthly-settlements' }}
           onRowClick={(row) => router.push(detailHref(row.id))}
           rowActions={(row) => (

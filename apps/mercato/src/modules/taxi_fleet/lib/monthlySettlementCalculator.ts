@@ -554,7 +554,7 @@ export function buildMonthlySettlementSegments(params: {
         selectionNetAmount: netAmount,
         tiers: null,
         matchedTier: null,
-      } as ResolvedSettlementPayout
+      }
       straddle = {
         role: 'leading_remainder',
         weeklyPayoutAmount,

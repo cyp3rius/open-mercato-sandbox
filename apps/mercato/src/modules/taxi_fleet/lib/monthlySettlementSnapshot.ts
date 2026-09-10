@@ -214,83 +214,86 @@ export function parseMonthlySettlementSegments(
 ): MonthlySettlementSegment[] {
   const raw = snapshotJson?.segments
   if (!Array.isArray(raw)) return []
-  return raw
-    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
-    .map((item) => {
-      if (typeof item.id !== 'string' || !item.id) return null
-      const kind: MonthlySettlementSegmentKind = item.kind === 'leading' ? 'leading' : 'week'
-      const dateFrom = typeof item.dateFrom === 'string' ? normalizeDateOnly(item.dateFrom) : ''
-      const dateTo = typeof item.dateTo === 'string' ? normalizeDateOnly(item.dateTo) : ''
-      if (!dateFrom || !dateTo) return null
-      const resolutionRaw =
-        item.payoutResolution && typeof item.payoutResolution === 'object'
-          ? (item.payoutResolution as Record<string, unknown>)
-          : null
-      const matchedRaw =
-        resolutionRaw?.matchedTier && typeof resolutionRaw.matchedTier === 'object'
-          ? (resolutionRaw.matchedTier as Record<string, unknown>)
-          : null
-      const stringIds = (value: unknown): string[] =>
-        Array.isArray(value)
-          ? value.filter((id): id is string => typeof id === 'string' && id.length > 0)
-          : []
-      return {
-        id: item.id,
-        kind,
-        dateFrom,
-        dateTo,
-        weekStart:
-          typeof item.weekStart === 'string' ? normalizeDateOnly(item.weekStart) || null : null,
-        weeklySettlementId:
-          typeof item.weeklySettlementId === 'string' ? item.weeklySettlementId : null,
-        revenueGross: toFiniteNumber(item.revenueGross),
-        revenueNet: toFiniteNumber(item.revenueNet),
-        costsGross: toFiniteNumber(item.costsGross),
-        costsNet: toFiniteNumber(item.costsNet),
-        netAmount: toFiniteNumber(item.netAmount),
-        payoutPercent: toFiniteNumber(item.payoutPercent),
-        payoutAmount: toFiniteNumber(item.payoutAmount),
-        payoutResolution: {
-          mode: typeof resolutionRaw?.mode === 'string' ? resolutionRaw.mode : 'fixed',
-          percent: toFiniteNumber(resolutionRaw?.percent),
-          selectionNetAmount: toFiniteNumber(resolutionRaw?.selectionNetAmount),
-          matchedTier: matchedRaw
-            ? {
-                fromAmount: toFiniteNumber(matchedRaw.fromAmount),
-                toAmount:
-                  matchedRaw.toAmount == null ? null : toFiniteNumber(matchedRaw.toAmount),
-                percent: toFiniteNumber(matchedRaw.percent),
-              }
-            : null,
-          weeklyPayoutAmount:
-            resolutionRaw?.weeklyPayoutAmount == null
-              ? undefined
-              : toFiniteNumber(resolutionRaw.weeklyPayoutAmount),
-          priorAttributedPayout:
-            resolutionRaw?.priorAttributedPayout == null
-              ? undefined
-              : toFiniteNumber(resolutionRaw.priorAttributedPayout),
-        },
-        straddle: (() => {
-          const raw =
-            item.straddle && typeof item.straddle === 'object'
-              ? (item.straddle as Record<string, unknown>)
-              : null
-          if (!raw) return null
-          if (raw.role !== 'leading_remainder' && raw.role !== 'trailing_partial') return null
-          return {
-            role: raw.role,
-            weeklyPayoutAmount: toFiniteNumber(raw.weeklyPayoutAmount),
-            priorAttributedPayout:
-              raw.priorAttributedPayout == null
-                ? undefined
-                : toFiniteNumber(raw.priorAttributedPayout),
-          } satisfies MonthlySettlementSegmentStraddle
-        })(),
-        nonPlatformTripIds: stringIds(item.nonPlatformTripIds),
-        platformTripIds: stringIds(item.platformTripIds),
-        costEntryIds: stringIds(item.costEntryIds),
-      } satisfies MonthlySettlementSegment
+  const segments: MonthlySettlementSegment[] = []
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue
+    const item = entry as Record<string, unknown>
+    if (typeof item.id !== 'string' || !item.id) continue
+    const kind: MonthlySettlementSegmentKind = item.kind === 'leading' ? 'leading' : 'week'
+    const dateFrom = typeof item.dateFrom === 'string' ? normalizeDateOnly(item.dateFrom) : ''
+    const dateTo = typeof item.dateTo === 'string' ? normalizeDateOnly(item.dateTo) : ''
+    if (!dateFrom || !dateTo) continue
+    const resolutionRaw =
+      item.payoutResolution && typeof item.payoutResolution === 'object'
+        ? (item.payoutResolution as Record<string, unknown>)
+        : null
+    const matchedRaw =
+      resolutionRaw?.matchedTier && typeof resolutionRaw.matchedTier === 'object'
+        ? (resolutionRaw.matchedTier as Record<string, unknown>)
+        : null
+    const stringIds = (value: unknown): string[] =>
+      Array.isArray(value)
+        ? value.filter((id): id is string => typeof id === 'string' && id.length > 0)
+        : []
+    const straddleRaw =
+      item.straddle && typeof item.straddle === 'object'
+        ? (item.straddle as Record<string, unknown>)
+        : null
+    let straddle: MonthlySettlementSegmentStraddle | null = null
+    if (
+      straddleRaw &&
+      (straddleRaw.role === 'leading_remainder' || straddleRaw.role === 'trailing_partial')
+    ) {
+      straddle = {
+        role: straddleRaw.role,
+        weeklyPayoutAmount: toFiniteNumber(straddleRaw.weeklyPayoutAmount),
+        priorAttributedPayout:
+          straddleRaw.priorAttributedPayout == null
+            ? undefined
+            : toFiniteNumber(straddleRaw.priorAttributedPayout),
+      }
+    }
+    segments.push({
+      id: item.id,
+      kind,
+      dateFrom,
+      dateTo,
+      weekStart:
+        typeof item.weekStart === 'string' ? normalizeDateOnly(item.weekStart) || null : null,
+      weeklySettlementId:
+        typeof item.weeklySettlementId === 'string' ? item.weeklySettlementId : null,
+      revenueGross: toFiniteNumber(item.revenueGross),
+      revenueNet: toFiniteNumber(item.revenueNet),
+      costsGross: toFiniteNumber(item.costsGross),
+      costsNet: toFiniteNumber(item.costsNet),
+      netAmount: toFiniteNumber(item.netAmount),
+      payoutPercent: toFiniteNumber(item.payoutPercent),
+      payoutAmount: toFiniteNumber(item.payoutAmount),
+      payoutResolution: {
+        mode: typeof resolutionRaw?.mode === 'string' ? resolutionRaw.mode : 'fixed',
+        percent: toFiniteNumber(resolutionRaw?.percent),
+        selectionNetAmount: toFiniteNumber(resolutionRaw?.selectionNetAmount),
+        matchedTier: matchedRaw
+          ? {
+              fromAmount: toFiniteNumber(matchedRaw.fromAmount),
+              toAmount: matchedRaw.toAmount == null ? null : toFiniteNumber(matchedRaw.toAmount),
+              percent: toFiniteNumber(matchedRaw.percent),
+            }
+          : null,
+        weeklyPayoutAmount:
+          resolutionRaw?.weeklyPayoutAmount == null
+            ? undefined
+            : toFiniteNumber(resolutionRaw.weeklyPayoutAmount),
+        priorAttributedPayout:
+          resolutionRaw?.priorAttributedPayout == null
+            ? undefined
+            : toFiniteNumber(resolutionRaw.priorAttributedPayout),
+      },
+      straddle,
+      nonPlatformTripIds: stringIds(item.nonPlatformTripIds),
+      platformTripIds: stringIds(item.platformTripIds),
+      costEntryIds: stringIds(item.costEntryIds),
     })
-    .filter((item): item is MonthlySettlementSegment => item != null)
+  }
+  return segments
 }

@@ -84,11 +84,12 @@ const crud = makeCrudRoute({
     delete: {
       commandId: 'taxi_fleet.monthly_settlement_documents.delete',
       schema: rawBodySchema,
-      mapInput: async ({ raw, ctx, id }) => {
+      mapInput: async ({ parsed, raw, ctx }) => {
         const { translate } = await resolveTranslations()
+        const id = resolveCrudRecordId(parsed, ctx, translate)
         return parseScopedCommandInput(
           monthlySettlementDocumentDeleteSchema,
-          { ...(raw ?? {}), id: resolveCrudRecordId(id, raw) },
+          { ...(raw ?? {}), id },
           ctx,
           translate,
         )

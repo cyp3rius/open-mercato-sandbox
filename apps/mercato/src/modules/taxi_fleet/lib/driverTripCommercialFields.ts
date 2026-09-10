@@ -53,7 +53,7 @@ export function resolveDriverCommercialFieldVisibility(
       return {
         showPlatform: true,
         showCustomer: true,
-        customerRequired: tripType === 'client',
+        customerRequired: false,
         showPayment: true,
       }
   }
