@@ -1,12 +1,25 @@
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import type { EntitySearchComboboxOption } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
-import { mergeEntitySearchOption } from '@open-mercato/core/modules/procurement/lib/procurementEntitySearch'
+import {
+  fetchProcurementCustomerAssociationPreview,
+  mergeEntitySearchOption,
+  resolveCustomerEntityDisplayLabel,
+} from '@open-mercato/core/modules/procurement/lib/procurementEntitySearch'
 
 type SearchItem = {
   id?: unknown
   kind?: unknown
   label?: unknown
   description?: unknown
+}
+
+const UUID_LIKE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function isUsableLabel(value: string | null | undefined): value is string {
+  if (!value) return false
+  const trimmed = value.trim()
+  return trimmed.length > 0 && !UUID_LIKE.test(trimmed)
 }
 
 function mapItem(
@@ -49,12 +62,22 @@ export async function remoteSearchFleetCustomers(
 export async function resolveFleetCustomerDisplayLabel(entityId: string): Promise<string | null> {
   const id = entityId.trim()
   if (!id.length) return null
-  const call = await apiCall<{ items?: SearchItem[] }>(
+
+  const fleetCall = await apiCall<{ items?: SearchItem[] }>(
     `/api/taxi_fleet/customers/search?id=${encodeURIComponent(id)}`,
   )
-  if (!call.ok || !Array.isArray(call.result?.items) || !call.result.items[0]) return null
-  const label = call.result.items[0].label
-  return typeof label === 'string' && label.trim().length ? label.trim() : null
+  if (fleetCall.ok && Array.isArray(fleetCall.result?.items) && fleetCall.result.items[0]) {
+    const label = fleetCall.result.items[0].label
+    if (typeof label === 'string' && isUsableLabel(label)) return label.trim()
+  }
+
+  const crmLabel = await resolveCustomerEntityDisplayLabel(id)
+  if (isUsableLabel(crmLabel)) return crmLabel.trim()
+
+  const preview = await fetchProcurementCustomerAssociationPreview(id)
+  if (preview?.title && isUsableLabel(preview.title)) return preview.title.trim()
+
+  return isUsableLabel(crmLabel) ? crmLabel.trim() : null
 }
 
 export { mergeEntitySearchOption }

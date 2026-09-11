@@ -244,7 +244,8 @@ export async function resolveFleetCustomerEntityLabel(
   const entityId = params.entityId.trim()
   if (!entityId.length) return null
   const scope = { tenantId: params.tenantId, organizationId: params.organizationId }
-  const row = await findOneWithDecryption(
+  // Prefer org-scoped lookup, then tenant-wide (customer may live in another org in the scope).
+  const scoped = await findOneWithDecryption(
     em,
     CustomerEntity,
     {
@@ -256,8 +257,21 @@ export async function resolveFleetCustomerEntityLabel(
     {},
     scope,
   )
+  const row =
+    scoped ??
+    (await findOneWithDecryption(
+      em,
+      CustomerEntity,
+      {
+        id: entityId,
+        tenantId: params.tenantId,
+        deletedAt: null,
+      },
+      {},
+      scope,
+    ))
   if (!row) return null
-  const label = row.displayName?.trim() || row.id
-  if (looksEncryptedLabel(label)) return null
+  const label = row.displayName?.trim() || ''
+  if (!label.length || looksEncryptedLabel(label)) return null
   return label
 }

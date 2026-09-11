@@ -30,6 +30,7 @@ import { PlatformTripIngestPanel } from '../../../../components/PlatformTripInge
 import { Notice } from '@open-mercato/ui/primitives/Notice'
 import { isPlatformIngestedTrip } from '../../../../lib/platformSync/platformTripIngest'
 import {
+  isCompletedTripStatus,
   tripDetailActionsForStatus,
   tripDetailAllowsDriverEdit,
   tripDetailLockMode,
@@ -94,10 +95,17 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
       return
     }
     setRow(item)
-    const lockMode = tripDetailLockMode(normalizeTripStatus(item.status), {
+    const normalizedStatus = normalizeTripStatus(item.status)
+    const lockMode = tripDetailLockMode(normalizedStatus, {
       allowEditCompleted: canEditCompletedTrips,
     })
-    if (item.startedAt && item.endedAt && lockMode !== 'full') {
+    // Suggested drivers are for scheduling/assignment — hide on completed trips even when editable.
+    if (
+      item.startedAt &&
+      item.endedAt &&
+      lockMode !== 'full' &&
+      !isCompletedTripStatus(normalizedStatus)
+    ) {
       const params = new URLSearchParams({
         startedAt: item.startedAt,
         endedAt: item.endedAt,

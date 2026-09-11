@@ -667,13 +667,20 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
       label: t('taxi_fleet.trips.customer', 'Customer'),
       required: false,
       layout: 'full',
-      component: ({ value, setValue, disabled, readOnly: fieldReadOnly }) => (
-        <TripCustomerField
-          value={typeof value === 'string' ? value : ''}
-          onChange={(next) => setValue(next)}
-          disabled={disabled || fieldReadOnly || readOnly}
-        />
-      ),
+      component: ({ value, setValue, disabled, readOnly: fieldReadOnly, values }) => {
+        const companyName =
+          typeof values?.companyName === 'string' ? values.companyName.trim() : ''
+        const contactName =
+          typeof values?.contactName === 'string' ? values.contactName.trim() : ''
+        return (
+          <TripCustomerField
+            value={typeof value === 'string' ? value : ''}
+            onChange={(next) => setValue(next)}
+            disabled={disabled || fieldReadOnly || readOnly}
+            fallbackLabel={companyName || contactName || undefined}
+          />
+        )
+      },
     },
     ...buildTripRequestFormFields(t, { readOnly }).filter((field) =>
       ['contactName', 'contactPhone', 'contactEmail', 'paymentType', 'referringPartnerEntityId'].includes(
