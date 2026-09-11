@@ -183,6 +183,7 @@ export function tripRequestDetailsFromStrapiMapped(
     mapped.paymentType === 'cash' ||
     mapped.paymentType === 'card' ||
     mapped.paymentType === 'transfer' ||
+    mapped.paymentType === 'loyalty_program' ||
     mapped.paymentType === 'other'
       ? mapped.paymentType
       : 'electronic'

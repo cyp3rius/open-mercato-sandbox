@@ -487,6 +487,31 @@ export default function DriverTripDetailPage({
                   value={revenueDisplay}
                 />
               </div>
+
+              {isScheduled ? (
+                <div className="mt-4 border-t border-[#F1F1F4] pt-1">
+                  <OptionalDetailRow
+                    label={t('taxi_fleet.driverApp.trips.customer', 'Customer')}
+                    value={
+                      request.companyName ||
+                      request.contactName ||
+                      null
+                    }
+                  />
+                  <OptionalDetailRow
+                    label={t('taxi_fleet.driverApp.trips.companyTaxId', 'NIP')}
+                    value={request.companyTaxId || null}
+                  />
+                  <OptionalDetailRow
+                    label={t('taxi_fleet.driverApp.trips.contactPhone', 'Phone')}
+                    value={request.contactPhone || null}
+                  />
+                  <OptionalDetailRow
+                    label={t('taxi_fleet.driverApp.trips.notes', 'Notes')}
+                    value={hasText(trip.notes) ? trip.notes : null}
+                  />
+                </div>
+              ) : null}
             </div>
 
             {canSupplementReceipt ? (

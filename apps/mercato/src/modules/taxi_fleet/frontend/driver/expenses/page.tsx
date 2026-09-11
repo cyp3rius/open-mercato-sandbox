@@ -297,14 +297,12 @@ export default function DriverExpensesPage() {
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
           role="presentation"
-          onClick={() => setPendingDelete(null)}
         >
           <div
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="driver-expense-delete-title"
             className="w-full max-w-md rounded-xl border border-[#F1F1F4] bg-white p-5 text-[#071437] shadow-lg"
-            onClick={(event) => event.stopPropagation()}
           >
             <h2 id="driver-expense-delete-title" className="text-base font-semibold text-[#071437]">
               {t('taxi_fleet.driverApp.expenses.deleteConfirmTitle', 'Delete this cost?')}

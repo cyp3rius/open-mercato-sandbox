@@ -248,11 +248,7 @@ export function TripCalendarDetailsPanel({ open, item, onOpenChange }: TripCalen
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-40 bg-black/20"
-        onClick={() => onOpenChange(false)}
-        aria-hidden="true"
-      />
+      <div className="fixed inset-0 z-40 bg-black/20" aria-hidden="true" />
       <div
         className="fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col border-l bg-background shadow-lg"
         role="dialog"

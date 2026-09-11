@@ -5,7 +5,7 @@ import type { PlatformTripIngestSource } from './types'
 export function resolvePlatformTripPaymentType(
   value: TripRequestPaymentType | null | undefined,
 ): TripRequestPaymentType {
-  if (value === 'cash' || value === 'card' || value === 'electronic' || value === 'transfer' || value === 'other') {
+  if (value === 'cash' || value === 'card' || value === 'electronic' || value === 'transfer' || value === 'loyalty_program' || value === 'other') {
     return value
   }
   return 'electronic'

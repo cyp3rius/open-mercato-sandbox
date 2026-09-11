@@ -3,15 +3,15 @@
 import * as React from 'react'
 import { Building2, Plus, UserRound } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import {
-  mergeEntitySearchOption,
-  remoteSearchCustomerEntities,
-  resolveCustomerEntityDisplayLabel,
-} from '@open-mercato/core/modules/procurement/lib/procurementEntitySearch'
 import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { IconButton } from '@open-mercato/ui/primitives/icon-button'
 import { Popover, PopoverContent, PopoverTrigger } from '@open-mercato/ui/primitives/popover'
+import {
+  mergeEntitySearchOption,
+  remoteSearchFleetCustomers,
+  resolveFleetCustomerDisplayLabel,
+} from '../lib/fleetCustomerEntitySearch'
 
 type TripCustomerFieldProps = {
   value: string
@@ -24,6 +24,14 @@ export function TripCustomerField({ value, onChange, disabled = false }: TripCus
   const [label, setLabel] = React.useState('')
   const [createMenuOpen, setCreateMenuOpen] = React.useState(false)
 
+  const kindLabels = React.useMemo(
+    () => ({
+      person: t('taxi_fleet.trips.customerKind.person', 'Person'),
+      company: t('taxi_fleet.trips.customerKind.company', 'Company'),
+    }),
+    [t],
+  )
+
   React.useEffect(() => {
     let cancelled = false
     const trimmed = value.trim()
@@ -31,7 +39,7 @@ export function TripCustomerField({ value, onChange, disabled = false }: TripCus
       setLabel('')
       return
     }
-    void resolveCustomerEntityDisplayLabel(trimmed).then((resolved) => {
+    void resolveFleetCustomerDisplayLabel(trimmed).then((resolved) => {
       if (!cancelled) setLabel(resolved ?? trimmed)
     })
     return () => {
@@ -54,7 +62,7 @@ export function TripCustomerField({ value, onChange, disabled = false }: TripCus
         options={mergeEntitySearchOption([], value, label || value)}
         selectedDisplayOverride={label || undefined}
         onRemoteSearch={async (query) => {
-          const rows = await remoteSearchCustomerEntities(query)
+          const rows = await remoteSearchFleetCustomers(query, kindLabels)
           return mergeEntitySearchOption(rows, value, label || value)
         }}
         placeholder={t('taxi_fleet.trips.customerSearch', 'Search customer…')}

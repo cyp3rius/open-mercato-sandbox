@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Banknote, CreditCard, Landmark, Wallet } from 'lucide-react'
+import { Award, Banknote, CreditCard, Landmark, Wallet } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
@@ -10,12 +10,13 @@ import {
 } from '../../lib/tripRequestForm'
 import { driverLabelClass } from './driverUi'
 
-const PAYMENT_ICONS = {
+const PAYMENT_ICONS: Record<TripFormPaymentOption, typeof Wallet> = {
   electronic: Wallet,
   cash: Banknote,
   card: CreditCard,
   transfer: Landmark,
-} as const
+  loyalty_program: Award,
+}
 
 type Props = {
   value: TripFormPaymentOption

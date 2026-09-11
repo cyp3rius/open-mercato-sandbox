@@ -3,6 +3,7 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { Trash2, Save, Loader2 } from 'lucide-react'
+import { cn } from '@open-mercato/shared/lib/utils'
 import { Button } from '../../primitives/button'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
@@ -38,6 +39,7 @@ export type FormActionButtonsProps = {
   }
   /** When true, hides all buttons */
   hidden?: boolean
+  className?: string
 }
 
 export function FormActionButtons({
@@ -50,6 +52,7 @@ export function FormActionButtons({
   cancelLabel,
   submit,
   hidden,
+  className,
 }: FormActionButtonsProps) {
   const t = useT()
 
@@ -62,7 +65,7 @@ export function FormActionButtons({
   const SubmitIcon = submit?.icon ?? Save
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className={cn('flex flex-wrap items-center gap-2', className)}>
       {extraActions}
       {showDelete ? (
         <Button

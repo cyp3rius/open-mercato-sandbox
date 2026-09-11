@@ -2,8 +2,15 @@
 
 import * as React from 'react'
 import type { z } from 'zod'
+import { AlertTriangle } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@open-mercato/ui/primitives/tooltip'
 import type { FleetDriverProfile } from './useFleetDriverDirectory'
 import { taxiFleetDialogCrudTabbedBodyClass } from './TaxiFleetDialogShell'
 import {
@@ -171,30 +178,54 @@ export function TripCrudForm(props: TripCrudFormProps) {
     [onSubmitReadyChange, t, validationOptions],
   )
 
-  const blockingHint =
-    !readOnly && mode === 'create' && blockingIssues.length > 0 ? (
-      <div
-        className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950"
-        role="status"
-      >
-        <div className="font-medium">
-          {t('taxi_fleet.trips.form.incompleteTitle', 'Complete required fields to create the trip:')}
-        </div>
-        <ul className="mt-1 list-disc space-y-0.5 pl-5">
-          {blockingIssues.map((issue) => (
-            <li key={issue}>{issue}</li>
-          ))}
-        </ul>
-        {layout === 'dialog' ? (
-          <p className="mt-1.5 text-xs text-amber-900/80">
-            {t(
-              'taxi_fleet.trips.form.incompleteTabsHint',
-              'Check the Route, Assignment, and Customer tabs.',
-            )}
-          </p>
-        ) : null}
-      </div>
-    ) : null
+  const showBlockingHint = !readOnly && mode === 'create' && blockingIssues.length > 0
+  const incompleteTitle = t(
+    'taxi_fleet.trips.form.incompleteTitle',
+    'Complete required fields to create the trip:',
+  )
+
+  const blockingFooterIcon = (
+    <span className="mr-auto inline-flex shrink-0 items-center">
+      {showBlockingHint ? (
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex size-9 items-center justify-center rounded-md text-amber-600 transition-colors hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+                aria-label={incompleteTitle}
+              >
+                <AlertTriangle className="size-5" aria-hidden />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="start" className="max-w-sm space-y-1.5 p-3 text-left">
+              <div className="font-medium">{incompleteTitle}</div>
+              <ul className="list-disc space-y-0.5 pl-4">
+                {blockingIssues.map((issue) => (
+                  <li key={issue}>{issue}</li>
+                ))}
+              </ul>
+              {layout === 'dialog' ? (
+                <p className="text-[11px] text-slate-300">
+                  {t(
+                    'taxi_fleet.trips.form.incompleteTabsHint',
+                    'Check the Route, Assignment, and Customer tabs.',
+                  )}
+                </p>
+              ) : null}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ) : null}
+    </span>
+  )
+
+  const mergedExtraActions = (
+    <>
+      {blockingFooterIcon}
+      {extraActions}
+    </>
+  )
 
   const crudFormProps = {
     fields,
@@ -202,7 +233,7 @@ export function TripCrudForm(props: TripCrudFormProps) {
     initialValues,
     schema: schema as z.ZodType<TripFormValues>,
     submitLabel,
-    extraActions,
+    extraActions: mergedExtraActions,
     readOnly,
     // Completed/cancelled trips must stay viewable (OCR sidebar, scroll) without CrudForm's frosted overlay.
     readOnlyOverlay: readOnly ? (false as const) : undefined,
@@ -215,12 +246,13 @@ export function TripCrudForm(props: TripCrudFormProps) {
   if (layout === 'dialog') {
     return (
       <div className={taxiFleetDialogCrudTabbedBodyClass}>
-        {blockingHint}
-        <CrudForm<TripFormValues>
-          key={formKey}
-          embedded
-          {...crudFormProps}
-        />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <CrudForm<TripFormValues>
+            key={formKey}
+            embedded
+            {...crudFormProps}
+          />
+        </div>
       </div>
     )
   }
@@ -228,16 +260,13 @@ export function TripCrudForm(props: TripCrudFormProps) {
   const { title, backHref, cancelHref, onDelete } = props
 
   return (
-    <>
-      {blockingHint}
-      <CrudForm<TripFormValues>
-        key={formKey}
-        title={title}
-        backHref={backHref}
-        cancelHref={readOnly ? undefined : cancelHref}
-        onDelete={onDelete}
-        {...crudFormProps}
-      />
-    </>
+    <CrudForm<TripFormValues>
+      key={formKey}
+      title={title}
+      backHref={backHref}
+      cancelHref={readOnly ? undefined : cancelHref}
+      onDelete={onDelete}
+      {...crudFormProps}
+    />
   )
 }

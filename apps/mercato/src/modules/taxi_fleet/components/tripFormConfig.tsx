@@ -407,6 +407,7 @@ const CUSTOMER_FIELD_IDS = [
   'contactName',
   'contactEmail',
   'contactPhone',
+  'paymentType',
   '__tripQuoteSummary',
   'revenueAmount',
   'referringPartnerEntityId',
@@ -417,6 +418,7 @@ const PAGE_CUSTOMER_FIELD_IDS = [
   'contactName',
   'contactEmail',
   'contactPhone',
+  'paymentType',
   'referringPartnerEntityId',
   'notes',
 ]
@@ -672,7 +674,9 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
       ),
     },
     ...buildTripRequestFormFields(t, { readOnly }).filter((field) =>
-      ['contactName', 'contactPhone', 'contactEmail', 'referringPartnerEntityId'].includes(field.id),
+      ['contactName', 'contactPhone', 'contactEmail', 'paymentType', 'referringPartnerEntityId'].includes(
+        field.id,
+      ),
     ),
   ]
 

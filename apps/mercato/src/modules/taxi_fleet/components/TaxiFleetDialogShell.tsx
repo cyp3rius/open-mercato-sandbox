@@ -23,7 +23,13 @@ export const taxiFleetDialogContentClass = (size: TaxiFleetDialogSize = 'lg') =>
 export const taxiFleetDialogHeaderClass = 'shrink-0 border-b border-border/70 px-6 pt-6 pb-4'
 
 export const taxiFleetDialogCrudFormLayoutClass =
-  '[&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col [&_form]:flex [&_form]:min-h-0 [&_form]:flex-1 [&_form]:flex-col [&_form>.grid]:min-h-0 [&_form>.grid]:flex-1 [&_form>.grid]:overflow-y-auto [&_form>.grid]:pb-2 [&_form>div:last-child]:static! [&_form>div:last-child]:mt-auto [&_form>div:last-child]:-mx-6 [&_form>div:last-child]:border-t [&_form>div:last-child]:border-border/60 [&_form>div:last-child]:bg-background [&_form>div:last-child]:px-6 [&_form>div:last-child]:py-4'
+  // Flex chain: optional shell wrappers → CrudForm root → DataLoader → form (grid scrolls, footer pinned).
+  '[&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col ' +
+  '[&>div>div]:flex [&>div>div]:min-h-0 [&>div>div]:flex-1 [&>div>div]:flex-col ' +
+  '[&>div>div>div]:flex [&>div>div>div]:min-h-0 [&>div>div>div]:flex-1 [&>div>div>div]:flex-col ' +
+  '[&_form]:flex [&_form]:min-h-0 [&_form]:flex-1 [&_form]:flex-col ' +
+  '[&_form>.grid]:min-h-0 [&_form>.grid]:flex-1 [&_form>.grid]:overflow-y-auto [&_form>.grid]:overscroll-contain [&_form>.grid]:pb-2 ' +
+  '[&_form>div:last-child]:relative! [&_form>div:last-child]:mt-auto [&_form>div:last-child]:-mx-6 [&_form>div:last-child]:overflow-visible [&_form>div:last-child]:border-t [&_form>div:last-child]:border-border/60 [&_form>div:last-child]:bg-background [&_form>div:last-child]:px-6 [&_form>div:last-child]:py-4'
 
 export const taxiFleetDialogCrudBodyClass = cn(
   'flex min-h-0 flex-1 flex-col overflow-hidden px-6 pt-4',
@@ -74,8 +80,10 @@ export function TaxiFleetDialogFrame({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         ref={contentRef}
-        className={taxiFleetDialogContentClass(size)}
+        className={cn(taxiFleetDialogContentClass(size), '!overflow-hidden')}
         onKeyDown={onKeyDown}
+        onInteractOutside={(event) => event.preventDefault()}
+        onPointerDownOutside={(event) => event.preventDefault()}
       >
         <DialogHeader className={taxiFleetDialogHeaderClass}>
           <DialogTitle>{title}</DialogTitle>

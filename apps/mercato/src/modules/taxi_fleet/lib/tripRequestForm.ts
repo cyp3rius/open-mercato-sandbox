@@ -3,11 +3,24 @@ import { mapStrapiPayloadToTaxiRequest } from './strapiTaxiRequestMapper'
 export const TRIP_SERVICE_TYPES = ['airport', 'local'] as const
 export type TripServiceType = (typeof TRIP_SERVICE_TYPES)[number]
 
-export const TRIP_REQUEST_PAYMENT_TYPES = ['electronic', 'cash', 'card', 'transfer', 'other'] as const
+export const TRIP_REQUEST_PAYMENT_TYPES = [
+  'electronic',
+  'cash',
+  'card',
+  'transfer',
+  'loyalty_program',
+  'other',
+] as const
 export type TripRequestPaymentType = (typeof TRIP_REQUEST_PAYMENT_TYPES)[number]
 
 /** Payment options offered in the trip create/edit form and driver app. */
-export const TRIP_FORM_PAYMENT_OPTIONS = ['electronic', 'cash', 'card', 'transfer'] as const
+export const TRIP_FORM_PAYMENT_OPTIONS = [
+  'electronic',
+  'cash',
+  'card',
+  'transfer',
+  'loyalty_program',
+] as const
 export type TripFormPaymentOption = (typeof TRIP_FORM_PAYMENT_OPTIONS)[number]
 
 export const TRIP_CONTACT_TYPES = ['private', 'company'] as const
@@ -70,7 +83,15 @@ function parseServiceType(value: unknown): TripServiceType {
 function parsePaymentType(value: unknown): TripRequestPaymentType {
   const raw = str(value)
   if (raw === 'electronic' || raw === 'paypal') return 'electronic'
-  if (raw === 'cash' || raw === 'card' || raw === 'transfer' || raw === 'other') return raw
+  if (
+    raw === 'cash' ||
+    raw === 'card' ||
+    raw === 'transfer' ||
+    raw === 'loyalty_program' ||
+    raw === 'other'
+  ) {
+    return raw
+  }
   return 'cash'
 }
 

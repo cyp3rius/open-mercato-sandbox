@@ -8,7 +8,7 @@ function readItems(payload: Record<string, unknown> | null | undefined): unknown
 }
 
 function displayName(row: Record<string, unknown>): string {
-  const dn = row.display_name
+  const dn = row.display_name ?? row.displayName
   if (typeof dn === 'string' && dn.trim().length) return dn.trim()
   return String(row.id ?? '')
 }
@@ -29,31 +29,29 @@ export async function remoteSearchCustomerEntities(query: string): Promise<Entit
 
   const out: EntitySearchComboboxOption[] = []
 
-  for (const item of readItems(peopleCall.result ?? undefined)) {
-    if (!item || typeof item !== 'object') continue
-    const row = item as Record<string, unknown>
-    const id = typeof row.id === 'string' ? row.id : ''
-    if (!id) continue
-    const email = typeof row.primary_email === 'string' ? row.primary_email.trim() : ''
-    out.push({
-      value: id,
-      label: displayName(row),
-      description: email.length ? email : undefined,
-    })
+  const pushRows = (call: Awaited<ReturnType<typeof apiCall<Record<string, unknown>>>>, kindLabel?: string) => {
+    if (!call.ok) return
+    for (const item of readItems(call.result ?? undefined)) {
+      if (!item || typeof item !== 'object') continue
+      const row = item as Record<string, unknown>
+      const id = typeof row.id === 'string' ? row.id : ''
+      if (!id) continue
+      const name = displayName(row)
+      const emailRaw = row.primary_email ?? row.primaryEmail
+      const email = typeof emailRaw === 'string' ? emailRaw.trim() : ''
+      const phoneRaw = row.primary_phone ?? row.primaryPhone
+      const phone = typeof phoneRaw === 'string' ? phoneRaw.trim() : ''
+      const description = phone || email || undefined
+      out.push({
+        value: id,
+        label: kindLabel ? `${kindLabel}: ${name}` : name,
+        description,
+      })
+    }
   }
 
-  for (const item of readItems(companiesCall.result ?? undefined)) {
-    if (!item || typeof item !== 'object') continue
-    const row = item as Record<string, unknown>
-    const id = typeof row.id === 'string' ? row.id : ''
-    if (!id) continue
-    const email = typeof row.primary_email === 'string' ? row.primary_email.trim() : ''
-    out.push({
-      value: id,
-      label: displayName(row),
-      description: email.length ? email : undefined,
-    })
-  }
+  pushRows(peopleCall)
+  pushRows(companiesCall)
 
   out.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
   return out

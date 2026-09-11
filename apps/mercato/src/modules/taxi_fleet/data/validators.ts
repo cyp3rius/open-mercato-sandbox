@@ -173,7 +173,14 @@ export const driverLocationBatchSchema = z.object({
   clientMutationId: z.string().trim().min(1).max(191).optional(),
 })
 
-export const tripInjectPaymentTypeSchema = z.enum(['electronic', 'cash', 'card', 'transfer', 'other'])
+export const tripInjectPaymentTypeSchema = z.enum([
+  'electronic',
+  'cash',
+  'card',
+  'transfer',
+  'loyalty_program',
+  'other',
+])
 export const tripInjectContactTypeSchema = z.enum(['private', 'company'])
 export const tripInjectServiceTypeSchema = z.enum(['airport', 'local'])
 
@@ -760,7 +767,14 @@ export type QuoteBodyInput = z.infer<typeof quoteBodySchema>
 
 export const platformTripIngestSourceSchema = z.enum(['platform_sync', 'platform_csv'])
 export const platformTripUpsertStatusSchema = z.enum(['completed', 'cancelled', 'paid'])
-export const platformTripPaymentTypeSchema = z.enum(['cash', 'card', 'electronic', 'transfer', 'other'])
+export const platformTripPaymentTypeSchema = z.enum([
+  'cash',
+  'card',
+  'electronic',
+  'transfer',
+  'loyalty_program',
+  'other',
+])
 
 export const platformTripUpsertSchema = z.object({
   tenantId: uuid,

@@ -15,13 +15,11 @@ export type FormFooterProps = {
 
 export function FormFooter({ actions, embedded, className }: FormFooterProps) {
   return (
-    <div className={cn(
-      'flex items-center gap-2',
-      embedded ? 'justify-end' : 'justify-between',
-      className,
-    )}>
-      {embedded ? null : <div />}
-      <FormActionButtons {...actions} />
+    <div
+      className={cn('relative flex w-full items-center gap-2 overflow-visible', className)}
+      data-form-footer={embedded ? 'embedded' : 'page'}
+    >
+      <FormActionButtons {...actions} className="w-full" />
     </div>
   )
 }

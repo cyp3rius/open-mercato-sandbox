@@ -349,6 +349,7 @@ export function pickTripRequestDetails(values: TripRequestDetails & Record<strin
       values.paymentType === 'cash' ||
       values.paymentType === 'card' ||
       values.paymentType === 'transfer' ||
+      values.paymentType === 'loyalty_program' ||
       values.paymentType === 'other'
         ? values.paymentType
         : 'electronic',

@@ -98,6 +98,7 @@ function parsePaymentType(value: string | undefined): PlatformTripUpsertInput['p
   if (normalized === 'card') return 'card'
   if (normalized === 'electronic') return 'electronic'
   if (normalized === 'transfer') return 'transfer'
+  if (normalized === 'loyalty_program' || normalized === 'loyalty') return 'loyalty_program'
   if (normalized === 'other') return 'other'
   return 'electronic'
 }

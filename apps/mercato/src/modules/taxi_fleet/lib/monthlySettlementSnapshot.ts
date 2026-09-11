@@ -127,6 +127,7 @@ export function parseWeeklyTripSnapshot(item: Record<string, unknown>): Settleme
       item.paymentType === 'card' ||
       item.paymentType === 'electronic' ||
       item.paymentType === 'transfer' ||
+      item.paymentType === 'loyalty_program' ||
       item.paymentType === 'other'
         ? item.paymentType
         : undefined,
