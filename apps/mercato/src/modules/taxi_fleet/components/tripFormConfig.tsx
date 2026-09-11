@@ -113,7 +113,9 @@ const TRIP_REQUEST_FIELD_IDS = new Set<string>([
 ])
 
 export function defaultTripFormValues(reference = new Date()): TripFormValues {
-  const { startedAtLocal, endedAtLocal } = defaultTripDateTimeLocalRange(reference)
+  const { startedAtLocal, endedAtLocal } = defaultTripDateTimeLocalRange(reference, {
+    minAdvanceHours: 0,
+  })
   const request = defaultTripRequestDetails()
   return {
     teamMemberId: '',

@@ -89,7 +89,7 @@ export function TripCrudForm(props: TripCrudFormProps) {
 
   const activeTab = layout === 'dialog' ? (props.activeTab ?? 'route') : null
 
-  // Freeze lead-time clock when the form instance mounts (or remounts via formKey).
+  // Freeze clock when the form instance mounts (or remounts via formKey).
   const minAdvanceReference = React.useMemo(() => new Date(), [formKey])
 
   const fields = React.useMemo(
@@ -107,6 +107,8 @@ export function TripCrudForm(props: TripCrudFormProps) {
         lockStatus,
         allowDriverEdit,
         minAdvanceReference,
+        // CRM may schedule/add trips without the public booking lead-time rule.
+        minAdvanceHours: 0,
       }),
     [
       allowDriverEdit,
@@ -147,11 +149,16 @@ export function TripCrudForm(props: TripCrudFormProps) {
     ]
   }, [activeTab, allGroups, layout, sidebarExtra])
 
-  const enforceMinAdvance = mode === 'create'
   const requireDriver = !(driverLocked && lockedTeamMemberId?.trim().length)
   const validationOptions = React.useMemo(
-    () => ({ requireDriver, enforceMinAdvance, minAdvanceReference }),
-    [enforceMinAdvance, minAdvanceReference, requireDriver],
+    () => ({
+      requireDriver,
+      // CRM create/edit: no 24h booking lead-time gate (driver app keeps its own rules).
+      enforceMinAdvance: false,
+      minAdvanceHours: 0,
+      minAdvanceReference,
+    }),
+    [minAdvanceReference, requireDriver],
   )
 
   const schema = React.useMemo(
