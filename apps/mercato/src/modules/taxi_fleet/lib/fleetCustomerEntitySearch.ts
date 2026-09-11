@@ -77,7 +77,7 @@ export async function resolveFleetCustomerDisplayLabel(entityId: string): Promis
   const preview = await fetchProcurementCustomerAssociationPreview(id)
   if (preview?.title && isUsableLabel(preview.title)) return preview.title.trim()
 
-  return isUsableLabel(crmLabel) ? crmLabel.trim() : null
+  return null
 }
 
 export { mergeEntitySearchOption }
