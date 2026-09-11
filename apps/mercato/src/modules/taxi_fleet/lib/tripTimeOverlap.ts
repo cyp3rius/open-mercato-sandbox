@@ -37,6 +37,14 @@ export function tripBlocksSchedule(status: string | null | undefined): boolean {
 }
 
 /**
+ * Open-ended (live) candidates only conflict with another live trip.
+ * Planned/scheduled windows must not block starting a different scheduled trip.
+ */
+export function tripBlocksOpenEndedCandidate(status: string | null | undefined): boolean {
+  return String(status ?? '').trim() === 'in_progress'
+}
+
+/**
  * Whether candidate trip window overlaps an existing trip.
  * Open-ended existing trips (no endedAt) use `now` as their end bound.
  */
@@ -44,8 +52,16 @@ export function tripTimesOverlap(
   candidate: { startedAt: Date | string; endedAt?: Date | string | null },
   existing: TripTimeRange,
   now: Date = new Date(),
+  options?: { openEndedCandidate?: boolean },
 ): boolean {
-  if (!tripBlocksSchedule(existing.status)) return false
+  const openEnded = options?.openEndedCandidate === true || candidate.endedAt == null
+  if (openEnded) {
+    if (!tripBlocksOpenEndedCandidate(existing.status)) return false
+    // Only one live trip at a time — another open in-progress always blocks.
+    if (existing.endedAt == null) return true
+  } else if (!tripBlocksSchedule(existing.status)) {
+    return false
+  }
   const candidateStart = toTime(candidate.startedAt)
   if (candidateStart == null) return false
   const candidateEnd = resolveTripRangeEnd(candidate.endedAt ?? null, now)
@@ -67,9 +83,10 @@ export function findOverlappingTrip<T extends TripTimeRange>(
 ): T | null {
   const now = options?.now ?? new Date()
   const excludeId = options?.excludeTripId?.trim() || null
+  const openEndedCandidate = candidate.endedAt == null
   for (const trip of existingTrips) {
     if (excludeId && trip.id === excludeId) continue
-    if (tripTimesOverlap(candidate, trip, now)) return trip
+    if (tripTimesOverlap(candidate, trip, now, { openEndedCandidate })) return trip
   }
   return null
 }

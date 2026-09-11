@@ -26,6 +26,7 @@ import {
   tripHasReceiptAttachment,
   type DriverTripCompletionMode,
 } from '@/modules/taxi_fleet/lib/driverTripReceiptStatus'
+import { enrichDriverTripsCustomerMetadata } from '@/modules/taxi_fleet/lib/enrichDriverTripCustomer'
 import { assertDriverCanMutatePlatformTrip } from '@/modules/taxi_fleet/lib/platformSync/platformTripIngest'
 
 export const metadata = {
@@ -145,6 +146,10 @@ export async function GET(req: Request) {
       driver.teamMember.tenantId,
       driver.teamMember.organizationId,
     )
+    const enrichedMetadataByTripId = await enrichDriverTripsCustomerMetadata(em, rows, {
+      tenantId: driver.teamMember.tenantId,
+      organizationId: driver.teamMember.organizationId,
+    })
     const items = rows.map((trip) => {
       const extraction = extractionByTripId.get(trip.id)
       const warnings = parseDriverTripReceiptWarnings(
@@ -155,6 +160,7 @@ export async function GET(req: Request) {
           resolveTripReceiptAttachmentId(trip) ?? extraction?.attachmentId ?? null,
         ocrStatus: extraction?.status ?? null,
         warnings,
+        metadata: enrichedMetadataByTripId.get(trip.id) ?? trip.metadata ?? null,
       })
     })
     return NextResponse.json({ items })

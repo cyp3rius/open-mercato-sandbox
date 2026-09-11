@@ -138,7 +138,7 @@ export function TripCreateDialog({
         submitLabel={t('taxi_fleet.trips.actions.create', 'Create trip')}
         onSubmitReadyChange={setCanSubmit}
         extraActions={(
-          <Button type="button" variant="outline" onClick={handleCancel}>
+          <Button type="button" variant="outline" className="h-9 shrink-0 self-center" onClick={handleCancel}>
             {t('common.cancel', 'Cancel')}
           </Button>
         )}

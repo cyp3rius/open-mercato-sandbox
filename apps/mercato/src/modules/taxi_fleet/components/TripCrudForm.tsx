@@ -192,7 +192,7 @@ export function TripCrudForm(props: TripCrudFormProps) {
   )
 
   const blockingFooterIcon = (
-    <span className="mr-auto inline-flex shrink-0 items-center">
+    <span className="mr-auto inline-flex h-9 shrink-0 items-center self-center">
       {showBlockingHint ? (
         <TooltipProvider delayDuration={200}>
           <Tooltip>

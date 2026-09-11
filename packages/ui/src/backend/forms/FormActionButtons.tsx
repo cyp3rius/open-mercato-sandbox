@@ -65,7 +65,7 @@ export function FormActionButtons({
   const SubmitIcon = submit?.icon ?? Save
 
   return (
-    <div className={cn('flex flex-wrap items-center gap-2', className)}>
+    <div className={cn('flex flex-row flex-nowrap items-center gap-2', className)}>
       {extraActions}
       {showDelete ? (
         <Button

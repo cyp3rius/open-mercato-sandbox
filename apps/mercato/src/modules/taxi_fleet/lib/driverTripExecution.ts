@@ -50,6 +50,7 @@ export function resolveDriverTripUpdateInput(
         input: {
           id,
           startedAt: body.startedAt,
+          endedAt: null,
           status: 'in_progress',
         },
       }

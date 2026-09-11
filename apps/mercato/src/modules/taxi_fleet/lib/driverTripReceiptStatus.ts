@@ -14,6 +14,7 @@ export type DriverTripListExtras = {
   receiptAttachmentId?: string | null
   ocrStatus?: string | null
   warnings?: DriverTripReceiptWarning[]
+  metadata?: Record<string, unknown> | null
 }
 
 const WARNING_CODE_SET = new Set<string>(RECEIPT_OCR_WARNING_CODES)
@@ -106,7 +107,7 @@ export function serializeDriverTripListItem(
     revenueAmount: trip.revenueAmount ?? null,
     currencyCode: trip.currencyCode ?? 'PLN',
     notes: trip.notes ?? null,
-    metadata: trip.metadata ?? null,
+    metadata: extras?.metadata !== undefined ? extras.metadata : (trip.metadata ?? null),
     receiptAttachmentId,
     ocrStatus: extras?.ocrStatus ?? null,
     warnings: extras?.warnings ?? [],

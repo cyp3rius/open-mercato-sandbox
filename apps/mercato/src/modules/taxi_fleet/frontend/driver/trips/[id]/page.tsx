@@ -9,7 +9,7 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Notice } from '@open-mercato/ui/primitives/Notice'
-import { DriverTripGate } from '../../../../components/driverApp/DriverTripGate'
+import { DriverTripGate, useDriverTripGateShift } from '../../../../components/driverApp/DriverTripGate'
 import { DriverTripReceiptStatusBadge } from '../../../../components/driverApp/DriverTripReceiptStatusBadge'
 import {
   driverBadgeNeutralClass,
@@ -132,6 +132,23 @@ export default function DriverTripDetailPage({
   params?: { id?: string | string[] }
 }) {
   const t = useT()
+  return (
+    <DriverTripGate
+      showShiftPrompt
+      title={t('taxi_fleet.driverApp.trips.detail', 'Trip')}
+    >
+      <DriverTripDetailContent params={params} />
+    </DriverTripGate>
+  )
+}
+
+function DriverTripDetailContent({
+  params,
+}: {
+  params?: { id?: string | string[] }
+}) {
+  const t = useT()
+  const { shiftActive } = useDriverTripGateShift()
   const { resolveTripStatusLabel, resolveTripTypeLabel } = useTaxiFleetLabels()
   const tripId = resolveTripId(params)
   const [trip, setTrip] = React.useState<TripRow | null>(null)
@@ -268,6 +285,16 @@ export default function DriverTripDetailPage({
 
   async function startTrip() {
     if (!trip || trip.status !== 'scheduled') return
+    if (!shiftActive) {
+      flash(
+        t(
+          'taxi_fleet.driverApp.trips.liveRequiresOpenShift',
+          'Start a live trip only while your shift is open.',
+        ),
+        'error',
+      )
+      return
+    }
     setBusy(true)
     setNotice(null)
     try {
@@ -292,7 +319,7 @@ export default function DriverTripDetailPage({
         startedAt,
         status: 'in_progress',
       })
-      setTrip({ ...trip, status: 'in_progress', startedAt })
+      setTrip({ ...trip, status: 'in_progress', startedAt, endedAt: null })
       setNotice(t('taxi_fleet.driverApp.trips.started', 'Trip started. Start time updated.'))
     } catch (err) {
       const message =
@@ -397,10 +424,6 @@ export default function DriverTripDetailPage({
     : null
 
   return (
-    <DriverTripGate
-      showShiftPrompt={trip != null && !isCompleted}
-      title={t('taxi_fleet.driverApp.trips.detail', 'Trip')}
-    >
       <div className="space-y-4">
         <Link
           href="/driver/trips"
@@ -750,12 +773,17 @@ export default function DriverTripDetailPage({
                 <Button
                   type="button"
                   className={driverPrimaryActionClass}
-                  disabled={busy}
+                  disabled={busy || !shiftActive}
                   onClick={() => void startTrip()}
                 >
                   {busy
                     ? t('taxi_fleet.driverApp.trips.starting', 'Starting…')
-                    : t('taxi_fleet.driverApp.trips.start', 'Start trip')}
+                    : !shiftActive
+                      ? t(
+                          'taxi_fleet.driverApp.trips.startNeedsShift',
+                          'Start shift to begin trip',
+                        )
+                      : t('taxi_fleet.driverApp.trips.start', 'Start trip')}
                 </Button>
               </div>
             ) : null}
@@ -775,6 +803,5 @@ export default function DriverTripDetailPage({
           </>
         ) : null}
       </div>
-    </DriverTripGate>
   )
 }

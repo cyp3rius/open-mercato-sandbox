@@ -2354,6 +2354,7 @@
   "taxi_fleet.driverApp.trips.starting": "Starting…",
   "taxi_fleet.driverApp.trips.started": "Trip started. Start time updated.",
   "taxi_fleet.driverApp.trips.startFailed": "Could not start trip.",
+  "taxi_fleet.driverApp.trips.startNeedsShift": "Start shift to begin trip",
   "taxi_fleet.driverApp.trips.completed": "Trip completed. End time updated.",
   "taxi_fleet.driverApp.trips.completeFailed": "Could not complete trip.",
   "taxi_fleet.driverApp.trips.empty": "No trips yet.",

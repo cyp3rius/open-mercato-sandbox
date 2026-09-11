@@ -30,6 +30,10 @@ export function TripQuoteSync({ values, setFormValue, disabled = false }: TripQu
   const debounceRef = React.useRef<ReturnType<typeof setTimeout>>(undefined)
   const abortRef = React.useRef<AbortController | null>(null)
   const requestIdRef = React.useRef(0)
+  /** Last final price we wrote from a quote; used so manual overrides are not overwritten. */
+  const lastAutoRevenueRef = React.useRef<string | null>(null)
+  const revenueAmountRef = React.useRef(values.revenueAmount)
+  revenueAmountRef.current = values.revenueAmount
 
   const quoteInput = React.useMemo(() => buildQuoteInputFromTripForm(values as TripFormValues), [values])
 
@@ -80,8 +84,20 @@ export function TripQuoteSync({ values, setFormValue, disabled = false }: TripQu
             ...(Array.isArray(data.warnings) && data.warnings.length ? { warnings: data.warnings } : {}),
           }
 
+          const quotedTotal = String(data.totalPrice)
+          const currentRevenue = String(revenueAmountRef.current ?? '').trim()
+          const shouldSyncFinalPrice =
+            !currentRevenue ||
+            currentRevenue === lastAutoRevenueRef.current ||
+            currentRevenue === quotedTotal
+
           setFormValue('basePrice', String(data.basePrice ?? ''))
-          setFormValue('revenueAmount', String(data.totalPrice))
+          if (shouldSyncFinalPrice) {
+            if (currentRevenue !== quotedTotal) {
+              setFormValue('revenueAmount', quotedTotal)
+            }
+            lastAutoRevenueRef.current = quotedTotal
+          }
           setFormValue('quoteSnapshotJson', JSON.stringify(snapshot))
           const currentCategory =
             values.vehicleCategory === 'standard' || values.vehicleCategory === 'van'

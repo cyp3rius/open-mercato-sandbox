@@ -2354,6 +2354,7 @@
   "taxi_fleet.driverApp.trips.starting": "Rozpoczynanie…",
   "taxi_fleet.driverApp.trips.started": "Kurs rozpoczęty. Zaktualizowano czas startu.",
   "taxi_fleet.driverApp.trips.startFailed": "Nie udało się rozpocząć kursu.",
+  "taxi_fleet.driverApp.trips.startNeedsShift": "Rozpocznij zmianę, aby wystartować kurs",
   "taxi_fleet.driverApp.trips.completed": "Kurs zakończony. Zaktualizowano czas zakończenia.",
   "taxi_fleet.driverApp.trips.completeFailed": "Nie udało się zakończyć kursu.",
   "taxi_fleet.driverApp.trips.empty": "Brak kursów.",

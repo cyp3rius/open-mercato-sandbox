@@ -43,6 +43,20 @@ type MeResponse = {
   } | null
 }
 
+type DriverTripGateContextValue = {
+  shiftActive: boolean
+  ready: boolean
+}
+
+const DriverTripGateContext = React.createContext<DriverTripGateContextValue>({
+  shiftActive: false,
+  ready: false,
+})
+
+export function useDriverTripGateShift(): DriverTripGateContextValue {
+  return React.useContext(DriverTripGateContext)
+}
+
 type Props = {
   children: React.ReactNode
   title: string
@@ -219,79 +233,81 @@ export function DriverTripGate({ children, title, showShiftPrompt = true }: Prop
     (!assignment || Boolean(assignment.shiftEnd))
 
   return (
-    <DriverShell title={title} shiftActive={shiftActive} assignmentId={assignment?.id ?? null}>
-      {showPlannedPrompt ? (
-        <div className={`${driverCardClass} mb-3 space-y-3`}>
-          <div className={driverSectionTitleClass}>
-            {t('taxi_fleet.driverApp.trips.gateTitle', 'Start your shift for a live trip')}
+    <DriverTripGateContext.Provider value={{ shiftActive, ready }}>
+      <DriverShell title={title} shiftActive={shiftActive} assignmentId={assignment?.id ?? null}>
+        {showPlannedPrompt ? (
+          <div className={`${driverCardClass} mb-3 space-y-3`}>
+            <div className={driverSectionTitleClass}>
+              {t('taxi_fleet.driverApp.trips.gateTitle', 'Start your shift for a live trip')}
+            </div>
+            <p className={driverSectionDescClass}>
+              {t(
+                'taxi_fleet.driverApp.trips.gateHintPastOnly',
+                'You can add past trips anytime. Start your shift to run a live trip.',
+              )}
+            </p>
+            {needsVehiclePick ? (
+              <DriverShiftVehiclePicker
+                vehicles={shiftVehicles}
+                assignmentResourceId={assignment.resourceId}
+                value={selectedResourceId}
+                onChange={setSelectedResourceId}
+                disabled={busy}
+              />
+            ) : null}
+            <Button
+              type="button"
+              className={driverPrimaryActionClass}
+              disabled={busy || !selectedResourceId}
+              onClick={() => void clockInPlanned()}
+            >
+              {busy
+                ? t('taxi_fleet.driverApp.home.starting', 'Starting…')
+                : t('taxi_fleet.driverApp.home.clockIn', 'Start shift')}
+            </Button>
+            {!bypass ? (
+              <Link href="/driver" className={`${driverSecondaryActionClass} inline-flex`}>
+                {t('taxi_fleet.driverApp.trips.backHome', 'Back to home')}
+              </Link>
+            ) : null}
           </div>
-          <p className={driverSectionDescClass}>
-            {t(
-              'taxi_fleet.driverApp.trips.gateHintPastOnly',
-              'You can add past trips anytime. Start your shift to run a live trip.',
-            )}
-          </p>
-          {needsVehiclePick ? (
+        ) : null}
+        {showAdHocPrompt ? (
+          <div className={`${driverCardClass} mb-3 space-y-3`}>
+            <div className={driverSectionTitleClass}>
+              {t('taxi_fleet.driverApp.trips.gateAdHocTitle', 'Start an ad-hoc shift')}
+            </div>
+            <p className={driverSectionDescClass}>
+              {t(
+                'taxi_fleet.driverApp.trips.gateAdHocHint',
+                'No planned assignment today. Pick a default vehicle to start working.',
+              )}
+            </p>
             <DriverShiftVehiclePicker
               vehicles={shiftVehicles}
-              assignmentResourceId={assignment.resourceId}
               value={selectedResourceId}
               onChange={setSelectedResourceId}
               disabled={busy}
             />
-          ) : null}
-          <Button
-            type="button"
-            className={driverPrimaryActionClass}
-            disabled={busy || !selectedResourceId}
-            onClick={() => void clockInPlanned()}
-          >
-            {busy
-              ? t('taxi_fleet.driverApp.home.starting', 'Starting…')
-              : t('taxi_fleet.driverApp.home.clockIn', 'Start shift')}
-          </Button>
-          {!bypass ? (
-            <Link href="/driver" className={`${driverSecondaryActionClass} inline-flex`}>
-              {t('taxi_fleet.driverApp.trips.backHome', 'Back to home')}
-            </Link>
-          ) : null}
-        </div>
-      ) : null}
-      {showAdHocPrompt ? (
-        <div className={`${driverCardClass} mb-3 space-y-3`}>
-          <div className={driverSectionTitleClass}>
-            {t('taxi_fleet.driverApp.trips.gateAdHocTitle', 'Start an ad-hoc shift')}
+            <Button
+              type="button"
+              className={driverPrimaryActionClass}
+              disabled={busy || !selectedResourceId}
+              onClick={() => void clockInAdHoc()}
+            >
+              {busy
+                ? t('taxi_fleet.driverApp.home.starting', 'Starting…')
+                : t('taxi_fleet.driverApp.home.clockInAdHoc', 'Start ad-hoc shift')}
+            </Button>
+            {!bypass ? (
+              <Link href="/driver" className={`${driverSecondaryActionClass} inline-flex`}>
+                {t('taxi_fleet.driverApp.trips.backHome', 'Back to home')}
+              </Link>
+            ) : null}
           </div>
-          <p className={driverSectionDescClass}>
-            {t(
-              'taxi_fleet.driverApp.trips.gateAdHocHint',
-              'No planned assignment today. Pick a default vehicle to start working.',
-            )}
-          </p>
-          <DriverShiftVehiclePicker
-            vehicles={shiftVehicles}
-            value={selectedResourceId}
-            onChange={setSelectedResourceId}
-            disabled={busy}
-          />
-          <Button
-            type="button"
-            className={driverPrimaryActionClass}
-            disabled={busy || !selectedResourceId}
-            onClick={() => void clockInAdHoc()}
-          >
-            {busy
-              ? t('taxi_fleet.driverApp.home.starting', 'Starting…')
-              : t('taxi_fleet.driverApp.home.clockInAdHoc', 'Start ad-hoc shift')}
-          </Button>
-          {!bypass ? (
-            <Link href="/driver" className={`${driverSecondaryActionClass} inline-flex`}>
-              {t('taxi_fleet.driverApp.trips.backHome', 'Back to home')}
-            </Link>
-          ) : null}
-        </div>
-      ) : null}
-      {children}
-    </DriverShell>
+        ) : null}
+        {children}
+      </DriverShell>
+    </DriverTripGateContext.Provider>
   )
 }

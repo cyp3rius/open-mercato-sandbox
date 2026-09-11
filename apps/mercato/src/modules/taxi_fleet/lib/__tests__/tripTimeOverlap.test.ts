@@ -47,6 +47,46 @@ describe('tripTimeOverlap', () => {
     ).toBe(true)
   })
 
+  it('does not let scheduled trips block an open-ended live start', () => {
+    expect(
+      findOverlappingTrip(
+        {
+          startedAt: '2026-08-11T15:00:00.000Z',
+          endedAt: null,
+        },
+        [
+          {
+            id: 'planned',
+            status: 'scheduled',
+            startedAt: '2026-08-11T14:00:00.000Z',
+            endedAt: '2026-08-11T16:00:00.000Z',
+          },
+        ],
+        { now },
+      ),
+    ).toBeNull()
+  })
+
+  it('blocks open-ended live start against another in-progress trip', () => {
+    expect(
+      findOverlappingTrip(
+        {
+          startedAt: '2026-08-11T15:00:00.000Z',
+          endedAt: null,
+        },
+        [
+          {
+            id: 'live',
+            status: 'in_progress',
+            startedAt: '2026-08-11T14:00:00.000Z',
+            endedAt: null,
+          },
+        ],
+        { now },
+      )?.id,
+    ).toBe('live')
+  })
+
   it('ignores cancelled trips', () => {
     expect(
       findOverlappingTrip(

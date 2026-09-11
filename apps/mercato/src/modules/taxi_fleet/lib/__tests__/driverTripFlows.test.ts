@@ -150,6 +150,7 @@ describe('resolveDriverTripUpdateInput', () => {
     expect(resolved.action).toBe('start')
     expect(resolved.input.status).toBe('in_progress')
     expect(resolved.input.startedAt).toBe('2026-08-11T10:00:00.000Z')
+    expect(resolved.input.endedAt).toBeNull()
   })
 
   it('rejects unrelated field changes on scheduled trips', () => {

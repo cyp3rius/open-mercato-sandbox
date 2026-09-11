@@ -208,8 +208,9 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
     }
     const previousTeamMemberId = row.teamMemberId ?? null
     const previousWeekStart = resolveTripWeekStart(row)
+    const previousStatus = normalizeTripStatus(row.status)
+    const actor = await resolveFleetBackendActor(ctx)
     if (parsed.teamMemberId !== undefined) {
-      const actor = await resolveFleetBackendActor(ctx)
       const nextTeamMemberId = actor?.role === 'driver' ? actor.teamMemberId : parsed.teamMemberId
       if (nextTeamMemberId) {
         await assertTeamMemberHasDriverProfile(em, {
@@ -256,10 +257,35 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
       await applyTripStatusChange(ctx, row, parsed.status)
     }
 
+    const nextStatus = normalizeTripStatus(row.status)
+    const driverStartedScheduled =
+      actor?.role === 'driver' &&
+      previousStatus === 'scheduled' &&
+      nextStatus === 'in_progress'
+    if (driverStartedScheduled) {
+      const now = new Date()
+      row.endedAt = null
+      if (!row.startedAt) row.startedAt = now
+      const shiftMatch = await assertDriverTripShift({
+        em,
+        tenantId: row.tenantId,
+        organizationId: row.organizationId,
+        teamMemberId: row.teamMemberId ?? actor.teamMemberId,
+        startedAt: row.startedAt,
+        endedAt: null,
+        mode: 'live',
+        translate,
+        now,
+      })
+      row.resourceId = shiftMatch.resourceId
+      row.assignmentId = shiftMatch.assignmentId
+    }
+
     const timesOrMemberTouched =
       parsed.startedAt !== undefined ||
       parsed.endedAt !== undefined ||
-      parsed.teamMemberId !== undefined
+      parsed.teamMemberId !== undefined ||
+      driverStartedScheduled
     if (timesOrMemberTouched && row.teamMemberId && row.startedAt) {
       await assertNoTripOverlap({
         em,
