@@ -3,7 +3,7 @@ const DB_VERSION = 2
 const CACHE_NAME = 'taxi-fleet-driver-v3'
 
 const SESSION_KEYS = [
-  'taxi_fleet_driver_gps_ready',
+  // Intentionally omit GPS grant flags — GPS consent must survive logout/login.
   'taxi_fleet.driver.tripsBypassDate',
   'taxi_fleet.driver.localeReloadPl',
 ] as const

@@ -44,6 +44,7 @@ export const setup: ModuleSetupConfig = {
       'taxi_fleet.view',
       'taxi_fleet.manage_assignments',
       'taxi_fleet.manage_trips',
+      'taxi_fleet.trips.edit_completed',
       'taxi_fleet.trips.inject',
       'taxi_fleet.manage_settlements',
       'taxi_fleet.manage_platform_sync',

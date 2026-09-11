@@ -122,7 +122,11 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
   useDriverDefaultLocale()
   useDriverForcedLightTheme()
   const online = useDriverOnlineStatus()
-  const { status: gpsStatus, requestAccess: requestGpsAccess } = useDriverGpsStatus()
+  const {
+    status: gpsStatus,
+    showConsentBanner,
+    requestAccess: requestGpsAccess,
+  } = useDriverGpsStatus()
   const { canInstall, install } = useDriverPwa()
   const [gpsBusy, setGpsBusy] = React.useState(false)
   const [pending, setPending] = React.useState(0)
@@ -343,7 +347,7 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
             </span>
           ) : null}
         </div>
-        {gpsStatus === 'denied' ? (
+        {showConsentBanner ? (
           <div className="mx-auto w-full max-w-lg px-4 pb-3">
             <button
               type="button"

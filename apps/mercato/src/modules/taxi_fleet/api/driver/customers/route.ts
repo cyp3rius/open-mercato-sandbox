@@ -17,6 +17,7 @@ import { resolveSearchConfig } from '@open-mercato/shared/lib/search/config'
 import { normalizeNipDigits } from '@open-mercato/shared/lib/pl/nip'
 import { E } from '@/.mercato/generated/entities.ids.generated'
 import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
+import { normalizeDriverCustomerPhone } from '@/modules/taxi_fleet/lib/driverCustomerPhone'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['taxi_fleet.driver'] },
@@ -298,10 +299,13 @@ export async function POST(req: Request) {
     const commandBus = context.container.resolve('commandBus') as CommandBus
     const tenantId = driver.teamMember.tenantId
     const organizationId = driver.teamMember.organizationId
-    const phone = body.primaryPhone.trim()
-    if (phone.length < 5) {
+    const phone = normalizeDriverCustomerPhone(body.primaryPhone)
+    if (!phone) {
       throw new CrudHttpError(400, {
-        error: translate('taxi_fleet.driverApp.customers.phoneRequired', 'Phone number is required.'),
+        error: translate(
+          'taxi_fleet.driverApp.customers.phoneInvalid',
+          'Enter a valid phone number (e.g. 504 013 184 or +48 504 013 184).',
+        ),
       })
     }
     const email = body.primaryEmail?.trim() || undefined

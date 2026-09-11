@@ -101,10 +101,11 @@ export function DriverCustomerField({
     setCreateBusy(true)
     setCreateError(null)
     try {
-      const { result } = await apiCall<{ id: string; label: string }>(
+      const call = await apiCall<{ id: string; label: string; error?: string }>(
         '/api/taxi_fleet/driver/customers',
         {
           method: 'POST',
+          headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             kind: createKind,
             displayName: createName.trim() || undefined,
@@ -113,10 +114,18 @@ export function DriverCustomerField({
           }),
         },
       )
-      if (!result?.id) {
-        throw new Error('missing customer id')
+      if (!call.ok || !call.result?.id) {
+        const apiError =
+          typeof call.result?.error === 'string' && call.result.error.trim()
+            ? call.result.error.trim()
+            : null
+        setCreateError(
+          apiError ??
+            t('taxi_fleet.driverApp.customers.createFailed', 'Could not create customer.'),
+        )
+        return
       }
-      onChange({ id: result.id, label: result.label })
+      onChange({ id: call.result.id, label: call.result.label })
       setCreateOpen(false)
       setCreateName('')
       setCreatePhone('')
@@ -285,6 +294,10 @@ export function DriverCustomerField({
               inputMode="tel"
               required
               autoComplete="tel"
+              placeholder={t(
+                'taxi_fleet.driverApp.customers.phonePlaceholder',
+                '504 013 184 or +48…',
+              )}
             />
           </div>
           {createKind === 'company' ? (

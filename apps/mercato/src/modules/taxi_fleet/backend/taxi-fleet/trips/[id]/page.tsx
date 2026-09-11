@@ -70,7 +70,7 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
   const tripId = params?.id ?? ''
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const { profiles, resolveName } = useFleetDriverDirectory()
-  const { canManageTrips } = useTaxiFleetPermissions()
+  const { canManageTrips, canEditCompletedTrips } = useTaxiFleetPermissions()
   const { isDriverOnly, lockedTeamMemberId } = useFleetBackendSession()
   const { statusOptions } = useTripStatusDictionary()
   const [row, setRow] = React.useState<TripRow | null>(null)
@@ -94,7 +94,9 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
       return
     }
     setRow(item)
-    const lockMode = tripDetailLockMode(normalizeTripStatus(item.status))
+    const lockMode = tripDetailLockMode(normalizeTripStatus(item.status), {
+      allowEditCompleted: canEditCompletedTrips,
+    })
     if (item.startedAt && item.endedAt && lockMode !== 'full') {
       const params = new URLSearchParams({
         startedAt: item.startedAt,
@@ -109,7 +111,7 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
       setSuggestions([])
     }
     setLoading(false)
-  }, [tripId, t])
+  }, [tripId, t, canEditCompletedTrips])
 
   React.useEffect(() => {
     void load()
@@ -208,7 +210,9 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
 
   const canEditTrip = canManageTrips || (isDriverOnly && row.teamMemberId === lockedTeamMemberId)
   const normalizedStatus = normalizeTripStatus(row.status)
-  const lockMode = tripDetailLockMode(normalizedStatus)
+  const lockMode = tripDetailLockMode(normalizedStatus, {
+    allowEditCompleted: canEditCompletedTrips,
+  })
   const formFullyReadOnly = !canEditTrip || lockMode === 'full'
   const availableActions = canManageTrips ? tripDetailActionsForStatus(normalizedStatus) : []
   const actionBusy = pendingAction !== null
@@ -280,7 +284,7 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
             statusOptions={statusOptions}
             initialValues={initialValues}
             readOnly={formFullyReadOnly}
-            lockStatus={canEditTrip ? normalizedStatus : null}
+            lockStatus={canEditTrip && lockMode !== 'none' ? normalizedStatus : null}
             allowDriverEdit={canEditTrip && tripDetailAllowsDriverEdit(normalizedStatus)}
             onDelete={canManageTrips && lockMode !== 'full' ? handleDelete : undefined}
             sidebarExtra={
@@ -291,7 +295,11 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
                   externalTripId={row.externalTripId ?? null}
                 />
               ) : (
-                <TripReceiptOcrPanel tripId={row.id} canManage={canManageTrips} />
+                <TripReceiptOcrPanel
+                  tripId={row.id}
+                  canManage={canManageTrips}
+                  canReplaceReceipt={canManageTrips && lockMode !== 'full'}
+                />
               )
             }
             extraActions={

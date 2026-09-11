@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { ExternalLink, Loader2, RefreshCw, Save } from 'lucide-react'
+import { ExternalLink, Loader2, RefreshCw, Save, Upload } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -32,7 +32,10 @@ type ExtractionItem = {
 
 type TripReceiptOcrPanelProps = {
   tripId: string
+  /** Retry OCR / overwrite document number */
   canManage: boolean
+  /** Upload or replace receipt file (unlocked trips / edit-completed) */
+  canReplaceReceipt?: boolean
 }
 
 const statusClass: Record<string, string> = {
@@ -44,13 +47,18 @@ const statusClass: Record<string, string> = {
   applied: 'border-emerald-300 bg-emerald-50 text-emerald-950',
 }
 
-export function TripReceiptOcrPanel({ tripId, canManage }: TripReceiptOcrPanelProps) {
+export function TripReceiptOcrPanel({
+  tripId,
+  canManage,
+  canReplaceReceipt = false,
+}: TripReceiptOcrPanelProps) {
   const t = useT()
   const [item, setItem] = React.useState<ExtractionItem | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [overwriteValue, setOverwriteValue] = React.useState('')
   const [overwriteBaseline, setOverwriteBaseline] = React.useState('')
   const [busy, setBusy] = React.useState(false)
+  const fileRef = React.useRef<HTMLInputElement | null>(null)
 
   const load = React.useCallback(async () => {
     setLoading(true)
@@ -106,6 +114,63 @@ export function TripReceiptOcrPanel({ tripId, canManage }: TripReceiptOcrPanelPr
     }
   }
 
+  const uploadReceipt = async (file: File) => {
+    setBusy(true)
+    try {
+      const form = new FormData()
+      form.set('file', file)
+      const call = await apiCall<{ attachmentId?: string; error?: string }>(
+        `/api/taxi_fleet/trips/${encodeURIComponent(tripId)}/receipt`,
+        { method: 'POST', body: form },
+      )
+      if (!call.ok || !call.result?.attachmentId) {
+        flash(
+          (typeof call.result?.error === 'string' && call.result.error) ||
+            t('taxi_fleet.receiptOcr.uploadFailed', 'Could not upload receipt.'),
+          'error',
+        )
+        return
+      }
+      flash(t('taxi_fleet.receiptOcr.uploadSuccess', 'Receipt uploaded. OCR started.'), 'success')
+      await load()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const uploadControls =
+    canReplaceReceipt ? (
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          ref={fileRef}
+          type="file"
+          className="hidden"
+          accept="image/*,.pdf,application/pdf"
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            event.target.value = ''
+            if (file) void uploadReceipt(file)
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={() => fileRef.current?.click()}
+        >
+          {busy ? (
+            <Loader2 className="mr-2 size-3.5 animate-spin" aria-hidden />
+          ) : (
+            <Upload className="mr-2 size-3.5" aria-hidden />
+          )}
+          {item
+            ? t('taxi_fleet.receiptOcr.replace', 'Replace receipt')
+            : t('taxi_fleet.receiptOcr.upload', 'Upload receipt')}
+        </Button>
+      </div>
+    ) : null
+
   if (loading) {
     return (
       <section className="mt-6 rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground">
@@ -116,8 +181,9 @@ export function TripReceiptOcrPanel({ tripId, canManage }: TripReceiptOcrPanelPr
 
   if (!item) {
     return (
-      <section className="mt-6 rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground">
-        {t('taxi_fleet.receiptOcr.empty', 'No receipt OCR for this trip yet.')}
+      <section className="mt-6 space-y-3 rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground">
+        <div>{t('taxi_fleet.receiptOcr.empty', 'No receipt OCR for this trip yet.')}</div>
+        {uploadControls}
       </section>
     )
   }
@@ -220,6 +286,7 @@ export function TripReceiptOcrPanel({ tripId, canManage }: TripReceiptOcrPanelPr
             {t('taxi_fleet.receiptOcr.retry', 'Retry OCR')}
           </Button>
         ) : null}
+        {uploadControls}
       </div>
 
       {canManage ? (

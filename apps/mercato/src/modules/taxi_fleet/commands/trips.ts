@@ -38,6 +38,29 @@ import {
   resolveTripWeekStart,
 } from '../lib/settlementWeekScope'
 
+async function actorMayEditCompletedTrip(
+  ctx: Parameters<CommandHandler<TripUpdateInput, { tripId: string }>['execute']>[1],
+): Promise<boolean> {
+  const userId = ctx.auth?.sub
+  if (!userId) return false
+  try {
+    const rbac = ctx.container.resolve('rbacService') as {
+      userHasAllFeatures: (
+        userId: string,
+        required: string[],
+        scope: { tenantId: string | null; organizationId: string | null },
+      ) => Promise<boolean>
+    }
+    return await rbac.userHasAllFeatures(
+      userId,
+      ['taxi_fleet.trips.edit_completed'],
+      { tenantId: ctx.auth?.tenantId ?? null, organizationId: ctx.auth?.orgId ?? null },
+    )
+  } catch {
+    return false
+  }
+}
+
 async function assertDriverScopedTeamMember(
   ctx: Parameters<CommandHandler<TripCreateInput, { tripId: string }>['execute']>[1],
   teamMemberId: string,
@@ -162,7 +185,9 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
     await assertDriverScopedTeamMember(ctx, row.teamMemberId ?? '')
 
     const { translate } = await resolveTranslations()
-    if (tripDetailLockMode(row.status) === 'full') {
+    const allowEditCompleted = await actorMayEditCompletedTrip(ctx)
+    const lockMode = tripDetailLockMode(row.status, { allowEditCompleted })
+    if (lockMode === 'full') {
       throw new CrudHttpError(409, {
         error: translate(
           'taxi_fleet.trips.errors.locked',
@@ -172,7 +197,7 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
     }
     if (
       parsed.teamMemberId !== undefined &&
-      !isTripDetailFieldEditable(row.status, 'teamMemberId')
+      !isTripDetailFieldEditable(row.status, 'teamMemberId', { allowEditCompleted })
     ) {
       throw new CrudHttpError(400, {
         error: translate(
