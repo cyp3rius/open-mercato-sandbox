@@ -1,5 +1,4 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { after } from 'next/server'
 import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 import { getStorageDriverFactory } from '@open-mercato/core/modules/attachments/lib/drivers'
 import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attachments/lib/storage'
@@ -39,6 +38,7 @@ import { recalculateWeeklySettlementsForFinancialEntry, recalculateWeeklySettlem
 import { syncFinancialEntryDocumentDuplicates } from './documentDuplicates'
 import { mergeReceiptTripDistance, readTripRouteDistanceKm } from './receiptTripDistanceApply'
 import { formatDistanceKm } from './settlementTripDistance'
+import { scheduleAfterResponse } from './scheduleAfterResponse'
 
 const STALE_PROCESSING_MS = 2 * 60 * 1000
 
@@ -268,11 +268,7 @@ export function scheduleReceiptExtractionProcessing(
       })
     })
   }
-  try {
-    after(run)
-  } catch {
-    setImmediate(run)
-  }
+  scheduleAfterResponse(run)
 }
 
 export async function processReceiptExtraction(

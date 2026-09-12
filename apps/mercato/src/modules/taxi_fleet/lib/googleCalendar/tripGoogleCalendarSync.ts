@@ -1,4 +1,3 @@
-import { after } from 'next/server'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
@@ -8,6 +7,7 @@ import { TaxiFleetTrip } from '../../data/entities'
 import { loadTaxiFleetOrganizationSettings } from '../taxiFleetOrganizationSettings'
 import { normalizeTripStatus } from '../tripStatuses'
 import { tripRequestDetailsFromMetadata } from '../tripRequestForm'
+import { scheduleAfterResponse } from '../scheduleAfterResponse'
 
 const GOOGLE_CALENDAR_EVENT_META_KEY = 'googleCalendarEventId'
 const CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar']
@@ -200,9 +200,5 @@ export function scheduleTripGoogleCalendarSync(tripId: string): void {
       })
     })
   }
-  try {
-    after(run)
-  } catch {
-    setImmediate(run)
-  }
+  scheduleAfterResponse(run)
 }

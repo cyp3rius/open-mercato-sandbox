@@ -71,6 +71,13 @@ async function tryBootstrap(): Promise<boolean> {
       message.includes('Cannot find module') &&
       (message.includes('/generated/') || message.includes('.generated') || message.includes('.mercato'))
     ) {
+      console.error('[mercato] bootstrap failed while loading generated modules:')
+      console.error(err instanceof Error ? err.stack ?? err.message : err)
+      return false
+    }
+    if (message.includes('Generated file not found:')) {
+      console.error('[mercato] bootstrap failed — missing generated file:')
+      console.error(message)
       return false
     }
     // Re-throw other errors
