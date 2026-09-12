@@ -15,6 +15,27 @@ const PAID_EDITABLE_FIELD_IDS = new Set([
   '__tripQuoteSummary',
 ])
 
+/** Fields that must stay untouched for a completed-trip receipt supplement. */
+const RECEIPT_SUPPLEMENT_DISALLOWED_UPDATE_KEYS = [
+  'teamMemberId',
+  'resourceId',
+  'assignmentId',
+  'tripType',
+  'platform',
+  'startedAt',
+  'endedAt',
+  'odometerStart',
+  'odometerEnd',
+  'distanceKm',
+  'revenueAmount',
+  'currencyCode',
+  'customerPersonId',
+  'customerCompanyId',
+  'customerEntityId',
+  'status',
+  'notes',
+] as const
+
 export function tripDetailActionsForStatus(status: string): TripDetailActionId[] {
   switch (normalizeTripStatus(status)) {
     case 'new':
@@ -71,4 +92,27 @@ export function tripDetailAllowsDriverEdit(status: string): boolean {
 
 export function isCompletedTripStatus(status: string): boolean {
   return normalizeTripStatus(status) === 'completed'
+}
+
+/**
+ * Narrow exception to the completed-trip lock: attach a receipt when the trip
+ * has none yet. Used by the driver app “Add receipt” flow after completion.
+ */
+export function isCompletedTripReceiptSupplementUpdate(
+  currentStatus: string,
+  existingHasReceipt: boolean,
+  update: Record<string, unknown>,
+): boolean {
+  if (normalizeTripStatus(currentStatus) !== 'completed') return false
+  if (existingHasReceipt) return false
+
+  const metadata = update.metadata
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false
+  const attachmentId = (metadata as Record<string, unknown>).receiptAttachmentId
+  if (typeof attachmentId !== 'string' || !attachmentId.trim()) return false
+
+  for (const key of RECEIPT_SUPPLEMENT_DISALLOWED_UPDATE_KEYS) {
+    if (update[key] !== undefined) return false
+  }
+  return true
 }

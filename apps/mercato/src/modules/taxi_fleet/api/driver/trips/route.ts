@@ -28,6 +28,10 @@ import {
 } from '@/modules/taxi_fleet/lib/driverTripReceiptStatus'
 import { enrichDriverTripsCustomerMetadata } from '@/modules/taxi_fleet/lib/enrichDriverTripCustomer'
 import { assertDriverCanMutatePlatformTrip } from '@/modules/taxi_fleet/lib/platformSync/platformTripIngest'
+import { TAXI_FLEET_FINANCIAL_ENTRY_ENTITY_ID } from '@/modules/taxi_fleet/lib/financialEntryEntity'
+import { TAXI_FLEET_DRIVER_RECEIPTS_PARTITION } from '@/modules/taxi_fleet/lib/receiptPartition'
+import { applyReceiptExtractionToLinkedRecords } from '@/modules/taxi_fleet/lib/receiptExtractionPipeline'
+import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['taxi_fleet.driver'] },
@@ -120,6 +124,93 @@ async function resolveTripExtractionMap(
       const byAttachment = byAttachmentId.get(attachmentId)
       if (byAttachment) {
         map.set(trip.id, byAttachment)
+      }
+    }
+  }
+
+  // Recover orphans: upload used recordId=trip.id, but trips.update lock prevented linking.
+  const tripsMissingReceipt = trips.filter(
+    (trip) => !map.has(trip.id) && !tripHasReceiptAttachment(trip),
+  )
+  if (!tripsMissingReceipt.length) return map
+
+  const orphanAttachments = await em.find(
+    Attachment,
+    {
+      recordId: { $in: tripsMissingReceipt.map((trip) => trip.id) },
+      entityId: TAXI_FLEET_FINANCIAL_ENTRY_ENTITY_ID,
+      tenantId,
+      organizationId,
+      partitionCode: TAXI_FLEET_DRIVER_RECEIPTS_PARTITION,
+    },
+    { orderBy: { createdAt: 'DESC' } },
+  )
+  if (!orphanAttachments.length) return map
+
+  const latestAttachmentByTripId = new Map<string, Attachment>()
+  for (const attachment of orphanAttachments) {
+    if (!latestAttachmentByTripId.has(attachment.recordId)) {
+      latestAttachmentByTripId.set(attachment.recordId, attachment)
+    }
+  }
+
+  const orphanAttachmentIds = [...latestAttachmentByTripId.values()].map((row) => row.id)
+  const orphanExtractions = await findWithDecryption(
+    em,
+    TaxiFleetReceiptExtraction,
+    {
+      tenantId,
+      organizationId,
+      deletedAt: null,
+      attachmentId: { $in: orphanAttachmentIds },
+    },
+    { orderBy: { updatedAt: 'DESC' } },
+    { tenantId, organizationId },
+  )
+  const extractionByAttachmentId = new Map<string, TaxiFleetReceiptExtraction>()
+  for (const row of orphanExtractions) {
+    if (row.attachmentId && !extractionByAttachmentId.has(row.attachmentId)) {
+      extractionByAttachmentId.set(row.attachmentId, row)
+    }
+  }
+
+  let healed = false
+  const healedExtractions: TaxiFleetReceiptExtraction[] = []
+  for (const trip of tripsMissingReceipt) {
+    const attachment = latestAttachmentByTripId.get(trip.id)
+    if (!attachment) continue
+    const extraction = extractionByAttachmentId.get(attachment.id) ?? null
+    if (extraction) {
+      if (!extraction.tripId) {
+        extraction.tripId = trip.id
+        extraction.updatedAt = new Date()
+        healed = true
+        healedExtractions.push(extraction)
+      }
+      map.set(trip.id, extraction)
+    }
+    const existingMeta =
+      trip.metadata && typeof trip.metadata === 'object'
+        ? { ...(trip.metadata as Record<string, unknown>) }
+        : {}
+    if (!existingMeta.receiptAttachmentId) {
+      trip.metadata = {
+        ...existingMeta,
+        receiptAttachmentId: attachment.id,
+      }
+      trip.updatedAt = new Date()
+      healed = true
+    }
+  }
+  if (healed) {
+    await em.flush()
+    for (const extraction of healedExtractions) {
+      const status = String(extraction.status ?? '')
+      if (status === 'extracted' || status === 'applied' || status === 'needs_review') {
+        const trip = tripsMissingReceipt.find((row) => row.id === extraction.tripId)
+        await applyReceiptExtractionToLinkedRecords(em, extraction.id, {
+          tripRevenueAmount: trip?.revenueAmount != null ? Number(trip.revenueAmount) : null,
+        }).catch(() => undefined)
       }
     }
   }

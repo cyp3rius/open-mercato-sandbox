@@ -32,7 +32,8 @@ import {
 import { ensureOrganizationScope, ensureTenantScope, numericToString } from './shared'
 import { assertDriverTripShift } from '../lib/assertDriverTripShift'
 import { assertNoTripOverlap } from '../lib/assertNoTripOverlap'
-import { isTripDetailFieldEditable, tripDetailLockMode } from '../lib/tripDetailWorkflow'
+import { isTripDetailFieldEditable, tripDetailLockMode, isCompletedTripReceiptSupplementUpdate } from '../lib/tripDetailWorkflow'
+import { tripHasReceiptAttachment } from '../lib/driverTripReceiptStatus'
 import {
   recalculateWeeklySettlementsForTrip,
   resolveTripWeekStart,
@@ -187,7 +188,14 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
     const { translate } = await resolveTranslations()
     const allowEditCompleted = await actorMayEditCompletedTrip(ctx)
     const lockMode = tripDetailLockMode(row.status, { allowEditCompleted })
-    if (lockMode === 'full') {
+    const receiptSupplement =
+      lockMode === 'full' &&
+      isCompletedTripReceiptSupplementUpdate(
+        row.status,
+        tripHasReceiptAttachment(row),
+        parsed as Record<string, unknown>,
+      )
+    if (lockMode === 'full' && !receiptSupplement) {
       throw new CrudHttpError(409, {
         error: translate(
           'taxi_fleet.trips.errors.locked',
