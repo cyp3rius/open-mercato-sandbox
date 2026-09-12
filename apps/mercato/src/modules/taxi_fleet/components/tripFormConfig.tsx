@@ -565,7 +565,7 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
       label: t('taxi_fleet.trips.driver', 'Driver'),
       required: true,
       layout: 'half',
-      component: ({ value, setValue, disabled, readOnly: fieldReadOnly, values }) => (
+      component: ({ value, setValue, disabled, readOnly: fieldReadOnly }) => (
         <TripDriverField
           value={typeof value === 'string' ? value : ''}
           onChange={(next) => setValue(next)}
@@ -577,8 +577,6 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
             (mode === 'edit' && !allowDriverEdit)
           }
           driverOptions={driverOptions}
-          startedAtLocal={typeof values?.startedAtLocal === 'string' ? values.startedAtLocal : ''}
-          endedAtLocal={typeof values?.endedAtLocal === 'string' ? values.endedAtLocal : ''}
           lockedDisplayName={driverLocked ? lockedDisplayName : null}
         />
       ),

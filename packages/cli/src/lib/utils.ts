@@ -97,6 +97,7 @@ export function writeIfChanged(
     }
 
     const shouldWrite =
+      !fs.existsSync(filePath) ||
       !existingRecord ||
       existingRecord.content !== newRecord.content ||
       (structureChecksum && existingRecord.structure !== newRecord.structure)
@@ -235,6 +236,7 @@ export function writeGeneratedFile(options: {
   const checksum = { content: calculateChecksum(content), structure: structureChecksum }
   const existing = readChecksumRecord(checksumFile)
   const shouldWrite =
+    !fs.existsSync(outFile) ||
     !existing ||
     existing.content !== checksum.content ||
     existing.structure !== checksum.structure

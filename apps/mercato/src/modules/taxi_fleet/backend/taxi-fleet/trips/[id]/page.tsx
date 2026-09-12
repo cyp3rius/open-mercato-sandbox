@@ -1,13 +1,11 @@
 'use client'
 
 import * as React from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { BadgeCheck, CalendarClock, Check, CreditCard, X } from 'lucide-react'
 import { ApplyBreadcrumb } from '@open-mercato/ui/backend/AppShell'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { Badge } from '@open-mercato/ui/primitives/badge'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { updateCrud, deleteCrud } from '@open-mercato/ui/backend/utils/crud'
@@ -30,7 +28,6 @@ import { PlatformTripIngestPanel } from '../../../../components/PlatformTripInge
 import { Notice } from '@open-mercato/ui/primitives/Notice'
 import { isPlatformIngestedTrip } from '../../../../lib/platformSync/platformTripIngest'
 import {
-  isCompletedTripStatus,
   tripDetailActionsForStatus,
   tripDetailAllowsDriverEdit,
   tripDetailLockMode,
@@ -56,13 +53,6 @@ type TripRow = {
   metadata?: Record<string, unknown> | null
 }
 
-type DriverSuggestion = {
-  teamMemberId: string
-  displayName: string
-  score: number
-  reasons: string[]
-}
-
 const ACTION_BUTTON_CLASS = 'h-9 rounded border shadow-none'
 
 export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: string } }) {
@@ -75,7 +65,6 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
   const { isDriverOnly, lockedTeamMemberId } = useFleetBackendSession()
   const { statusOptions } = useTripStatusDictionary()
   const [row, setRow] = React.useState<TripRow | null>(null)
-  const [suggestions, setSuggestions] = React.useState<DriverSuggestion[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [formKey, setFormKey] = React.useState(0)
@@ -90,36 +79,12 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
     if (!item) {
       setError(t('taxi_fleet.trips.detail.notFound', 'Trip not found.'))
       setRow(null)
-      setSuggestions([])
       setLoading(false)
       return
     }
     setRow(item)
-    const normalizedStatus = normalizeTripStatus(item.status)
-    const lockMode = tripDetailLockMode(normalizedStatus, {
-      allowEditCompleted: canEditCompletedTrips,
-    })
-    // Suggested drivers are for scheduling/assignment — hide on completed trips even when editable.
-    if (
-      item.startedAt &&
-      item.endedAt &&
-      lockMode !== 'full' &&
-      !isCompletedTripStatus(normalizedStatus)
-    ) {
-      const params = new URLSearchParams({
-        startedAt: item.startedAt,
-        endedAt: item.endedAt,
-        limit: '5',
-      })
-      const suggestCall = await apiCall<{ items: DriverSuggestion[] }>(
-        `/api/taxi_fleet/trips/suggest-drivers?${params}`,
-      )
-      setSuggestions(Array.isArray(suggestCall.result?.items) ? suggestCall.result.items : [])
-    } else {
-      setSuggestions([])
-    }
     setLoading(false)
-  }, [tripId, t, canEditCompletedTrips])
+  }, [tripId, t])
 
   React.useEffect(() => {
     void load()
@@ -340,25 +305,6 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
               void load()
             }}
           />
-          {suggestions.length > 0 ? (
-            <section className="mt-6 space-y-3 rounded-lg border bg-card px-4 py-3">
-              <h2 className="text-sm font-medium">{t('taxi_fleet.trips.suggestedDrivers', 'Suggested drivers')}</h2>
-              <ul className="space-y-2">
-                {suggestions.map((suggestion) => (
-                  <li key={suggestion.teamMemberId} className="flex flex-wrap items-center gap-2 text-sm">
-                    <Link
-                      href={`/backend/staff/team-members/${suggestion.teamMemberId}`}
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {suggestion.displayName}
-                    </Link>
-                    <Badge variant="secondary">{suggestion.score}</Badge>
-                    <span className="text-muted-foreground">{suggestion.reasons.join(', ')}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
         </PageBody>
         {ConfirmDialogElement}
       </Page>

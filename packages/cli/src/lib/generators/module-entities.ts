@@ -104,7 +104,11 @@ export const entities = [
   let shouldWrite = true
 
   const existingRecord = readChecksumRecord(checksumFile)
-  if (existingRecord && existingRecord.content === newChecksum) {
+  if (
+    existingRecord &&
+    existingRecord.content === newChecksum &&
+    fs.existsSync(outFile)
+  ) {
     shouldWrite = false
   }
 
