@@ -5,6 +5,7 @@ import {
   calculateStructureChecksum,
   toVar,
   moduleHasExport,
+  sourceFileHasNamedExport,
   type GeneratorResult,
   createGeneratorResult,
   writeGeneratedFile,
@@ -270,7 +271,10 @@ async function processWorkers(options: {
     const file = segs.pop()!
     const name = file.replace(/\.ts$/, '')
     const importPath = `${fromApp ? appImportBase : pkgImportBase}/workers/${[...segs, name].join('/')}`
-    if (!(await moduleHasExport(importPath, 'metadata'))) continue
+    const absSource = path.join(fromApp ? roots.appBase : roots.pkgBase, 'workers', ...segs, file)
+    const hasMetadata =
+      (await moduleHasExport(importPath, 'metadata')) || sourceFileHasNamedExport(absSource, 'metadata')
+    if (!hasMetadata) continue
     const importName = `Worker${importIdRef.value++}_${toVar(modId)}_${toVar([...segs, name].join('_') || 'index')}`
     const metaName = `WorkerMeta${importIdRef.value++}_${toVar(modId)}_${toVar([...segs, name].join('_') || 'index')}`
     imports.push(`import ${importName}, * as ${metaName} from '${importPath}'`)

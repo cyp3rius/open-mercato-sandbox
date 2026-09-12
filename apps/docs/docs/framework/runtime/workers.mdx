@@ -161,6 +161,9 @@ yarn dev
 
 # Start app only (no workers)
 AUTO_SPAWN_WORKERS=false yarn dev
+
+# Low-memory app-only mode (also skips package watchers, MCP, and scheduler)
+yarn dev:light
 ```
 
 :::danger Production Warning

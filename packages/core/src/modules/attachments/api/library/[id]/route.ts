@@ -11,7 +11,7 @@ import {
   normalizeAttachmentTags,
   readAttachmentMetadata,
 } from '../../../lib/metadata'
-import { deletePartitionFile } from '../../../lib/storage'
+import { getStorageDriverFactory } from '../../../lib/drivers'
 import { splitCustomFieldPayload, loadCustomFieldValues } from '@open-mercato/shared/lib/crud/custom-fields'
 import { emitCrudSideEffects, setCustomFieldsIfAny } from '@open-mercato/shared/lib/commands/helpers'
 import { normalizeCustomFieldResponse } from '@open-mercato/shared/lib/custom-fields/normalize'
@@ -238,7 +238,9 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
     return NextResponse.json({ error: 'Attachment not found' }, { status: 404 })
   }
 
-  await deletePartitionFile(record.partitionCode, record.storagePath, record.storageDriver)
+  await getStorageDriverFactory()
+    .resolve(record.storageDriver)
+    .delete(record.partitionCode, record.storagePath)
   await em.removeAndFlush(record)
 
   if (dataEngine) {

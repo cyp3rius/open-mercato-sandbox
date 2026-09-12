@@ -13,9 +13,147 @@ import { E } from '#generated/entities.ids.generated'
 import { loadCustomFieldValues } from '@open-mercato/shared/lib/crud/custom-fields'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { userCrudEvents, userCrudIndexer } from '@open-mercato/core/modules/auth/commands/users'
-import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
+import { findAndCountWithDecryption, findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
+import { decryptEntitiesWithFallbackScope } from '@open-mercato/shared/lib/encryption/subscriber'
+import { isTenantDataEncryptionEnabled } from '@open-mercato/shared/lib/encryption/toggles'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
 import { buildPasswordSchema } from '@open-mercato/shared/lib/auth/passwordPolicy'
+import { computeEmailHash } from '@open-mercato/core/modules/auth/lib/emailHash'
+
+const ENCRYPTED_USER_SEARCH_SCAN_LIMIT = 5000
+
+function looksLikeFullEmail(value: string): boolean {
+  return z.string().email().safeParse(value).success
+}
+
+function isLikelyEncryptedValue(value: unknown): boolean {
+  if (typeof value !== 'string') return false
+  const parts = value.split(':')
+  return parts.length === 4 && parts[3] === 'v1'
+}
+
+function expandUserSearchVariants(search: string): string[] {
+  const trimmed = search.trim()
+  if (!trimmed) return []
+  const variants = new Set<string>([trimmed])
+  if (trimmed.includes('@')) {
+    if (trimmed.includes(' ')) variants.add(trimmed.replace(/ /g, '+'))
+    if (trimmed.includes('+')) variants.add(trimmed.replace(/\+/g, ' '))
+  }
+  return Array.from(variants)
+}
+
+function matchesUserSearchText(user: User, search: string): boolean {
+  return expandUserSearchVariants(search).some((variant) => {
+    const query = variant.toLowerCase()
+    const email = typeof user.email === 'string' ? user.email.toLowerCase() : ''
+    const name = typeof user.name === 'string' ? user.name.toLowerCase() : ''
+    return email.includes(query) || name.includes(query)
+  })
+}
+
+function applyPlaintextUserSearchFilter(where: Record<string, unknown>, search: string): void {
+  const variants = expandUserSearchVariants(search)
+  if (!variants.length) return
+  const orConditions: Record<string, unknown>[] = variants.flatMap((variant) => [
+    { email: { $ilike: `%${escapeLikePattern(variant)}%` } },
+    { name: { $ilike: `%${escapeLikePattern(variant)}%` } },
+    ...(looksLikeFullEmail(variant) ? [{ emailHash: computeEmailHash(variant) }] : []),
+  ])
+  where.$or = orConditions
+}
+
+async function ensureUserDecrypted(em: EntityManager, user: User): Promise<void> {
+  await decryptEntitiesWithFallbackScope(user, {
+    em,
+    tenantId: user.tenantId ?? null,
+    organizationId: user.organizationId ?? null,
+  })
+}
+
+async function searchEncryptedUsersInMemory(
+  em: EntityManager,
+  where: Record<string, unknown>,
+  search: string,
+  page: number,
+  pageSize: number,
+): Promise<[User[], number]> {
+  const candidates = await em.find(User, where as any, {
+    limit: ENCRYPTED_USER_SEARCH_SCAN_LIMIT,
+    offset: 0,
+    orderBy: { createdAt: 'desc' },
+  })
+  for (const user of candidates) {
+    await ensureUserDecrypted(em, user)
+    if (isLikelyEncryptedValue(user.email) || isLikelyEncryptedValue(user.name)) {
+      const refreshed = await em.findOne(User, { id: user.id })
+      if (refreshed) {
+        await ensureUserDecrypted(em, refreshed)
+        user.email = refreshed.email
+        user.name = refreshed.name
+      }
+    }
+  }
+  const filtered = candidates.filter((user) => matchesUserSearchText(user, search))
+  const offset = (page - 1) * pageSize
+  return [filtered.slice(offset, offset + pageSize), filtered.length]
+}
+
+async function tryExactEncryptedEmailHashMatch(
+  em: EntityManager,
+  where: Record<string, unknown>,
+  search: string,
+  options: { page: number; pageSize: number; decryptionScope: { tenantId: string | null; organizationId: string | null } },
+): Promise<[User[], number] | null> {
+  const emailVariants = expandUserSearchVariants(search).filter((variant) => looksLikeFullEmail(variant))
+  if (!emailVariants.length) return null
+  const emailHashes = Array.from(new Set(emailVariants.map((variant) => computeEmailHash(variant))))
+  const [rows, count] = await findAndCountWithDecryption(
+    em,
+    User,
+    { ...where, emailHash: { $in: emailHashes } } as any,
+    { limit: options.pageSize, offset: (options.page - 1) * options.pageSize },
+    options.decryptionScope,
+  )
+  return rows.length ? [rows, count] : null
+}
+
+async function loadUsersForList(
+  em: EntityManager,
+  where: Record<string, unknown>,
+  options: {
+    page: number
+    pageSize: number
+    search?: string
+    decryptionScope: { tenantId: string | null; organizationId: string | null }
+  },
+): Promise<[User[], number]> {
+  const { page, pageSize, search, decryptionScope } = options
+  const trimmedSearch = search?.trim() ?? ''
+
+  if (trimmedSearch && isTenantDataEncryptionEnabled()) {
+    const exactMatch = await tryExactEncryptedEmailHashMatch(em, where, trimmedSearch, {
+      page,
+      pageSize,
+      decryptionScope,
+    })
+    if (exactMatch) return exactMatch
+
+    return searchEncryptedUsersInMemory(em, where, trimmedSearch, page, pageSize)
+  }
+
+  const searchWhere = { ...where }
+  if (trimmedSearch) {
+    applyPlaintextUserSearchFilter(searchWhere, trimmedSearch)
+  }
+  return findAndCountWithDecryption(
+    em,
+    User,
+    searchWhere as any,
+    { limit: pageSize, offset: (page - 1) * pageSize },
+    decryptionScope,
+  )
+}
 
 const querySchema = z.object({
   id: z.string().uuid().optional(),
@@ -48,6 +186,7 @@ const userUpdateSchema = z.object({
 const userListItemSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
+  name: z.string().nullable().optional(),
   organizationId: z.string().uuid().nullable(),
   organizationName: z.string().nullable(),
   tenantId: z.string().uuid().nullable(),
@@ -155,7 +294,6 @@ export async function GET(req: Request) {
     where.tenantId = auth.tenantId
   }
   if (organizationId) where.organizationId = organizationId
-  if (search) where.email = { $ilike: `%${escapeLikePattern(search)}%` } as any
   let idFilter: Set<string> | null = id ? new Set([id]) : null
   if (Array.isArray(roleIds) && roleIds.length > 0) {
     const uniqueRoleIds = Array.from(new Set(roleIds))
@@ -180,7 +318,16 @@ export async function GET(req: Request) {
   } else if (id) {
     where.id = id
   }
-  const [rows, count] = await em.findAndCount(User, where, { limit: pageSize, offset: (page - 1) * pageSize })
+  const decryptionScope = {
+    tenantId: auth.tenantId ?? null,
+    organizationId: null,
+  }
+  const [rows, count] = await loadUsersForList(em, where, {
+    page,
+    pageSize,
+    search,
+    decryptionScope,
+  })
   const userIds = rows.map((u: any) => u.id)
   const links = userIds.length
     ? await findWithDecryption(
@@ -264,6 +411,7 @@ export async function GET(req: Request) {
     return {
       id: uid,
       email: String(u.email),
+      name: typeof u.name === 'string' && u.name.trim() ? u.name.trim() : null,
       organizationId: orgId,
       organizationName: orgId ? orgMap[orgId] ?? orgId : null,
       tenantId: u.tenantId ? String(u.tenantId) : null,

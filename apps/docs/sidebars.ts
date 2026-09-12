@@ -122,6 +122,57 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
+      label: "User Guide (PL)",
+      items: [
+        "user-guide/pl/overview",
+        {
+          type: "category",
+          label: "Pulpit i skróty",
+          items: [
+            "user-guide/pl/dashboard",
+            "user-guide/pl/messages",
+            "user-guide/pl/workflows-tasks",
+          ],
+        },
+        {
+          type: "category",
+          label: "Klienci",
+          items: [
+            "user-guide/pl/customers",
+            "user-guide/pl/partner-programs",
+          ],
+        },
+        {
+          type: "category",
+          label: "Sprzedaż",
+          items: [
+            "user-guide/pl/sales-simple",
+            "user-guide/pl/catalog-products",
+          ],
+        },
+        {
+          type: "category",
+          label: "Zasoby",
+          items: ["user-guide/pl/resources"],
+        },
+        {
+          type: "category",
+          label: "Serwis",
+          items: [
+            "user-guide/pl/procurement",
+            "user-guide/pl/cases",
+            "user-guide/pl/playbooks",
+          ],
+        },
+        {
+          type: "category",
+          label: "Ubezpieczenia",
+          items: ["user-guide/pl/insurance-desk"],
+        },
+      ],
+    },
+    {
+      type: "category",
       label: "Architecture",
       items: ["architecture/system-overview", "architecture/data-encryption"],
     },

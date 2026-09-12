@@ -778,7 +778,7 @@ export const searchConfig: SearchModuleConfig = {
           'description',
         ],
         hashOnly: ['tax_id', 'registration_number'],
-        excluded: ['bank_account', 'billing_info', 'credit_info'],
+        excluded: ['bank_account', 'bank_name', 'iban', 'billing_info', 'credit_info'],
       },
     },
 

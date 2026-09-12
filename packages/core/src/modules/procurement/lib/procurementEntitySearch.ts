@@ -8,7 +8,7 @@ function readItems(payload: Record<string, unknown> | null | undefined): unknown
 }
 
 function displayName(row: Record<string, unknown>): string {
-  const dn = row.display_name
+  const dn = row.display_name ?? row.displayName
   if (typeof dn === 'string' && dn.trim().length) return dn.trim()
   return String(row.id ?? '')
 }
@@ -29,31 +29,29 @@ export async function remoteSearchCustomerEntities(query: string): Promise<Entit
 
   const out: EntitySearchComboboxOption[] = []
 
-  for (const item of readItems(peopleCall.result ?? undefined)) {
-    if (!item || typeof item !== 'object') continue
-    const row = item as Record<string, unknown>
-    const id = typeof row.id === 'string' ? row.id : ''
-    if (!id) continue
-    const email = typeof row.primary_email === 'string' ? row.primary_email.trim() : ''
-    out.push({
-      value: id,
-      label: displayName(row),
-      description: email.length ? email : undefined,
-    })
+  const pushRows = (call: Awaited<ReturnType<typeof apiCall<Record<string, unknown>>>>, kindLabel?: string) => {
+    if (!call.ok) return
+    for (const item of readItems(call.result ?? undefined)) {
+      if (!item || typeof item !== 'object') continue
+      const row = item as Record<string, unknown>
+      const id = typeof row.id === 'string' ? row.id : ''
+      if (!id) continue
+      const name = displayName(row)
+      const emailRaw = row.primary_email ?? row.primaryEmail
+      const email = typeof emailRaw === 'string' ? emailRaw.trim() : ''
+      const phoneRaw = row.primary_phone ?? row.primaryPhone
+      const phone = typeof phoneRaw === 'string' ? phoneRaw.trim() : ''
+      const description = phone || email || undefined
+      out.push({
+        value: id,
+        label: kindLabel ? `${kindLabel}: ${name}` : name,
+        description,
+      })
+    }
   }
 
-  for (const item of readItems(companiesCall.result ?? undefined)) {
-    if (!item || typeof item !== 'object') continue
-    const row = item as Record<string, unknown>
-    const id = typeof row.id === 'string' ? row.id : ''
-    if (!id) continue
-    const email = typeof row.primary_email === 'string' ? row.primary_email.trim() : ''
-    out.push({
-      value: id,
-      label: displayName(row),
-      description: email.length ? email : undefined,
-    })
-  }
+  pushRows(peopleCall)
+  pushRows(companiesCall)
 
   out.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
   return out
@@ -217,9 +215,14 @@ export async function remoteSearchAuthUsers(query: string): Promise<EntitySearch
     if (!item || typeof item !== 'object') continue
     const row = item as Record<string, unknown>
     const id = typeof row.id === 'string' ? row.id : ''
+    const name = typeof row.name === 'string' ? row.name.trim() : ''
     const email = typeof row.email === 'string' ? row.email.trim() : ''
-    if (!id || !email) continue
-    out.push({ value: id, label: email, description: email })
+    if (!id || (!name && !email)) continue
+    out.push({
+      value: id,
+      label: name || email,
+      description: name && email && name !== email ? email : undefined,
+    })
   }
   return out
 }
@@ -268,11 +271,46 @@ export async function resolveQuoteDisplayLabel(id: string): Promise<string | nul
 /** Primary title for a resource — matches `mapApiResource` / resources DataTable name column. */
 export function formatResourceApiRowLabel(row: Record<string, unknown>): string {
   const id = typeof row.id === 'string' ? row.id : ''
-  if (typeof row.name === 'string') {
-    const trimmed = row.name.trim()
-    if (trimmed.length) return trimmed
-  }
+  const name =
+    typeof row.name === 'string' && row.name.trim().length
+      ? row.name.trim()
+      : typeof row.title === 'string' && row.title.trim().length
+        ? row.title.trim()
+        : ''
+  const plate = readResourceVehiclePlate(row)
+  if (name && plate) return `${name} · ${plate}`
+  if (name) return name
+  if (plate) return plate
   return id
+}
+
+function readResourceVehiclePlate(row: Record<string, unknown>): string | null {
+  const candidates = [
+    row.cf_vehicle_plate,
+    row['cf:vehicle_plate'],
+    row.vehicle_plate,
+  ]
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  const customFields = row.customFields
+  if (customFields && typeof customFields === 'object' && !Array.isArray(customFields)) {
+    const map = customFields as Record<string, unknown>
+    for (const key of ['vehicle_plate', 'cf_vehicle_plate']) {
+      const value = map[key]
+      if (typeof value === 'string' && value.trim()) return value.trim()
+    }
+  }
+  if (Array.isArray(customFields)) {
+    for (const entry of customFields) {
+      if (!entry || typeof entry !== 'object') continue
+      const item = entry as Record<string, unknown>
+      const key = typeof item.key === 'string' ? item.key.replace(/^cf_/, '') : ''
+      if (key !== 'vehicle_plate') continue
+      if (typeof item.value === 'string' && item.value.trim()) return item.value.trim()
+    }
+  }
+  return null
 }
 
 export async function resolveResourceDisplayLabel(id: string): Promise<string | null> {
@@ -301,13 +339,22 @@ export async function resolveUserDisplayLabel(id: string): Promise<string | null
   const call = await apiCall<Record<string, unknown>>(
     `/api/auth/users?id=${encodeURIComponent(trimmed)}&pageSize=1`,
   )
+  if (!call.ok) return null
   const items = readItems(call.result ?? undefined)
-  const row = items[0]
+  const row =
+    items.find(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        (item as Record<string, unknown>).id === trimmed,
+    ) ?? items[0]
   if (!row || typeof row !== 'object') return null
   const r = row as Record<string, unknown>
   const name = typeof r.name === 'string' ? r.name.trim() : ''
   const email = typeof r.email === 'string' ? r.email.trim() : ''
-  return name.length ? name : email.length ? email : typeof r.id === 'string' ? r.id : null
+  if (name.length) return name
+  if (email.length) return email
+  return null
 }
 
 export type ProcurementCustomerAssociationPreview = {
@@ -317,20 +364,62 @@ export type ProcurementCustomerAssociationPreview = {
   recordHref: string | null
 }
 
+function readTrimmed(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length ? trimmed : null
+}
+
+function resolvePersonDisplayTitle(
+  person: { displayName?: string | null; display_name?: string | null },
+  profile?: {
+    firstName?: string | null
+    lastName?: string | null
+    preferredName?: string | null
+    first_name?: string | null
+    last_name?: string | null
+    preferred_name?: string | null
+  } | null,
+): string | null {
+  const fromPerson =
+    readTrimmed(person.displayName) ?? readTrimmed(person.display_name)
+  if (fromPerson) return fromPerson
+  if (!profile) return null
+  const preferred = readTrimmed(profile.preferredName) ?? readTrimmed(profile.preferred_name)
+  if (preferred) return preferred
+  const first = readTrimmed(profile.firstName) ?? readTrimmed(profile.first_name)
+  const last = readTrimmed(profile.lastName) ?? readTrimmed(profile.last_name)
+  const composed = [first, last].filter(Boolean).join(' ').trim()
+  return composed.length ? composed : null
+}
+
 export async function fetchProcurementCustomerAssociationPreview(
   entityId: string,
 ): Promise<ProcurementCustomerAssociationPreview | null> {
   const id = entityId.trim()
   if (!id.length) return null
   const personRes = await apiCall<{
-    person?: { id?: string; displayName?: string | null; primaryEmail?: string | null }
+    person?: {
+      id?: string
+      displayName?: string | null
+      display_name?: string | null
+      primaryEmail?: string | null
+      primary_email?: string | null
+    }
+    profile?: {
+      firstName?: string | null
+      lastName?: string | null
+      preferredName?: string | null
+      first_name?: string | null
+      last_name?: string | null
+      preferred_name?: string | null
+    } | null
   }>(`/api/customers/people/${encodeURIComponent(id)}`)
   if (personRes.ok && personRes.result?.person?.id === id) {
     const row = personRes.result.person
-    const title =
-      typeof row.displayName === 'string' && row.displayName.trim().length ? row.displayName.trim() : id
+    const title = resolvePersonDisplayTitle(row, personRes.result.profile) ?? id
     const email =
-      typeof row.primaryEmail === 'string' && row.primaryEmail.trim().length ? row.primaryEmail.trim() : null
+      readTrimmed(row.primaryEmail) ?? readTrimmed(row.primary_email)
     return {
       kind: 'person',
       title,
@@ -339,15 +428,21 @@ export async function fetchProcurementCustomerAssociationPreview(
     }
   }
   const companyRes = await apiCall<{
-    company?: { id?: string; displayName?: string | null; primaryEmail?: string | null }
+    company?: {
+      id?: string
+      displayName?: string | null
+      display_name?: string | null
+      primaryEmail?: string | null
+      primary_email?: string | null
+    }
     profile?: { domain?: string | null } | null
   }>(`/api/customers/companies/${encodeURIComponent(id)}`)
   if (companyRes.ok && companyRes.result?.company?.id === id) {
     const row = companyRes.result.company
     const title =
-      typeof row.displayName === 'string' && row.displayName.trim().length ? row.displayName.trim() : id
+      readTrimmed(row.displayName) ?? readTrimmed(row.display_name) ?? id
     const email =
-      typeof row.primaryEmail === 'string' && row.primaryEmail.trim().length ? row.primaryEmail.trim() : null
+      readTrimmed(row.primaryEmail) ?? readTrimmed(row.primary_email)
     const domainRaw =
       companyRes.result.profile && typeof companyRes.result.profile.domain === 'string'
         ? companyRes.result.profile.domain.trim()
@@ -420,6 +515,22 @@ export function mergeEntitySearchOption(
 ): EntitySearchComboboxOption[] {
   const v = value.trim()
   if (!v.length) return options
-  if (options.some((o) => o.value === v)) return options
-  return [{ value: v, label: label.trim() || v, description: description ?? undefined }, ...options]
+  const nextLabel = label.trim() || v
+  const existing = options.find((o) => o.value === v)
+  if (existing) {
+    // Upgrade placeholder labels (often the raw UUID) once a real name is known
+    if (existing.label === v && nextLabel !== v) {
+      return options.map((option) =>
+        option.value === v
+          ? {
+              ...option,
+              label: nextLabel,
+              description: description ?? option.description,
+            }
+          : option,
+      )
+    }
+    return options
+  }
+  return [{ value: v, label: nextLabel, description: description ?? undefined }, ...options]
 }

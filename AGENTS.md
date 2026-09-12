@@ -73,6 +73,10 @@ IMPORTANT: Before any research or coding, match the task to the root `AGENTS.md`
 | Implementing a spec (or specific phases) with coordinated agents, unit tests, docs, progress tracking | `.ai/skills/implement-spec/SKILL.md` |
 | Writing new specs, updating existing specs after implementation, documenting architectural decisions, maintaining changelogs | `.ai/specs/AGENTS.md` |
 | Reviewing code changes for architecture, security, conventions, and quality compliance | `.ai/skills/code-review/SKILL.md` |
+| **Documentation** | |
+| Operator user guides, module descriptions (EN), Polish PDF manuals for Daily work sidebar | `.ai/skills/user-guide-authoring/SKILL.md` + `.ai/module-guides/INDEX.md` |
+| In-CRM playbook procedures (MD ↔ playbook import) | `.ai/skills/procedure-authoring/SKILL.md` |
+| Open Mercato MCP operations (local/remote CRM) | `.ai/skills/remote-crm-mcp/SKILL.md` + domain `crm-*` skills |
 
 ## Core Principles
 
@@ -314,7 +318,8 @@ Third-party module developers depend on stable platform APIs. Any change to a **
 ## Key Commands
 
 ```bash
-yarn dev                  # Start development server
+yarn dev                  # Start development server (full stack)
+yarn dev:light            # Low-memory app + platform CSV import worker (no watchers/MCP/full workers/scheduler)
 yarn build                # Build everything
 yarn build:packages       # Build packages only
 yarn lint                 # Lint all packages

@@ -275,6 +275,12 @@ export class CustomerCompanyProfile {
   @Property({ name: 'regon', type: 'text', nullable: true })
   regon?: string | null
 
+  @Property({ name: 'bank_name', type: 'text', nullable: true })
+  bankName?: string | null
+
+  @Property({ name: 'iban', type: 'text', nullable: true })
+  iban?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 

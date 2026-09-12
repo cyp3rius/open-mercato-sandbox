@@ -15,9 +15,14 @@ const authServiceMock = {
   createSession: jest.fn(async () => ({ token: 'session-token' })),
 }
 
+const rbacServiceMock = {
+  userHasAllFeatures: jest.fn(async () => true),
+}
+
 const containerMock = {
   resolve: jest.fn((name: string) => {
     if (name === 'authService') return authServiceMock
+    if (name === 'rbacService') return rbacServiceMock
     if (name === 'eventBus') return { emitEvent: jest.fn(async () => undefined) }
     if (name === 'em') return {}
     return null
@@ -51,6 +56,7 @@ describe('POST /api/auth/login with custom route interceptors', () => {
   test('returns unchanged login response when no interceptor matches', async () => {
     const req = new Request('http://localhost/api/auth/login', {
       method: 'POST',
+      headers: { accept: 'application/json' },
       body: makeFormData({ email: 'user@example.com', password: 'secret', remember: '1' }),
     })
 
@@ -89,6 +95,7 @@ describe('POST /api/auth/login with custom route interceptors', () => {
 
     const req = new Request('http://localhost/api/auth/login', {
       method: 'POST',
+      headers: { accept: 'application/json' },
       body: makeFormData({ email: 'user@example.com', password: 'secret' }),
     })
 
@@ -102,6 +109,101 @@ describe('POST /api/auth/login with custom route interceptors', () => {
       redirect: '/backend',
       mfa_required: true,
     })
+  })
+
+  test('rejects login when required feature is missing', async () => {
+    rbacServiceMock.userHasAllFeatures.mockResolvedValueOnce(false)
+
+    const req = new Request('http://localhost/api/auth/login', {
+      method: 'POST',
+      body: makeFormData({
+        email: 'user@example.com',
+        password: 'secret',
+        requireFeature: 'taxi_fleet.driver',
+      }),
+    })
+
+    const res = await POST(req)
+    expect(res.status).toBe(403)
+    const body = await res.json()
+    expect(body.ok).toBe(false)
+    expect(rbacServiceMock.userHasAllFeatures).toHaveBeenCalledWith(
+      '1',
+      ['taxi_fleet.driver'],
+      { tenantId, organizationId: orgId },
+    )
+  })
+
+  test('honors relative redirect for JSON clients', async () => {
+    const req = new Request('http://localhost/api/auth/login', {
+      method: 'POST',
+      headers: { accept: 'application/json' },
+      body: makeFormData({
+        email: 'user@example.com',
+        password: 'secret',
+        requireFeature: 'taxi_fleet.driver',
+        redirect: '/driver',
+      }),
+    })
+
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.redirect).toBe('/driver')
+  })
+
+  test('redirects browser form navigation instead of returning JSON', async () => {
+    const req = new Request('http://localhost/api/auth/login', {
+      method: 'POST',
+      headers: {
+        accept: 'text/html,application/xhtml+xml',
+        'sec-fetch-mode': 'navigate',
+        'sec-fetch-dest': 'document',
+      },
+      body: makeFormData({
+        email: 'user@example.com',
+        password: 'secret',
+        redirect: '/driver',
+      }),
+    })
+
+    const res = await POST(req)
+    expect(res.status).toBe(303)
+    expect(res.headers.get('location')).toContain('/driver')
+    const setCookie = res.headers.get('set-cookie') ?? ''
+    expect(setCookie).toContain('auth_token=jwt-token')
+  })
+
+  test('redirects by default when Accept is not JSON-only', async () => {
+    const req = new Request('http://localhost/api/auth/login', {
+      method: 'POST',
+      body: makeFormData({
+        email: 'user@example.com',
+        password: 'secret',
+        redirect: '/driver',
+      }),
+    })
+
+    const res = await POST(req)
+    expect(res.status).toBe(303)
+    expect(res.headers.get('location')).toContain('/driver')
+  })
+
+  test('rejects open redirect targets', async () => {
+    const req = new Request('http://localhost/api/auth/login', {
+      method: 'POST',
+      headers: { accept: 'application/json' },
+      body: makeFormData({
+        email: 'user@example.com',
+        password: 'secret',
+        redirect: '//evil.example/phish',
+      }),
+    })
+
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.redirect).toBe('/backend')
   })
 
   test('applies body replace from matched after interceptor and keeps cookies valid', async () => {
@@ -130,6 +232,7 @@ describe('POST /api/auth/login with custom route interceptors', () => {
 
     const req = new Request('http://localhost/api/auth/login', {
       method: 'POST',
+      headers: { accept: 'application/json' },
       body: makeFormData({ email: 'user@example.com', password: 'secret', remember: '1' }),
     })
 

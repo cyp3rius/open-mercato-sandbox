@@ -262,6 +262,7 @@ export function TeamMemberForm(props: TeamMemberFormProps) {
             onChange={(next) => setValue(next)}
             options={userOptions}
             fetchOptions={fetchUserOptions}
+            minQuery={0}
             placeholder={translate('staff.teamMembers.form.fields.user.placeholder', 'Select a user')}
             searchPlaceholder={translate('staff.teamMembers.form.fields.user.search', 'Search users')}
             emptyLabel={translate('staff.teamMembers.form.fields.user.empty', 'No users found')}

@@ -1,10 +1,14 @@
 /** @jest-environment node */
 
 import { GET } from '@open-mercato/core/modules/auth/api/users/route'
+import { User } from '@open-mercato/core/modules/auth/data/entities'
 
 const mockGetAuthFromRequest = jest.fn()
 const mockLoadAcl = jest.fn()
 const mockFindWithDecryption = jest.fn()
+const mockFindAndCountWithDecryption = jest.fn()
+const mockDecryptEntitiesWithFallbackScope = jest.fn()
+const mockIsTenantDataEncryptionEnabled = jest.fn()
 const mockLoadCustomFieldValues = jest.fn()
 const mockLogCrudAccess = jest.fn()
 
@@ -41,6 +45,15 @@ jest.mock('@open-mercato/shared/lib/crud/factory', () => ({
 
 jest.mock('@open-mercato/shared/lib/encryption/find', () => ({
   findWithDecryption: jest.fn((...args: unknown[]) => mockFindWithDecryption(...args)),
+  findAndCountWithDecryption: jest.fn((...args: unknown[]) => mockFindAndCountWithDecryption(...args)),
+}))
+
+jest.mock('@open-mercato/shared/lib/encryption/toggles', () => ({
+  isTenantDataEncryptionEnabled: jest.fn(() => mockIsTenantDataEncryptionEnabled()),
+}))
+
+jest.mock('@open-mercato/shared/lib/encryption/subscriber', () => ({
+  decryptEntitiesWithFallbackScope: jest.fn((...args: unknown[]) => mockDecryptEntitiesWithFallbackScope(...args)),
 }))
 
 jest.mock('@open-mercato/shared/lib/crud/custom-fields', () => ({
@@ -63,6 +76,9 @@ describe('GET /api/auth/users', () => {
     mockEm.find.mockReset()
     mockEm.findAndCount.mockReset()
     mockFindWithDecryption.mockReset()
+    mockFindAndCountWithDecryption.mockReset()
+    mockDecryptEntitiesWithFallbackScope.mockReset()
+    mockIsTenantDataEncryptionEnabled.mockReset()
     mockLoadCustomFieldValues.mockReset()
     mockLogCrudAccess.mockReset()
     mockContainer.resolve.mockClear()
@@ -77,6 +93,9 @@ describe('GET /api/auth/users', () => {
     mockEm.find.mockResolvedValue([])
     mockEm.findAndCount.mockResolvedValue([[], 0])
     mockFindWithDecryption.mockResolvedValue([])
+    mockFindAndCountWithDecryption.mockResolvedValue([[], 0])
+    mockDecryptEntitiesWithFallbackScope.mockResolvedValue(undefined)
+    mockIsTenantDataEncryptionEnabled.mockReturnValue(false)
     mockLoadCustomFieldValues.mockResolvedValue({})
     mockLogCrudAccess.mockResolvedValue(undefined)
   })
@@ -107,10 +126,22 @@ describe('GET /api/auth/users', () => {
     expect(response.status).toBe(200)
     expect(body).toEqual({ items: [], total: 0, totalPages: 1, isSuperAdmin: false })
     expect(mockEm.findAndCount).not.toHaveBeenCalled()
+    expect(mockFindAndCountWithDecryption).not.toHaveBeenCalled()
   })
 
   test('applies tenant and search filters for non-superadmin users', async () => {
     mockEm.findAndCount.mockResolvedValueOnce([
+      [
+        {
+          id: '423e4567-e89b-12d3-a456-426614174001',
+          email: 'alice@example.com',
+          tenantId,
+          organizationId,
+        },
+      ],
+      1,
+    ])
+    mockFindAndCountWithDecryption.mockResolvedValueOnce([
       [
         {
           id: '423e4567-e89b-12d3-a456-426614174001',
@@ -126,16 +157,24 @@ describe('GET /api/auth/users', () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(mockEm.findAndCount).toHaveBeenCalledWith(
+    expect(mockFindAndCountWithDecryption).toHaveBeenCalledWith(
       expect.anything(),
+      User,
       expect.objectContaining({
         deletedAt: null,
         tenantId,
-        email: { $ilike: '%alice%' },
+        $or: expect.arrayContaining([
+          { email: { $ilike: '%alice%' } },
+          { name: { $ilike: '%alice%' } },
+        ]),
       }),
       expect.objectContaining({
         limit: 50,
         offset: 0,
+      }),
+      expect.objectContaining({
+        tenantId,
+        organizationId: null,
       }),
     )
     expect(body.total).toBe(1)
@@ -148,6 +187,101 @@ describe('GET /api/auth/users', () => {
     expect(body.isSuperAdmin).toBe(false)
   })
 
+  test('filters encrypted users in memory when tenant encryption is enabled', async () => {
+    mockIsTenantDataEncryptionEnabled.mockReturnValueOnce(true)
+    mockEm.find.mockResolvedValueOnce([
+      {
+        id: '423e4567-e89b-12d3-a456-426614174001',
+        email: 'employee@acme.com',
+        name: 'Employee User',
+        tenantId,
+        organizationId,
+      },
+      {
+        id: '523e4567-e89b-12d3-a456-426614174002',
+        email: 'admin@acme.com',
+        name: 'Admin User',
+        tenantId,
+        organizationId,
+      },
+    ])
+
+    const response = await GET(makeRequest('/api/auth/users?search=employee&page=1&pageSize=50'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(mockEm.find).toHaveBeenCalledWith(
+      User,
+      expect.objectContaining({
+        deletedAt: null,
+        tenantId,
+      }),
+      expect.objectContaining({
+        limit: 5000,
+        offset: 0,
+        orderBy: { createdAt: 'desc' },
+      }),
+    )
+    expect(mockDecryptEntitiesWithFallbackScope).toHaveBeenCalled()
+    expect(body.total).toBe(1)
+    expect(body.items).toHaveLength(1)
+    expect(body.items[0].email).toBe('employee@acme.com')
+  })
+
+  test('filters encrypted users by partial email domain', async () => {
+    mockIsTenantDataEncryptionEnabled.mockReturnValueOnce(true)
+    mockEm.find.mockResolvedValueOnce([
+      {
+        id: '635ab1f0-e49d-448f-bb74-a536b2e1a576',
+        email: 'hello+2@sziarko.pl',
+        tenantId,
+        organizationId,
+      },
+      {
+        id: '523e4567-e89b-12d3-a456-426614174002',
+        email: 'admin@acme.com',
+        tenantId,
+        organizationId,
+      },
+    ])
+
+    const response = await GET(makeRequest('/api/auth/users?search=sziarko&page=1&pageSize=50'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.total).toBe(1)
+    expect(body.items[0].email).toBe('hello+2@sziarko.pl')
+  })
+
+  test('matches encrypted users by email hash for full email search', async () => {
+    mockIsTenantDataEncryptionEnabled.mockReturnValueOnce(true)
+    mockFindAndCountWithDecryption.mockResolvedValueOnce([
+      [{
+        id: '635ab1f0-e49d-448f-bb74-a536b2e1a576',
+        email: 'hello+2@sziarko.pl',
+        tenantId,
+        organizationId,
+      }],
+      1,
+    ])
+
+    const response = await GET(makeRequest('/api/auth/users?search=hello+2@sziarko.pl&page=1&pageSize=50'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(mockFindAndCountWithDecryption).toHaveBeenCalledWith(
+      expect.anything(),
+      User,
+      expect.objectContaining({
+        emailHash: { $in: expect.any(Array) },
+      }),
+      expect.objectContaining({ limit: 50, offset: 0 }),
+      expect.objectContaining({ tenantId, organizationId: null }),
+    )
+    expect(body.items).toHaveLength(1)
+    expect(body.items[0].email).toBe('hello+2@sziarko.pl')
+  })
+
   test('short-circuits with empty result when role filter has no matching users', async () => {
     mockEm.find.mockResolvedValueOnce([])
 
@@ -156,13 +290,13 @@ describe('GET /api/auth/users', () => {
 
     expect(response.status).toBe(200)
     expect(body).toEqual({ items: [], total: 0, totalPages: 1 })
-    expect(mockEm.findAndCount).not.toHaveBeenCalled()
+    expect(mockFindAndCountWithDecryption).not.toHaveBeenCalled()
   })
 
   test('applies roleId filter for a single role when users are found', async () => {
     const matchedUserId = '523e4567-e89b-12d3-a456-426614174001'
     mockEm.find.mockResolvedValueOnce([{ user: { id: matchedUserId }, role: { id: roleId } }])
-    mockEm.findAndCount.mockResolvedValueOnce([
+    mockFindAndCountWithDecryption.mockResolvedValueOnce([
       [{ id: matchedUserId, email: 'role-filtered@example.com', tenantId, organizationId }],
       1,
     ])
@@ -170,7 +304,7 @@ describe('GET /api/auth/users', () => {
     const response = await GET(makeRequest(`/api/auth/users?roleId=${roleId}`))
     const body = await response.json()
 
-    const where = mockEm.findAndCount.mock.calls[0][1] as { id?: { $in: string[] } }
+    const where = mockFindAndCountWithDecryption.mock.calls[0][2] as { id?: { $in: string[] } }
     expect(where.id?.$in).toEqual([matchedUserId])
     expect(body.total).toBe(1)
     expect(body.items).toHaveLength(1)
@@ -186,7 +320,7 @@ describe('GET /api/auth/users', () => {
       { user: secondUserId, role: { id: secondRoleId } },
       { user: { id: firstUserId }, role: { id: secondRoleId } },
     ])
-    mockEm.findAndCount.mockResolvedValueOnce([
+    mockFindAndCountWithDecryption.mockResolvedValueOnce([
       [
         { id: firstUserId, email: 'first@example.com', tenantId, organizationId },
         { id: secondUserId, email: 'second@example.com', tenantId, organizationId },
@@ -203,7 +337,7 @@ describe('GET /api/auth/users', () => {
     expect(roleFilter.role?.$in).toEqual(expect.arrayContaining([roleId, secondRoleId]))
     expect(roleFilter.role?.$in).toHaveLength(2)
 
-    const where = mockEm.findAndCount.mock.calls[0][1] as { id?: { $in: string[] } }
+    const where = mockFindAndCountWithDecryption.mock.calls[0][2] as { id?: { $in: string[] } }
     expect(where.id?.$in).toEqual(expect.arrayContaining([firstUserId, secondUserId]))
     expect(where.id?.$in).toHaveLength(2)
     expect(body.total).toBe(2)
@@ -218,14 +352,14 @@ describe('GET /api/auth/users', () => {
       roles: ['admin'],
     })
     mockLoadAcl.mockResolvedValueOnce({ isSuperAdmin: true })
-    mockEm.findAndCount.mockResolvedValueOnce([[], 0])
+    mockFindAndCountWithDecryption.mockResolvedValueOnce([[], 0])
 
     const response = await GET(
       makeRequest(`/api/auth/users?organizationId=${secondaryOrganizationId}&page=1&pageSize=10`),
     )
     const body = await response.json()
 
-    const where = mockEm.findAndCount.mock.calls[0][1] as Record<string, unknown>
+    const where = mockFindAndCountWithDecryption.mock.calls[0][2] as Record<string, unknown>
     expect(where.organizationId).toBe(secondaryOrganizationId)
     expect(where).not.toHaveProperty('tenantId')
     expect(body.isSuperAdmin).toBe(true)

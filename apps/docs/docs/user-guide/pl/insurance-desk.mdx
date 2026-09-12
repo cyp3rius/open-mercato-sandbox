@@ -1,0 +1,98 @@
+---
+title: Ubezpieczenia (biurko ubezpieczeniowe)
+description: Jak obsługiwać zapytania ubezpieczeniowe, polisy, ubezpieczycieli i konfigurację modułu.
+---
+
+# Ubezpieczenia (biurko ubezpieczeniowe)
+
+## Dla kogo jest ten moduł
+
+Moduł **Ubezpieczenia** (biurko ubezpieczeniowe) służy pracownikom obsługi polis: rejestracji **zapytań** (leadów), wystawiania **polis**, prowadzenia bazy **ubezpieczycieli** i powiązań z klientem, produktem z katalogu oraz zasobem (np. pojazdem).
+
+## Gdzie znaleźć w systemie
+
+| Element | Ścieżka w menu |
+|---------|----------------|
+| Pulpit ubezpieczeń | **Codzienna praca → Ubezpieczenia** (pierwsza pozycja — hub) |
+| Polisy | **Codzienna praca → Ubezpieczenia → Polisy** |
+| Zapytania | **Codzienna praca → Ubezpieczenia → Zapytania** |
+| Ubezpieczyciele | **Codzienna praca → Ubezpieczenia → Ubezpieczyciele** |
+
+Konfiguracja słowników i statusów: **Ustawienia → Konfiguracja modułów → Ubezpieczenia**.
+
+## Co można zrobić
+
+- Rejestrować zapytania ubezpieczeniowe ręcznie lub odbierać je z kanałów zewnętrznych (gdy skonfigurowane).
+- Tworzyć **polisę** na podstawie zapytania.
+- Powiązać polisę z **klientem**, **ubezpieczycielem**, **pokryciami z katalogu** i **zasobem** (przedmiot ubezpieczenia).
+- Prowadzić kontakty ubezpieczycieli i załączniki dokumentów.
+- Otrzymywać powiadomienia o wygasających polisach (gdy włączone).
+
+## Instrukcje krok po kroku
+
+### Rejestracja zapytania
+
+1. Otwórz **Zapytania** → **Utwórz**.
+2. Wypełnij dane kontaktowe i opis zapytania.
+3. Opcjonalnie wskaż **partnera polecającego** i dołącz dokumenty.
+4. Zapisz.
+
+Zapytania mogą też trafiać automatycznie z formularza na stronie lub innego systemu — wtedy pojawią się na liście bez ręcznego tworzenia.
+
+### Utworzenie polisy z zapytania
+
+1. Otwórz szczegóły **zapytania**.
+2. Kliknij akcję **Utwórz polisę** (lub odpowiednik w interfejsie).
+3. Uzupełnij dane polisy — część pól zostanie uzupełniona z zapytania.
+4. Wybierz **ubezpieczyciela** i **pokrycia** z katalogu produktów.
+5. Powiąż **zasób** (np. pojazd) jako przedmiot ubezpieczenia.
+6. Zapisz.
+
+### Nowa polisa bez zapytania
+
+1. Otwórz **Polisy** → **Utwórz**.
+2. Wypełnij dane klienta, ubezpieczyciela, okresu i pokryć.
+3. Dołącz skany dokumentów w sekcji załączników.
+4. Zapisz.
+
+### Prowadzenie ubezpieczycieli
+
+1. Otwórz **Ubezpieczyciele** → **Utwórz** lub edytuj istniejącego.
+2. Uzupełnij dane firmy ubezpieczyciela.
+3. Na szczegółach dodaj **kontakty** (osoby po stronie ubezpieczyciela).
+
+## Uprawnienia
+
+| Uprawnienie | Co umożliwia |
+|-------------|--------------|
+| Dostęp do biurka ubezpieczeń | Hub i nawigacja modułu |
+| Podgląd / zarządzanie zapytaniami | Lista, tworzenie, edycja zapytań |
+| Podgląd / zarządzanie polisami | Lista, tworzenie, edycja polis |
+| Podgląd / zarządzanie ubezpieczycielami | Baza ubezpieczycieli |
+| Konfiguracja ubezpieczeń | Słowniki statusów i ustawienia list |
+
+Pracownicy zwykle mają podgląd; tworzenie i edycja polis wymaga osobnych uprawnień.
+
+## Powiązania z innymi modułami
+
+- **Klienci** — posiadacz polisy i osoby kontaktowe.
+- **Produkty (katalog)** — pokrycia i warianty ubezpieczeniowe.
+- **Zasoby** — ubezpieczany przedmiot (np. pojazd).
+- **Programy partnerskie** — partner polecający przy zapytaniu.
+- **Sprawy** — sprawa może odnosić się do polisy.
+
+## Częste pytania
+
+**Pytanie:** Nie mogę utworzyć polisy.  
+**Odpowiedź:** Sprawdź, czy masz uprawnienie do **zarządzania polisami**, nie tylko podglądu.
+
+**Pytanie:** Skąd biorą się zapytania z internetu?  
+**Odpowiedź:** Z integracji skonfigurowanej przez administratora (np. formularz na stronie) — szczegóły zależą od wdrożenia.
+
+## Powiązane materiały
+
+- [Klienci](./customers)
+- [Zasoby](./resources)
+- [Produkty](./catalog-products)
+- [Sprawy](./cases)
+- [Przegląd instrukcji PL](./overview)

@@ -25,6 +25,13 @@ function uniqueNonEmpty(values: string[]): string[] {
   return Array.from(new Set(values.map((entry) => entry.trim()).filter((entry) => entry.length > 0)))
 }
 
+function parseBankAccountsFromProfile(profile: Record<string, unknown> | null | undefined): string[] {
+  if (!profile || typeof profile !== 'object') return []
+  const out: string[] = []
+  if (typeof profile.iban === 'string') out.push(profile.iban)
+  return uniqueNonEmpty(out)
+}
+
 function parseBankAccounts(customFields: Record<string, unknown> | undefined | null): string[] {
   if (!customFields || typeof customFields !== 'object') return []
   const bucket = customFields as Record<string, unknown>
@@ -119,6 +126,9 @@ export async function readCustomerCompanySnapshot(entityId: string): Promise<Cus
     nip,
     regon,
     address: formatAddress(addresses),
-    bankAccounts: parseBankAccounts(customFields),
+    bankAccounts: uniqueNonEmpty([
+      ...parseBankAccountsFromProfile(profile && typeof profile === 'object' ? profile : null),
+      ...parseBankAccounts(customFields),
+    ]),
   }
 }

@@ -26,6 +26,7 @@ import { formatDateTime } from '@open-mercato/shared/lib/time'
 import {
   fetchProcurementCustomerAssociationPreview,
   mergeEntitySearchOption,
+  remoteSearchAuthUsers,
   remoteSearchCustomerEntities,
   resolveCustomerEntityDisplayLabel,
   resolveResourceDisplayLabel,
@@ -89,6 +90,11 @@ type CaseProcedureState = {
     label?: string | null
   } | null
   customerEntityId?: string | null
+  procedureOwnerUserId?: string | null
+  needsProcedureOwner?: boolean
+  canAssignProcedureOwner?: boolean
+  canTakeProcedureOwnership?: boolean
+  caseOwnerUserId?: string | null
 }
 
 function procedureErrorMessage(err: string | null | undefined, t: (key: string, fallback: string) => string) {
@@ -257,6 +263,11 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
   }>({ open: false, variant: 'choice' })
   const [interruptClosing, setInterruptClosing] = React.useState(false)
   const [ownerDisplayLabel, setOwnerDisplayLabel] = React.useState('')
+  const [startProcedureOwnerUserId, setStartProcedureOwnerUserId] = React.useState('')
+  const [startProcedureOwnerLabel, setStartProcedureOwnerLabel] = React.useState('')
+  const [assignProcedureOwnerUserId, setAssignProcedureOwnerUserId] = React.useState('')
+  const [assignProcedureOwnerLabel, setAssignProcedureOwnerLabel] = React.useState('')
+  const [procedureOwnerDisplayLabel, setProcedureOwnerDisplayLabel] = React.useState('')
 
   React.useEffect(() => {
     let cancelled = false
@@ -335,6 +346,76 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
       cancelled = true
     }
   }, [caseRow?.ownerUserId])
+
+  React.useEffect(() => {
+    if (!procedure?.canStart) {
+      setStartProcedureOwnerUserId('')
+      setStartProcedureOwnerLabel('')
+      return
+    }
+    const preferred = currentUserId?.trim() || caseRow?.ownerUserId?.trim() || ''
+    setStartProcedureOwnerUserId(preferred)
+    if (!preferred) {
+      setStartProcedureOwnerLabel('')
+      return
+    }
+    if (preferred === caseRow?.ownerUserId?.trim() && ownerDisplayLabel) {
+      setStartProcedureOwnerLabel(ownerDisplayLabel)
+      return
+    }
+    void resolveUserDisplayLabel(preferred).then((label) => {
+      setStartProcedureOwnerLabel(label ?? preferred)
+    })
+  }, [
+    procedure?.canStart,
+    caseRow?.ownerUserId,
+    ownerDisplayLabel,
+    procedure?.playbookId,
+    currentUserId,
+  ])
+
+  React.useEffect(() => {
+    if (!procedure?.needsProcedureOwner) {
+      setAssignProcedureOwnerUserId('')
+      setAssignProcedureOwnerLabel('')
+      return
+    }
+    const oid =
+      currentUserId?.trim() ||
+      procedure.caseOwnerUserId?.trim() ||
+      caseRow?.ownerUserId?.trim() ||
+      ''
+    setAssignProcedureOwnerUserId(oid)
+    void (async () => {
+      if (!oid) {
+        setAssignProcedureOwnerLabel('')
+        return
+      }
+      const label = await resolveUserDisplayLabel(oid)
+      setAssignProcedureOwnerLabel(label ?? oid)
+    })()
+  }, [
+    procedure?.needsProcedureOwner,
+    procedure?.caseOwnerUserId,
+    caseRow?.ownerUserId,
+    procedure?.startedAt,
+    currentUserId,
+  ])
+
+  React.useEffect(() => {
+    const oid = procedure?.procedureOwnerUserId?.trim() || ''
+    if (!oid) {
+      setProcedureOwnerDisplayLabel('')
+      return
+    }
+    let cancelled = false
+    void resolveUserDisplayLabel(oid).then((label) => {
+      if (!cancelled) setProcedureOwnerDisplayLabel(label ?? oid)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [procedure?.procedureOwnerUserId])
 
   React.useEffect(() => {
     let cancelled = false
@@ -1264,20 +1345,213 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
                   </div>
 
                   {procedure.canStart && canMutate ? (
-                    <Button
-                      type="button"
-                      variant="default"
-                      size="sm"
-                      className="w-full gap-1 sm:w-auto"
-                      disabled={procedureAction || isCaseTerminal}
-                      onClick={() => void runProcedurePost({ action: 'start' })}
-                    >
-                      <PlayCircle className="size-4 shrink-0" aria-hidden />
-                      {t('cases.detail.procedure.start', 'Start procedure')}
-                    </Button>
+                    <div className="space-y-2">
+                      <div className="space-y-1.5">
+                        <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+                          {t('cases.detail.procedure.procedureOwner', 'Procedure owner')}
+                        </span>
+                        <EntitySearchCombobox
+                          value={startProcedureOwnerUserId}
+                          onChange={(next) => {
+                            const id = next.trim()
+                            setStartProcedureOwnerUserId(id)
+                            if (!id) {
+                              setStartProcedureOwnerLabel('')
+                              return
+                            }
+                            void resolveUserDisplayLabel(id).then((label) => {
+                              setStartProcedureOwnerLabel(label ?? id)
+                            })
+                          }}
+                          options={mergeEntitySearchOption(
+                            [],
+                            startProcedureOwnerUserId,
+                            startProcedureOwnerLabel || startProcedureOwnerUserId,
+                          )}
+                          onRemoteSearch={async (query) => {
+                            const rows = await remoteSearchAuthUsers(query)
+                            return mergeEntitySearchOption(
+                              rows,
+                              startProcedureOwnerUserId,
+                              startProcedureOwnerLabel || startProcedureOwnerUserId,
+                            )
+                          }}
+                          placeholder={t(
+                            'cases.detail.procedure.procedureOwnerPlaceholder',
+                            'Select procedure owner…',
+                          )}
+                          searchPlaceholder={t(
+                            'cases.detail.procedure.procedureOwnerSearch',
+                            'Search users…',
+                          )}
+                          disabled={procedureAction || isCaseTerminal}
+                          createInNewTabHref="/backend/users/create"
+                          createInNewTabAriaLabel={t(
+                            'cases.detail.procedure.procedureOwnerAddUser',
+                            'Create user in a new tab',
+                          )}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          {t(
+                            'cases.detail.procedure.procedureOwnerStartHint',
+                            'Defaults to you (current user). You can pick another user before starting.',
+                          )}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        className="w-full gap-1 sm:w-auto"
+                        disabled={
+                          procedureAction ||
+                          isCaseTerminal ||
+                          !startProcedureOwnerUserId.trim().length
+                        }
+                        onClick={() =>
+                          void runProcedurePost({
+                            action: 'start',
+                            ownerUserId: startProcedureOwnerUserId.trim(),
+                          })
+                        }
+                      >
+                        <PlayCircle className="size-4 shrink-0" aria-hidden />
+                        {t('cases.detail.procedure.start', 'Start procedure')}
+                      </Button>
+                    </div>
                   ) : null}
 
-                  {procedure.startedAt && procedure.currentBlock ? (
+                  {procedure.needsProcedureOwner && canMutate && procedure.canAssignProcedureOwner ? (
+                    <div className="space-y-2 rounded-md border border-border/60 bg-muted/15 px-3 py-2.5">
+                      <p className="text-sm font-medium leading-snug">
+                        {t(
+                          'cases.detail.procedure.needsProcedureOwnerTitle',
+                          'Assign a procedure owner to continue',
+                        )}
+                      </p>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        {t(
+                          'cases.detail.procedure.needsProcedureOwnerHint',
+                          'This procedure has no owner yet. Choose who should run the remaining steps (defaults to the case owner).',
+                        )}
+                      </p>
+                      <EntitySearchCombobox
+                        value={assignProcedureOwnerUserId}
+                        onChange={(next) => {
+                          const id = next.trim()
+                          setAssignProcedureOwnerUserId(id)
+                          if (!id) {
+                            setAssignProcedureOwnerLabel('')
+                            return
+                          }
+                          void resolveUserDisplayLabel(id).then((label) => {
+                            setAssignProcedureOwnerLabel(label ?? id)
+                          })
+                        }}
+                        options={mergeEntitySearchOption(
+                          [],
+                          assignProcedureOwnerUserId,
+                          assignProcedureOwnerLabel || assignProcedureOwnerUserId,
+                        )}
+                        onRemoteSearch={async (query) => {
+                          const rows = await remoteSearchAuthUsers(query)
+                          return mergeEntitySearchOption(
+                            rows,
+                            assignProcedureOwnerUserId,
+                            assignProcedureOwnerLabel || assignProcedureOwnerUserId,
+                          )
+                        }}
+                        placeholder={t(
+                          'cases.detail.procedure.procedureOwnerPlaceholder',
+                          'Select procedure owner…',
+                        )}
+                        searchPlaceholder={t(
+                          'cases.detail.procedure.procedureOwnerSearch',
+                          'Search users…',
+                        )}
+                        disabled={procedureAction || isCaseTerminal}
+                        createInNewTabHref="/backend/users/create"
+                        createInNewTabAriaLabel={t(
+                          'cases.detail.procedure.procedureOwnerAddUser',
+                          'Create user in a new tab',
+                        )}
+                      />
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        className="gap-2"
+                        disabled={
+                          procedureAction ||
+                          isCaseTerminal ||
+                          !assignProcedureOwnerUserId.trim().length
+                        }
+                        onClick={() =>
+                          void runProcedurePost({
+                            action: 'assignProcedureOwner',
+                            ownerUserId: assignProcedureOwnerUserId.trim(),
+                          })
+                        }
+                      >
+                        <UserPlus className="size-4 shrink-0" aria-hidden />
+                        {t('cases.detail.procedure.assignProcedureOwner', 'Assign procedure owner')}
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  {procedure.needsProcedureOwner && !canMutate ? (
+                    <p className="text-muted-foreground text-sm">
+                      {t(
+                        'cases.detail.procedure.needsProcedureOwnerReadOnly',
+                        'This procedure has no owner. Someone with case edit permission must assign one before steps can continue.',
+                      )}
+                    </p>
+                  ) : null}
+
+                  {procedure.startedAt &&
+                  !procedure.needsProcedureOwner &&
+                  procedure.canTakeProcedureOwnership &&
+                  canMutate &&
+                  currentUserId ? (
+                    <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5">
+                      <p className="text-sm font-medium leading-snug">
+                        {t(
+                          'cases.detail.procedure.notProcedureOwnerTitle',
+                          'You are not the procedure owner',
+                        )}
+                      </p>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        {t(
+                          'cases.detail.procedure.notProcedureOwnerHint',
+                          'Only the procedure owner can schedule tasks and advance steps. Current owner: {{owner}}.',
+                        ).replace(
+                          '{{owner}}',
+                          procedureOwnerDisplayLabel ||
+                            procedure.procedureOwnerUserId ||
+                            t('cases.detail.procedure.unknownOwner', 'Unknown'),
+                        )}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        className="gap-2"
+                        disabled={procedureAction || isCaseTerminal}
+                        onClick={() =>
+                          void runProcedurePost({
+                            action: 'assignProcedureOwner',
+                            ownerUserId: currentUserId,
+                            replaceExisting: true,
+                          })
+                        }
+                      >
+                        <UserPlus className="size-4 shrink-0" aria-hidden />
+                        {t('cases.detail.procedure.takeProcedureOwnership', 'Take procedure ownership')}
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  {procedure.startedAt && procedure.currentBlock && !procedure.needsProcedureOwner ? (
                     <CaseProcedureStepExecutor
                       block={procedure.currentBlock}
                       caseId={caseId ?? ''}

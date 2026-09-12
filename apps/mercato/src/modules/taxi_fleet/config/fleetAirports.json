@@ -1,0 +1,94 @@
+{
+  "airports": [
+    {
+      "id": "KRK",
+      "iata": "KRK",
+      "coordinates": [19.79259, 50.075943],
+      "labels": {
+        "pl": "Port Lotniczy Kraków-Balice (KRK)",
+        "en": "Kraków John Paul II Airport (KRK)"
+      },
+      "keywords": ["kraków", "krakow", "balice", "krk"]
+    },
+    {
+      "id": "KTW",
+      "iata": "KTW",
+      "coordinates": [19.07964, 50.472758],
+      "labels": {
+        "pl": "Port Lotniczy Katowice-Pyrzowice (KTW)",
+        "en": "Katowice Airport (KTW)"
+      },
+      "keywords": ["katowice", "pyrzowice", "ktw"]
+    },
+    {
+      "id": "RZE",
+      "iata": "RZE",
+      "coordinates": [21.988124, 50.111608],
+      "labels": {
+        "pl": "Port Lotniczy Rzeszów-Jasionka (RZE)",
+        "en": "Rzeszów-Jasionka Airport (RZE)"
+      },
+      "keywords": ["rzeszów", "rzeszow", "jasionka", "rze"]
+    },
+    {
+      "id": "WRO",
+      "iata": "WRO",
+      "coordinates": [16.89087, 51.103048],
+      "labels": {
+        "pl": "Port Lotniczy Wrocław-Strachowice (WRO)",
+        "en": "Wrocław Copernicus Airport (WRO)"
+      },
+      "keywords": ["wrocław", "wroclaw", "strachowice", "wro"]
+    },
+    {
+      "id": "LUZ",
+      "iata": "LUZ",
+      "coordinates": [22.719744, 51.238659],
+      "labels": {
+        "pl": "Port Lotniczy Lublin (LUZ)",
+        "en": "Lublin Airport (LUZ)"
+      },
+      "keywords": ["lublin", "świdnik", "swidnik", "luz"]
+    },
+    {
+      "id": "LCJ",
+      "iata": "LCJ",
+      "coordinates": [19.401356, 51.727348],
+      "labels": {
+        "pl": "Port Lotniczy Łódź-Lublinek (LCJ)",
+        "en": "Łódź Władysław Reymont Airport (LCJ)"
+      },
+      "keywords": ["łódź", "lodz", "lublinek", "lcj"]
+    },
+    {
+      "id": "WAW",
+      "iata": "WAW",
+      "coordinates": [20.974035, 52.173129],
+      "labels": {
+        "pl": "Port Lotniczy Warszawa-Chopin (WAW)",
+        "en": "Warsaw Chopin Airport (WAW)"
+      },
+      "keywords": ["warszawa", "warsaw", "chopin", "okęcie", "okecie", "waw"]
+    },
+    {
+      "id": "WMI",
+      "iata": "WMI",
+      "coordinates": [20.650481, 52.445964],
+      "labels": {
+        "pl": "Port Lotniczy Warszawa-Modlin (WMI)",
+        "en": "Warsaw Modlin Airport (WMI)"
+      },
+      "keywords": ["modlin", "wmi", "warszawa-modlin", "warsaw-modlin"]
+    },
+    {
+      "id": "RDO",
+      "iata": "RDO",
+      "coordinates": [21.209329, 51.390754],
+      "labels": {
+        "pl": "Port Lotniczy Warszawa-Radom (RDO)",
+        "en": "Warsaw Radom Airport (RDO)"
+      },
+      "keywords": ["radom", "rdo", "warszawa-radom", "warsaw-radom"]
+    }
+  ]
+}

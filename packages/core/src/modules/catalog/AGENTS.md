@@ -64,3 +64,8 @@ The default pipeline emits `catalog.pricing.resolve.before|after` events.
 Key events follow the standard pattern in `events.ts`:
 - `catalog.product.created/updated/deleted` — CRUD events
 - `catalog.pricing.resolve.before/after` — pricing lifecycle (excluded from workflow triggers)
+
+## Operator documentation
+
+- Module guide (products): [`.ai/module-guides/catalog-products.md`](../../../../.ai/module-guides/catalog-products.md)
+- EN user guide: `apps/docs/docs/user-guide/products-and-sales-channels.mdx`

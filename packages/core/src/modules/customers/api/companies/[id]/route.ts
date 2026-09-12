@@ -420,11 +420,18 @@ export async function GET(_req: Request, ctx: { params?: { id?: string } }) {
   }
   const viewerUserId = auth.isApiKey ? null : auth.sub ?? null
   if (viewerUserId) authorIds.add(viewerUserId)
+  if (company.ownerUserId) authorIds.add(company.ownerUserId)
 
   let userMap = new Map<string, { name: string | null; email: string | null }>()
   if (authorIds.size) {
     const authorIdList = Array.from(authorIds)
-    const users = await em.find(User, { id: { $in: authorIdList } })
+    const users = await findWithDecryption(
+      em,
+      User,
+      { id: { $in: authorIdList } },
+      undefined,
+      { tenantId: company.tenantId ?? auth.tenantId ?? null, organizationId: null },
+    )
     userMap = new Map(
       users.map((user) => [
         user.id,
@@ -500,6 +507,12 @@ export async function GET(_req: Request, ctx: { params?: { id?: string } }) {
     profileId ? profileCustomFieldValues?.[profileId] ?? {} : {},
   )
 
+  const ownerInfo = company.ownerUserId ? userMap.get(company.ownerUserId) : null
+  const ownerUserLabel =
+    (ownerInfo?.name && ownerInfo.name.trim()) ||
+    (ownerInfo?.email && ownerInfo.email.trim()) ||
+    null
+
   return NextResponse.json({
     interactionMode,
     company: {
@@ -509,6 +522,7 @@ export async function GET(_req: Request, ctx: { params?: { id?: string } }) {
       displayName: company.displayName,
       description: company.description,
       ownerUserId: company.ownerUserId,
+      ownerUserName: ownerUserLabel,
       primaryEmail: company.primaryEmail,
       primaryPhone: company.primaryPhone,
       status: company.status,
@@ -537,6 +551,8 @@ export async function GET(_req: Request, ctx: { params?: { id?: string } }) {
           annualRevenue: profile.annualRevenue,
           nip: profile.nip ?? null,
           regon: profile.regon ?? null,
+          bankName: profile.bankName ?? null,
+          iban: profile.iban ?? null,
         }
       : null,
     customFields,
@@ -741,6 +757,8 @@ const companyDetailResponseSchema = z.object({
       annualRevenue: z.number().nullable().optional(),
       nip: z.string().nullable().optional(),
       regon: z.string().nullable().optional(),
+      bankName: z.string().nullable().optional(),
+      iban: z.string().nullable().optional(),
     })
     .nullable(),
   customFields: z.record(z.string(), z.unknown()),

@@ -110,7 +110,7 @@ export function FilterBar({
                 const formatted = f.formatValue(String(val))
                 if (formatted) return formatted
               }
-              if (f.type === 'select' && f.options) {
+              if ((f.type === 'select' || f.type === 'combobox') && f.options) {
                 const o = f.options.find((o) => o.value === val)
                 return o ? o.label : String(val)
               }

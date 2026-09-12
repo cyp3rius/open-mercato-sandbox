@@ -57,15 +57,25 @@ export type CustomFieldsetDto = {
 /** Custom fields entity id for `resources` module records (fieldset bindings in CrudForm). */
 export const RESOURCES_RESOURCE_CUSTOM_FIELDS_ENTITY_ID = 'resources:resources_resource' as const
 
+export type FieldsetResourceTypeScopeOptions = {
+  /** When set, fieldsets whose code matches the resolved resource fieldset still apply even if `resourceTypeIds` omits the type. */
+  resolvedFieldsetCode?: string | null
+}
+
 export function fieldsetAppliesToResourceType(
-  fieldset: Pick<CustomFieldsetDto, 'resourceTypeIds'>,
+  fieldset: Pick<CustomFieldsetDto, 'resourceTypeIds' | 'code'>,
   resourceTypeId: string | null | undefined,
+  options?: FieldsetResourceTypeScopeOptions,
 ): boolean {
   const ids = fieldset.resourceTypeIds
   if (!ids?.length) return true
   const rt = typeof resourceTypeId === 'string' ? resourceTypeId.trim() : ''
-  if (!rt) return false
-  return ids.includes(rt)
+  if (rt && ids.includes(rt)) return true
+  const resolved = typeof options?.resolvedFieldsetCode === 'string'
+    ? options.resolvedFieldsetCode.trim()
+    : ''
+  if (resolved.length && fieldset.code === resolved) return true
+  return false
 }
 
 export type CustomFieldDefinitionsPayload = {

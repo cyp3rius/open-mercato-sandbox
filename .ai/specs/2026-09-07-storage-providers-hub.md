@@ -1,14 +1,33 @@
 # SPEC-045i — Storage Providers Hub
 
-**Parent**: [SPEC-045 — Integration Marketplace](./SPEC-045-2026-02-24-integration-marketplace.md)
+**Status**: In progress (design was incorrectly marked implemented; runtime was local-FS only)
+**Parent**: [SPEC-045 — Integration Marketplace](./implemented/SPEC-045-2026-02-24-integration-marketplace.md)
 **Phase**: 5a (Storage) of 6
 **Related**: Attachments module (`packages/core/src/modules/attachments/`), [SPEC-058 (PR #875)](https://github.com/open-mercato/open-mercato/pull/875)
 
 ---
 
+## MVP decisions (2026-09-07)
+
+Product choices for the first landable slice (custom / own-use provider path):
+
+| Decision | Choice |
+|----------|--------|
+| Target backend | **No S3 / Marketplace packaging in MVP.** Ship `StorageDriver` abstraction + `local` (+ `legacyPublic` read path). Custom providers are **env-loaded packages** (no app `register()` required). |
+| Credentials / config | **Environment variables only.** Active driver: `ATTACHMENTS_STORAGE_DRIVER`. Provider packages: `ATTACHMENTS_STORAGE_PROVIDER_MODULES`. Per-driver settings: `ATTACHMENTS_STORAGE_<DRIVER>_*`. No secrets in DB. |
+| Scope of active backend | **One storage backend per tenant** (for single-tenant / own deployments this is process-wide env). New uploads use the tenant default driver; existing rows keep their `attachment.storageDriver` for read/delete. |
+| Partition `storageDriver` | Still written on create for BC / future per-partition flexibility, but **upload resolution prefers tenant default from env**, not Marketplace integration binding. |
+| Out of scope for MVP | Integration Marketplace `storage_s3` package, standalone `/api/storage-providers/s3/*`, signed URLs, Google Drive implementation package. |
+
+**Implementation order**: Phase 1 (drivers + factory + DI) → Phase 2 (wire call sites including `createStoredAttachment.ts`) → defer Phase 3 (S3/Marketplace) until needed.
+
+**Hub ID note**: shared types use `storage_hubs`; older text said `storage_providers`. Prefer `storage_hubs` when Marketplace work resumes.
+
+---
+
 ## TLDR
 
-Build a `storage_providers` hub that abstracts file storage backends for the attachments module. Introduce a pluggable `StorageDriver` interface so each attachment partition can independently store files on **local disk** (current behavior, backward-compatible default) or **S3-compatible object storage** (AWS S3, DigitalOcean Spaces, MinIO). The storage provider is selected and configured through the Integration Marketplace — attachments resolve the active `StorageDriver` for each partition via the configured integration. Metadata remains in PostgreSQL; only file binary storage is abstracted. The S3 integration also supports **standalone usage** (upload/download files directly via API) independent of the attachments module — documented in §10.
+Build a pluggable `StorageDriver` layer for the attachments module so file binaries are not hard-wired to local `fs`. MVP keeps **local disk** as the default (backward-compatible) and allows registering custom drivers configured via **env**, with **one active backend per tenant**. The fuller `storage_providers` / Marketplace + S3 design below remains the long-term hub target but is **deferred** past MVP.
 
 ---
 
@@ -700,3 +719,6 @@ The S3 integration appears in the Integration Marketplace under the **Storage** 
 |------|--------|--------|
 | 2026-03-10 | Claude | Initial draft — merged from SPEC-045e storage section and SPEC-058 (PR #875) |
 | 2026-03-11 | Claude | Removed database storage driver (PostgreSQL bytea); kept local (BC default) + S3 only. Added standalone S3 usage API and documentation (§10) for direct file operations without attachments module. |
+| 2026-09-07 | Cursor | Moved out of `implemented/` (code never landed). Added MVP decisions: no S3/Marketplace first, env credentials, one backend per tenant, Phase 1–2 only. |
+| 2026-09-07 | Cursor | Env-only provider wiring: `ATTACHMENTS_STORAGE_PROVIDER_MODULES` loads `{ storageDriverDefinition }` packages; config via `ATTACHMENTS_STORAGE_<DRIVER>_*`. |
+| 2026-09-07 | Cursor | Added `@open-mercato/storage-google-drive`: root folder selection + OM path layout mirrored under Drive. |

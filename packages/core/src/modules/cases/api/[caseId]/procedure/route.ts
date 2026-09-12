@@ -33,6 +33,7 @@ import {
   casePlaybookSelectEntitySchema,
   casePlaybookSendNotifySchema,
   casePlaybookStartSchema,
+  casePlaybookAssignProcedureOwnerSchema,
 } from '../../../commands/caseProcedure'
 
 export const metadata = {
@@ -47,7 +48,7 @@ const paramsSchema = z.object({
 
 const postBodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('select'), playbookId: z.string().uuid() }),
-  z.object({ action: z.literal('start') }),
+  z.object({ action: z.literal('start'), ownerUserId: z.string().uuid().optional() }),
   z.object({ action: z.literal('next'), closingNote: z.string().max(10000).optional() }),
   z.object({ action: z.literal('sendNotify'), body: z.string().min(1).max(50000) }),
   z.object({ action: z.literal('answer'), branch: z.enum(['yes', 'no']) }),
@@ -66,6 +67,11 @@ const postBodySchema = z.discriminatedUnion('action', [
     action: z.literal('selectEntity'),
     entityId: z.string().uuid(),
     label: z.string().max(500).optional().nullable(),
+  }),
+  z.object({
+    action: z.literal('assignProcedureOwner'),
+    ownerUserId: z.string().uuid(),
+    replaceExisting: z.boolean().optional(),
   }),
 ])
 
@@ -129,8 +135,12 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
     const meta = caseRow.metadata && typeof caseRow.metadata === 'object' ? (caseRow.metadata as Record<string, unknown>) : {}
     const run = readCasePlaybookRun(meta)
     const uid = typeof ctx.auth?.sub === 'string' ? ctx.auth.sub.trim() : ''
-    const ownerId = run?.procedureOwnerUserId?.trim() || caseRow.ownerUserId?.trim() || ''
-    const isOwner = Boolean(uid.length && ownerId.length && uid === ownerId)
+    const procedureOwnerUserId = run?.procedureOwnerUserId?.trim() || ''
+    const started = Boolean(run?.startedAt)
+    const needsProcedureOwner = started && !procedureOwnerUserId.length
+    const isOwner = Boolean(
+      !needsProcedureOwner && uid.length && procedureOwnerUserId.length && uid === procedureOwnerUserId,
+    )
 
     let playbookTitle: string | null = null
     let playbookVersion: number | null = null
@@ -157,13 +167,14 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
 
     const locked = Boolean(run?.startedAt)
     const hasPlaybook = Boolean(run?.playbookId)
-    const started = Boolean(run?.startedAt)
     const onCondition = currentBlock?.kind === 'condition'
     const verificationUid =
       currentBlock?.kind === 'condition' && currentBlock.verificationUserId
         ? currentBlock.verificationUserId
         : ''
-    const isVerifier = Boolean(uid.length && verificationUid.length && uid === verificationUid)
+    const isVerifier = Boolean(
+      !needsProcedureOwner && uid.length && verificationUid.length && uid === verificationUid,
+    )
 
     const isNotifyAction =
       currentBlock?.kind === 'action' && currentBlock.actionVariant === 'notify'
@@ -210,14 +221,18 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
 
     const taskStepAllowsNext =
       !isTaskActionStep ||
+      !linkedProcedureTaskId.length ||
       Boolean(
-        linkedProcedureTaskId.length &&
-          procedureTaskSummary?.id === linkedProcedureTaskId &&
+        procedureTaskSummary?.id === linkedProcedureTaskId &&
           procedureTaskSummary.taskStatus === 'done',
       )
 
     const canScheduleProcedureTask =
-      started && isOwner && isTaskActionStep && !linkedProcedureTaskId.length
+      started &&
+      !needsProcedureOwner &&
+      isOwner &&
+      isTaskActionStep &&
+      !linkedProcedureTaskId.length
 
     const canSelectPlaybook = !locked
     const canStart = hasPlaybook && !started
@@ -230,9 +245,10 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
       isSelectEntityStep && typeof run?.currentBlockId === 'string' && run.currentBlockId.trim().length
         ? run.entitySelectionByBlockId?.[run.currentBlockId.trim()] ?? null
         : null
-    const canConfirmSelectEntity = started && isOwner && isSelectEntityStep
+    const canConfirmSelectEntity = started && !needsProcedureOwner && isOwner && isSelectEntityStep
     const canNext =
       started &&
+      !needsProcedureOwner &&
       Boolean(run?.currentBlockId) &&
       isOwner &&
       currentBlock &&
@@ -259,17 +275,23 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
     }
     const canLaunchInvokeProcedure =
       started &&
+      !needsProcedureOwner &&
       isOwner &&
       currentBlock?.kind === 'invoke_procedure' &&
       invokeProcedureOptions.some((o) => Boolean(o.playbookId?.trim().length))
-    const canSendNotify = started && Boolean(run?.currentBlockId) && isOwner && isNotifyAction
+    const canSendNotify =
+      started && !needsProcedureOwner && Boolean(run?.currentBlockId) && isOwner && isNotifyAction
     const condBlock = currentBlock?.kind === 'condition' ? currentBlock : null
     const canAnswerYesNo =
       started &&
+      !needsProcedureOwner &&
       onCondition &&
       condBlock &&
       ((condBlock.conditionMode === 'manual' && isOwner) ||
         (condBlock.conditionMode === 'verification' && isVerifier))
+
+    const canAssignProcedureOwnerMissing = needsProcedureOwner
+    const canTakeProcedureOwnership = started && !needsProcedureOwner && !isOwner
 
     return NextResponse.json({
       playbookId: run?.playbookId ?? null,
@@ -292,6 +314,11 @@ export async function GET(req: Request, routeContext: { params?: { caseId?: stri
       canConfirmSelectEntity,
       entitySelection: currentEntitySelection,
       customerEntityId: caseRow.customerEntityId ?? null,
+      procedureOwnerUserId: procedureOwnerUserId.length ? procedureOwnerUserId : null,
+      needsProcedureOwner,
+      canAssignProcedureOwner: canAssignProcedureOwnerMissing,
+      canTakeProcedureOwnership,
+      caseOwnerUserId: caseRow.ownerUserId?.trim() || null,
     })
   } catch (err) {
     if (isCrudHttpError(err)) {
@@ -335,8 +362,30 @@ export async function POST(req: Request, routeContext: { params?: { caseId?: str
       return NextResponse.json(result)
     }
     if (body.data.action === 'start') {
-      const input = parseScopedCommandInput(casePlaybookStartSchema, merged, ctx, translate)
+      const input = parseScopedCommandInput(
+        casePlaybookStartSchema,
+        {
+          ...merged,
+          ...(body.data.ownerUserId ? { ownerUserId: body.data.ownerUserId } : {}),
+        },
+        ctx,
+        translate,
+      )
       const { result } = await commandBus.execute('cases.playbook.start', { input, ctx })
+      return NextResponse.json(result)
+    }
+    if (body.data.action === 'assignProcedureOwner') {
+      const input = parseScopedCommandInput(
+        casePlaybookAssignProcedureOwnerSchema,
+        {
+          ...merged,
+          ownerUserId: body.data.ownerUserId,
+          ...(body.data.replaceExisting ? { replaceExisting: true } : {}),
+        },
+        ctx,
+        translate,
+      )
+      const { result } = await commandBus.execute('cases.playbook.assignProcedureOwner', { input, ctx })
       return NextResponse.json(result)
     }
     if (body.data.action === 'next') {

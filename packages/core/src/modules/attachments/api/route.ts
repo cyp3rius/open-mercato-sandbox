@@ -6,7 +6,7 @@ import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { buildAttachmentImageUrl, slugifyAttachmentFileName } from '../lib/imageUrls'
 import { sanitizePartitionCode } from '../lib/partitions'
 import { Attachment } from '../data/entities'
-import { deletePartitionFile } from '../lib/storage'
+import { getStorageDriverFactory } from '../lib/drivers'
 import { clearAttachmentThumbnailCache } from '../lib/thumbnailCache'
 import { readAttachmentMetadata } from '../lib/metadata'
 import { parseFormAssignments, parseFormTags } from '../lib/formTags'
@@ -239,7 +239,9 @@ export async function DELETE(req: Request) {
     console.error('[attachments] failed to cleanup cached thumbnails', error)
   })
   if (record.storagePath) {
-    await deletePartitionFile(record.partitionCode, record.storagePath, record.storageDriver)
+    await getStorageDriverFactory()
+      .resolve(record.storageDriver)
+      .delete(record.partitionCode, record.storagePath)
   }
   if (dataEngine) {
     await emitCrudSideEffects({

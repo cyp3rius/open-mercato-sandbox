@@ -151,7 +151,7 @@ export function FieldDefinitionsEditor({
   orderNotice,
   infoNote = (
     <div className="text-xs text-muted-foreground mt-2">
-      Supported kinds: text, multiline, integer, float, boolean, select (with options/optionsUrl), currency (fixed currencies list), relation (with related entity and options URL).
+      Supported kinds: text, multiline, integer, float, boolean, select (with options/optionsUrl), currency (fixed currencies list), relation (with related entity and options URL), color, icon, dictionary, attachment.
     </div>
   ),
   addButtonLabel = 'Add Field',

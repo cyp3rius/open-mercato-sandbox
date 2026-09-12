@@ -36,6 +36,7 @@ import type { CaseProcedureBlockJson } from '../lib/procedureBlockJson'
 import { formatProcedurePlaybookLabel } from '../lib/formatProcedurePlaybookLabel'
 import { defaultHtmlFromNotifyBody } from '../lib/htmlToPlainText'
 import { getProcedureEntityKindAdapter } from '../lib/procedureEntitySearch'
+import type { ResourceProcedureSearchScope } from '../lib/caseRelationsSearch'
 import {
   mergeEntitySearchOption,
   remoteSearchAuthUsers,
@@ -166,6 +167,8 @@ export function CaseProcedureStepExecutor({
   const [selectEntityId, setSelectEntityId] = React.useState('')
   const [selectEntityLabel, setSelectEntityLabel] = React.useState('')
   const [selectEntityEditing, setSelectEntityEditing] = React.useState(true)
+  const [resourceSearchScope, setResourceSearchScope] =
+    React.useState<ResourceProcedureSearchScope>('customer')
   const selectEntityOptionsRef = React.useRef<EntitySearchComboboxOption[]>([])
 
   React.useEffect(() => {
@@ -211,6 +214,7 @@ export function CaseProcedureStepExecutor({
       setSelectEntityLabel('')
       setSelectEntityEditing(true)
       selectEntityOptionsRef.current = []
+      setResourceSearchScope('customer')
       return
     }
     const savedId = entitySelection?.entityId?.trim() ?? ''
@@ -225,6 +229,7 @@ export function CaseProcedureStepExecutor({
       setSelectEntityEditing(true)
     }
     selectEntityOptionsRef.current = []
+    setResourceSearchScope('customer')
   }, [block?.id, block?.kind, entitySelection?.entityId, entitySelection?.label])
 
   React.useEffect(() => {
@@ -288,6 +293,9 @@ export function CaseProcedureStepExecutor({
   const onPlaybookTaskStep = block.kind === 'action' && block.actionVariant === 'task'
   const showSchedulePlaybookTask =
     onPlaybookTaskStep && Boolean(canScheduleProcedureTask && onScheduleProcedureTask)
+  const showCompleteTaskWithoutSchedule = Boolean(
+    showSchedulePlaybookTask && canNext && onNext,
+  )
   const showNextButton = Boolean(canNext && onNext && !showSchedulePlaybookTask)
   const selectEntityAdapter =
     block.kind === 'select_entity' ? getProcedureEntityKindAdapter(block.entityKind) : null
@@ -295,6 +303,12 @@ export function CaseProcedureStepExecutor({
     block.kind === 'select_entity'
       ? t(`playbooks.procedure.entityKind.${block.entityKind}`, block.entityKind)
       : ''
+  const caseHasCustomer = Boolean(customerEntityId?.trim().length)
+  const showResourceScopeToggle =
+    block.kind === 'select_entity' &&
+    block.entityKind === 'resource' &&
+    caseHasCustomer &&
+    selectEntityEditing
   const showSelectEntityConfirm = Boolean(
     block.kind === 'select_entity' &&
       canConfirmSelectEntity &&
@@ -539,18 +553,43 @@ export function CaseProcedureStepExecutor({
               )}
             </p>
           ) : null}
-          {canScheduleProcedureTask && onScheduleProcedureTask ? (
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              className="gap-2"
-              disabled={disabled}
-              onClick={() => setScheduleOpen(true)}
-            >
-              <CalendarDays className="size-4 shrink-0" aria-hidden />
-              {t('cases.detail.procedure.scheduleTask', 'Schedule')}
-            </Button>
+          {showSchedulePlaybookTask ? (
+            <div className="space-y-2">
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                {t(
+                  'cases.detail.procedure.taskScheduleOrCompleteHint',
+                  'Schedule a task for later, or mark done if you already completed the work.',
+                )}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {onScheduleProcedureTask ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    disabled={disabled}
+                    onClick={() => setScheduleOpen(true)}
+                  >
+                    <CalendarDays className="size-4 shrink-0" aria-hidden />
+                    {t('cases.detail.procedure.scheduleTask', 'Schedule')}
+                  </Button>
+                ) : null}
+                {showCompleteTaskWithoutSchedule ? (
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    className="gap-2"
+                    disabled={disabled}
+                    onClick={() => onNext!()}
+                  >
+                    <Check className="size-4 shrink-0" aria-hidden />
+                    {t('cases.detail.procedure.taskCompleteWithoutSchedule', 'Done')}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
           ) : null}
         </div>
       ) : null}
@@ -763,7 +802,55 @@ export function CaseProcedureStepExecutor({
               <Label>
                 {t('cases.detail.procedure.selectEntityPicker', 'Search and select')}
               </Label>
+              {showResourceScopeToggle ? (
+                <div
+                  className="inline-flex rounded-md border border-border bg-background p-0.5"
+                  role="group"
+                  aria-label={t(
+                    'cases.detail.procedure.resourceScopeGroup',
+                    'Resource list scope',
+                  )}
+                >
+                  <Button
+                    type="button"
+                    variant={resourceSearchScope === 'customer' ? 'default' : 'ghost'}
+                    size="sm"
+                    className="h-7 rounded-sm px-2.5 text-xs"
+                    disabled={disabled || !canConfirmSelectEntity}
+                    onClick={() => {
+                      if (resourceSearchScope === 'customer') return
+                      setResourceSearchScope('customer')
+                      selectEntityOptionsRef.current = []
+                      setSelectEntityId('')
+                      setSelectEntityLabel('')
+                    }}
+                  >
+                    {t('cases.detail.procedure.resourceScopeCustomer', 'Customer resources')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={resourceSearchScope === 'all' ? 'default' : 'ghost'}
+                    size="sm"
+                    className="h-7 rounded-sm px-2.5 text-xs"
+                    disabled={disabled || !canConfirmSelectEntity}
+                    onClick={() => {
+                      if (resourceSearchScope === 'all') return
+                      setResourceSearchScope('all')
+                      selectEntityOptionsRef.current = []
+                      setSelectEntityId('')
+                      setSelectEntityLabel('')
+                    }}
+                  >
+                    {t('cases.detail.procedure.resourceScopeAll', 'All resources')}
+                  </Button>
+                </div>
+              ) : null}
               <EntitySearchCombobox
+                key={
+                  showResourceScopeToggle
+                    ? `resource-scope-${resourceSearchScope}`
+                    : 'select-entity'
+                }
                 value={selectEntityId}
                 onChange={(next) => {
                   const id = next.trim()
@@ -779,6 +866,11 @@ export function CaseProcedureStepExecutor({
                 onRemoteSearch={async (query) => {
                   const rows = await selectEntityAdapter.onRemoteSearch(query, {
                     customerEntityId,
+                    ...(block.kind === 'select_entity' && block.entityKind === 'resource'
+                      ? {
+                          resourceScope: caseHasCustomer ? resourceSearchScope : 'all',
+                        }
+                      : {}),
                   })
                   selectEntityOptionsRef.current = rows
                   return mergeEntitySearchOption(rows, selectEntityId, selectEntityLabel || selectEntityId)

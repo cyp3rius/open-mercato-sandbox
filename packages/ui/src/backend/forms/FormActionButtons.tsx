@@ -3,6 +3,7 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { Trash2, Save, Loader2 } from 'lucide-react'
+import { cn } from '@open-mercato/shared/lib/utils'
 import { Button } from '../../primitives/button'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
@@ -33,9 +34,12 @@ export type FormActionButtonsProps = {
     pendingLabel?: string
     /** Optional icon for idle submit state */
     icon?: React.ComponentType<{ className?: string }>
+    /** When true, submit stays disabled (e.g. incomplete required fields). */
+    disabled?: boolean
   }
   /** When true, hides all buttons */
   hidden?: boolean
+  className?: string
 }
 
 export function FormActionButtons({
@@ -48,6 +52,7 @@ export function FormActionButtons({
   cancelLabel,
   submit,
   hidden,
+  className,
 }: FormActionButtonsProps) {
   const t = useT()
 
@@ -60,7 +65,7 @@ export function FormActionButtons({
   const SubmitIcon = submit?.icon ?? Save
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className={cn('flex flex-row flex-nowrap items-center gap-2', className)}>
       {extraActions}
       {showDelete ? (
         <Button
@@ -87,7 +92,7 @@ export function FormActionButtons({
         <Button
           type="submit"
           form={submit.formId}
-          disabled={submit.pending}
+          disabled={submit.pending || submit.disabled}
         >
           {submit.pending ? <Loader2 className="size-4 mr-2 animate-spin" /> : <SubmitIcon className="size-4 mr-2" />}
           {submit.pending ? resolvedPendingLabel : resolvedSubmitLabel}

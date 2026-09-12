@@ -72,10 +72,18 @@ function resolvedCustomerId(customerEntityId: string | undefined): string | null
   return t && t.length ? t : null
 }
 
-/** Resources for the case customer, or unassigned resources when the case has no customer. */
+export type ResourceProcedureSearchScope = 'customer' | 'all'
+
+/**
+ * Procedure resource picker search.
+ * - `scope: 'customer'` (default when a case customer exists): only that customer's resources
+ * - `scope: 'all'`: all org resources
+ * - no customer on the case: always all org resources
+ */
 export async function remoteSearchResourcesForCaseCustomer(
   customerEntityId: string | undefined,
   query: string,
+  scope: ResourceProcedureSearchScope = 'customer',
 ): Promise<EntitySearchComboboxOption[]> {
   const cid = resolvedCustomerId(customerEntityId)
   const params = new URLSearchParams({
@@ -84,13 +92,11 @@ export async function remoteSearchResourcesForCaseCustomer(
     sortField: 'name',
     sortDir: 'asc',
   })
-  if (cid) {
-    params.set('customerEntityId', cid)
-  } else {
-    params.set('customerUnassigned', 'true')
-  }
   const q = query.trim()
   if (q.length) params.set('search', q)
+  if (cid && scope === 'customer') {
+    params.set('customerEntityId', cid)
+  }
   const call = await apiCall<Record<string, unknown>>(`/api/resources/resources?${params.toString()}`)
   if (!call.ok) return []
   const out: EntitySearchComboboxOption[] = []

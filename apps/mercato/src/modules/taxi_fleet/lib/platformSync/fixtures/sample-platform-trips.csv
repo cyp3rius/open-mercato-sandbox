@@ -1,0 +1,4 @@
+externalTripId,platformDriverId,startedAt,revenueAmount,status,endedAt,distanceKm,paymentType,currencyCode
+bolt-trip-001,driver-bolt-42,2026-08-20T08:15:00,45.50,completed,2026-08-20T08:42:00,12.3,electronic,PLN
+bolt-trip-002,driver-bolt-42,2026-08-20T14:00:00,28.00,completed,2026-08-20T14:18:00,6.1,cash,PLN
+bolt-trip-003,driver-bolt-99,2026-08-21T19:30:00,62.75,paid,2026-08-21T20:05:00,18.0,card,PLN

@@ -12,6 +12,7 @@
   ],
   "scripts": {
     "dev": "yarn build:packages && yarn watch:packages & sleep 3 && yarn dev:stack",
+    "dev:light": "tsx scripts/dev-light.ts",
     "dev:ephemeral": "tsx scripts/dev-ephemeral.ts",
     "dev:greenfield": "yarn build:packages && yarn generate && yarn build:packages && yarn initialize -- --reinstall && yarn dev",
     "dev:stack": "tsx scripts/dev-stack.ts",

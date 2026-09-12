@@ -13,3 +13,15 @@ export function resolveInvokeProcedureOwner(input: {
   const parent = input.parentOwnerUserId?.trim() || ''
   return parent.length ? parent : null
 }
+
+/** Resolve procedure owner for start / assign-when-missing (`cases.edit`). */
+export function resolveStartOrAssignProcedureOwner(input: {
+  mayEdit: boolean
+  requestedOwnerUserId?: string | null
+  caseOwnerUserId?: string | null
+}): string | null {
+  const requested = input.requestedOwnerUserId?.trim() || ''
+  if (input.mayEdit && requested.length) return requested
+  const caseOwner = input.caseOwnerUserId?.trim() || ''
+  return caseOwner.length ? caseOwner : null
+}

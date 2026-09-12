@@ -50,6 +50,7 @@ alwaysApply: false
 ## i18n
 
 - Lists: `*.viewDetails`; detail meta: `*.detail.pageTitle`, `*.detail.breadcrumb`, `*.detail.notFound`; sections: `*.form.groups.basics` (plus existing group keys). **No** hard-coded user-visible strings.
+- **Every user-visible string** introduced or changed in app modules MUST have translation entries in **`apps/mercato/src/i18n/en.json`** and **`apps/mercato/src/i18n/pl.json`** (at minimum EN + PL). Use the same key in `t('key', 'English fallback')` calls; keep Polish copy in `pl.json` aligned with product language.
 
 ## Platform docs
 

@@ -87,3 +87,20 @@ Use these rules when building or refactoring **backend forms**, **custom CrudFor
 ## Relation previews (inline select + `renderDisplay`)
 
 - For **corner actions** (edit pencil, “open in new tab”) on association previews, wrap the preview container with **`group`** and make the action row **`opacity-0 group-hover:opacity-100`** (with **`pointer-events-none` / `group-hover:pointer-events-auto`**) so actions appear **on hover over the preview block**, not as always-on chrome.
+
+## Numeric fields (CrudForm, DataTable, inline display)
+
+Use **`@open-mercato/shared/lib/numeric`** — do not show raw API numeric strings (`50.00`, `1234.5000`) or unlabeled `type="number"` when the value has a clear unit.
+
+| Semantic type | Stored scale (example) | Edit control | Load from API | Display (list / read-only) | Submit payload |
+|---------------|------------------------|--------------|---------------|----------------------------|----------------|
+| **Percent** | `0–100` (e.g. `payout_percent`) | **`PercentInputField`** from `@open-mercato/ui/backend/inputs`; label without `%` | **`formatPercentInputValue`** | **`formatPercentDisplay`** | **`parseNumericValue`** → number |
+| **Money** | decimal string (e.g. `revenue_amount`) | **`MoneyInputField`** from `@open-mercato/ui/backend/inputs` | normalize to edit string | **`formatMoneyDisplay`** / **`formatSignedMoneyDisplay`** | **`parseNumericValue`** |
+| **Plain decimal** | module-specific | `inputMode="decimal"` + Crud classes | trim / fixed fraction digits | `Intl.NumberFormat` or shared helper | **`parseNumericValue`** |
+
+Rules:
+
+- **One mapper per entity** when mapping API rows → form state (e.g. **`mapDriverProfileRowToFormValues`**) — apply input formatting at the boundary, not in every page.
+- **Percent:** never put `%` in the field **label** when the control already has a **`%` postfix**; never store/display `0–1` in UI when the DB column is `0–100`.
+- **Lists:** format in **`cell`**, not via raw `accessorKey` display of string numerics.
+- Keep **zod** schemas (`z.coerce.number()`, min/max) aligned with the same scale as formatters.

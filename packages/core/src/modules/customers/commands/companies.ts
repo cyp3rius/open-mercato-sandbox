@@ -179,6 +179,8 @@ type CompanySnapshot = {
     annualRevenue: string | null
     nip: string | null
     regon: string | null
+    bankName: string | null
+    iban: string | null
   }
   tagIds: string[]
   custom?: Record<string, unknown>
@@ -279,6 +281,8 @@ async function loadCompanySnapshot(em: EntityManager, id: string): Promise<Compa
       annualRevenue: profile.annualRevenue ?? null,
       nip: profile.nip ?? null,
       regon: profile.regon ?? null,
+      bankName: profile.bankName ?? null,
+      iban: profile.iban ?? null,
     },
     tagIds,
     custom,
@@ -465,6 +469,8 @@ const createCompanyCommand: CommandHandler<CompanyCreateInput, { entityId: strin
       annualRevenue: parsed.annualRevenue !== undefined ? String(parsed.annualRevenue) : null,
       nip: parsed.nip ?? null,
       regon: parsed.regon ?? null,
+      bankName: parsed.bankName ?? null,
+      iban: parsed.iban ?? null,
     })
 
     em.persist(entity)
@@ -619,6 +625,8 @@ const updateCompanyCommand: CommandHandler<CompanyUpdateInput, { entityId: strin
     }
     if (parsed.nip !== undefined) profile.nip = parsed.nip ?? null
     if (parsed.regon !== undefined) profile.regon = parsed.regon ?? null
+    if (parsed.bankName !== undefined) profile.bankName = parsed.bankName ?? null
+    if (parsed.iban !== undefined) profile.iban = parsed.iban ?? null
 
     await ensureReferralCodeAvailable(em, {
       organizationId: record.organizationId,
@@ -746,6 +754,8 @@ const updateCompanyCommand: CommandHandler<CompanyUpdateInput, { entityId: strin
         annualRevenue: before.profile.annualRevenue,
         nip: before.profile.nip,
         regon: before.profile.regon,
+        bankName: before.profile.bankName,
+        iban: before.profile.iban,
       })
       em.persist(profile)
     } else {
@@ -758,6 +768,8 @@ const updateCompanyCommand: CommandHandler<CompanyUpdateInput, { entityId: strin
       profile.annualRevenue = before.profile.annualRevenue
       profile.nip = before.profile.nip
       profile.regon = before.profile.regon
+      profile.bankName = before.profile.bankName
+      profile.iban = before.profile.iban
     }
 
     await em.flush()
@@ -1021,6 +1033,8 @@ const deleteCompanyCommand: CommandHandler<{ body?: Record<string, unknown>; que
         annualRevenue: before.profile.annualRevenue,
         nip: before.profile.nip,
         regon: before.profile.regon,
+        bankName: before.profile.bankName,
+        iban: before.profile.iban,
       })
       em.persist(profile)
     } else {
@@ -1033,6 +1047,8 @@ const deleteCompanyCommand: CommandHandler<{ body?: Record<string, unknown>; que
       profile.annualRevenue = before.profile.annualRevenue
       profile.nip = before.profile.nip
       profile.regon = before.profile.regon
+      profile.bankName = before.profile.bankName
+      profile.iban = before.profile.iban
     }
 
     await em.flush()

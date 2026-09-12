@@ -5,6 +5,7 @@ import { PostgreSqlDriver } from '@mikro-orm/postgresql'
 import { getSslConfig } from './ssl'
 
 let ormInstance: MikroORM<PostgreSqlDriver> | null = null
+let registeredEntitySignature = ''
 
 // Use globalThis so standalone apps survive duplicated shared package module instances.
 const GLOBAL_ENTITIES_KEY = '__openMercatoOrmEntities__'
@@ -18,6 +19,18 @@ function setRegisteredEntities(entities: any[]): void {
 }
 
 export function registerOrmEntities(entities: any[]) {
+  const signature = entities.map((entity) => entity?.name ?? '').sort().join('|')
+  if (
+    process.env.NODE_ENV === 'development' &&
+    registeredEntitySignature.length > 0 &&
+    signature !== registeredEntitySignature &&
+    ormInstance
+  ) {
+    ormInstance = null
+    void closeOrmIfLoaded()
+  }
+  registeredEntitySignature = signature
+
   if (getRegisteredEntities() !== null && process.env.NODE_ENV === 'development') {
     console.debug('[Bootstrap] ORM entities re-registered (this may occur during HMR)')
   }

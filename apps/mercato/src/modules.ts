@@ -51,6 +51,7 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'payment_gateways', from: '@open-mercato/core' },
   { id: 'checkout', from: '@open-mercato/checkout' },
   { id: 'gateway_stripe', from: '@open-mercato/gateway-stripe' },
+  { id: 'storage_google_drive', from: '@open-mercato/storage-google-drive' },
   { id: 'sync_akeneo', from: '@open-mercato/sync-akeneo' },
   { id: 'shipping_carriers', from: '@open-mercato/core' },
   { id: 'webhooks', from: '@open-mercato/webhooks' },
@@ -59,6 +60,7 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'insurance_desk', from: '@app' },
   { id: 'lead_intake', from: '@app' },
   { id: 'mail_delivery', from: '@app' },
+  { id: 'taxi_fleet', from: '@app' },
 ]
 
 const enterpriseModulesEnabled = parseBooleanWithDefault(process.env.OM_ENABLE_ENTERPRISE_MODULES, false)

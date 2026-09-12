@@ -112,6 +112,7 @@ describe('CrudForm initialValues', () => {
         initialValues={{ id: 'link_1', name: 'Alice' }}
         readOnly
         readOnlyOverlay={<div>Locked overlay</div>}
+        cancelHref="/backend/list"
         deleteVisible
         onSubmit={() => {}}
         onDelete={() => {}}
@@ -121,5 +122,28 @@ describe('CrudForm initialValues', () => {
     expect(getByText('Locked overlay')).toBeInTheDocument()
     expect(queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
     expect(queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+    expect(queryByRole('link', { name: 'Cancel' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the form body interactive when readOnlyOverlay is false', () => {
+    const { queryByText, getByDisplayValue, queryByRole } = renderWithProviders(
+      <CrudForm
+        title="Form"
+        fields={fields}
+        initialValues={{ id: 'link_1', name: 'Alice' }}
+        readOnly
+        readOnlyOverlay={false}
+        cancelHref="/backend/list"
+        deleteVisible
+        onSubmit={() => {}}
+        onDelete={() => {}}
+      />
+    )
+
+    expect(queryByText('Locked overlay')).not.toBeInTheDocument()
+    expect(getByDisplayValue('Alice')).toBeInTheDocument()
+    expect(queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
+    expect(queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+    expect(queryByRole('link', { name: 'Cancel' })).not.toBeInTheDocument()
   })
 })

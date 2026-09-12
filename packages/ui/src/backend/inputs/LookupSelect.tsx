@@ -72,6 +72,7 @@ export function LookupSelect({
   const fetchItemsRef = React.useRef(fetchItems ?? fetchOptions)
   const setQueryRef = React.useRef(setQuery)
   const optionsWasArrayRef = React.useRef(Array.isArray(options))
+  const hasStaticOptions = Array.isArray(options) && options.length > 0
 
   React.useEffect(() => {
     fetchItemsRef.current = fetchItems ?? fetchOptions
@@ -92,8 +93,17 @@ export function LookupSelect({
     if (onReady) onReady({ setQuery })
   }, [onReady, setQuery])
 
-  const shouldSearch =
-    defaultOpen || query.trim().length >= minQuery || Boolean(value && (options?.length ?? 0) > 0)
+  const trimmedQuery = query.trim()
+  // minQuery <= 0: browse static lists before a choice; after select, collapse until user types again.
+  const isBrowsing =
+    defaultOpen ||
+    hasTyped ||
+    trimmedQuery.length >= Math.max(minQuery, 1) ||
+    (minQuery <= 0 && !value && hasStaticOptions)
+
+  const showSelectedOnly = Boolean(value) && !isBrowsing
+  const shouldShowResults = isBrowsing || showSelectedOnly
+
   React.useEffect(() => {
     if (disabled) {
       setItems(options ?? [])
@@ -102,19 +112,28 @@ export function LookupSelect({
     }
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | null = null
-    if (!shouldSearch) {
+    if (!shouldShowResults) {
       setItems(options ?? [])
       setLoading(false)
       setError(null)
-      return () => { cancelled = true }
+      return () => {
+        cancelled = true
+      }
+    }
+    if (showSelectedOnly && hasStaticOptions) {
+      setItems(options ?? [])
+      setLoading(false)
+      setError(null)
+      return () => {
+        cancelled = true
+      }
     }
     setLoading(true)
     setError(null)
     timer = setTimeout(() => {
-      const requestId = Date.now()
       const fetcher = fetchItemsRef.current
       const loader = fetcher ?? (() => Promise.resolve(options ?? []))
-      loader(query.trim())
+      loader(trimmedQuery)
         .then((result) => {
           if (cancelled) return
           setItems(result)
@@ -127,13 +146,29 @@ export function LookupSelect({
         .finally(() => {
           if (!cancelled) setLoading(false)
         })
-      return requestId
     }, 220)
     return () => {
       cancelled = true
       if (timer) clearTimeout(timer)
     }
-  }, [query, shouldSearch, fetchKey])
+  }, [trimmedQuery, shouldShowResults, showSelectedOnly, hasStaticOptions, fetchKey, disabled, options])
+
+  const visibleItems = React.useMemo(() => {
+    if (!showSelectedOnly || !value) return items
+    const selected = items.find((item) => item.id === value)
+    if (selected) return [selected]
+    if (hasStaticOptions) {
+      const fromOptions = (options ?? []).find((item) => item.id === value)
+      return fromOptions ? [fromOptions] : []
+    }
+    return []
+  }, [showSelectedOnly, value, items, hasStaticOptions, options])
+
+  const collapseAfterSelect = React.useCallback((next: string | null) => {
+    onChange(next)
+    setQuery('')
+    setHasTyped(false)
+  }, [onChange])
 
   return (
     <div className="space-y-3">
@@ -153,7 +188,7 @@ export function LookupSelect({
         </div>
         {actionSlot ? <div className="sm:self-start">{actionSlot}</div> : null}
       </div>
-      {shouldSearch ? (
+      {shouldShowResults ? (
         <div className="space-y-2">
           {loading || loadingProp ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -161,25 +196,27 @@ export function LookupSelect({
               {loadingLabel}
             </div>
           ) : null}
-          {!loading && !loadingProp && !items.length ? (
+          {!loading && !loadingProp && !visibleItems.length ? (
             <p className="text-xs text-muted-foreground">{emptyLabel}</p>
           ) : null}
           <div className="space-y-2 max-h-80 overflow-y-auto">
-            {items.map((item) => {
+            {visibleItems.map((item) => {
               const isSelected = value === item.id
+              const itemBlocked = disabled || (Boolean(item.disabled) && !isSelected)
               const handleSelect = () => {
-                if (item.disabled && !isSelected) return
-                onChange(item.id)
+                if (itemBlocked) return
+                collapseAfterSelect(item.id)
               }
               return (
                 <div
                   key={item.id}
                   className={cn(
-                    'flex gap-3 rounded border bg-card p-3 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                    isSelected ? 'border-primary/70 bg-primary/5' : 'hover:border-primary/50'
+                    'flex gap-3 rounded border bg-card p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                    itemBlocked ? 'cursor-default opacity-70' : 'cursor-pointer',
+                    isSelected ? 'border-primary/70 bg-primary/5' : !itemBlocked && 'hover:border-primary/50'
                   )}
                   role="button"
-                  tabIndex={item.disabled ? -1 : 0}
+                  tabIndex={itemBlocked ? -1 : 0}
                   onClick={handleSelect}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
@@ -188,6 +225,7 @@ export function LookupSelect({
                     }
                   }}
                   aria-pressed={isSelected}
+                  aria-disabled={itemBlocked || undefined}
                 >
                   <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center overflow-hidden rounded border bg-muted">
                     {item.icon ?? <span className="text-muted-foreground">•</span>}
@@ -217,7 +255,7 @@ export function LookupSelect({
                           event.stopPropagation()
                           handleSelect()
                         }}
-                        disabled={item.disabled && !isSelected}
+                        disabled={itemBlocked}
                       >
                         {isSelected ? selectedLabel : selectLabel}
                       </Button>
@@ -227,17 +265,20 @@ export function LookupSelect({
               )
             })}
           </div>
-          {value ? (
+          {value && !disabled ? (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="w-fit gap-1 text-sm font-normal"
-              onClick={() => onChange(null)}
+              onClick={() => collapseAfterSelect(null)}
             >
               <X className="h-4 w-4" />
               {clearLabel}
             </Button>
+          ) : null}
+          {value && selectedHintLabel ? (
+            <p className="text-xs text-muted-foreground">{selectedHintLabel(value)}</p>
           ) : null}
         </div>
       ) : hasTyped ? (

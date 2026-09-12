@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { z } from 'zod'
+import { normalizeIbanForStorage } from '../lib/iban'
 import { isValidNip, normalizeNipDigits } from '../lib/nip'
 import { isValidPesel, normalizePeselDigits } from '../lib/pesel'
 import { isValidRegon, normalizeRegonDigits } from '../lib/regon'
@@ -200,6 +201,8 @@ export type CompanyFormValues = {
    annualRevenue?: string
   nip?: string
   regon?: string
+  bankName?: string
+  iban?: string
   description?: string
   addresses?: CustomerAddressValue[]
 } & Record<string, unknown>
@@ -2014,6 +2017,20 @@ export const createCompanyFormSchema = () =>
         .or(z.literal(''))
         .transform((val) => (val === '' ? undefined : val))
         .optional(),
+      bankName: z
+        .string()
+        .trim()
+        .optional()
+        .or(z.literal(''))
+        .transform((val) => (val === '' ? undefined : val))
+        .optional(),
+      iban: z
+        .string()
+        .trim()
+        .optional()
+        .or(z.literal(''))
+        .transform((val) => (val === '' ? undefined : val))
+        .optional(),
     })
     .superRefine((data, ctx) => {
       const rawNip = data.nip
@@ -2166,6 +2183,20 @@ export const createCompanyFormFields = (t: Translator, options?: CompanyFormFiel
       },
     },
     {
+      id: 'bankName',
+      label: t('customers.companies.form.bankName', 'Bank'),
+      type: 'text',
+      layout: 'half',
+      placeholder: t('customers.companies.form.bankNamePlaceholder', 'Bank name'),
+    },
+    {
+      id: 'iban',
+      label: t('customers.companies.form.iban', 'IBAN / account number'),
+      type: 'text',
+      layout: 'half',
+      placeholder: t('customers.companies.form.ibanPlaceholder', 'PL00 0000 0000 0000 0000 0000 0000'),
+    },
+    {
       id: 'domain',
       label: t('customers.companies.detail.fields.domain', 'Domain'),
       type: 'text',
@@ -2311,6 +2342,8 @@ export const createCompanyFormGroups = (t: Translator, groupOptions?: CompanyFor
       'brandName',
       'nip',
       'regon',
+      'bankName',
+      'iban',
       'domain',
       'websiteUrl',
       'industry',
@@ -2391,6 +2424,16 @@ export function buildCompanyPayload(
     payload.regon = regonDigits
   } else if (typeof values.regon === 'string' && values.regon.trim() === '') {
     payload.regon = null
+  }
+
+  assign('bankName', typeof values.bankName === 'string' ? values.bankName : undefined)
+  if (typeof values.iban === 'string') {
+    const trimmed = values.iban.trim()
+    if (!trimmed.length) {
+      payload.iban = null
+    } else {
+      payload.iban = normalizeIbanForStorage(trimmed)
+    }
   }
 
   assign('domain', typeof values.domain === 'string' ? values.domain?.toLowerCase() : undefined)
@@ -2702,6 +2745,8 @@ export type CompanyOverview = {
     annualRevenue?: string | null
     nip?: string | null
     regon?: string | null
+    bankName?: string | null
+    iban?: string | null
   } | null
   customFields: Record<string, unknown>
   tags: TagSummary[]
@@ -2802,6 +2847,8 @@ export function mapCompanyOverviewToFormValues(overview: CompanyOverview): Parti
     annualRevenue: overview.profile?.annualRevenue ?? '',
     nip: overview.profile?.nip ?? '',
     regon: overview.profile?.regon ?? '',
+    bankName: overview.profile?.bankName ?? '',
+    iban: overview.profile?.iban ?? '',
     ...overview.customFields,
   }
 }

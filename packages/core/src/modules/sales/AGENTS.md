@@ -86,3 +86,8 @@ Sales documents are scoped to channels. Channel selection affects:
 ## Frontend
 
 - `frontend/quote/` — public-facing quote view (for customer acceptance)
+
+## Operator documentation
+
+- Module guide (simple quotes/orders): [`.ai/module-guides/sales-simple.md`](../../../../.ai/module-guides/sales-simple.md)
+- EN user guide: `apps/docs/docs/user-guide/sales/`

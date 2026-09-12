@@ -1,0 +1,115 @@
+{
+  "version": "1.0.0",
+  "currency": "PLN",
+  "passengers": {
+    "min": 1,
+    "max": 8
+  },
+  "distance": {
+    "rounding": "ceil"
+  },
+  "vehicleSelection": {
+    "airport": {
+      "standard": {
+        "maxPassengersWithFullLuggage": 3,
+        "maxHoldLuggage": 3,
+        "maxHandLuggage": 3,
+        "fourPassengersRequiresZeroHoldLuggage": true,
+        "fourPassengersVanUpgradeWarningKey": "vehicle.fourPassengersVanUpgrade"
+      },
+      "van": {
+        "minPassengers": 5,
+        "maxPassengers": 8,
+        "upgradeOnLuggageOverflow": true,
+        "luggageOverflowWarningKey": "vehicle.luggageOverflowUpgrade"
+      }
+    },
+    "local": {
+      "standard": {
+        "maxPassengers": 4
+      },
+      "van": {
+        "minPassengers": 5,
+        "maxPassengers": 8,
+        "passengersVanUpgradeWarningKey": "vehicle.passengersVanUpgrade"
+      }
+    }
+  },
+  "tariffs": [
+    {
+      "serviceType": "airport",
+      "vehicleCategory": "standard",
+      "minimumFare": 85,
+      "includedKm": 10,
+      "ratePerKm": 4
+    },
+    {
+      "serviceType": "airport",
+      "vehicleCategory": "van",
+      "minimumFare": 120,
+      "includedKm": 10,
+      "ratePerKm": 7
+    },
+    {
+      "serviceType": "local",
+      "vehicleCategory": "standard",
+      "minimumFare": 50,
+      "includedKm": 5,
+      "ratePerKm": 4
+    },
+    {
+      "serviceType": "local",
+      "vehicleCategory": "van",
+      "minimumFare": 70,
+      "includedKm": 5,
+      "ratePerKm": 5
+    }
+  ],
+  "booking": {
+    "minAdvanceHours": 24
+  },
+  "percentSurcharges": {
+    "policy": "stack",
+    "priority": ["NIGHT", "HOLIDAY"],
+    "items": [
+      {
+        "code": "NIGHT",
+        "rate": 0.2,
+        "timeRange": {
+          "start": "22:00",
+          "end": "06:00",
+          "endExclusive": true
+        }
+      },
+      {
+        "code": "HOLIDAY",
+        "rate": 0.2,
+        "includesSunday": true,
+        "includesPublicHolidays": true,
+        "country": "PL"
+      }
+    ]
+  },
+  "fixedSurcharges": [
+    {
+      "code": "MEET_GREET",
+      "amount": 20,
+      "serviceTypes": ["airport"],
+      "booleanField": "meetAndGreet"
+    },
+    {
+      "code": "CHILD_SEAT",
+      "amountPerUnit": 20,
+      "countField": "childSeats"
+    },
+    {
+      "code": "BOOSTER",
+      "amountPerUnit": 10,
+      "countField": "boosterSeats"
+    }
+  ],
+  "calculationOrder": ["basePrice", "percentSurcharges", "fixedSurcharges"],
+  "rounding": {
+    "moneyDecimalPlaces": 2
+  }
+}

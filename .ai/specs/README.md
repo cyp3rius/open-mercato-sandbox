@@ -164,7 +164,7 @@ Fully implemented and deployed. Canonical files live in [`implemented/`](impleme
 | [SPEC-045f](implemented/SPEC-045f-health-monitoring.md) | 2026-02-24 | Integration Marketplace — Health Monitoring | Integration health monitoring, status dashboard, and marketplace UI |
 | [SPEC-045g](implemented/SPEC-045g-google-workspace.md) | 2026-02-24 | Integration Marketplace — Google Workspace | Google Workspace integration: spreadsheet-based product import |
 | [SPEC-045h](implemented/SPEC-045h-stripe-payment-gateway.md) | 2026-02-24 | Integration Marketplace — Stripe Gateway | Stripe payment gateway reference implementation |
-| [SPEC-045i](implemented/SPEC-045i-storage-hub.md) | 2026-03-10 | Integration Marketplace — Storage Providers Hub | File storage backend hub with pluggable drivers (local, S3, database) |
+| [SPEC-045i](2026-09-07-storage-providers-hub.md) | 2026-09-07 | Integration Marketplace — Storage Providers Hub | Pluggable attachment storage drivers (MVP: local + env; S3/Marketplace deferred) |
 | [SPEC-048](implemented/SPEC-048-2026-02-25-notifications-sse-migration.md) | 2026-02-25 | Migrate Notifications from Polling to SSE | Replaces 5-second polling with SSE event delivery via DOM Event Bridge |
 | [SPEC-049](implemented/SPEC-049-2026-02-26-message-objects-universal-view-attachments.md) | 2026-02-26 | Universal Message Object Attachments | Generic message object attachment previews/details and compose-flow wiring |
 | [SPEC-050](implemented/SPEC-050-2026-02-26-dev-container-setup.md) | 2026-02-26 | Dev Container Setup | VS Code Dev Container configuration for Open Mercato |

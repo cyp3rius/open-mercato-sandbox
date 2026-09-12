@@ -136,7 +136,40 @@ const crud = makeCrudRoute({
       const term = sanitizeSearchTerm(query.search)
       if (term) {
         const like = `%${escapeLikePattern(term)}%`
-        filters[F.name] = { $ilike: like }
+        const compact = escapeLikePattern(term.replace(/\s+/g, ''))
+        const em = (ctx.container.resolve('em') as EntityManager).fork()
+        const connection = em.getConnection()
+        const plateRows = (await connection.execute(
+          `select distinct record_id
+           from custom_field_values
+           where entity_id = ?
+             and field_key = ?
+             and deleted_at is null
+             and (
+               value_text ilike ?
+               or regexp_replace(coalesce(value_text, ''), '\\s+', '', 'g') ilike ?
+             )
+           limit 100`,
+          [E.resources.resources_resource, 'vehicle_plate', like, `%${compact}%`],
+        )) as Array<{ record_id?: string; recordId?: string }>
+        const plateIds = [
+          ...new Set(
+            plateRows
+              .map((row) =>
+                typeof row.record_id === 'string'
+                  ? row.record_id
+                  : typeof row.recordId === 'string'
+                    ? row.recordId
+                    : '',
+              )
+              .filter((id) => id.length > 0),
+          ),
+        ]
+        if (plateIds.length) {
+          filters.$or = [{ [F.name]: { $ilike: like } }, { [F.id]: { $in: plateIds } }]
+        } else {
+          filters[F.name] = { $ilike: like }
+        }
       }
       const fieldsetRaw =
         typeof query.resourcesResourceFieldset === 'string' ? query.resourcesResourceFieldset.trim() : ''
@@ -207,6 +240,7 @@ const crud = makeCrudRoute({
       }
       return filters
     },
+    decorateCustomFields: { entityIds: [E.resources.resources_resource] },
   },
   hooks: {
     afterList: async (payload, ctx) => {

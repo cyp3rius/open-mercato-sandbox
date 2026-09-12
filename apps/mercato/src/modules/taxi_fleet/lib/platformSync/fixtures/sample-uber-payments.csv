@@ -1,0 +1,4 @@
+identyfikator UUID transakcji,Identyfikator UUID kierowcy,Imię kierowcy,Nazwisko kierowcy,Identyfikator UUID przejazdu,Opis,Wypłacono Ci,Wypłacono Ci : Twój przychód,Wypłacono Ci : Bilans przejazdu : Wypłaty : Odebrana gotówka
+tx-1,driver-uber-42,Jan,Kowalski,trip-uber-001,trip completed order,18.72,18.72,0
+tx-2,driver-uber-42,Jan,Kowalski,trip-uber-002,trip completed order,-10.00,40.00,-50.00
+tx-3,driver-uber-42,Jan,Kowalski,trip-uber-002,trip fare adjust order,2.00,2.00,0

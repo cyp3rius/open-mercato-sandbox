@@ -177,6 +177,25 @@ export function toSnake(s: string): string {
     .toLowerCase()
 }
 
+/**
+ * Static check for a named export in a TypeScript/JavaScript source file.
+ * Used when dynamic import fails (e.g. app-module workers with extensionless TS imports).
+ */
+export function sourceFileHasNamedExport(filePath: string, exportName: string): boolean {
+  if (!fs.existsSync(filePath)) return false
+  try {
+    const src = fs.readFileSync(filePath, 'utf8')
+    const escaped = exportName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const patterns = [
+      new RegExp(`export\\s+(?:async\\s+)?(?:const|let|var|function|class)\\s+${escaped}\\b`),
+      new RegExp(`export\\s*\\{[^}]*\\b${escaped}\\b[^}]*\\}`),
+    ]
+    return patterns.some((re) => re.test(src))
+  } catch {
+    return false
+  }
+}
+
 export async function moduleHasExport(filePath: string, exportName: string): Promise<boolean> {
   try {
     // On Windows, absolute paths must be file:// URLs for ESM imports

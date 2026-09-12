@@ -79,7 +79,7 @@ import { parseBooleanWithDefault } from '@open-mercato/shared/lib/boolean'
 import { cn } from '@open-mercato/shared/lib/utils'
 import { useInjectionDataWidgets } from './injection/useInjectionDataWidgets'
 import { InjectedField } from './injection/InjectedField'
-import type { InjectionFieldDefinition, FieldContext } from '@open-mercato/shared/modules/widgets/injection'
+import type { InjectionFieldDefinition, FieldContext, FieldVisibilityCondition } from '@open-mercato/shared/modules/widgets/injection'
 import { evaluateInjectedVisibility } from './injection/visibility-utils'
 import { ComponentReplacementHandles } from '@open-mercato/shared/modules/widgets/component-registry'
 
@@ -139,6 +139,8 @@ export type CrudFieldBase = {
   layout?: 'full' | 'half' | 'third' | 'quarter'
   disabled?: boolean
   readOnly?: boolean
+  /** Hide the entire field (label + control) when the condition is false. Same semantics as injected fields. */
+  visibleWhen?: FieldVisibilityCondition
 }
 
 export type CrudFieldOption = {
@@ -148,6 +150,7 @@ export type CrudFieldOption = {
   icon?: string
   /** Dictionary / catalog: optional CSS color (e.g. hex). */
   color?: string
+  disabled?: boolean
 }
 
 export type CrudBuiltinField = CrudFieldBase & {
@@ -209,6 +212,7 @@ export type CrudCustomFieldRenderProps = {
   formErrors?: Record<string, string>
   autoFocus?: boolean
   disabled?: boolean
+  readOnly?: boolean
   values?: Record<string, unknown>
   setValue: (value: unknown) => void
   // Optional helper to update other form values from within a custom field
@@ -221,6 +225,10 @@ export type CrudCustomFieldRenderProps = {
 export type CrudCustomField = CrudFieldBase & {
   type: 'custom'
   component: (props: CrudCustomFieldRenderProps) => React.ReactNode
+}
+
+function isCrudFieldVisible(field: CrudField, values: Record<string, unknown>): boolean {
+  return evaluateInjectedVisibility(field.visibleWhen, values, {})
 }
 
 export type CrudField = CrudBuiltinField | CrudCustomField
@@ -249,6 +257,10 @@ export type CrudFormProps<TValues extends Record<string, unknown>> = {
   deleteRedirect?: string
   onSubmit?: (values: TValues, context?: CrudFormSubmitContext) => Promise<void> | void
   onDelete?: () => Promise<void> | void
+  /** When true, primary submit stays disabled until the form is ready. */
+  submitDisabled?: boolean
+  /** Called when form values change (including after initial mount). */
+  onValuesChange?: (values: TValues) => void
   // When true, shows Delete button whenever onDelete is provided, even without an id
   deleteVisible?: boolean
   // Legacy field-only grid toggle. Use `groups` for advanced layout.
@@ -290,6 +302,11 @@ export type CrudFormProps<TValues extends Record<string, unknown>> = {
   // Optional custom content injected between the header actions and the form body
   contentHeader?: React.ReactNode
   readOnly?: boolean
+  /**
+   * Custom content for the read-only frosted overlay.
+   * Pass `false` to keep field/footer locking without the blocking overlay
+   * (e.g. viewable completed records with interactive sidebar widgets).
+   */
   readOnlyOverlay?: React.ReactNode
   // Optional mapping of entityId -> form value key storing the selected fieldset code
   customFieldsetBindings?: Record<string, { valueKey: string }>
@@ -453,6 +470,8 @@ export function CrudForm<TValues extends Record<string, unknown>>({
   deleteRedirect,
   onSubmit,
   onDelete,
+  submitDisabled = false,
+  onValuesChange,
   deleteVisible,
   twoColumn = false,
   title,
@@ -508,6 +527,9 @@ export function CrudForm<TValues extends Record<string, unknown>>({
   const [values, setValues] = React.useState<CrudFormValues<TValues>>(
     () => ({ ...(initialValues ?? {}) } as CrudFormValues<TValues>)
   )
+  React.useEffect(() => {
+    onValuesChange?.(values as TValues)
+  }, [onValuesChange, values])
   const valuesRef = React.useRef(values)
   const [errors, setErrors] = React.useState<Record<string, string>>({})
   const [pending, setPending] = React.useState(false)
@@ -1094,6 +1116,17 @@ export function CrudForm<TValues extends Record<string, unknown>>({
       {extraActions}
     </>
   ) : undefined
+  const embeddedTopHeaderActions =
+    embedded && repeatExtraActionsInFooter && extraActions
+      ? versionHistoryEnabled || headerInjectionAction
+        ? (
+            <>
+              {versionHistoryEnabled ? versionHistoryAction : null}
+              {headerInjectionAction}
+            </>
+          )
+        : undefined
+      : headerExtraActions
 
   // Auto-append custom fields for this entityId
   React.useEffect(() => {
@@ -1261,7 +1294,11 @@ export function CrudForm<TValues extends Record<string, unknown>>({
       const allFieldsets = fieldsetsByEntity[entityId] ?? []
       const availableFieldsets =
         isResourcesCustomEntity
-          ? allFieldsets.filter((fs) => fieldsetAppliesToResourceType(fs, resourceTypeIdForResourceFieldsets))
+          ? allFieldsets.filter((fs) =>
+              fieldsetAppliesToResourceType(fs, resourceTypeIdForResourceFieldsets, {
+                resolvedFieldsetCode: resourceCustomFieldsetCodeStr || null,
+              }),
+            )
           : allFieldsets
       const hasFieldsets = availableFieldsets.length > 0
       const resourceFieldsetsExcludedByType =
@@ -1913,7 +1950,11 @@ export function CrudForm<TValues extends Record<string, unknown>>({
     if (!binding) return
     const all = fieldsetsByEntity[RESOURCES_RESOURCE_CUSTOM_FIELDS_ENTITY_ID] ?? []
     if (!all.length) return
-    const applicable = all.filter((fs) => fieldsetAppliesToResourceType(fs, resourceTypeIdForResourceFieldsets))
+    const applicable = all.filter((fs) =>
+      fieldsetAppliesToResourceType(fs, resourceTypeIdForResourceFieldsets, {
+        resolvedFieldsetCode: resourceCustomFieldsetCodeStr || null,
+      }),
+    )
     const codes = new Set(applicable.map((fs) => fs.code))
     const current = resourceCustomFieldsetCodeStr
     if (!current || codes.has(current)) return
@@ -2052,6 +2093,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
       if (!field.required) continue
       if (field.disabled) continue
       if (hiddenInjectedFieldIds.has(field.id)) continue
+      if (!isCrudFieldVisible(field, values as Record<string, unknown>)) continue
       const v = values[field.id]
       const isArray = Array.isArray(v)
       const isString = typeof v === 'string'
@@ -2498,6 +2540,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
               wrapperClassName={wrapperClassName}
               entityIdForField={primaryEntityId ?? undefined}
               recordId={recordId}
+              formReadOnly={formReadOnly}
             />
           )
         })}
@@ -2708,6 +2751,10 @@ export function CrudForm<TValues extends Record<string, unknown>>({
 
   const wrapFormBody = React.useCallback((children: React.ReactNode, className?: string) => {
     if (!formReadOnly) return children
+    // Explicit false: lock actions/fields without a full-screen blocking overlay.
+    if (readOnlyOverlay === false) {
+      return <div className={className}>{children}</div>
+    }
     return (
       <div
         className={cn('relative', className)}
@@ -2840,13 +2887,13 @@ export function CrudForm<TValues extends Record<string, unknown>>({
               showDelete: !formReadOnly && showDelete,
               onDelete: handleDelete, // NOSONAR — async→void assignment is valid TypeScript
               deleteLabel,
-              cancelHref,
+              cancelHref: formReadOnly ? undefined : cancelHref,
               cancelLabel,
-              submit: formReadOnly ? undefined : { formId, pending: pending, label: resolvedSubmitLabel, pendingLabel: savingLabel, icon: submitIcon },
+              submit: formReadOnly ? undefined : { formId, pending: pending, label: resolvedSubmitLabel, pendingLabel: savingLabel, icon: submitIcon, disabled: submitDisabled },
             }}
           />
-        ) : headerExtraActions ? (
-          <div className="flex justify-end gap-2 mb-2">{headerExtraActions}</div>
+        ) : embeddedTopHeaderActions ? (
+          <div className="flex justify-end gap-2 mb-2">{embeddedTopHeaderActions}</div>
         ) : null}
         {contentHeader}
         <DataLoader
@@ -2893,7 +2940,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
                   deleteLabel,
                   cancelHref: !embedded ? cancelHref : undefined,
                   cancelLabel,
-                  submit: { pending: pending, label: resolvedSubmitLabel, pendingLabel: savingLabel, icon: submitIcon }
+                  submit: { pending: pending, label: resolvedSubmitLabel, pendingLabel: savingLabel, icon: submitIcon, disabled: submitDisabled }
                 }}
               />
             )}
@@ -2921,13 +2968,13 @@ export function CrudForm<TValues extends Record<string, unknown>>({
             showDelete: !formReadOnly && showDelete,
             onDelete: handleDelete, // NOSONAR — async→void assignment is valid TypeScript
             deleteLabel,
-            cancelHref,
+            cancelHref: formReadOnly ? undefined : cancelHref,
             cancelLabel,
-            submit: formReadOnly ? undefined : { formId, pending: pending, label: resolvedSubmitLabel, pendingLabel: savingLabel, icon: submitIcon },
+            submit: formReadOnly ? undefined : { formId, pending: pending, label: resolvedSubmitLabel, pendingLabel: savingLabel, icon: submitIcon, disabled: submitDisabled },
           }}
         />
-      ) : headerExtraActions ? (
-        <div className="flex justify-end gap-2 mb-2">{headerExtraActions}</div>
+      ) : embeddedTopHeaderActions ? (
+        <div className="flex justify-end gap-2 mb-2">{embeddedTopHeaderActions}</div>
       ) : null}
       {contentHeader}
       <DataLoader
@@ -2974,6 +3021,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
                     wrapperClassName={wrapperClassName}
                     entityIdForField={primaryEntityId ?? undefined}
                     recordId={recordId}
+                    formReadOnly={formReadOnly}
                   />
                 )
               })}
@@ -2990,7 +3038,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
                   deleteLabel,
                   cancelHref: !embedded ? cancelHref : undefined,
                   cancelLabel,
-                  submit: { pending: pending, label: resolvedSubmitLabel, pendingLabel: savingLabel, icon: submitIcon },
+                  submit: { pending: pending, label: resolvedSubmitLabel, pendingLabel: savingLabel, icon: submitIcon, disabled: submitDisabled },
                 }}
               />
             )}
@@ -3072,6 +3120,7 @@ function TextInput({
   autoFocus,
   onSubmit,
   disabled,
+  readOnly,
   suggestions,
   inputType = 'text',
 }: {
@@ -3081,6 +3130,7 @@ function TextInput({
   autoFocus?: boolean
   onSubmit?: () => void
   disabled?: boolean
+  readOnly?: boolean
   suggestions?: string[]
   inputType?: 'text' | 'password'
 }) {
@@ -3101,21 +3151,21 @@ function TextInput({
   }, [value])
 
   const handleChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (disabled) return
+    if (disabled || readOnly) return
     const next = e.target.value
     userTypingRef.current = true
     setLocal(next)
     onChange(next)
-  }, [disabled, onChange])
+  }, [disabled, onChange, readOnly])
 
   const handleKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (disabled) return
+    if (disabled || readOnly) return
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       commitIfChanged()
       onSubmit?.()
     }
-  }, [commitIfChanged, disabled, onSubmit])
+  }, [commitIfChanged, disabled, onSubmit, readOnly])
 
   const handleFocus = React.useCallback(() => {
     isFocusedRef.current = true
@@ -3131,7 +3181,7 @@ function TextInput({
     <>
       <input
         type={inputType}
-        className={CRUD_FORM_TEXT_INPUT_CLASS}
+        className={cn(CRUD_FORM_TEXT_INPUT_CLASS, readOnly && 'bg-muted/20')}
         placeholder={placeholder}
         value={local}
         onChange={handleChange}
@@ -3142,6 +3192,7 @@ function TextInput({
         autoFocus={autoFocus}
         data-crud-focus-target=""
         disabled={disabled}
+        readOnly={readOnly}
         list={suggestions && suggestions.length > 0 ? datalistId : undefined}
       />
       {suggestions && suggestions.length > 0 && (
@@ -3235,11 +3286,15 @@ function TextAreaInput({
   onChange,
   placeholder,
   autoFocus,
+  disabled,
+  readOnly,
 }: {
   value: string
   onChange: (v: string) => void
   placeholder?: string
   autoFocus?: boolean
+  disabled?: boolean
+  readOnly?: boolean
 }) {
   const [local, setLocal] = React.useState<string>(value)
   const isFocusedRef = React.useRef(false)
@@ -3253,10 +3308,11 @@ function TextAreaInput({
   }, [value])
 
   const handleChange = React.useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (disabled || readOnly) return
     const next = e.target.value
     setLocal(next)
     onChange(next)
-  }, [onChange])
+  }, [disabled, onChange, readOnly])
 
   const handleFocus = React.useCallback(() => { isFocusedRef.current = true }, [])
   const handleBlur = React.useCallback(() => {
@@ -3266,13 +3322,15 @@ function TextAreaInput({
 
   return (
     <textarea
-      className={CRUD_FORM_TEXTAREA_CLASS}
+      className={cn(CRUD_FORM_TEXTAREA_CLASS, readOnly && 'bg-muted/20')}
       placeholder={placeholder}
       value={local}
       onChange={handleChange}
       onFocus={handleFocus}
       onBlur={handleBlur}
       autoFocus={autoFocus}
+      disabled={disabled}
+      readOnly={readOnly}
       data-crud-focus-target=""
     />
   )
@@ -3397,6 +3455,8 @@ type FieldControlProps = {
   wrapperClassName?: string
   entityIdForField?: string
   recordId?: string
+  /** Form-level read-only (e.g. completed trip). Must lock custom fields even when `readOnlyOverlay` is false. */
+  formReadOnly?: boolean
 }
 
 function supportsWrapperBlurValidation(field: CrudField): boolean {
@@ -3494,26 +3554,35 @@ const FieldControl = React.memo(function FieldControlImpl({
   wrapperClassName,
   entityIdForField,
   recordId,
+  formReadOnly = false,
 }: FieldControlProps) {
   const t = useT()
   const fieldSetValue = React.useCallback(
-    (nextValue: unknown) => setValue(field.id, nextValue),
-    [setValue, field.id]
+    (nextValue: unknown) => {
+      if (formReadOnly) return
+      setValue(field.id, nextValue)
+    },
+    [formReadOnly, setValue, field.id]
   )
   const setFormValue = React.useCallback(
-    (targetId: string, nextValue: unknown) => setValue(targetId, nextValue),
-    [setValue],
+    (targetId: string, nextValue: unknown) => {
+      if (formReadOnly) return
+      setValue(targetId, nextValue)
+    },
+    [formReadOnly, setValue],
   )
   const builtin = field.type === 'custom' ? null : field
   const hasLoader = typeof builtin?.loadOptions === 'function'
-  const disabled = Boolean(field.disabled)
-  const readOnly = Boolean(field.readOnly)
+  const disabled = Boolean(field.disabled) || formReadOnly
+  const readOnly = Boolean(field.readOnly) || formReadOnly
   const autoFocusField = autoFocus && !disabled
 
   React.useEffect(() => {
     if (!hasLoader || field.type === 'custom') return
     loadFieldOptions(field).catch(() => {})
   }, [field, hasLoader, loadFieldOptions])
+
+  if (!isCrudFieldVisible(field, values)) return null
 
   const placeholder = builtin?.placeholder
   const rootClassName = wrapperClassName ? `space-y-1 ${wrapperClassName}` : 'space-y-1'
@@ -3545,6 +3614,7 @@ const FieldControl = React.memo(function FieldControlImpl({
           autoFocus={autoFocusField}
           onSubmit={onSubmitRequest}
           disabled={disabled}
+          readOnly={readOnly}
           suggestions={field.type === 'text' ? field.suggestions : undefined}
         />
       )}
@@ -3556,6 +3626,7 @@ const FieldControl = React.memo(function FieldControlImpl({
           autoFocus={autoFocusField}
           onSubmit={onSubmitRequest}
           disabled={disabled}
+          readOnly={readOnly}
           inputType="password"
         />
       )}
@@ -3566,29 +3637,31 @@ const FieldControl = React.memo(function FieldControlImpl({
           onChange={fieldSetValue}
           autoFocus={autoFocusField}
           onSubmit={onSubmitRequest}
-          disabled={disabled}
+          disabled={disabled || readOnly}
         />
       )}
       {field.type === 'date' && (
         <input
           type="date"
-          className="w-full h-9 rounded border px-2 text-sm"
+          className={cn('w-full h-9 rounded border px-2 text-sm', readOnly && 'bg-muted/20')}
           value={typeof value === 'string' ? value : ''}
           onChange={(e) => setValue(field.id, e.target.value || undefined)}
           autoFocus={autoFocusField}
           data-crud-focus-target=""
           disabled={disabled}
+          readOnly={readOnly}
         />
       )}
       {field.type === 'datetime-local' && (
         <input
           type="datetime-local"
-          className="w-full h-9 rounded border px-2 text-sm"
+          className={cn('w-full h-9 rounded border px-2 text-sm', readOnly && 'bg-muted/20')}
           value={typeof value === 'string' ? value : ''}
           onChange={(e) => setValue(field.id, e.target.value || undefined)}
           autoFocus={autoFocusField}
           data-crud-focus-target=""
           disabled={disabled}
+          readOnly={readOnly}
         />
       )}
       {field.type === 'datepicker' && (
@@ -3635,6 +3708,8 @@ const FieldControl = React.memo(function FieldControlImpl({
           placeholder={placeholder}
           onChange={(next) => fieldSetValue(next)}
           autoFocus={autoFocusField}
+          disabled={disabled}
+          readOnly={readOnly}
         />
       )}
       {field.type === 'richtext' && builtin?.editor === 'simple' && (
@@ -3740,7 +3815,7 @@ const FieldControl = React.memo(function FieldControlImpl({
       )}
       {field.type === 'select' && !builtin?.multiple && !builtin?.useEntitySearchCombobox && (
         <select
-          className="w-full h-9 rounded border pl-3 pr-8 text-sm"
+          className={cn('w-full h-9 rounded border pl-3 pr-8 text-sm', readOnly && 'bg-muted/20')}
           value={
             Array.isArray(value)
               ? String(value[0] ?? '')
@@ -3750,11 +3825,11 @@ const FieldControl = React.memo(function FieldControlImpl({
           }
           onChange={(e) => setValue(field.id, e.target.value || undefined)}
           data-crud-focus-target=""
-          disabled={disabled}
+          disabled={disabled || readOnly}
         >
           <option value="">{t('ui.forms.select.emptyOption', '—')}</option>
           {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
+            <option key={opt.value} value={opt.value} disabled={opt.disabled}>
               {opt.label}
             </option>
           ))}
@@ -3828,6 +3903,7 @@ const FieldControl = React.memo(function FieldControlImpl({
             recordId,
             autoFocus,
             disabled,
+            readOnly,
           })}
         </>
       )}
@@ -3853,6 +3929,8 @@ const FieldControl = React.memo(function FieldControlImpl({
     prev.field.label === next.field.label &&
     prev.field.description === next.field.description &&
     prev.field.required === next.field.required &&
+    prev.field.disabled === next.field.disabled &&
+    prev.field.readOnly === next.field.readOnly &&
     prev.value === next.value &&
     prev.error === next.error &&
     prev.options === next.options &&

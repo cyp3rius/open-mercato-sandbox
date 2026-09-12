@@ -1575,7 +1575,13 @@ export function makeCrudRoute<TCreate = any, TUpdate = any, TList = any>(opts: C
           tenantId: ctx.auth?.tenantId ?? null,
           organizationIds: ctx.organizationIds,
         })
-        const emptyPayload = { items: [], total: 0 }
+        const emptyPayload = {
+          items: [] as unknown[],
+          total: 0,
+          page: Math.max(1, requestedPage),
+          pageSize: Math.min(Math.max(1, requestedPageSize), 100),
+          totalPages: 0,
+        }
         await opts.hooks?.afterList?.(emptyPayload, { ...ctx, query: validated as any })
         const fallbackEmptyAfterInterceptors = await applyInterceptorsAfter({
           ctx,
@@ -1630,8 +1636,32 @@ export function makeCrudRoute<TCreate = any, TUpdate = any, TList = any>(opts: C
           softDeleteField: ormCfg.softDeleteField,
         }
       )
-      let list = await repo.find(where)
-      profiler.mark('orm_query_complete', { itemCount: Array.isArray(list) ? list.length : 0 })
+      const pickOrmSortString = (value: unknown) =>
+        typeof value === 'string' && value.trim().length ? value.trim() : null
+      // ORM entities use camelCase properties. Prefer the raw sortField (e.g. startedAt),
+      // not sortFieldMap values which are typically snake_case query-engine columns.
+      const ormSortField =
+        pickOrmSortString((validated as Record<string, unknown>).sortField) ??
+        pickOrmSortString((queryParams as Record<string, unknown>).sortField) ??
+        'id'
+      const ormSortDirToken = (
+        pickOrmSortString((validated as Record<string, unknown>).sortDir) ??
+        pickOrmSortString((queryParams as Record<string, unknown>).sortDir) ??
+        'asc'
+      ).toLowerCase()
+      const ormSortDir = ormSortDirToken === 'desc' ? 'desc' : 'asc'
+      const fallbackPage = Math.max(1, requestedPage)
+      const fallbackPageSize = Math.min(Math.max(1, requestedPageSize), 100)
+      const fallbackOffset = (fallbackPage - 1) * fallbackPageSize
+      const total = await repo.count(where)
+      let list = exportRequested
+        ? await repo.find(where, { orderBy: { [ormSortField]: ormSortDir } })
+        : await repo.find(where, {
+            orderBy: { [ormSortField]: ormSortDir },
+            limit: fallbackPageSize,
+            offset: fallbackOffset,
+          })
+      profiler.mark('orm_query_complete', { itemCount: Array.isArray(list) ? list.length : 0, total })
       list = await decorateItemsWithCustomFields(list, ctx)
       profiler.mark('fallback_custom_fields_complete', { itemCount: Array.isArray(list) ? list.length : 0 })
 
@@ -1693,7 +1723,13 @@ export function makeCrudRoute<TCreate = any, TUpdate = any, TList = any>(opts: C
         })
         return response
       }
-      const payload = { items: list, total: list.length }
+      const payload = {
+        items: list,
+        total,
+        page: fallbackPage,
+        pageSize: fallbackPageSize,
+        totalPages: Math.max(1, Math.ceil(total / fallbackPageSize)),
+      }
       await opts.hooks?.afterList?.(payload, { ...ctx, query: validated as any })
       profiler.mark('after_list_hook')
       const fallbackAfterInterceptors = await applyInterceptorsAfter({

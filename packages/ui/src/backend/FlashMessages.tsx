@@ -146,7 +146,7 @@ function FlashMessagesInner() {
   const color = kind === 'success' ? 'bg-emerald-600' : kind === 'error' ? 'bg-red-600' : kind === 'warning' ? 'bg-amber-500' : 'bg-blue-600'
 
   return (
-    <div className="pointer-events-none fixed left-3 right-3 top-3 z-[1200] sm:left-auto sm:right-4 sm:w-[380px]">
+    <div className="pointer-events-none fixed left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[1200] sm:left-auto sm:right-4 sm:w-[380px]">
       <div className={`pointer-events-auto rounded px-3 py-2 text-white shadow-md ${color}`}>
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm">{msg}</div>

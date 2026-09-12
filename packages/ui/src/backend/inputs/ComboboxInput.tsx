@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { Button } from '../../primitives/button'
+import { CRUD_FORM_TEXT_INPUT_CLASS } from '../CrudForm'
 
 export type ComboboxOption = {
   value: string
@@ -211,7 +212,7 @@ export function ComboboxInput({
       <input
         ref={inputRef}
         type="text"
-        className="w-full h-9 rounded border px-2 text-sm disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+        className={CRUD_FORM_TEXT_INPUT_CLASS}
         value={input}
         placeholder={placeholder || 'Type to search...'}
         autoFocus={autoFocus}

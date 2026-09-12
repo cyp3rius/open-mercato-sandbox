@@ -1,12 +1,15 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { after } from 'next/server'
 import { Attachment, AttachmentPartition } from '../data/entities'
+import { getStorageDriverFactory } from './drivers'
 import { OcrService } from './ocrService'
 
 export type OcrRequestedEvent = {
   attachmentId: string
-  filePath: string
   mimeType: string
   partitionCode: string
+  storagePath: string
+  storageDriver: string
   organizationId: string | null
   tenantId: string | null
 }
@@ -15,10 +18,14 @@ export async function processAttachmentOcr(
   em: EntityManager,
   payload: OcrRequestedEvent
 ): Promise<void> {
-  const { attachmentId, filePath, mimeType, partitionCode } = payload
+  const { attachmentId, mimeType, partitionCode, storagePath, storageDriver } = payload
 
   console.log(`[attachments.ocr] Processing started for attachment: ${attachmentId}`)
   const startTime = Date.now()
+
+  const localPath = await getStorageDriverFactory()
+    .resolve(storageDriver)
+    .toLocalPath(partitionCode, storagePath)
 
   try {
     const partition = await em.findOne(AttachmentPartition, { code: partitionCode })
@@ -32,7 +39,7 @@ export async function processAttachmentOcr(
     }
 
     const result = await ocrService.processFile({
-      filePath,
+      filePath: localPath.filePath,
       mimeType,
       model: resolvedModel,
     })
@@ -63,27 +70,37 @@ export async function processAttachmentOcr(
       attachmentId,
       error: error instanceof Error ? error.message : String(error),
     })
+  } finally {
+    await localPath.cleanup()
   }
 }
 
 export async function requestOcrProcessing(
   em: EntityManager,
   attachment: Attachment,
-  filePath: string
 ): Promise<void> {
   const payload: OcrRequestedEvent = {
     attachmentId: attachment.id,
-    filePath,
     mimeType: attachment.mimeType,
     partitionCode: attachment.partitionCode,
+    storagePath: attachment.storagePath,
+    storageDriver: attachment.storageDriver || 'local',
     organizationId: attachment.organizationId ?? null,
     tenantId: attachment.tenantId ?? null,
   }
 
-  setImmediate(() => {
-    const workerEm = typeof (em as any)?.fork === 'function' ? (em as any).fork() : em
+  const run = () => {
+    const workerEm = typeof (em as { fork?: () => EntityManager }).fork === 'function'
+      ? (em as { fork: () => EntityManager }).fork()
+      : em
     processAttachmentOcr(workerEm, payload).catch((error) => {
       console.error(`[attachments.ocr] Background processing error:`, error)
     })
-  })
+  }
+
+  try {
+    after(run)
+  } catch {
+    setImmediate(run)
+  }
 }

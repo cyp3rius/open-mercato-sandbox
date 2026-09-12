@@ -3,7 +3,8 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { useReactTable, getCoreRowModel, getSortedRowModel, flexRender, type ColumnDef, type SortingState, type Column as TableColumn, type VisibilityState, type RowSelectionState } from '@tanstack/react-table'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { RefreshCw, Loader2, SlidersHorizontal, MoreHorizontal, Circle } from 'lucide-react'
+import { RefreshCw, Loader2, SlidersHorizontal, MoreHorizontal, Circle, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react'
+import { buildPageItems } from './dataTablePagination'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../primitives/table'
 import { Button } from '../primitives/button'
 import { Checkbox } from '../primitives/checkbox'
@@ -1542,27 +1543,87 @@ export function DataTable<T>({
           </span>
           {cacheBadge}
         </div>
-        <div className="flex items-center justify-center sm:justify-end gap-2">
+        <nav
+          className="flex flex-wrap items-center justify-center sm:justify-end gap-1"
+          aria-label={t('ui.dataTable.pagination.navAriaLabel', 'Pagination')}
+        >
           <Button
+            type="button"
             variant="outline"
             size="sm"
+            className="px-2"
+            onClick={() => { onPageChange(1); scrollTableIntoView() }}
+            disabled={page <= 1}
+            aria-label={t('ui.dataTable.pagination.firstAriaLabel', 'Go to first page')}
+            title={t('ui.dataTable.pagination.first', 'First')}
+          >
+            <ChevronsLeft className="size-4" aria-hidden />
+            <span className="sr-only">{t('ui.dataTable.pagination.first', 'First')}</span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="px-2"
             onClick={() => { onPageChange(page - 1); scrollTableIntoView() }}
             disabled={page <= 1}
+            aria-label={t('ui.dataTable.pagination.previousAriaLabel', 'Go to previous page')}
+            title={t('ui.dataTable.pagination.previous', 'Previous')}
           >
-            {t('ui.dataTable.pagination.previous', 'Previous')}
+            <ChevronLeft className="size-4" aria-hidden />
+            <span className="sr-only">{t('ui.dataTable.pagination.previous', 'Previous')}</span>
           </Button>
-          <span className="text-sm whitespace-nowrap">
-            {t('ui.dataTable.pagination.pageInfo', 'Page {page} of {totalPages}', { page, totalPages })}
-          </span>
+          {buildPageItems(page, totalPages).map((item, index) =>
+            item === 'ellipsis' ? (
+              <span
+                key={`ellipsis-${index}`}
+                className="px-1.5 text-sm text-muted-foreground select-none"
+                aria-hidden
+              >
+                …
+              </span>
+            ) : (
+              <Button
+                key={item}
+                type="button"
+                variant={item === page ? 'default' : 'outline'}
+                size="sm"
+                className="min-w-8 px-2 tabular-nums"
+                onClick={() => { onPageChange(item); scrollTableIntoView() }}
+                aria-label={t('ui.dataTable.pagination.pageAriaLabel', 'Go to page {page}', { page: item })}
+                aria-current={item === page ? 'page' : undefined}
+              >
+                {item}
+              </Button>
+            ),
+          )}
           <Button
+            type="button"
             variant="outline"
             size="sm"
+            className="px-2"
             onClick={() => { onPageChange(page + 1); scrollTableIntoView() }}
             disabled={page >= totalPages}
+            aria-label={t('ui.dataTable.pagination.nextAriaLabel', 'Go to next page')}
+            title={t('ui.dataTable.pagination.next', 'Next')}
           >
-            {t('ui.dataTable.pagination.next', 'Next')}
+            <ChevronRight className="size-4" aria-hidden />
+            <span className="sr-only">{t('ui.dataTable.pagination.next', 'Next')}</span>
           </Button>
-        </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="px-2"
+            onClick={() => { onPageChange(totalPages); scrollTableIntoView() }}
+            disabled={page >= totalPages}
+            aria-label={t('ui.dataTable.pagination.lastAriaLabel', 'Go to last page')}
+            title={t('ui.dataTable.pagination.last', 'Last')}
+          >
+            <ChevronsRight className="size-4" aria-hidden />
+            <span className="sr-only">{t('ui.dataTable.pagination.last', 'Last')}</span>
+          </Button>
+        </nav>
       </div>
     )
   }, [pagination, measuredDurationMs, scrollTableIntoView, t])

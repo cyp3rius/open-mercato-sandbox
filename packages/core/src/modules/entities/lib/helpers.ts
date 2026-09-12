@@ -26,6 +26,8 @@ function columnFromKind(kind: string): keyof CustomFieldValue {
     case 'select':
     case 'currency':
     case 'dictionary':
+    case 'color':
+    case 'icon':
       return 'valueText'
     case 'multiline':
       return 'valueMultiline'
