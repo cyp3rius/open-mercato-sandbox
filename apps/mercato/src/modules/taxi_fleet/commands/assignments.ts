@@ -139,16 +139,27 @@ const updateAssignmentCommand: CommandHandler<AssignmentUpdateInput, { assignmen
     if (parsed.resourceId !== undefined) row.resourceId = parsed.resourceId
     if (parsed.assignmentDate !== undefined) row.assignmentDate = parsed.assignmentDate
 
-    // Operator schedule edits always go to planned*; never overwrite punch via CRUD.
+    const hasPlannedKeys =
+      parsed.plannedShiftStart !== undefined || parsed.plannedShiftEnd !== undefined
+    const hasPunchKeys = parsed.shiftStart !== undefined || parsed.shiftEnd !== undefined
+
+    // Explicit planned* always writes the schedule window.
     if (parsed.plannedShiftStart !== undefined) {
       row.plannedShiftStart = parsed.plannedShiftStart
-    } else if (parsed.shiftStart !== undefined) {
+    } else if (!hasPlannedKeys && parsed.shiftStart !== undefined) {
+      // Legacy clients: shiftStart alone still means plan.
       row.plannedShiftStart = parsed.shiftStart
     }
     if (parsed.plannedShiftEnd !== undefined) {
       row.plannedShiftEnd = parsed.plannedShiftEnd
-    } else if (parsed.shiftEnd !== undefined) {
+    } else if (!hasPlannedKeys && parsed.shiftEnd !== undefined) {
       row.plannedShiftEnd = parsed.shiftEnd
+    }
+
+    // When planned* is present (CRM editor), shift* are actual punch times.
+    if (hasPlannedKeys && hasPunchKeys) {
+      if (parsed.shiftStart !== undefined) row.shiftStart = parsed.shiftStart
+      if (parsed.shiftEnd !== undefined) row.shiftEnd = parsed.shiftEnd
     }
 
     if (parsed.status !== undefined) row.status = parsed.status
