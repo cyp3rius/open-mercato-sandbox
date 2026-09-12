@@ -1,8 +1,22 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { after } from 'next/server'
 import { Attachment, AttachmentPartition } from '../data/entities'
 import { getStorageDriverFactory } from './drivers'
 import { OcrService } from './ocrService'
+
+function scheduleAfterResponse(task: () => void): void {
+  void import('next/server')
+    .then((mod) => {
+      const afterFn = (mod as { after?: (fn: () => void) => void }).after
+      if (typeof afterFn === 'function') {
+        afterFn(task)
+        return
+      }
+      setImmediate(task)
+    })
+    .catch(() => {
+      setImmediate(task)
+    })
+}
 
 export type OcrRequestedEvent = {
   attachmentId: string
@@ -98,9 +112,5 @@ export async function requestOcrProcessing(
     })
   }
 
-  try {
-    after(run)
-  } catch {
-    setImmediate(run)
-  }
+  scheduleAfterResponse(run)
 }
