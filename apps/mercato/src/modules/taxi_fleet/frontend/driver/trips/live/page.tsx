@@ -23,6 +23,7 @@ import {
   driverSectionDescClass,
   driverSectionTitleClass,
 } from '../../../../components/driverApp/driverUi'
+import { pushDriverLocationPing, beginExternalDriverLocationFeed, endExternalDriverLocationFeed } from '../../../../components/driverApp/useDriverTracking'
 import {
   appendPendingTripToCache,
   enqueueDriverMutation,
@@ -134,13 +135,28 @@ function DriverLiveTripPageInner() {
   // Track GPS while active
   React.useEffect(() => {
     if (!draft || draft.phase !== 'active' || !navigator.geolocation) return
+    beginExternalDriverLocationFeed()
     let wakeLock: WakeLockSentinel | null = null
     void navigator.wakeLock?.request('screen').then((lock) => {
       wakeLock = lock
     }).catch(() => undefined)
 
+    const pushShiftPing = (position: GeolocationPosition) => {
+      pushDriverLocationPing({
+        recordedAt: new Date(position.timestamp).toISOString(),
+        lat: position.coords.latitude,
+        lon: position.coords.longitude,
+        accuracyM: position.coords.accuracy,
+        speedMps: position.coords.speed,
+        heading: position.coords.heading,
+        assignmentId: draft.assignmentId ?? null,
+        tripId: draft.serverTripId ?? null,
+      })
+    }
+
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
+        pushShiftPing(position)
         const point = {
           lat: position.coords.latitude,
           lon: position.coords.longitude,
@@ -162,6 +178,7 @@ function DriverLiveTripPageInner() {
       if (document.visibilityState !== 'visible') return
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          pushShiftPing(position)
           const point = {
             lat: position.coords.latitude,
             lon: position.coords.longitude,
@@ -180,11 +197,12 @@ function DriverLiveTripPageInner() {
     document.addEventListener('visibilitychange', onVisible)
 
     return () => {
+      endExternalDriverLocationFeed()
       navigator.geolocation.clearWatch(watchId)
       document.removeEventListener('visibilitychange', onVisible)
       void wakeLock?.release().catch(() => undefined)
     }
-  }, [draft?.id, draft?.phase])
+  }, [draft?.id, draft?.phase, draft?.assignmentId, draft?.serverTripId])
 
   async function endTrip() {
     if (!draft) return

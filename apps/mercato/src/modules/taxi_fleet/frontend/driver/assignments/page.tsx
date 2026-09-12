@@ -23,6 +23,7 @@ import {
   driverSectionDescClass,
   driverSectionTitleClass,
 } from '../../../components/driverApp/driverUi'
+import { flushDriverLocationTracking } from '../../../components/driverApp/useDriverTracking'
 import { enqueueDriverMutation } from '../../../lib/driverOffline/outbox'
 import { formatVehicleResourceLabel, stripPlateFromVehicleName } from '../../../lib/vehicleResourceLabel'
 
@@ -316,6 +317,7 @@ export default function DriverAssignmentsPage() {
     if (row.status === 'cancelled') return
     setBusyId(row.id)
     try {
+      await flushDriverLocationTracking()
       if (!navigator.onLine) {
         await enqueueDriverMutation({
           type: 'assignment.shift',

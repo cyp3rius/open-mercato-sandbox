@@ -2286,6 +2286,8 @@
   "taxi_fleet.driverApp.home.status": "Status",
   "taxi_fleet.driverApp.home.started": "Started",
   "taxi_fleet.driverApp.home.ended": "Ended",
+  "taxi_fleet.driverApp.home.gpsDistance": "GPS distance",
+  "taxi_fleet.driverApp.home.gpsDistanceValue": "{km} km",
   "taxi_fleet.driverApp.home.shiftEnded": "Shift ended",
   "taxi_fleet.driverApp.home.clockIn": "Start shift",
   "taxi_fleet.driverApp.home.clockInAdHoc": "Start ad-hoc shift",

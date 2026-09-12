@@ -30,6 +30,10 @@ import {
   driverSectionTitleClass,
 } from '../../components/driverApp/driverUi'
 import { cacheDriverJson, enqueueDriverMutation, readCachedDriverJson } from '../../lib/driverOffline/outbox'
+import {
+  flushDriverLocationTracking,
+  useDriverTrackingEstimatedKm,
+} from '../../components/driverApp/useDriverTracking'
 import { formatVehicleResourceLabel, stripPlateFromVehicleName } from '../../lib/vehicleResourceLabel'
 
 type MeResponse = {
@@ -49,6 +53,7 @@ type MeResponse = {
     status: string
     shiftStart: string | null
     shiftEnd: string | null
+    gpsDistanceKm?: string | null
   } | null
 }
 
@@ -169,6 +174,19 @@ export default function DriverHomePage() {
   const assignment = me?.todayAssignment ?? null
   const homeState = loaded ? resolveHomeState(assignment) : 'loading'
   const shiftActive = homeState === 'on_shift'
+  const estimatedKmLabel = useDriverTrackingEstimatedKm(shiftActive)
+
+  React.useEffect(() => {
+    if (!shiftActive) return
+    const id = window.setInterval(() => void load(), 60_000)
+    return () => window.clearInterval(id)
+  }, [load, shiftActive])
+
+  const gpsKmLabel = React.useMemo(() => {
+    const server = assignment?.gpsDistanceKm?.trim()
+    if (server && Number(server) > 0) return server
+    return estimatedKmLabel
+  }, [assignment?.gpsDistanceKm, estimatedKmLabel])
   const profileDefaults = me?.profile?.defaultResourceIds ?? []
   const shiftVehicles = React.useMemo(
     () =>
@@ -207,6 +225,9 @@ export default function DriverHomePage() {
     }
     setBusy(true)
     try {
+      if (action === 'end') {
+        await flushDriverLocationTracking()
+      }
       const resourceId = action === 'start' ? selectedResourceId : null
       if (!navigator.onLine) {
         await enqueueDriverMutation({
@@ -484,6 +505,16 @@ export default function DriverHomePage() {
                 shiftStart={assignment.shiftStart}
                 shiftEnd={assignment.shiftEnd}
               />
+              {gpsKmLabel ? (
+                <div className="mt-3 rounded-lg border border-[#F1F1F4] bg-[#F9F9F9] px-3 py-2.5">
+                  <div className="text-xs font-medium text-[#78829D]">
+                    {t('taxi_fleet.driverApp.home.gpsDistance', 'GPS distance')}
+                  </div>
+                  <div className="mt-0.5 text-sm font-semibold text-[#071437]">
+                    {t('taxi_fleet.driverApp.home.gpsDistanceValue', '{km} km', { km: gpsKmLabel })}
+                  </div>
+                </div>
+              ) : null}
               <ShiftVehicle
                 label={t('taxi_fleet.driverApp.vehicle', 'Vehicle')}
                 vehicleName={assignment.resourceName}
@@ -536,6 +567,18 @@ export default function DriverHomePage() {
                 shiftStart={assignment.shiftStart}
                 shiftEnd={assignment.shiftEnd}
               />
+              {assignment.gpsDistanceKm && Number(assignment.gpsDistanceKm) > 0 ? (
+                <div className="mt-3 rounded-lg border border-[#F1F1F4] bg-[#F9F9F9] px-3 py-2.5">
+                  <div className="text-xs font-medium text-[#78829D]">
+                    {t('taxi_fleet.driverApp.home.gpsDistance', 'GPS distance')}
+                  </div>
+                  <div className="mt-0.5 text-sm font-semibold text-[#071437]">
+                    {t('taxi_fleet.driverApp.home.gpsDistanceValue', '{km} km', {
+                      km: assignment.gpsDistanceKm,
+                    })}
+                  </div>
+                </div>
+              ) : null}
               <ShiftVehicle
                 label={t('taxi_fleet.driverApp.vehicle', 'Vehicle')}
                 vehicleName={assignment.resourceName}

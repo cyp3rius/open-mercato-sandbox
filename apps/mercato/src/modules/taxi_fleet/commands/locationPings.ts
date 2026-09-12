@@ -6,6 +6,7 @@ import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetDailyAssignment, TaxiFleetLocationPing } from '../data/entities'
 import { driverLocationBatchSchema, type DriverLocationBatchInput } from '../data/validators'
 import { resolveDriverContext } from '../lib/driverContext'
+import { computeAssignmentGpsDistanceKm } from '../lib/computeAssignmentGpsDistance'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
 
 const ingestLocationPingsCommand: CommandHandler<DriverLocationBatchInput, { accepted: number }> = {
@@ -59,6 +60,16 @@ const ingestLocationPingsCommand: CommandHandler<DriverLocationBatchInput, { acc
       )
     }
     await em.flush()
+
+    // Keep shift km estimate fresh while the driver is still on shift.
+    const gps = await computeAssignmentGpsDistanceKm(em, openShift.id, {
+      tenantId: openShift.tenantId,
+      organizationId: openShift.organizationId,
+    })
+    openShift.gpsDistanceKm = gps.formatted
+    openShift.updatedAt = now
+    await em.flush()
+
     return { accepted: parsed.pings.length }
   },
 }
