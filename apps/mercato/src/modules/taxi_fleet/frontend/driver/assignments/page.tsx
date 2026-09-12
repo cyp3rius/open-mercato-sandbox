@@ -24,6 +24,7 @@ import {
   driverSectionTitleClass,
 } from '../../../components/driverApp/driverUi'
 import { flushDriverLocationTracking } from '../../../components/driverApp/useDriverTracking'
+import { useRegisterDriverPullToRefresh } from '../../../components/driverApp/DriverPullToRefresh'
 import { enqueueDriverMutation } from '../../../lib/driverOffline/outbox'
 import { formatVehicleResourceLabel, stripPlateFromVehicleName } from '../../../lib/vehicleResourceLabel'
 
@@ -272,6 +273,10 @@ export default function DriverAssignmentsPage() {
     setItems(sortAssignmentsNewestFirst(assignmentsCall.result?.items ?? []))
     setMe(meCall.result ?? null)
   }, [])
+
+  useRegisterDriverPullToRefresh(async () => {
+    await reload().catch(() => undefined)
+  })
 
   React.useEffect(() => {
     let active = true

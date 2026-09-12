@@ -2226,6 +2226,8 @@
   "taxi_fleet.driverApp.title": "Driver",
   "taxi_fleet.driverApp.online": "Online",
   "taxi_fleet.driverApp.offline": "Offline",
+  "taxi_fleet.driverApp.pullToRefresh": "Pull to refresh",
+  "taxi_fleet.driverApp.refreshing": "Refreshing…",
   "taxi_fleet.driverApp.gps": "GPS",
   "taxi_fleet.driverApp.gpsEnable": "Enable GPS",
   "taxi_fleet.driverApp.gpsRequesting": "GPS…",

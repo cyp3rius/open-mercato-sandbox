@@ -9,6 +9,7 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { DriverShell } from '../../../components/driverApp/DriverShell'
+import { useRegisterDriverPullToRefresh } from '../../../components/driverApp/DriverPullToRefresh'
 import {
   driverBadgeInfoClass,
   driverBadgeSuccessClass,
@@ -218,6 +219,10 @@ export default function DriverExpensesPage() {
   const refreshCurrent = React.useCallback(async () => {
     await loadExpenses(safePage, sort, order)
   }, [loadExpenses, order, safePage, sort])
+
+  useRegisterDriverPullToRefresh(async () => {
+    await refreshCurrent().catch(() => undefined)
+  })
 
   React.useEffect(() => {
     const waitingForOcr = items.some((item) => {

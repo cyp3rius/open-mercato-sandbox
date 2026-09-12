@@ -10,6 +10,7 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Notice } from '@open-mercato/ui/primitives/Notice'
 import { DriverTripGate, useDriverTripGateShift } from '../../../../components/driverApp/DriverTripGate'
+import { useRegisterDriverPullToRefresh } from '../../../../components/driverApp/DriverPullToRefresh'
 import { DriverTripReceiptStatusBadge } from '../../../../components/driverApp/DriverTripReceiptStatusBadge'
 import {
   driverBadgeNeutralClass,
@@ -191,6 +192,10 @@ function DriverTripDetailContent({
       flash(t('taxi_fleet.driverApp.trips.loadFailed', 'Could not load trips.'), 'error')
     }
   }, [tripId, t])
+
+  useRegisterDriverPullToRefresh(async () => {
+    await reload().catch(() => undefined)
+  })
 
   React.useEffect(() => {
     let active = true

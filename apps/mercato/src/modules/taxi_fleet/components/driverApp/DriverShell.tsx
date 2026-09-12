@@ -18,6 +18,7 @@ import { clearDriverLocalData } from '../../lib/driverOffline/clearDriverLocalDa
 import { flushDriverOutbox, getPendingOutboxCount } from '../../lib/driverOffline/outbox'
 import { clearLiveTripDraft, getActiveLiveTripDraft } from '../../lib/driverOffline/tripDrafts'
 import { useDriverTracking } from './useDriverTracking'
+import { DriverPullToRefresh, DriverPullToRefreshProvider } from './DriverPullToRefresh'
 import {
   driverBadgeInfoClass,
   driverBadgeNeutralClass,
@@ -144,41 +145,83 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
     if (assignmentId !== undefined) setResolvedAssignmentId(assignmentId ?? null)
   }, [shiftActive, assignmentId])
 
-  React.useEffect(() => {
-    let active = true
-    void apiCall<{
-      member: { displayName: string }
-      todayAssignment: {
-        id: string
-        resourceLabel?: string | null
-        shiftStart: string | null
-        shiftEnd: string | null
-      } | null
-    }>('/api/taxi_fleet/driver/me')
-      .then(({ result }) => {
-        if (!active || !result) return
-        setDriverName(result.member?.displayName?.trim() || null)
-        const assignment = result.todayAssignment
-        const open = Boolean(assignment?.shiftStart && !assignment?.shiftEnd)
-        if (typeof shiftActive !== 'boolean') {
-          setResolvedAssignmentId(assignment?.id ?? null)
-          setResolvedShiftActive(open)
-        }
-        setActiveVehicleLabel(
-          open && assignment?.resourceLabel?.trim() ? assignment.resourceLabel.trim() : null,
-        )
-      })
-      .catch(() => undefined)
-    return () => {
-      active = false
+  const refreshDriverSession = React.useCallback(async () => {
+    try {
+      const { result } = await apiCall<{
+        member: { displayName: string }
+        todayAssignment: {
+          id: string
+          resourceLabel?: string | null
+          shiftStart: string | null
+          shiftEnd: string | null
+        } | null
+      }>('/api/taxi_fleet/driver/me')
+      if (!result) return
+      setDriverName(result.member?.displayName?.trim() || null)
+      const assignment = result.todayAssignment
+      const open = Boolean(assignment?.shiftStart && !assignment?.shiftEnd)
+      if (typeof shiftActive !== 'boolean') {
+        setResolvedAssignmentId(assignment?.id ?? null)
+        setResolvedShiftActive(open)
+      }
+      setActiveVehicleLabel(
+        open && assignment?.resourceLabel?.trim() ? assignment.resourceLabel.trim() : null,
+      )
+    } catch {
+      // keep prior header state
     }
-  }, [shiftActive, pathname])
+  }, [shiftActive])
+
+  const refreshLiveAndOutbox = React.useCallback(async () => {
+    const count = await getPendingOutboxCount()
+    let live = await getActiveLiveTripDraft()
+    let serverInProgressId: string | null = null
+    if (navigator.onLine) {
+      try {
+        const { result } = await apiCall<{ items?: Array<{ id: string; status?: string }> }>(
+          '/api/taxi_fleet/driver/trips',
+        )
+        const items = result?.items ?? []
+        if (live?.serverTripId) {
+          const serverTripId = live.serverTripId
+          const draftId = live.id
+          const serverTrip = items.find((row) => row.id === serverTripId)
+          if (!serverTrip || serverTrip.status !== 'in_progress') {
+            await clearLiveTripDraft(draftId)
+            live = null
+          }
+        }
+        if (!live) {
+          const inProgress = items.find((row) => row.status === 'in_progress')
+          serverInProgressId = inProgress?.id ?? null
+        }
+      } catch {
+        serverInProgressId = null
+      }
+    }
+    setPending(count)
+    setLiveTripId(live?.id ?? null)
+    setServerInProgressTripId(serverInProgressId)
+  }, [])
+
+  const refreshShell = React.useCallback(async () => {
+    await Promise.all([refreshDriverSession(), refreshLiveAndOutbox()])
+    if (navigator.onLine) {
+      await flushDriverOutbox().catch(() => undefined)
+      setPending(await getPendingOutboxCount())
+    }
+    router.refresh()
+  }, [refreshDriverSession, refreshLiveAndOutbox, router])
+
+  React.useEffect(() => {
+    void refreshDriverSession()
+  }, [refreshDriverSession, pathname])
 
   useDriverTracking({ enabled: resolvedShiftActive, assignmentId: resolvedAssignmentId })
 
   React.useEffect(() => {
     let active = true
-    const refresh = async () => {
+    const tick = async () => {
       const count = await getPendingOutboxCount()
       let live = await getActiveLiveTripDraft()
       let serverInProgressId: string | null = null
@@ -205,14 +248,13 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
           serverInProgressId = null
         }
       }
-      if (active) {
-        setPending(count)
-        setLiveTripId(live?.id ?? null)
-        setServerInProgressTripId(serverInProgressId)
-      }
+      if (!active) return
+      setPending(count)
+      setLiveTripId(live?.id ?? null)
+      setServerInProgressTripId(serverInProgressId)
     }
-    void refresh()
-    const id = window.setInterval(() => void refresh(), 5000)
+    void tick()
+    const id = window.setInterval(() => void tick(), 5000)
     return () => {
       active = false
       window.clearInterval(id)
@@ -246,7 +288,8 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
     pathname !== `/driver/trips/${serverInProgressTripId}`
 
   return (
-    <div className={`flex min-h-dvh flex-col touch-manipulation ${driverPageBgClass}`}>
+    <DriverPullToRefreshProvider>
+    <div className={`flex min-h-dvh flex-col touch-manipulation overscroll-y-contain ${driverPageBgClass}`}>
       <FlashMessages />
       <header className="sticky top-0 z-20 border-b border-[#F1F1F4] bg-white/95 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur">
         <div className="mx-auto flex w-full max-w-lg items-center justify-between gap-3 px-4 py-3">
@@ -399,7 +442,7 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
       </header>
 
       <main className="mx-auto w-full max-w-lg flex-1 px-4 py-5 pb-[calc(5.75rem+env(safe-area-inset-bottom))]">
-        {children}
+        <DriverPullToRefresh onShellRefresh={refreshShell}>{children}</DriverPullToRefresh>
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-[#F1F1F4] bg-white pb-[env(safe-area-inset-bottom)]">
@@ -426,5 +469,6 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
         </div>
       </nav>
     </div>
+    </DriverPullToRefreshProvider>
   )
 }

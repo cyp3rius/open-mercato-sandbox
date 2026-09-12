@@ -34,6 +34,7 @@ import {
   flushDriverLocationTracking,
   useDriverTrackingEstimatedKm,
 } from '../../components/driverApp/useDriverTracking'
+import { useRegisterDriverPullToRefresh } from '../../components/driverApp/DriverPullToRefresh'
 import { formatVehicleResourceLabel, stripPlateFromVehicleName } from '../../lib/vehicleResourceLabel'
 
 type MeResponse = {
@@ -166,6 +167,8 @@ export default function DriverHomePage() {
       setLoaded(true)
     }
   }, [router, t])
+
+  useRegisterDriverPullToRefresh(load)
 
   React.useEffect(() => {
     void load()

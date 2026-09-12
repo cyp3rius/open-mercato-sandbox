@@ -8,6 +8,7 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { DriverTripGate } from '../../../components/driverApp/DriverTripGate'
+import { useRegisterDriverPullToRefresh } from '../../../components/driverApp/DriverPullToRefresh'
 import {
   DriverTripReceiptStatusBadge,
   tripListHasProcessingReceipt,
@@ -178,6 +179,10 @@ export default function DriverTripsPage() {
     setItems(next)
     await cacheDriverJson('driver/trips', next)
   }, [])
+
+  useRegisterDriverPullToRefresh(async () => {
+    await reloadTrips().catch(() => undefined)
+  })
 
   React.useEffect(() => {
     if (!tripListHasProcessingReceipt(items)) return

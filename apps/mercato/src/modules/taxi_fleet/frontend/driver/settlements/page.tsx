@@ -8,6 +8,7 @@ import { formatMoneyDisplay } from '@open-mercato/shared/lib/numeric'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { DriverShell } from '../../../components/driverApp/DriverShell'
+import { useRegisterDriverPullToRefresh } from '../../../components/driverApp/DriverPullToRefresh'
 import {
   driverBadgeNeutralClass,
   driverListRowClass,
@@ -116,6 +117,14 @@ export default function DriverSettlementsPage() {
       active = false
     }
   }, [load, t, tab])
+
+  useRegisterDriverPullToRefresh(async () => {
+    try {
+      await load(tab, safePage)
+    } catch {
+      // shell refresh still ran
+    }
+  })
 
   const switchTab = React.useCallback(
     async (nextTab: TabId) => {

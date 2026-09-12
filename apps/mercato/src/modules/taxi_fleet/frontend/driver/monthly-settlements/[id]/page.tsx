@@ -8,6 +8,7 @@ import { formatMoneyDisplay } from '@open-mercato/shared/lib/numeric'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { DriverShell } from '../../../../components/driverApp/DriverShell'
+import { useRegisterDriverPullToRefresh } from '../../../../components/driverApp/DriverPullToRefresh'
 import {
   driverBadgeNeutralClass,
   driverCardClass,
@@ -45,41 +46,39 @@ export default function DriverMonthlySettlementDetailPage({ params }: { params?:
   const [row, setRow] = React.useState<DriverMonthlySettlementDetail | null>(null)
   const [loaded, setLoaded] = React.useState(false)
 
-  React.useEffect(() => {
-    let active = true
-    void (async () => {
-      if (!settlementId) {
-        setLoaded(true)
-        return
-      }
-      try {
-        const call = await apiCall<DriverMonthlySettlementDetail>(
-          `/api/taxi_fleet/driver/monthly-settlements/${encodeURIComponent(settlementId)}`,
-        )
-        if (!active) return
-        if (!call.ok) {
-          if (call.status === 401 || call.status === 403) {
-            window.location.href = '/driver/login'
-            return
-          }
-          throw new Error('load_failed')
+  const load = React.useCallback(async () => {
+    if (!settlementId) {
+      setLoaded(true)
+      return
+    }
+    try {
+      const call = await apiCall<DriverMonthlySettlementDetail>(
+        `/api/taxi_fleet/driver/monthly-settlements/${encodeURIComponent(settlementId)}`,
+      )
+      if (!call.ok) {
+        if (call.status === 401 || call.status === 403) {
+          window.location.href = '/driver/login'
+          return
         }
-        setRow(call.result ?? null)
-      } catch {
-        if (!active) return
-        flash(
-          t('taxi_fleet.driverApp.settlements.detailLoadFailed', 'Could not load settlement.'),
-          'error',
-        )
-        setRow(null)
-      } finally {
-        if (active) setLoaded(true)
+        throw new Error('load_failed')
       }
-    })()
-    return () => {
-      active = false
+      setRow(call.result ?? null)
+    } catch {
+      flash(
+        t('taxi_fleet.driverApp.settlements.detailLoadFailed', 'Could not load settlement.'),
+        'error',
+      )
+      setRow(null)
+    } finally {
+      setLoaded(true)
     }
   }, [settlementId, t])
+
+  useRegisterDriverPullToRefresh(load)
+
+  React.useEffect(() => {
+    void load()
+  }, [load])
 
   return (
     <DriverShell title={t('taxi_fleet.driverApp.settlements.monthlyDetailTitle', 'Monthly payout')}>
