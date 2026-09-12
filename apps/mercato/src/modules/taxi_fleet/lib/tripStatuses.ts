@@ -206,10 +206,12 @@ export function createEmptyTripStatusDefinition(sortOrder: number): TaxiFleetTri
 }
 
 export function defaultTripStatusCode(dictionary: TaxiFleetTripStatusDefinition[]): string {
-  const preferred = dictionary.find((entry) => entry.code === 'new')
+  const preferred = dictionary.find((entry) => entry.code === 'scheduled')
   if (preferred) return preferred.code
+  const legacyNew = dictionary.find((entry) => entry.code === 'new')
+  if (legacyNew) return legacyNew.code
   const first = listSelectableTripStatuses(dictionary)[0]
-  return first?.code ?? 'new'
+  return first?.code ?? 'scheduled'
 }
 
 export function normalizeTripStatus(value: string | null | undefined): string {

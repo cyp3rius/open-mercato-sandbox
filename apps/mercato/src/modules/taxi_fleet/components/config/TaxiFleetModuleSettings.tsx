@@ -533,7 +533,7 @@ export function TaxiFleetModuleSettings() {
         title={t('taxi_fleet.config.calendar.title', 'Google Calendar integration')}
         description={t(
           'taxi_fleet.config.calendar.description',
-          'Create calendar events when trips are confirmed or paid (mirrors Strapi GOOGLE_CALENDAR_* settings).',
+          'Create calendar events for trips created or updated in CRM and the driver app (background, non-blocking). Reuses the same service-account style as Strapi GOOGLE_CALENDAR_*.',
         )}
       >
         <div className="flex items-center justify-between gap-3">

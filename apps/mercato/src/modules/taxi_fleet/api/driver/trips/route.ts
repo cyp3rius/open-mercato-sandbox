@@ -31,6 +31,7 @@ import { assertDriverCanMutatePlatformTrip } from '@/modules/taxi_fleet/lib/plat
 import { TAXI_FLEET_FINANCIAL_ENTRY_ENTITY_ID } from '@/modules/taxi_fleet/lib/financialEntryEntity'
 import { TAXI_FLEET_DRIVER_RECEIPTS_PARTITION } from '@/modules/taxi_fleet/lib/receiptPartition'
 import { applyReceiptExtractionToLinkedRecords } from '@/modules/taxi_fleet/lib/receiptExtractionPipeline'
+import { DRIVER_VISIBLE_TRIP_STATUSES } from '@/modules/taxi_fleet/lib/driverVisibleTripStatuses'
 import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 
 export const metadata = {
@@ -227,7 +228,11 @@ export async function GET(req: Request) {
     const rows = await findWithDecryption(
       em,
       TaxiFleetTrip,
-      { teamMemberId: driver.teamMemberId, deletedAt: null },
+      {
+        teamMemberId: driver.teamMemberId,
+        deletedAt: null,
+        status: { $in: [...DRIVER_VISIBLE_TRIP_STATUSES] },
+      },
       { orderBy: { startedAt: 'DESC' } },
       { tenantId: driver.teamMember.tenantId, organizationId: driver.teamMember.organizationId },
     )

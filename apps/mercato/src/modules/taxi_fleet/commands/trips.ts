@@ -32,12 +32,14 @@ import {
 import { ensureOrganizationScope, ensureTenantScope, numericToString } from './shared'
 import { assertDriverTripShift } from '../lib/assertDriverTripShift'
 import { assertNoTripOverlap } from '../lib/assertNoTripOverlap'
+import { assertNoVehicleTripOverlap } from '../lib/assertNoVehicleTripOverlap'
 import { isTripDetailFieldEditable, tripDetailLockMode, isCompletedTripReceiptSupplementUpdate } from '../lib/tripDetailWorkflow'
 import { tripHasReceiptAttachment } from '../lib/driverTripReceiptStatus'
 import {
   recalculateWeeklySettlementsForTrip,
   resolveTripWeekStart,
 } from '../lib/settlementWeekScope'
+import { scheduleTripGoogleCalendarSync } from '../lib/googleCalendar/tripGoogleCalendarSync'
 
 async function actorMayEditCompletedTrip(
   ctx: Parameters<CommandHandler<TripUpdateInput, { tripId: string }>['execute']>[1],
@@ -139,6 +141,18 @@ const createTripCommand: CommandHandler<TripCreateInput, { tripId: string }> = {
         now,
       })
     }
+    if (resourceId && parsed.startedAt) {
+      await assertNoVehicleTripOverlap({
+        em,
+        tenantId: parsed.tenantId,
+        organizationId: parsed.organizationId,
+        resourceId,
+        startedAt: parsed.startedAt,
+        endedAt: parsed.endedAt ?? null,
+        translate,
+        now,
+      })
+    }
 
     const record = em.create(TaxiFleetTrip, {
       tenantId: parsed.tenantId,
@@ -170,6 +184,7 @@ const createTripCommand: CommandHandler<TripCreateInput, { tripId: string }> = {
       await emitTripAssignedIfNeeded(ctx, record, null)
     }
     await recalculateWeeklySettlementsForTrip(em, record)
+    scheduleTripGoogleCalendarSync(record.id)
     return { tripId: record.id }
   },
 }
@@ -306,10 +321,25 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
         translate,
       })
     }
+    const vehicleScheduleTouched =
+      timesOrMemberTouched || parsed.resourceId !== undefined || driverStartedScheduled
+    if (vehicleScheduleTouched && row.resourceId && row.startedAt) {
+      await assertNoVehicleTripOverlap({
+        em,
+        tenantId: row.tenantId,
+        organizationId: row.organizationId,
+        resourceId: row.resourceId,
+        startedAt: row.startedAt,
+        endedAt: row.endedAt ?? null,
+        excludeTripId: row.id,
+        translate,
+      })
+    }
 
     await em.flush()
     await emitTripAssignedIfNeeded(ctx, row, previousTeamMemberId)
     await recalculateWeeklySettlementsForTrip(em, row, previousWeekStart)
+    scheduleTripGoogleCalendarSync(row.id)
     return { tripId: row.id }
   },
 }
@@ -329,6 +359,7 @@ const deleteTripCommand: CommandHandler<{ id: string }, { ok: true }> = {
     row.deletedAt = new Date()
     await em.flush()
     await recalculateWeeklySettlementsForTrip(em, row, previousWeekStart)
+    scheduleTripGoogleCalendarSync(row.id)
     return { ok: true }
   },
 }
@@ -344,6 +375,7 @@ const approveTripCommand: CommandHandler<{ id: string }, { tripId: string }> = {
     ensureOrganizationScope(ctx, row.organizationId)
     await applyTripStatusChange(ctx, row, 'approved')
     await em.flush()
+    scheduleTripGoogleCalendarSync(row.id)
     return { tripId: row.id }
   },
 }
@@ -364,6 +396,7 @@ const rejectTripCommand: CommandHandler<{ id: string; notes?: string | null }, {
     })
     await em.flush()
     await recalculateWeeklySettlementsForTrip(em, row)
+    scheduleTripGoogleCalendarSync(row.id)
     return { tripId: row.id }
   },
 }
@@ -390,6 +423,7 @@ const cancelTripCommand: CommandHandler<TripCancelInput, { tripId: string }> = {
     })
     await em.flush()
     await recalculateWeeklySettlementsForTrip(em, row)
+    scheduleTripGoogleCalendarSync(row.id)
     return { tripId: row.id }
   },
 }
@@ -411,6 +445,7 @@ const markTripPaidCommand: CommandHandler<TripMarkPaidInput, { tripId: string }>
     await applyTripStatusChange(ctx, row, 'paid', { paymentMethod: parsed.paymentMethod })
     await em.flush()
     await recalculateWeeklySettlementsForTrip(em, row)
+    scheduleTripGoogleCalendarSync(row.id)
     return { tripId: row.id }
   },
 }
@@ -426,6 +461,7 @@ const scheduleTripCommand: CommandHandler<{ id: string }, { tripId: string }> = 
     ensureOrganizationScope(ctx, row.organizationId)
     await applyTripStatusChange(ctx, row, 'scheduled')
     await em.flush()
+    scheduleTripGoogleCalendarSync(row.id)
     return { tripId: row.id }
   },
 }
@@ -442,6 +478,7 @@ const completeTripCommand: CommandHandler<{ id: string }, { tripId: string }> = 
     await applyTripStatusChange(ctx, row, 'completed')
     await em.flush()
     await recalculateWeeklySettlementsForTrip(em, row)
+    scheduleTripGoogleCalendarSync(row.id)
     return { tripId: row.id }
   },
 }

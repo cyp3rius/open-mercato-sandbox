@@ -5674,6 +5674,8 @@ __metadata:
     dotenv: "npm:^17.2.3"
     eslint: "npm:^9.0.0"
     eslint-config-next: "npm:16.1.7"
+    google-auth-library: "npm:^9.15.1"
+    googleapis: "npm:^148.0.0"
     ioredis: "npm:^5.8.2"
     jest: "npm:^30.2.0"
     lucide-react: "npm:^1.8.0"

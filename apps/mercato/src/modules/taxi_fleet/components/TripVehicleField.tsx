@@ -5,6 +5,7 @@ import { DriverVehicleSearchField } from './DriverVehicleSearchField'
 import { ResourceSearchField } from './ResourceSearchField'
 import { parseDateTimeLocalValue } from '../lib/datetimeLocal'
 import { resolveDriverAssignmentPrefill } from '../lib/driverAssignmentVehicles'
+import { loadDriverDefaultResourceIds } from '../lib/driverDefaultVehiclesClient'
 import { resolveResourceTaxiVehicleCategory } from '../lib/resolveResourceTaxiVehicleCategory'
 import type { VehicleCategory } from '../lib/pricing/types'
 import { useTaxiFleetSettings } from './useTaxiFleetSettings'
@@ -36,6 +37,8 @@ export function TripVehicleField({
   const vehicleTouchedRef = React.useRef(false)
   const previousDriverRef = React.useRef('')
   const categoryRequestRef = React.useRef(0)
+  const valueRef = React.useRef(value)
+  valueRef.current = value
 
   React.useEffect(() => {
     if (previousDriverRef.current !== teamMemberId) {
@@ -58,22 +61,42 @@ export function TripVehicleField({
     if (prefillKeyRef.current === prefillKey) return
 
     let cancelled = false
-    void resolveDriverAssignmentPrefill(trimmedMemberId, startedAt, endedAt, resourceTypeId).then((prefill) => {
+    void (async () => {
+      const [defaults, prefill] = await Promise.all([
+        loadDriverDefaultResourceIds(trimmedMemberId),
+        resolveDriverAssignmentPrefill(trimmedMemberId, startedAt, endedAt, resourceTypeId),
+      ])
       if (cancelled) return
       prefillKeyRef.current = prefillKey
-      if (prefill) {
-        onAssignmentResolved?.(prefill.assignmentId)
-        if (!vehicleTouchedRef.current) {
+      onAssignmentResolved?.(prefill?.assignmentId ?? null)
+      if (vehicleTouchedRef.current) return
+
+      const currentResourceId = valueRef.current.trim()
+      if (defaults.length) {
+        if (prefill?.resourceId && defaults.includes(prefill.resourceId)) {
           onChange(prefill.resourceId)
+          return
         }
+        if (currentResourceId && defaults.includes(currentResourceId)) return
+        onChange(defaults[0] ?? '')
         return
       }
-      onAssignmentResolved?.(null)
-    })
+
+      if (prefill?.resourceId) {
+        onChange(prefill.resourceId)
+      }
+    })()
     return () => {
       cancelled = true
     }
-  }, [endedAtLocal, onAssignmentResolved, onChange, resourceTypeId, startedAtLocal, teamMemberId])
+  }, [
+    endedAtLocal,
+    onAssignmentResolved,
+    onChange,
+    resourceTypeId,
+    startedAtLocal,
+    teamMemberId,
+  ])
 
   React.useEffect(() => {
     if (!onVehicleCategoryChange) return

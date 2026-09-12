@@ -127,7 +127,7 @@ export function defaultTripFormValues(reference = new Date()): TripFormValues {
     endedAtLocal,
     revenueAmount: '',
     notes: '',
-    status: 'new',
+    status: 'scheduled',
     fromLon: '',
     fromLat: '',
     toLon: '',
@@ -397,6 +397,7 @@ const DETAILS_FIELD_IDS = [
   'flightNumber',
 ]
 const ASSIGNMENT_FIELD_IDS = [
+  'status',
   'teamMemberId',
   'resourceId',
   'startedAtLocal',
@@ -479,7 +480,7 @@ export function buildTripFormGroups(
       id: 'basics',
       title: t('taxi_fleet.trips.form.groups.basics', 'Assignment'),
       column: 1,
-      fields: ASSIGNMENT_FIELD_IDS,
+      fields: ASSIGNMENT_FIELD_IDS.filter((id) => id !== 'status'),
     },
     {
       id: 'customer',
@@ -487,23 +488,19 @@ export function buildTripFormGroups(
       column: 1,
       fields: PAGE_CUSTOMER_FIELD_IDS,
     },
-  ]
-
-  if (options?.mode === 'edit') {
-    pageGroups.push({
+    {
       id: 'status',
       title: t('taxi_fleet.trips.form.groups.status', 'Status'),
       column: 2,
       fields: ['status'],
-    })
-  }
-
-  pageGroups.push({
-    id: 'pricing',
-    title: t('taxi_fleet.trips.form.groups.pricing', 'Pricing'),
-    column: 2,
-    fields: PRICING_SIDEBAR_FIELD_IDS,
-  })
+    },
+    {
+      id: 'pricing',
+      title: t('taxi_fleet.trips.form.groups.pricing', 'Pricing'),
+      column: 2,
+      fields: PRICING_SIDEBAR_FIELD_IDS,
+    },
+  ]
 
   return pageGroups
 }
@@ -546,6 +543,20 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
       : undefined
 
   const assignmentFields: CrudField[] = []
+
+  assignmentFields.push({
+    id: 'status',
+    type: 'custom',
+    label: t('taxi_fleet.trips.status', 'Status'),
+    layout: 'full',
+    component: ({ value, setValue, disabled, readOnly: fieldReadOnly }) => (
+      <TripStatusField
+        value={typeof value === 'string' && value.trim() ? value : (defaultStatusCode ?? 'scheduled')}
+        onChange={(next) => setValue(next)}
+        disabled={disabled || fieldReadOnly || readOnly || fieldLocked('status')}
+      />
+    ),
+  })
 
   if (!driverLocked || surface === 'dialog') {
     assignmentFields.push({
@@ -751,22 +762,6 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
     })
   }
 
-  if (mode === 'edit') {
-    byId.set('status', {
-      id: 'status',
-      type: 'custom',
-      label: t('taxi_fleet.trips.status', 'Status'),
-      layout: 'full',
-      component: ({ value, setValue, disabled, readOnly: fieldReadOnly }) => (
-        <TripStatusField
-          value={typeof value === 'string' ? value : ''}
-          onChange={(next) => setValue(next)}
-          disabled={disabled || fieldReadOnly || readOnly}
-        />
-      ),
-    })
-  }
-
   byId.set('__routeDistanceSync', {
     id: '__routeDistanceSync',
     type: 'custom',
@@ -827,7 +822,6 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
           ...ASSIGNMENT_FIELD_IDS,
           ...PAGE_CUSTOMER_FIELD_IDS,
           ...PRICING_SIDEBAR_FIELD_IDS,
-          ...(mode === 'edit' ? ['status'] : []),
           ...INTERNAL_TRIP_FORM_FIELD_IDS,
         ]
 
@@ -951,7 +945,7 @@ export function tripFormValuesToPayload(
     revenueAmount: extras.revenueAmount,
     notes: extras.notes,
     metadata: extras.metadata,
-    status: values.status || options?.defaultStatusCode || 'new',
+    status: values.status || options?.defaultStatusCode || 'scheduled',
     ...(assignmentId ? { assignmentId } : {}),
   }
 }

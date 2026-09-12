@@ -1,15 +1,15 @@
-"use client"
+'use client'
 
 import * as React from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { mergeEntitySearchOption } from '@open-mercato/core/modules/procurement/lib/procurementEntitySearch'
 import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
 import {
-  loadDriverAssignmentVehicleOptions,
-  resolveDriverAssignmentVehicleLabel,
-  searchDriverAssignmentVehicleOptions,
+  loadDriverDefaultVehicleOptions,
+  resolveDriverVehicleLabel,
+  searchDriverDefaultVehicleOptions,
   searchFallbackResourceOptions,
-} from '../lib/driverAssignmentVehicles'
+} from '../lib/driverDefaultVehiclesClient'
 import { useTaxiFleetSettings } from './useTaxiFleetSettings'
 
 type DriverVehicleSearchFieldProps = {
@@ -19,6 +19,7 @@ type DriverVehicleSearchFieldProps = {
   value: string
   onChange: (next: string) => void
   disabled?: boolean
+  /** When profile has no default vehicles, search the full fleet. */
   fallbackToAllResources?: boolean
 }
 
@@ -40,7 +41,8 @@ export function DriverVehicleSearchField({
   const t = useT()
   const { resourceTypeId } = useTaxiFleetSettings()
   const [label, setLabel] = React.useState('')
-  const [assignmentOptions, setAssignmentOptions] = React.useState<Array<{ value: string; label: string }>>([])
+  const [defaultOptions, setDefaultOptions] = React.useState<Array<{ value: string; label: string }>>([])
+  const [defaultsLoaded, setDefaultsLoaded] = React.useState(false)
 
   const window = React.useMemo(() => {
     const startedAt = parseDateTimeLocalValue(startedAtLocal)
@@ -56,7 +58,7 @@ export function DriverVehicleSearchField({
       setLabel('')
       return
     }
-    void resolveDriverAssignmentVehicleLabel(trimmed).then((resolved) => {
+    void resolveDriverVehicleLabel(trimmed).then((resolved) => {
       if (!cancelled) setLabel(resolved ?? trimmed)
     })
     return () => {
@@ -65,42 +67,49 @@ export function DriverVehicleSearchField({
   }, [value])
 
   React.useEffect(() => {
-    if (!window || !teamMemberId) {
-      setAssignmentOptions([])
+    if (!teamMemberId.trim()) {
+      setDefaultOptions([])
+      setDefaultsLoaded(false)
       return
     }
     let cancelled = false
-    void loadDriverAssignmentVehicleOptions(teamMemberId, window.startedAt, window.endedAt, resourceTypeId).then((options) => {
-      if (!cancelled) setAssignmentOptions(options)
+    setDefaultsLoaded(false)
+    void loadDriverDefaultVehicleOptions(teamMemberId, resourceTypeId).then((options) => {
+      if (cancelled) return
+      setDefaultOptions(options)
+      setDefaultsLoaded(true)
     })
     return () => {
       cancelled = true
     }
-  }, [resourceTypeId, teamMemberId, window])
+  }, [resourceTypeId, teamMemberId])
+
+  const useFleetFallback = fallbackToAllResources && defaultsLoaded && defaultOptions.length === 0
 
   const emptyText =
-    window && assignmentOptions.length === 0 && !fallbackToAllResources
-      ? t('taxi_fleet.trips.noVehiclesForDay', 'No vehicles assigned to this driver for the selected time.')
+    defaultsLoaded && defaultOptions.length === 0 && !fallbackToAllResources
+      ? t(
+          'taxi_fleet.trips.noDefaultVehicles',
+          'No default vehicles configured for this driver.',
+        )
       : t('taxi_fleet.drivers.vehicleEmpty', 'No vehicles found.')
 
   return (
     <EntitySearchCombobox
       value={value}
       onChange={onChange}
-      disabled={disabled || !window}
+      disabled={disabled || !window || !teamMemberId.trim() || !defaultsLoaded}
       className="min-w-0 w-full"
-      options={mergeEntitySearchOption(assignmentOptions, value, label || value)}
+      options={mergeEntitySearchOption(defaultOptions, value, label || value)}
       selectedDisplayOverride={label || undefined}
       onRemoteSearch={async (query) => {
-        if (!window) return []
-        if (fallbackToAllResources && assignmentOptions.length === 0) {
+        if (!window || !teamMemberId.trim()) return []
+        if (useFleetFallback) {
           const rows = await searchFallbackResourceOptions(query, resourceTypeId)
           return mergeEntitySearchOption(rows, value, label || value)
         }
-        const rows = await searchDriverAssignmentVehicleOptions(
+        const rows = await searchDriverDefaultVehicleOptions(
           teamMemberId,
-          window.startedAt,
-          window.endedAt,
           query,
           value,
           label || value,

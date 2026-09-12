@@ -72,16 +72,19 @@ export function TripCreateDialog({
   }, [open, seed?.assignmentId])
 
   const initialValues = React.useMemo(
-    () =>
-      tripFormValuesFromSeed({
+    () => {
+      const base = tripFormValuesFromSeed({
         teamMemberId: seed?.teamMemberId,
         resourceId: seed?.resourceId,
         startedAt: seed?.startedAt,
         endedAt: seed?.endedAt,
         defaultResourceId,
         lockedTeamMemberId,
-      }),
-    [defaultResourceId, lockedTeamMemberId, seed, formKey],
+      })
+      base.status = defaultTripStatusCode(statuses)
+      return base
+    },
+    [defaultResourceId, lockedTeamMemberId, seed, formKey, statuses],
   )
 
   const handleCancel = React.useCallback(() => {
