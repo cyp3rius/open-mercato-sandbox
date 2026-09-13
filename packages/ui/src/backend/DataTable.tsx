@@ -3,7 +3,7 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { useReactTable, getCoreRowModel, getSortedRowModel, flexRender, type ColumnDef, type SortingState, type Column as TableColumn, type VisibilityState, type RowSelectionState } from '@tanstack/react-table'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { RefreshCw, Loader2, SlidersHorizontal, MoreHorizontal, Circle, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react'
+import { RefreshCw, Loader2, SlidersHorizontal, MoreHorizontal, Circle, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react'
 import { buildPageItems } from './dataTablePagination'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../primitives/table'
 import { Button } from '../primitives/button'
@@ -209,6 +209,14 @@ export type DataTableProps<T> = {
   enableRowSelection?: boolean
   /** Fires when the selected row set changes (empty array when selection is cleared). */
   onSelectedRowsChange?: (rows: T[]) => void
+  /**
+   * Optional summary footer row rendered after data rows inside the table body.
+   * `cells` are keyed by column `id` / `accessorKey`; missing keys render empty cells.
+   */
+  summaryRow?: {
+    cells: Record<string, React.ReactNode>
+    className?: string
+  } | null
 }
 
 const DEFAULT_EXPORT_FORMATS: DataTableExportFormat[] = ['csv', 'json', 'xml', 'markdown']
@@ -686,6 +694,7 @@ export function DataTable<T>({
   bulkActions: propBulkActions,
   enableRowSelection: enableRowSelectionProp = false,
   onSelectedRowsChange,
+  summaryRow,
 }: DataTableProps<T>) {
   const t = useT()
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
@@ -2076,24 +2085,65 @@ export function DataTable<T>({
                 {hg.headers.map((header) => {
                   const columnMeta = (header.column.columnDef as any)?.meta
                   const priority = resolvePriority(header.column)
+                  const canSort = Boolean(sortable && header.column.getCanSort?.())
+                  const sorted = canSort ? header.column.getIsSorted?.() : false
+                  const sortLabel = sorted === 'asc'
+                    ? t('ui.dataTable.sort.sortedAsc', 'Sorted ascending. Click to sort descending.')
+                    : sorted === 'desc'
+                      ? t('ui.dataTable.sort.sortedDesc', 'Sorted descending. Click to sort ascending.')
+                      : t('ui.dataTable.sort.clickToSort', 'Click to sort ascending.')
                   return (
                     <TableHead
                       key={header.id}
-                      className={[responsiveClass(priority, columnMeta?.hidden), columnMeta?.className]
-                        .filter(Boolean)
-                        .join(' ')}
+                      aria-sort={
+                        sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : canSort ? 'none' : undefined
+                      }
+                      className={cn(
+                        responsiveClass(priority, columnMeta?.hidden),
+                        columnMeta?.className,
+                        canSort &&
+                          'group/th p-0 transition-colors hover:bg-accent hover:text-accent-foreground',
+                        sorted && 'bg-accent text-accent-foreground',
+                      )}
                     >
-                      {header.isPlaceholder ? null : (
-                        <Button
-                          variant="ghost"
-                          className={`h-auto p-0 font-medium ${sortable && header.column.getCanSort?.() ? 'cursor-pointer select-none' : ''}`}
-                          onClick={() => sortable && header.column.toggleSorting?.(header.column.getIsSorted() === 'asc')}
+                      {header.isPlaceholder ? null : canSort ? (
+                        <button
+                          type="button"
+                          title={sortLabel}
+                          aria-label={sortLabel}
+                          className={cn(
+                            'inline-flex w-full min-h-9 items-center gap-1 px-4 py-2 text-left text-sm font-medium',
+                            'cursor-pointer select-none bg-transparent',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset',
+                            sorted ? 'text-accent-foreground' : 'text-muted-foreground group-hover/th:text-accent-foreground',
+                          )}
+                          onClick={() => header.column.toggleSorting?.(sorted === 'asc')}
                         >
+                          <span className={cn('min-w-0', sorted && 'font-semibold')}>
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                          </span>
+                          <span
+                            className={cn(
+                              'inline-flex shrink-0 items-center justify-center transition-opacity',
+                              sorted
+                                ? 'opacity-100'
+                                : 'opacity-45 group-hover/th:opacity-100',
+                            )}
+                            aria-hidden="true"
+                          >
+                            {sorted === 'asc' ? (
+                              <ChevronUp className="size-4" />
+                            ) : sorted === 'desc' ? (
+                              <ChevronDown className="size-4" />
+                            ) : (
+                              <ChevronsUpDown className="size-3.5" />
+                            )}
+                          </span>
+                        </button>
+                      ) : (
+                        <span className="font-medium">
                           {flexRender(header.column.columnDef.header, header.getContext())}
-                          {sortable && header.column.getIsSorted?.() ? (
-                            <span className="text-xs text-muted-foreground">{header.column.getIsSorted() === 'asc' ? '▲' : '▼'}</span>
-                          ) : null}
-                        </Button>
+                        </span>
                       )}
                     </TableHead>
                   )
@@ -2229,6 +2279,38 @@ export function DataTable<T>({
                 </TableCell>
               </TableRow>
             )}
+            {summaryRow && !isLoading && !error ? (
+              <TableRow
+                className={cn(
+                  'border-t-2 bg-muted/50 font-medium hover:bg-muted/50',
+                  summaryRow.className,
+                )}
+                data-summary-row
+              >
+                {rowSelectionEnabled ? <TableCell className="w-8" /> : null}
+                {table.getVisibleLeafColumns().map((column) => {
+                  const columnMeta = (column.columnDef as any)?.meta
+                  const priority = resolvePriority(column)
+                  const columnId = String(column.id || '')
+                  const accessorKey = String((column.columnDef as any)?.accessorKey || '')
+                  const cellContent =
+                    summaryRow.cells[columnId] ??
+                    (accessorKey ? summaryRow.cells[accessorKey] : undefined) ??
+                    null
+                  return (
+                    <TableCell
+                      key={`summary-${column.id}`}
+                      className={[responsiveClass(priority, columnMeta?.hidden), columnMeta?.className]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      {cellContent}
+                    </TableCell>
+                  )
+                })}
+                {rowActions || injectedRowActions.length > 0 ? <TableCell /> : null}
+              </TableRow>
+            ) : null}
           </TableBody>
         </Table>
       </div>

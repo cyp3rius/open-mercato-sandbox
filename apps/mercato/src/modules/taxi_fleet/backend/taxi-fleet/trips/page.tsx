@@ -16,7 +16,7 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { formatDateTime } from '@open-mercato/shared/lib/time'
-import { formatMoneyDisplay } from '@open-mercato/shared/lib/numeric'
+import { parseNumericValue } from '@open-mercato/shared/lib/numeric'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { TAXI_FLEET_BASE } from '../paths'
 import { useFleetDriverDirectory } from '../../../components/useFleetDriverDirectory'
@@ -46,6 +46,20 @@ import type { DriverTripReceiptWarning } from '../../../lib/driverTripReceiptSta
 
 const PAGE_SIZE = 20
 
+function formatTripRevenue(
+  amount: string | number | null | undefined,
+  currencyCode?: string | null,
+): string {
+  const parsed = parseNumericValue(amount)
+  if (parsed === null) return '—'
+  const value = new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(parsed)
+  const currency = currencyCode?.trim() || 'PLN'
+  return `${value} ${currency}`
+}
+
 type TripRow = {
   id: string
   tripType: string
@@ -58,6 +72,7 @@ type TripRow = {
   customerCompanyId?: string | null
   paymentType?: string | null
   revenueAmount?: string | null
+  currencyCode?: string | null
   startedAt?: string | null
   metadata?: Record<string, unknown> | null
   receiptAttachmentId?: string | null
@@ -349,12 +364,26 @@ export default function TaxiFleetTripsPage() {
     }
   }, [queryParams, reloadToken, scopeVersion])
 
-  const revenueSummaryLabel = React.useMemo(() => {
+  const revenueSummaryRow = React.useMemo(() => {
     if (!revenueSummary) return null
-    const amount = formatMoneyDisplay(revenueSummary.revenueAmount, {
-      currency: revenueSummary.currencyCode || 'PLN',
-    })
-    return t('taxi_fleet.trips.list.revenueSummary', 'Filtered revenue: {amount}', { amount })
+    const amount = formatTripRevenue(
+      revenueSummary.revenueAmount,
+      revenueSummary.currencyCode,
+    )
+    return {
+      cells: {
+        startedAt: (
+          <span className="text-muted-foreground">
+            {t('taxi_fleet.trips.list.revenueSummaryLabel', 'Total revenue')}
+          </span>
+        ),
+        revenueAmount: (
+          <span className="tabular-nums font-semibold text-foreground whitespace-nowrap">
+            {amount}
+          </span>
+        ),
+      },
+    }
   }, [revenueSummary, t])
 
   const detailHref = (id: string) => `${TAXI_FLEET_BASE}/trips/${encodeURIComponent(id)}`
@@ -490,7 +519,15 @@ export default function TaxiFleetTripsPage() {
           return t(`taxi_fleet.trips.form.paymentTypes.${paymentType}`, paymentType)
         },
       },
-      { accessorKey: 'revenueAmount', header: t('taxi_fleet.trips.revenue', 'Revenue') },
+      {
+        accessorKey: 'revenueAmount',
+        header: t('taxi_fleet.trips.revenue', 'Revenue'),
+        cell: ({ row }) => (
+          <span className="tabular-nums whitespace-nowrap">
+            {formatTripRevenue(row.original.revenueAmount, row.original.currencyCode)}
+          </span>
+        ),
+      },
       {
         id: 'ocr',
         header: t('taxi_fleet.trips.list.ocr', 'OCR'),
@@ -514,9 +551,9 @@ export default function TaxiFleetTripsPage() {
       <PageBody>
         <DataTable<TripRow>
           title={t('taxi_fleet.trips.list.title', 'Trips')}
-          description={revenueSummaryLabel ?? undefined}
           sortable
           sorting={[{ id: 'startedAt', desc: true }]}
+          summaryRow={revenueSummaryRow}
           refreshButton={{
             label: t('taxi_fleet.trips.list.actions.refresh', 'Refresh'),
             onRefresh: () => {

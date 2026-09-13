@@ -114,11 +114,49 @@ export function FilterBar({
                 const o = f.options.find((o) => o.value === val)
                 return o ? o.label : String(val)
               }
-              if (typeof val === 'object' && val.from == null && val.to == null) return null
-              if (typeof val === 'object') {
-                const from = val.from ?? ''
-                const to = val.to ? ` → ${val.to}` : ''
-                return `${from}${to}`.trim()
+              if (typeof val === 'object' && val != null && !Array.isArray(val)) {
+                if (val.from == null && val.to == null) return null
+                if (typeof f.formatRangeValue === 'function') {
+                  const formatted = f.formatRangeValue(val as { from?: string; to?: string })
+                  if (formatted) return formatted
+                }
+                const formatPart = (raw: unknown): string => {
+                  if (typeof raw !== 'string' || !raw.trim()) return ''
+                  const value = raw.trim()
+                  // datetime-local: YYYY-MM-DDTHH:mm (seconds optional) — format without depending on Date parse quirks
+                  const dateTimeMatch = value.match(
+                    /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?)?$/,
+                  )
+                  if (dateTimeMatch) {
+                    const [, year, month, day, hour, minute] = dateTimeMatch
+                    if (f.dateTime || hour != null) {
+                      return `${day}.${month}.${year}, ${hour ?? '00'}:${minute ?? '00'}`
+                    }
+                    return `${day}.${month}.${year}`
+                  }
+                  const normalized =
+                    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value) ? `${value}:00` : value
+                  const parsed = new Date(normalized)
+                  if (Number.isNaN(parsed.getTime())) return value
+                  if (f.dateTime || value.includes('T')) {
+                    return parsed.toLocaleString(undefined, {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                  }
+                  return parsed.toLocaleDateString(undefined, {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                  })
+                }
+                const from = formatPart(val.from)
+                const to = formatPart(val.to)
+                if (from && to) return `${from} → ${to}`
+                return from || to
               }
               if (val === true) return t('common.yes', 'Yes')
               if (val === false) return t('common.no', 'No')

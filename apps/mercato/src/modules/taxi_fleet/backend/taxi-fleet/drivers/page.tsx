@@ -207,12 +207,13 @@ export default function TaxiFleetDriversPage() {
       {
         accessorKey: 'teamMemberId',
         header: t('taxi_fleet.drivers.member', 'Team member'),
+        meta: { truncate: false, maxWidth: '16rem' },
         cell: ({ row }) => {
           const onShift = row.original.onShift === true
           return (
             <Link
               href={detailHref(row.original.id)}
-              className="inline-flex items-center gap-2 font-medium hover:underline"
+              className="inline-flex max-w-full items-center gap-2 font-medium hover:underline"
             >
               <span
                 className={cn(
@@ -230,7 +231,7 @@ export default function TaxiFleetDriversPage() {
                     : t('taxi_fleet.drivers.list.filters.onShiftNo', 'Off shift')
                 }
               />
-              <span>{resolveName(row.original.teamMemberId)}</span>
+              <span className="whitespace-nowrap">{resolveName(row.original.teamMemberId)}</span>
             </Link>
           )
         },
@@ -238,6 +239,7 @@ export default function TaxiFleetDriversPage() {
       {
         id: 'assignedVehicle',
         header: t('taxi_fleet.drivers.list.assignedVehicle', 'Assigned vehicle'),
+        meta: { truncate: false, maxWidth: '14rem' },
         cell: ({ row }) => {
           const ids = Array.isArray(row.original.defaultResourceIds)
             ? row.original.defaultResourceIds
@@ -247,7 +249,9 @@ export default function TaxiFleetDriversPage() {
           if (!ids.length) return '—'
           const primary = resolveResourceLabel(ids[0]!)
           const extra = ids.length - 1
-          if (extra <= 0) return primary
+          if (extra <= 0) {
+            return <span className="whitespace-nowrap">{primary}</span>
+          }
           return (
             <span className="whitespace-nowrap">
               {primary}{' '}

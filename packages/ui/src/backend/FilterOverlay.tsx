@@ -20,6 +20,8 @@ export type FilterDef = {
   /** When type is dateRange, use datetime-local inputs instead of date-only. */
   dateTime?: boolean
   formatValue?: (value: string) => string
+  /** Optional label formatter for dateRange chip values (`{ from, to }`). */
+  formatRangeValue?: (range: { from?: string; to?: string }) => string | null
   formatDescription?: (value: string) => string | null | undefined
 }
 

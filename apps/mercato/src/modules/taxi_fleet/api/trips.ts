@@ -141,16 +141,23 @@ async function attachFilteredRevenueSummary(
   })
 
   const em = ctx.container.resolve('em') as EntityManager
-  const rows = await em
-    .createQueryBuilder(TaxiFleetTrip, 't')
-    .select([raw('coalesce(sum(t.revenue_amount), 0) as total')])
-    .where(where)
-    .execute<{ total?: string | number | null }[]>('get')
+  try {
+    const row = await em
+      .createQueryBuilder(TaxiFleetTrip, 't')
+      .select([raw('coalesce(sum(t.revenue_amount), 0) as total')])
+      .where(where)
+      .execute<{ total?: string | number | null }>('get')
 
-  const total = Number(rows?.[0]?.total ?? 0)
-  payload.revenueSummary = {
-    revenueAmount: Number.isFinite(total) ? total : 0,
-    currencyCode: 'PLN',
+    const total = Number(row?.total ?? 0)
+    payload.revenueSummary = {
+      revenueAmount: Number.isFinite(total) ? total : 0,
+      currencyCode: 'PLN',
+    }
+  } catch {
+    payload.revenueSummary = {
+      revenueAmount: 0,
+      currencyCode: 'PLN',
+    }
   }
 }
 
@@ -238,7 +245,11 @@ const crud = makeCrudRoute({
   },
   hooks: {
     afterList: async (payload, ctx) => {
-      await enrichTripListItemsWithReceiptOcr(payload.items ?? [], ctx)
+      try {
+        await enrichTripListItemsWithReceiptOcr(payload.items ?? [], ctx)
+      } catch {
+        // OCR enrichment is optional for list display; never block revenue summary.
+      }
       await attachFilteredRevenueSummary(payload, ctx)
     },
   },
