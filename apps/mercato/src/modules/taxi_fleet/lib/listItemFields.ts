@@ -19,8 +19,20 @@ function pickString(record: Record<string, unknown>, ...keys: string[]): string 
 }
 
 function readPaymentTypeFromMetadata(metadata: unknown): string | null {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null
-  const root = metadata as Record<string, unknown>
+  let root: Record<string, unknown> | null = null
+  if (typeof metadata === 'string' && metadata.trim()) {
+    try {
+      const parsed = JSON.parse(metadata) as unknown
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        root = parsed as Record<string, unknown>
+      }
+    } catch {
+      return null
+    }
+  } else if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+    root = metadata as Record<string, unknown>
+  }
+  if (!root) return null
   const nested =
     root.tripRequest && typeof root.tripRequest === 'object' && !Array.isArray(root.tripRequest)
       ? (root.tripRequest as Record<string, unknown>)

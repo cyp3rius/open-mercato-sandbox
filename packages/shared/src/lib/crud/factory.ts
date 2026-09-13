@@ -1686,6 +1686,10 @@ export function makeCrudRoute<TCreate = any, TUpdate = any, TList = any>(opts: C
         profiler.mark('fallback_translation_overlays_complete', { itemCount: Array.isArray(list) ? list.length : 0 })
       }
 
+      const transformFallbackItem = opts.list?.transformItem
+      const mapFallbackItems = <T,>(items: T[]): T[] =>
+        transformFallbackItem ? items.map((item) => transformFallbackItem(item) as T) : items
+
       await logCrudAccess({
         container: ctx.container,
         auth: ctx.auth,
@@ -1699,7 +1703,9 @@ export function makeCrudRoute<TCreate = any, TUpdate = any, TList = any>(opts: C
       })
       profiler.mark('access_logged')
       if (exportRequested && requestedExport) {
-        const exportItems = exportFullRequested ? list.map(normalizeFullRecordForExport) : list
+        const exportItems = exportFullRequested
+          ? list.map(normalizeFullRecordForExport)
+          : mapFallbackItems(list)
         const prepared = exportFullRequested
           ? { columns: ensureColumns(exportItems), rows: exportItems }
           : prepareExportData(exportItems, opts.list)
@@ -1724,7 +1730,7 @@ export function makeCrudRoute<TCreate = any, TUpdate = any, TList = any>(opts: C
         return response
       }
       const payload = {
-        items: list,
+        items: mapFallbackItems(list),
         total,
         page: fallbackPage,
         pageSize: fallbackPageSize,
