@@ -8,7 +8,7 @@ import type { CommandBus, CommandRuntimeContext } from '@open-mercato/shared/lib
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { normalizeNipDigits } from '@open-mercato/shared/lib/pl/nip'
-import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
+import { resolveDriverContext, resolveDriverContextForMutation } from '@/modules/taxi_fleet/lib/driverContext'
 import { normalizeDriverCustomerPhone } from '@/modules/taxi_fleet/lib/driverCustomerPhone'
 import { searchFleetCustomerEntities } from '@/modules/taxi_fleet/lib/customerEntitySearch'
 
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
   try {
     const context = await buildContext(req)
     const { translate } = await resolveTranslations()
-    const driver = await resolveDriverContext(context, translate, { requireExternalApp: true })
+    const driver = await resolveDriverContextForMutation(context, translate, { requireExternalApp: true })
     const body = createCustomerSchema.parse(await req.json().catch(() => ({})))
     const commandBus = context.container.resolve('commandBus') as CommandBus
     const tenantId = driver.teamMember.tenantId

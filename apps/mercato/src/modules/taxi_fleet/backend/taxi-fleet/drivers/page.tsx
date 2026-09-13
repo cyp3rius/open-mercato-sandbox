@@ -25,6 +25,7 @@ import { useTaxiFleetPermissions } from '../../../components/useTaxiFleetPermiss
 import { useTaxiFleetSettings } from '../../../components/useTaxiFleetSettings'
 import { useResourceLabels } from '../../../components/useResourceLabels'
 import { remoteSearchFleetResources } from '../../../lib/fleetResourceSearch'
+import { startDriverAppImpersonation } from '../../../lib/startDriverAppImpersonation'
 
 const PAGE_SIZE = 20
 
@@ -48,7 +49,7 @@ export default function TaxiFleetDriversPage() {
   const scopeVersion = useOrganizationScopeVersion()
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const { resolveName, reload: reloadDirectory } = useFleetDriverDirectory()
-  const { canManageSettlements } = useTaxiFleetPermissions()
+  const { canManageSettlements, canImpersonateDriver } = useTaxiFleetPermissions()
   const { resourceTypeId } = useTaxiFleetSettings()
   const [rows, setRows] = React.useState<DriverRow[]>([])
   const [page, setPage] = React.useState(1)
@@ -333,6 +334,26 @@ export default function TaxiFleetDriversPage() {
                   label: t('taxi_fleet.drivers.list.actions.openInNewTab', 'Open in new tab'),
                   onSelect: () => window.open(detailHref(row.id), '_blank', 'noopener,noreferrer'),
                 },
+                ...(canImpersonateDriver
+                  ? [
+                      {
+                        id: 'impersonate',
+                        label: t(
+                          'taxi_fleet.drivers.list.actions.previewApp',
+                          'Preview driver app',
+                        ),
+                        onSelect: () => {
+                          void startDriverAppImpersonation({
+                            teamMemberId: row.teamMemberId,
+                            errorMessage: t(
+                              'taxi_fleet.driverApp.impersonation.startError',
+                              'Could not start driver app preview.',
+                            ),
+                          })
+                        },
+                      },
+                    ]
+                  : []),
                 ...(canManageSettlements
                   ? [
                       {

@@ -12,6 +12,11 @@ export const features = [
   { id: 'taxi_fleet.manage_platform_sync', title: 'Sync platform trips (Bolt/Uber/Free)', module: 'taxi_fleet' },
   { id: 'taxi_fleet.settings.manage', title: 'Manage taxi fleet module settings', module: 'taxi_fleet' },
   { id: 'taxi_fleet.driver', title: 'Driver mobile app API', module: 'taxi_fleet' },
+  {
+    id: 'taxi_fleet.driver.impersonate',
+    title: 'Preview driver app as a selected driver (read-only)',
+    module: 'taxi_fleet',
+  },
   { id: 'taxi_fleet.trip.order.notify', title: 'Notify on every new trip order', module: 'taxi_fleet' },
   { id: 'taxi_fleet.trip.paid.notify', title: 'Notify when trip is paid by customer', module: 'taxi_fleet' },
   { id: 'taxi_fleet.trip.confirmed.notify', title: 'Notify when operator confirms trip', module: 'taxi_fleet' },

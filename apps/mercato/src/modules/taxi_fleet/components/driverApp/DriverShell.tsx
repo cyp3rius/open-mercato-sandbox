@@ -19,6 +19,9 @@ import { flushDriverOutbox, getPendingOutboxCount } from '../../lib/driverOfflin
 import { clearLiveTripDraft, getActiveLiveTripDraft } from '../../lib/driverOffline/tripDrafts'
 import { useDriverTracking } from './useDriverTracking'
 import { DriverPullToRefresh, DriverPullToRefreshProvider } from './DriverPullToRefresh'
+import { DriverAppModeProvider } from './useDriverAppMode'
+import type { DriverImpersonationInfo } from '../../lib/driverImpersonation'
+import { TAXI_FLEET_BASE } from '../../backend/taxi-fleet/paths'
 import {
   driverBadgeInfoClass,
   driverBadgeNeutralClass,
@@ -139,6 +142,8 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
     assignmentId ?? null,
   )
   const [activeVehicleLabel, setActiveVehicleLabel] = React.useState<string | null>(null)
+  const [impersonation, setImpersonation] = React.useState<DriverImpersonationInfo | null>(null)
+  const [impersonationBusy, setImpersonationBusy] = React.useState(false)
 
   React.useEffect(() => {
     if (typeof shiftActive === 'boolean') setResolvedShiftActive(shiftActive)
@@ -149,6 +154,7 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
     try {
       const { result } = await apiCall<{
         member: { displayName: string }
+        impersonation?: DriverImpersonationInfo | null
         todayAssignment: {
           id: string
           resourceLabel?: string | null
@@ -158,6 +164,7 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
       }>('/api/taxi_fleet/driver/me')
       if (!result) return
       setDriverName(result.member?.displayName?.trim() || null)
+      setImpersonation(result.impersonation?.active ? result.impersonation : null)
       const assignment = result.todayAssignment
       const open = Boolean(assignment?.shiftStart && !assignment?.shiftEnd)
       if (typeof shiftActive !== 'boolean') {
@@ -217,7 +224,10 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
     void refreshDriverSession()
   }, [refreshDriverSession, pathname])
 
-  useDriverTracking({ enabled: resolvedShiftActive, assignmentId: resolvedAssignmentId })
+  useDriverTracking({
+    enabled: resolvedShiftActive && !impersonation?.active,
+    assignmentId: resolvedAssignmentId,
+  })
 
   React.useEffect(() => {
     let active = true
@@ -281,13 +291,36 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
     router.replace('/driver/login')
   }
 
+  async function stopImpersonation() {
+    if (impersonationBusy) return
+    setImpersonationBusy(true)
+    const profileId = impersonation?.profileId ?? null
+    await apiCall('/api/taxi_fleet/driver/impersonation', { method: 'DELETE' }).catch(() => undefined)
+    setImpersonation(null)
+    setImpersonationBusy(false)
+    window.location.assign(
+      profileId
+        ? `${TAXI_FLEET_BASE}/drivers/${encodeURIComponent(profileId)}`
+        : `${TAXI_FLEET_BASE}/drivers`,
+    )
+  }
+
   const showLiveBanner = Boolean(liveTripId) && !pathname.startsWith('/driver/trips/live')
   const showScheduledInProgressBanner =
     !liveTripId &&
     Boolean(serverInProgressTripId) &&
     pathname !== `/driver/trips/${serverInProgressTripId}`
 
+  const appMode = React.useMemo(
+    () => ({
+      readOnly: Boolean(impersonation?.active),
+      impersonation,
+    }),
+    [impersonation],
+  )
+
   return (
+    <DriverAppModeProvider value={appMode}>
     <DriverPullToRefreshProvider>
     <div className={`flex min-h-dvh flex-col touch-manipulation overscroll-y-contain ${driverPageBgClass}`}>
       <FlashMessages />
@@ -305,7 +338,7 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            {canInstall ? (
+            {canInstall && !impersonation?.active ? (
               <Button
                 type="button"
                 variant="outline"
@@ -317,16 +350,18 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
                 {t('taxi_fleet.driverApp.install', 'Install')}
               </Button>
             ) : null}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-9 gap-1.5 px-2.5 text-xs font-medium text-[#78829D] hover:!bg-[#F1F1F4]/50 hover:!text-[#4B5675]"
-              onClick={() => void logout()}
-            >
-              <LogOut className="size-3.5" aria-hidden />
-              {t('taxi_fleet.driverApp.logout', 'Log out')}
-            </Button>
+            {!impersonation?.active ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 gap-1.5 px-2.5 text-xs font-medium text-[#78829D] hover:!bg-[#F1F1F4]/50 hover:!text-[#4B5675]"
+                onClick={() => void logout()}
+              >
+                <LogOut className="size-3.5" aria-hidden />
+                {t('taxi_fleet.driverApp.logout', 'Log out')}
+              </Button>
+            ) : null}
           </div>
         </div>
         <div className="mx-auto flex w-full max-w-lg flex-wrap gap-1.5 px-4 pb-3">
@@ -390,7 +425,37 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
             </span>
           ) : null}
         </div>
-        {showConsentBanner ? (
+        {impersonation?.active ? (
+          <div className="mx-auto w-full max-w-lg px-4 pb-3">
+            <div className="flex flex-col gap-2 rounded-lg border border-[#FFE8A3] bg-[#FFF8DD] px-3 py-2.5 text-sm text-[#9A7700] sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="font-medium text-[#071437]">
+                  {t('taxi_fleet.driverApp.impersonation.bannerTitle', 'Read-only preview')}
+                </div>
+                <div className="mt-0.5">
+                  {t(
+                    'taxi_fleet.driverApp.impersonation.bannerBody',
+                    'Viewing the driver app as {name}. Changes are disabled.',
+                    { name: impersonation.displayName },
+                  )}
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 shrink-0 border-[#DBDFE9] bg-white text-[#071437]"
+                disabled={impersonationBusy}
+                onClick={() => void stopImpersonation()}
+              >
+                {impersonationBusy
+                  ? t('taxi_fleet.driverApp.impersonation.stopping', 'Leaving…')
+                  : t('taxi_fleet.driverApp.impersonation.exit', 'Exit preview')}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        {showConsentBanner && !impersonation?.active ? (
           <div className="mx-auto w-full max-w-lg px-4 pb-3">
             <button
               type="button"
@@ -470,5 +535,6 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
       </nav>
     </div>
     </DriverPullToRefreshProvider>
+    </DriverAppModeProvider>
   )
 }

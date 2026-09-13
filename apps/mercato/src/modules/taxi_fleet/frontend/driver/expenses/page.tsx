@@ -19,6 +19,7 @@ import {
   driverPrimaryActionClass,
   driverSecondaryActionClass,
 } from '../../../components/driverApp/driverUi'
+import { DriverWritable } from '../../../components/driverApp/DriverWritable'
 import type {
   DriverExpenseListItem,
   DriverExpenseSortField,
@@ -332,10 +333,12 @@ export default function DriverExpensesPage() {
         </div>
       ) : null}
       <div className="space-y-4">
+        <DriverWritable>
         <Link href="/driver/expenses/new" className={`${driverPrimaryActionClass} gap-2`}>
           <Plus className="size-4" aria-hidden />
           {t('taxi_fleet.driverApp.expenses.new', 'Register a cost')}
         </Link>
+        </DriverWritable>
 
         <label className="block">
           <span className="mb-1.5 block text-sm font-medium text-[#071437]">
@@ -411,6 +414,7 @@ export default function DriverExpensesPage() {
             </div>
             <ExpenseWarnings item={item} t={t} />
             {item.canDelete ? (
+              <DriverWritable>
               <div className="mt-3 flex justify-end">
                 <button
                   type="button"
@@ -425,6 +429,7 @@ export default function DriverExpensesPage() {
                   {t('taxi_fleet.driverApp.expenses.delete', 'Delete')}
                 </button>
               </div>
+              </DriverWritable>
             ) : null}
           </div>
         ))}

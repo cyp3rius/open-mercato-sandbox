@@ -5,7 +5,7 @@ import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetDailyAssignment, TaxiFleetLocationPing } from '../data/entities'
 import { driverLocationBatchSchema, type DriverLocationBatchInput } from '../data/validators'
-import { resolveDriverContext } from '../lib/driverContext'
+import { resolveDriverContextForMutation } from '../lib/driverContext'
 import { computeAssignmentGpsDistanceKm } from '../lib/computeAssignmentGpsDistance'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
 
@@ -14,7 +14,7 @@ const ingestLocationPingsCommand: CommandHandler<DriverLocationBatchInput, { acc
   async execute(input, ctx) {
     const parsed = driverLocationBatchSchema.parse(input)
     const { translate } = await resolveTranslations()
-    const driver = await resolveDriverContext(ctx, translate, { requireExternalApp: true })
+    const driver = await resolveDriverContextForMutation(ctx, translate, { requireExternalApp: true })
     ensureTenantScope(ctx, driver.teamMember.tenantId)
     ensureOrganizationScope(ctx, driver.teamMember.organizationId)
     const em = (ctx.container.resolve('em') as EntityManager).fork()

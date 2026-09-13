@@ -17,7 +17,7 @@ import {
   TaxiFleetReceiptExtraction,
 } from '@/modules/taxi_fleet/data/entities'
 import { driverExpenseCreateSchema } from '@/modules/taxi_fleet/data/validators'
-import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
+import { resolveDriverContext, resolveDriverContextForMutation } from '@/modules/taxi_fleet/lib/driverContext'
 import {
   mapDriverExpenseToCreateInput,
   parseDriverExpenseWarnings,
@@ -196,7 +196,7 @@ export async function POST(req: Request) {
   try {
     const context = await buildContext(req)
     const { translate } = await resolveTranslations()
-    const driver = await resolveDriverContext(context, translate, { requireExternalApp: true })
+    const driver = await resolveDriverContextForMutation(context, translate, { requireExternalApp: true })
     const body = await req.json().catch(() => ({}))
     const parsed = driverExpenseCreateSchema.parse(body)
     const commandBus = context.container.resolve('commandBus') as CommandBus
@@ -238,7 +238,7 @@ export async function DELETE(req: Request) {
   try {
     const context = await buildContext(req)
     const { translate } = await resolveTranslations()
-    const driver = await resolveDriverContext(context, translate, { requireExternalApp: true })
+    const driver = await resolveDriverContextForMutation(context, translate, { requireExternalApp: true })
     const url = new URL(req.url)
     const id = url.searchParams.get('id')?.trim() || null
     if (!id) throw new CrudHttpError(400, { error: 'Missing expense id' })

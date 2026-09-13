@@ -18,7 +18,7 @@ import {
 } from '../data/validators'
 import { findAssignmentConflict, findAssignedResourceIdsForDate, findAssignmentUniqueBlockers, resolveSelfStartAssignmentRow } from '../lib/assignmentValidation'
 import { assertTeamMemberHasDriverProfile } from '../lib/driverProfileGuard'
-import { resolveDriverContext } from '../lib/driverContext'
+import { resolveDriverContextForMutation } from '../lib/driverContext'
 import { computeAssignmentGpsDistanceKm } from '../lib/computeAssignmentGpsDistance'
 import {
   buildShiftStartAllowlist,
@@ -208,7 +208,7 @@ const shiftAssignmentCommand: CommandHandler<
   async execute(input, ctx) {
     const parsed = assignmentShiftSchema.parse(input)
     const { translate } = await resolveTranslations()
-    const driver = await resolveDriverContext(ctx, translate, { requireExternalApp: true })
+    const driver = await resolveDriverContextForMutation(ctx, translate, { requireExternalApp: true })
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const row = await findOneWithDecryption(em, TaxiFleetDailyAssignment, {
       id: parsed.id,
@@ -366,7 +366,7 @@ const selfStartAssignmentCommand: CommandHandler<AssignmentSelfStartInput, Shift
   async execute(input, ctx) {
     const parsed = assignmentSelfStartSchema.parse(input)
     const { translate } = await resolveTranslations()
-    const driver = await resolveDriverContext(ctx, translate, { requireExternalApp: true })
+    const driver = await resolveDriverContextForMutation(ctx, translate, { requireExternalApp: true })
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const tenantId = driver.teamMember.tenantId
     const organizationId = driver.teamMember.organizationId

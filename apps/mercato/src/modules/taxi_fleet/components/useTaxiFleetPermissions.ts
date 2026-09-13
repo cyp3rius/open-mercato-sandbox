@@ -9,6 +9,7 @@ type PermissionState = {
   canManageSettlements: boolean
   canManageAssignments: boolean
   canManagePlatformSync: boolean
+  canImpersonateDriver: boolean
   isLoading: boolean
 }
 
@@ -19,6 +20,7 @@ export function useTaxiFleetPermissions(): PermissionState {
     canManageSettlements: false,
     canManageAssignments: false,
     canManagePlatformSync: false,
+    canImpersonateDriver: false,
     isLoading: true,
   })
 
@@ -35,6 +37,7 @@ export function useTaxiFleetPermissions(): PermissionState {
             'taxi_fleet.manage_settlements',
             'taxi_fleet.manage_assignments',
             'taxi_fleet.manage_platform_sync',
+            'taxi_fleet.driver.impersonate',
           ],
         }),
       })
@@ -48,6 +51,7 @@ export function useTaxiFleetPermissions(): PermissionState {
         canManageSettlements: allGranted || granted.includes('taxi_fleet.manage_settlements'),
         canManageAssignments: allGranted || granted.includes('taxi_fleet.manage_assignments'),
         canManagePlatformSync: allGranted || granted.includes('taxi_fleet.manage_platform_sync'),
+        canImpersonateDriver: allGranted || granted.includes('taxi_fleet.driver.impersonate'),
         isLoading: false,
       })
     }

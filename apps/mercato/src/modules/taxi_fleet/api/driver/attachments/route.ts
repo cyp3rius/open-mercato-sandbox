@@ -11,7 +11,7 @@ import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
-import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
+import { resolveDriverContextForMutation } from '@/modules/taxi_fleet/lib/driverContext'
 import { TAXI_FLEET_FINANCIAL_ENTRY_ENTITY_ID } from '@/modules/taxi_fleet/lib/financialEntryEntity'
 import {
   createPendingReceiptExtraction,
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   try {
     const context = await buildContext(req)
     const { translate } = await resolveTranslations()
-    await resolveDriverContext(context, translate, { requireExternalApp: true })
+    await resolveDriverContextForMutation(context, translate, { requireExternalApp: true })
 
     const auth = context.auth
     const tenantId = auth?.tenantId

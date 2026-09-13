@@ -10,7 +10,7 @@ import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { TaxiFleetTrip } from '@/modules/taxi_fleet/data/entities'
 import { tripCostLineCreateSchema } from '@/modules/taxi_fleet/data/validators'
-import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
+import { resolveDriverContextForMutation } from '@/modules/taxi_fleet/lib/driverContext'
 import { assertDriverCanMutatePlatformTrip } from '@/modules/taxi_fleet/lib/platformSync/platformTripIngest'
 
 export const metadata = {
@@ -37,7 +37,7 @@ export async function POST(req: Request, routeCtx: { params: Promise<{ id: strin
     const { id: tripId } = await routeCtx.params
     const context = await buildContext(req)
     const { translate } = await resolveTranslations()
-    const driver = await resolveDriverContext(context, translate, { requireExternalApp: true })
+    const driver = await resolveDriverContextForMutation(context, translate, { requireExternalApp: true })
     const em = context.container.resolve('em') as EntityManager
     const trip = await findOneWithDecryption(
       em,

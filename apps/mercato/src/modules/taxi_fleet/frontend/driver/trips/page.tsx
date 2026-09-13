@@ -21,6 +21,7 @@ import {
   driverPrimaryActionClass,
   driverSecondaryActionClass,
 } from '../../../components/driverApp/driverUi'
+import { DriverWritable } from '../../../components/driverApp/DriverWritable'
 import type { DriverTripReceiptWarning } from '../../../lib/driverTripReceiptStatus'
 import { cacheDriverJson, readCachedDriverJson } from '../../../lib/driverOffline/outbox'
 import { tripRequestDetailsFromMetadata } from '../../../lib/tripRequestForm'
@@ -219,10 +220,12 @@ export default function DriverTripsPage() {
   return (
     <DriverTripGate showShiftPrompt={false} title={t('taxi_fleet.driverApp.trips.title', 'My trips')}>
       <div className="space-y-3">
+        <DriverWritable>
         <Link href="/driver/trips/new" className={`${driverPrimaryActionClass} gap-2`}>
           <Plus className="size-4" aria-hidden />
           {t('taxi_fleet.driverApp.trips.new', 'New trip')}
         </Link>
+        </DriverWritable>
 
         {shiftReady && onOpenShift ? (
           <div className="grid grid-cols-2 gap-2">

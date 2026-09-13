@@ -21,6 +21,7 @@ import { DriverAllocationsTab } from '../../../../components/driver/DriverAlloca
 import { DriverSettlementsTab } from '../../../../components/driver/DriverSettlementsTab'
 import { mapDriverProfileRowToUpdateFormValues } from '../../../../components/driverProfileFormConfig'
 import { resolveDriverDefaultResourceIds } from '../../../../lib/driverDefaultResources'
+import { startDriverAppImpersonation } from '../../../../lib/startDriverAppImpersonation'
 
 type DriverRow = {
   id: string
@@ -43,7 +44,8 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
   const profileId = params?.id ?? ''
   const { ConfirmDialogElement } = useConfirmDialog()
   const { profiles, resolveName, reload: reloadDirectory } = useFleetDriverDirectory()
-  const { canManageTrips, canManageSettlements, canManageAssignments } = useTaxiFleetPermissions()
+  const { canManageTrips, canManageSettlements, canManageAssignments, canImpersonateDriver } =
+    useTaxiFleetPermissions()
   const [row, setRow] = React.useState<DriverRow | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -146,6 +148,28 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
             backLabel={t('taxi_fleet.drivers.detail.backToList', 'Back to drivers')}
             entityTypeLabel={t('taxi_fleet.drivers.detail.title', 'Driver profile')}
             title={displayName}
+            menuActions={
+              canImpersonateDriver && row
+                ? [
+                    {
+                      id: 'preview-app',
+                      label: t(
+                        'taxi_fleet.drivers.detail.actions.previewApp',
+                        'Preview driver app',
+                      ),
+                      onSelect: () => {
+                        void startDriverAppImpersonation({
+                          teamMemberId: row.teamMemberId,
+                          errorMessage: t(
+                            'taxi_fleet.driverApp.impersonation.startError',
+                            'Could not start driver app preview.',
+                          ),
+                        })
+                      },
+                    },
+                  ]
+                : undefined
+            }
           />
           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[7fr_3fr] lg:items-start">
             <div className="min-w-0">

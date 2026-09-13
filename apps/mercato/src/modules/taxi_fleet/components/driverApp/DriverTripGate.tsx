@@ -28,6 +28,7 @@ import { cacheDriverJson, enqueueDriverMutation, readCachedDriverJson } from '..
 
 type MeResponse = {
   member: { id: string; displayName: string }
+  impersonation?: { active: true; readOnly?: true } | null
   profile: {
     defaultResourceIds?: DriverDefaultVehicleOption[]
   } | null
@@ -101,6 +102,7 @@ export function DriverTripGate({ children, title, showShiftPrompt = true }: Prop
   }, [load])
 
   const assignment = me?.todayAssignment ?? null
+  const readOnly = Boolean(me?.impersonation?.active)
   const shiftActive = isDriverOnOpenShift(assignment)
   const shiftVehicles = React.useMemo(
     () =>
@@ -124,6 +126,7 @@ export function DriverTripGate({ children, title, showShiftPrompt = true }: Prop
   )
 
   async function clockInPlanned() {
+    if (readOnly) return
     if (!assignment || !selectedResourceId) {
       flash(
         t('taxi_fleet.driverApp.shift.vehicleRequired', 'Select a vehicle before starting your shift.'),
@@ -173,6 +176,7 @@ export function DriverTripGate({ children, title, showShiftPrompt = true }: Prop
   }
 
   async function clockInAdHoc() {
+    if (readOnly) return
     if (!selectedResourceId) {
       flash(
         t('taxi_fleet.driverApp.shift.vehicleRequired', 'Select a vehicle before starting your shift.'),
@@ -225,8 +229,10 @@ export function DriverTripGate({ children, title, showShiftPrompt = true }: Prop
     )
   }
 
-  const showPlannedPrompt = showShiftPrompt && !shiftActive && assignment && !assignment.shiftStart
+  const showPlannedPrompt =
+    !readOnly && showShiftPrompt && !shiftActive && assignment && !assignment.shiftStart
   const showAdHocPrompt =
+    !readOnly &&
     showShiftPrompt &&
     !shiftActive &&
     needsVehiclePick &&

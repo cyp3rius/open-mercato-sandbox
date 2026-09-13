@@ -35,10 +35,12 @@ import {
   useDriverTrackingEstimatedKm,
 } from '../../components/driverApp/useDriverTracking'
 import { useRegisterDriverPullToRefresh } from '../../components/driverApp/DriverPullToRefresh'
+import { DriverWritable } from '../../components/driverApp/DriverWritable'
 import { formatVehicleResourceLabel, stripPlateFromVehicleName } from '../../lib/vehicleResourceLabel'
 
 type MeResponse = {
   member: { id: string; displayName: string }
+  impersonation?: { active: true } | null
   today?: string
   profile: {
     externalAppEnabled: boolean
@@ -218,6 +220,7 @@ export default function DriverHomePage() {
   const hasDefaultsButNoneFree = profileDefaults.length > 0 && !needsVehiclePick
 
   async function runShift(action: 'start' | 'end') {
+    if (me?.impersonation?.active) return
     if (!assignment) return
     if (action === 'start' && !selectedResourceId) {
       flash(
@@ -283,6 +286,7 @@ export default function DriverHomePage() {
   }
 
   async function startAdHocShift() {
+    if (me?.impersonation?.active) return
     if (!selectedResourceId) {
       flash(
         t('taxi_fleet.driverApp.shift.vehicleRequired', 'Select a vehicle before starting your shift.'),
@@ -381,6 +385,7 @@ export default function DriverHomePage() {
                 </div>
               ) : null}
               {needsVehiclePick ? (
+                <DriverWritable>
                 <div className="mt-4">
                   <Button
                     type="button"
@@ -393,16 +398,19 @@ export default function DriverHomePage() {
                       : t('taxi_fleet.driverApp.home.clockInAdHoc', 'Start ad-hoc shift')}
                   </Button>
                 </div>
+                </DriverWritable>
               ) : null}
             </div>
             <Link href="/driver/assignments" className={`${driverSecondaryActionClass} gap-2`}>
               <CalendarDays className="size-4" aria-hidden />
               {t('taxi_fleet.driverApp.home.viewSchedule', 'View schedule')}
             </Link>
+            <DriverWritable>
             <Link href="/driver/expenses/new" className={`${driverSecondaryActionClass} gap-2`}>
               <Fuel className="size-4" aria-hidden />
               {t('taxi_fleet.driverApp.home.reportExpense', 'Register a cost')}
             </Link>
+            </DriverWritable>
           </>
         ) : null}
 
@@ -456,6 +464,7 @@ export default function DriverHomePage() {
                 </div>
               )}
               {needsVehiclePick ? (
+                <DriverWritable>
                 <div className="mt-4">
                   <Button
                     type="button"
@@ -466,15 +475,18 @@ export default function DriverHomePage() {
                     {t('taxi_fleet.driverApp.home.clockIn', 'Clock in')}
                   </Button>
                 </div>
+                </DriverWritable>
               ) : null}
             </div>
             <Button type="button" className={driverSecondaryActionClass} onClick={previewTripsWithoutClockIn}>
               {t('taxi_fleet.driverApp.home.previewTrips', 'Preview trips only')}
             </Button>
+            <DriverWritable>
             <Link href="/driver/expenses/new" className={`${driverSecondaryActionClass} gap-2`}>
               <Fuel className="size-4" aria-hidden />
               {t('taxi_fleet.driverApp.home.reportExpense', 'Register a cost')}
             </Link>
+            </DriverWritable>
             {hasDriverTripsBypass() ? (
               <p className="px-1 text-center text-xs text-[#99A1B7]">
                 {t(
@@ -525,6 +537,7 @@ export default function DriverHomePage() {
                 vehiclePlate={assignment.resourcePlate}
               />
             </div>
+            <DriverWritable>
             <Link href="/driver/trips/new" className={`${driverPrimaryActionClass} gap-2`}>
               <Plus className="size-4" aria-hidden />
               {t('taxi_fleet.driverApp.home.reportTrip', 'Register a trip')}
@@ -541,6 +554,7 @@ export default function DriverHomePage() {
             >
               {t('taxi_fleet.driverApp.home.clockOut', 'Clock out')}
             </Button>
+            </DriverWritable>
             <Link href="/driver/trips" className={`${driverSecondaryActionClass} gap-2`}>
               <CarFront className="size-4" aria-hidden />
               {t('taxi_fleet.driverApp.home.viewTrips', 'View trips')}
@@ -606,6 +620,7 @@ export default function DriverHomePage() {
                   onChange={setSelectedResourceId}
                   disabled={busy}
                 />
+                <DriverWritable>
                 <Button
                   type="button"
                   className={driverPrimaryActionClass}
@@ -616,6 +631,7 @@ export default function DriverHomePage() {
                     ? t('taxi_fleet.driverApp.home.starting', 'Starting…')
                     : t('taxi_fleet.driverApp.home.clockInAdHoc', 'Start ad-hoc shift')}
                 </Button>
+                </DriverWritable>
               </div>
             ) : hasDefaultsButNoneFree ? (
               <div className={driverCardClass}>

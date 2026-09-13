@@ -109,6 +109,15 @@ export async function GET(req: Request) {
         displayName: driver.teamMember.displayName,
         userId: driver.teamMember.userId ?? null,
       },
+      impersonation: driver.impersonating
+        ? {
+            active: true as const,
+            teamMemberId: driver.teamMemberId,
+            displayName: driver.teamMember.displayName,
+            profileId: driver.profile?.id ?? null,
+            readOnly: true as const,
+          }
+        : null,
       today,
       profile: driver.profile
         ? {

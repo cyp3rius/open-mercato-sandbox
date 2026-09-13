@@ -21,7 +21,7 @@ import {
   type SettlementCostExclusion,
 } from '../lib/settlementCostExclusions'
 import { assertTeamMemberHasDriverProfile } from '../lib/driverProfileGuard'
-import { resolveDriverContext } from '../lib/driverContext'
+import { resolveDriverContextForMutation } from '../lib/driverContext'
 import {
   applyWeeklySettlementRecalculation,
   isSettlementClosureUpdate,
@@ -274,7 +274,7 @@ const submitSettlementCommand: CommandHandler<
   async execute(input, ctx) {
     const parsed = settlementSubmitSchema.parse(input)
     const { translate } = await resolveTranslations()
-    const driver = await resolveDriverContext(ctx, translate)
+    const driver = await resolveDriverContextForMutation(ctx, translate)
     const teamMemberId = input.teamMemberId ?? driver.teamMemberId
     const tenantId = driver.teamMember.tenantId
     const organizationId = driver.teamMember.organizationId

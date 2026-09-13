@@ -11,7 +11,7 @@ import { parseScopedCommandInput } from '@open-mercato/shared/lib/api/scoped'
 import { findOneWithDecryption, findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetReceiptExtraction, TaxiFleetTrip } from '@/modules/taxi_fleet/data/entities'
 import { tripCreateSchema, tripUpdateSchema } from '@/modules/taxi_fleet/data/validators'
-import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
+import { resolveDriverContext, resolveDriverContextForMutation } from '@/modules/taxi_fleet/lib/driverContext'
 import { resolveDriverTripUpdateInput } from '@/modules/taxi_fleet/lib/driverTripExecution'
 import {
   finalizeDriverTripReceipt,
@@ -334,7 +334,7 @@ export async function POST(req: Request) {
   try {
     const context = await buildContext(req)
     const { translate } = await resolveTranslations()
-    const driver = await resolveDriverContext(context, translate, { requireExternalApp: true })
+    const driver = await resolveDriverContextForMutation(context, translate, { requireExternalApp: true })
     const body = await req.json().catch(() => ({}))
     const receipt = driverTripReceiptSchema.parse(body)
     const receiptInput = parseDriverTripReceiptInput(body)
@@ -451,7 +451,7 @@ export async function PUT(req: Request) {
   try {
     const context = await buildContext(req)
     const { translate } = await resolveTranslations()
-    const driver = await resolveDriverContext(context, translate, { requireExternalApp: true })
+    const driver = await resolveDriverContextForMutation(context, translate, { requireExternalApp: true })
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
     const em = context.container.resolve('em') as EntityManager
     const tripId = typeof body.id === 'string' ? body.id : null
