@@ -2,7 +2,7 @@
 
 import React from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ChevronDown, List } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, ChevronDown, List } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { parseNumericValue } from '@open-mercato/shared/lib/numeric'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
@@ -42,6 +42,7 @@ import {
   tripHasReceiptAttachment,
   type DriverTripReceiptWarning,
 } from '../../../../lib/driverTripReceiptStatus'
+import { formatReceiptOcrWarningLabel } from '../../../../lib/receiptOcrWarningLabel'
 import { isPlatformIngestedTrip } from '../../../../lib/platformSync/platformTripIngest'
 
 type TripRow = {
@@ -392,6 +393,22 @@ function DriverTripDetailContent({
   const receiptProcessing = Boolean(trip && isTripReceiptProcessing(receiptStatusItem))
   const receiptVerified = Boolean(trip && isTripReceiptVerified(receiptStatusItem))
   const showReceiptProcessingNotice = receiptProcessing && !receiptVerified
+  const receiptWarningMessages = (() => {
+    if (!trip || receiptProcessing) return [] as string[]
+    const fromWarnings = (trip.warnings ?? []).map((warning) =>
+      formatReceiptOcrWarningLabel(t, warning),
+    )
+    if (fromWarnings.length > 0) return fromWarnings
+    if (trip.ocrStatus === 'needs_review' || trip.ocrStatus === 'failed') {
+      return [
+        t(
+          'taxi_fleet.driverApp.trips.needsReview',
+          'Document needs review — check OCR results.',
+        ),
+      ]
+    }
+    return []
+  })()
   const canSupplementReceipt =
     Boolean(trip && isCompleted && !tripHasReceiptAttachment(trip)) && !isPlatformTrip
   const request = trip
@@ -453,6 +470,28 @@ function DriverTripDetailContent({
               'Receipt recognition in progress.',
             )}
           </Notice>
+        ) : null}
+        {receiptWarningMessages.length > 0 ? (
+          <div
+            className="rounded-lg border border-[#F6E5A5] bg-[#FFF8DD] px-3 py-2.5"
+            role="status"
+          >
+            <div className="flex gap-2.5">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[#DFA000]" aria-hidden />
+              <div className="min-w-0 space-y-1">
+                <div className="text-xs font-semibold text-[#7A5B00]">
+                  {t('taxi_fleet.driverApp.trips.warningTitle', 'Attention')}
+                </div>
+                <ul className="space-y-1">
+                  {receiptWarningMessages.map((message, index) => (
+                    <li key={`${message}-${index}`} className="text-sm text-[#7A5B00]">
+                      {message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
         ) : null}
         {trip && request ? (
           <>

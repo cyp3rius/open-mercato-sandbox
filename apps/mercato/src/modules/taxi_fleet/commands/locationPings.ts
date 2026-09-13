@@ -62,13 +62,18 @@ const ingestLocationPingsCommand: CommandHandler<DriverLocationBatchInput, { acc
     await em.flush()
 
     // Keep shift km estimate fresh while the driver is still on shift.
-    const gps = await computeAssignmentGpsDistanceKm(em, openShift.id, {
-      tenantId: openShift.tenantId,
-      organizationId: openShift.organizationId,
-    })
-    openShift.gpsDistanceKm = gps.formatted
-    openShift.updatedAt = now
-    await em.flush()
+    // Soft-fail: pings are already persisted; km is recomputed on shift end.
+    try {
+      const gps = await computeAssignmentGpsDistanceKm(em, openShift.id, {
+        tenantId: openShift.tenantId,
+        organizationId: openShift.organizationId,
+      })
+      openShift.gpsDistanceKm = gps.formatted
+      openShift.updatedAt = now
+      await em.flush()
+    } catch {
+      // ignore
+    }
 
     return { accepted: parsed.pings.length }
   },

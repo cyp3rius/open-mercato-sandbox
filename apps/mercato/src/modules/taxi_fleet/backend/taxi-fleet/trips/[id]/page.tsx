@@ -272,6 +272,10 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
                   tripId={row.id}
                   canManage={canManageTrips}
                   canReplaceReceipt={canManageTrips && lockMode !== 'full'}
+                  onApplied={() => {
+                    setFormKey((value) => value + 1)
+                    void load()
+                  }}
                 />
               )
             }

@@ -276,7 +276,8 @@ export function extractionHasReviewWarnings(
       code === 'nip_lookup_failed' ||
       code === 'customer_nip_conflict' ||
       code === 'document_duplicate' ||
-      code === 'low_confidence'
+      code === 'low_confidence' ||
+      code === 'polcard_payment_confirmation'
     )
   })
 }

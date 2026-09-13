@@ -22,6 +22,7 @@ export const RECEIPT_OCR_WARNING_CODES = [
   'customer_nip_conflict',
   'document_duplicate',
   'low_confidence',
+  'polcard_payment_confirmation',
 ] as const
 
 export type ReceiptOcrWarningCode = (typeof RECEIPT_OCR_WARNING_CODES)[number]

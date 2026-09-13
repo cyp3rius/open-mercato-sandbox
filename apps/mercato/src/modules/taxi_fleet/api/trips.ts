@@ -1,5 +1,8 @@
 import { z } from 'zod'
+import { raw } from '@mikro-orm/core'
+import type { EntityManager } from '@mikro-orm/postgresql'
 import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
+import { buildScopedWhere } from '@open-mercato/shared/lib/api/crud'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { resolveCrudRecordId, parseScopedCommandInput } from '@open-mercato/shared/lib/api/scoped'
 import { TaxiFleetTrip } from '../data/entities'
@@ -10,8 +13,14 @@ import {
   defaultOkResponseSchema,
 } from './openapi'
 
-import { applyFleetDriverListScope } from '../lib/backendFleetActor'
+import { applyFleetDriverListScope, type FleetActorScopeCtx } from '../lib/backendFleetActor'
 import { transformTripListItem } from '../lib/listItemFields'
+import { loadSettlementTripReceiptContext } from '../lib/settlementTripReceiptEnrichment'
+import {
+  TRIP_REQUEST_PAYMENT_TYPES,
+  type TripRequestPaymentType,
+} from '../lib/tripRequestForm'
+import { TAXI_FLEET_TRIP_PLATFORMS } from '../lib/tripPlatforms'
 
 const routeMetadata = {
   GET: { requireAuth: true, requireFeatures: ['taxi_fleet.view'] },
@@ -24,6 +33,9 @@ export const metadata = routeMetadata
 
 const rawBodySchema = z.object({}).passthrough()
 
+const paymentTypeSchema = z.enum(TRIP_REQUEST_PAYMENT_TYPES)
+const platformSchema = z.enum(TAXI_FLEET_TRIP_PLATFORMS)
+
 const listSchema = z
   .object({
     page: z.coerce.number().min(1).default(1),
@@ -31,8 +43,11 @@ const listSchema = z
     ids: z.string().optional(),
     teamMemberId: z.string().uuid().optional(),
     resourceId: z.string().uuid().optional(),
+    customerEntityId: z.string().uuid().optional(),
     tripType: z.string().optional(),
     status: z.string().optional(),
+    platform: platformSchema.optional(),
+    paymentType: paymentTypeSchema.optional(),
     unscheduled: z.coerce.boolean().optional(),
     dateFrom: z.string().optional(),
     dateTo: z.string().optional(),
@@ -44,6 +59,139 @@ const listSchema = z
 const parseIds = (value?: string) => {
   if (!value) return []
   return value.split(',').map((item) => item.trim()).filter(Boolean)
+}
+
+type TripListQuery = z.infer<typeof listSchema>
+
+type TripListCrudCtx = FleetActorScopeCtx & {
+  organizationIds?: string[] | null
+  query?: TripListQuery
+}
+
+function hasTripListFilterQuery(query: TripListQuery | undefined): boolean {
+  if (!query) return false
+  if (query.unscheduled === true) return true
+  if (query.platform) return true
+  if (query.paymentType) return true
+  if (query.customerEntityId) return true
+  if (query.teamMemberId) return true
+  if (query.resourceId) return true
+  if (typeof query.status === 'string' && query.status.trim()) return true
+  if (typeof query.tripType === 'string' && query.tripType.trim()) return true
+  if (typeof query.dateFrom === 'string' && query.dateFrom.trim()) return true
+  if (typeof query.dateTo === 'string' && query.dateTo.trim()) return true
+  return parseIds(query.ids).length > 0
+}
+
+async function buildTripListFilters(
+  query: TripListQuery,
+  ctx: TripListCrudCtx,
+): Promise<Record<string, unknown>> {
+  const filters: Record<string, unknown> = {}
+  const ids = parseIds(query.ids)
+  if (ids.length) filters.id = { $in: ids }
+  if (query.resourceId) filters.resourceId = query.resourceId
+  if (query.tripType) filters.tripType = query.tripType
+  if (query.status) filters.status = query.status
+  if (query.platform) filters.platform = query.platform
+  if (query.unscheduled === true) filters.teamMemberId = null
+  if (query.customerEntityId) {
+    filters.$or = [
+      { customerPersonId: query.customerEntityId },
+      { customerCompanyId: query.customerEntityId },
+    ]
+  }
+  if (query.paymentType) {
+    const paymentType = query.paymentType as TripRequestPaymentType
+    filters.metadata = { $contains: { tripRequest: { paymentType } } }
+  }
+  if (query.dateFrom || query.dateTo) {
+    const range: Record<string, Date> = {}
+    if (query.dateFrom) range.$gte = new Date(query.dateFrom)
+    if (query.dateTo) range.$lte = new Date(query.dateTo)
+    filters.startedAt = range
+  }
+  return applyFleetDriverListScope(ctx, filters, query.teamMemberId)
+}
+
+async function attachFilteredRevenueSummary(
+  payload: { revenueSummary?: { revenueAmount: number; currencyCode: string } | null },
+  ctx: TripListCrudCtx,
+): Promise<void> {
+  const query = ctx.query
+  if (!hasTripListFilterQuery(query)) {
+    payload.revenueSummary = null
+    return
+  }
+
+  const tenantId = ctx.auth?.tenantId ?? null
+  if (!tenantId || !query) {
+    payload.revenueSummary = null
+    return
+  }
+
+  const filters = await buildTripListFilters(query, ctx)
+  const where = buildScopedWhere(filters, {
+    organizationId: ctx.selectedOrganizationId ?? ctx.auth?.orgId ?? null,
+    organizationIds: ctx.organizationIds ?? undefined,
+    tenantId,
+    orgField: 'organizationId',
+    tenantField: 'tenantId',
+    softDeleteField: 'deletedAt',
+  })
+
+  const em = ctx.container.resolve('em') as EntityManager
+  const rows = await em
+    .createQueryBuilder(TaxiFleetTrip, 't')
+    .select([raw('coalesce(sum(t.revenue_amount), 0) as total')])
+    .where(where)
+    .execute<{ total?: string | number | null }[]>('get')
+
+  const total = Number(rows?.[0]?.total ?? 0)
+  payload.revenueSummary = {
+    revenueAmount: Number.isFinite(total) ? total : 0,
+    currencyCode: 'PLN',
+  }
+}
+
+async function enrichTripListItemsWithReceiptOcr(
+  items: unknown[],
+  ctx: { container: { resolve: (name: string) => unknown }; auth?: { tenantId?: string | null; orgId?: string | null } | null; selectedOrganizationId?: string | null },
+): Promise<void> {
+  if (!Array.isArray(items) || !items.length) return
+  const tenantId = ctx.auth?.tenantId ?? null
+  const organizationId = ctx.selectedOrganizationId ?? ctx.auth?.orgId ?? null
+  if (!tenantId || !organizationId) return
+
+  const trips = items.map((item) => {
+    const record = item as Record<string, unknown>
+    return {
+      id: String(record.id ?? ''),
+      metadata:
+        record.metadata && typeof record.metadata === 'object' && !Array.isArray(record.metadata)
+          ? (record.metadata as Record<string, unknown>)
+          : null,
+    } as Pick<TaxiFleetTrip, 'id' | 'metadata'>
+  }).filter((trip) => trip.id.length > 0)
+
+  if (!trips.length) return
+
+  const em = ctx.container.resolve('em') as EntityManager
+  const receiptContext = await loadSettlementTripReceiptContext(em, trips as TaxiFleetTrip[], {
+    tenantId,
+    organizationId,
+  })
+
+  for (const item of items) {
+    const record = item as Record<string, unknown>
+    const id = typeof record.id === 'string' ? record.id : ''
+    if (!id) continue
+    const extras = receiptContext.get(id)
+    if (!extras) continue
+    record.receiptAttachmentId = extras.receiptAttachmentId
+    record.ocrStatus = extras.ocrStatus
+    record.warnings = extras.receiptWarnings
+  }
 }
 
 const crud = makeCrudRoute({
@@ -85,23 +233,14 @@ const crud = makeCrudRoute({
       createdAt: 'created_at',
       updatedAt: 'updated_at',
     },
-    buildFilters: async (query, ctx) => {
-      const filters: Record<string, unknown> = {}
-      const ids = parseIds(query.ids)
-      if (ids.length) filters.id = { $in: ids }
-      if (query.resourceId) filters.resource_id = query.resourceId
-      if (query.tripType) filters.trip_type = query.tripType
-      if (query.status) filters.status = query.status
-      if (query.unscheduled === true) filters.team_member_id = null
-      if (query.dateFrom || query.dateTo) {
-        const range: Record<string, Date> = {}
-        if (query.dateFrom) range.$gte = new Date(query.dateFrom)
-        if (query.dateTo) range.$lte = new Date(query.dateTo)
-        filters.started_at = range
-      }
-      return applyFleetDriverListScope(ctx, filters, query.teamMemberId)
-    },
+    buildFilters: async (query, ctx) => buildTripListFilters(query, ctx),
     transformItem: (item) => transformTripListItem(item as Record<string, unknown>),
+  },
+  hooks: {
+    afterList: async (payload, ctx) => {
+      await enrichTripListItemsWithReceiptOcr(payload.items ?? [], ctx)
+      await attachFilteredRevenueSummary(payload, ctx)
+    },
   },
   actions: {
     create: {
@@ -143,11 +282,15 @@ export const DELETE = crud.DELETE
 
 const rowSchema = z.object({
   id: z.string().uuid(),
-  teamMemberId: z.string().uuid(),
+  teamMemberId: z.string().uuid().nullable().optional(),
   tripType: z.string(),
   status: z.string(),
+  platform: z.string().nullable().optional(),
+  paymentType: z.string().nullable().optional(),
   customerPersonId: z.string().uuid().nullable().optional(),
   customerCompanyId: z.string().uuid().nullable().optional(),
+  resourceId: z.string().uuid().nullable().optional(),
+  ocrStatus: z.string().nullable().optional(),
 })
 
 export const openApi = createTaxiFleetCrudOpenApi({

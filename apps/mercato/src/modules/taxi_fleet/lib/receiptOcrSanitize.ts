@@ -1,5 +1,6 @@
 import { normalizeNipDigits } from '@open-mercato/core/modules/customers/lib/nip'
 import type { ReceiptOcrFields } from './receiptOcrExtract'
+import { resolveReceiptDocumentKind } from './receiptDocumentKind'
 
 /** RS Investment Group — seller NIP on RS Moto taxi fiscal receipts (paragon). */
 export const RS_MOTO_ISSUER_NIP_DIGITS = '9452189152'
@@ -135,10 +136,16 @@ export function sanitizeReceiptOcrFields(fields: ReceiptOcrFields): ReceiptOcrFi
     documentNumber = extractFiscalDocumentNumberFromExcerpt(fields.rawExcerpt)
   }
 
+  const documentKind = resolveReceiptDocumentKind({
+    documentKind: fields.documentKind ?? null,
+    rawExcerpt: fields.rawExcerpt,
+  })
+
   return {
     ...fields,
     documentNumber,
     sellerNip,
     buyerNip,
+    documentKind,
   }
 }

@@ -18,8 +18,22 @@ function pickString(record: Record<string, unknown>, ...keys: string[]): string 
   return null
 }
 
+function readPaymentTypeFromMetadata(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null
+  const root = metadata as Record<string, unknown>
+  const nested =
+    root.tripRequest && typeof root.tripRequest === 'object' && !Array.isArray(root.tripRequest)
+      ? (root.tripRequest as Record<string, unknown>)
+      : null
+  const value = nested?.paymentType ?? root.paymentType
+  return typeof value === 'string' && value.trim().length ? value.trim() : null
+}
+
 export function transformTripListItem(item: Record<string, unknown> | null | undefined) {
   const record = (item ?? {}) as Record<string, unknown>
+  const metadata = record.metadata ?? null
+  const paymentType =
+    pickString(record, 'paymentType', 'payment_type') ?? readPaymentTypeFromMetadata(metadata)
   return {
     ...record,
     id: pickString(record, 'id') ?? '',
@@ -38,9 +52,17 @@ export function transformTripListItem(item: Record<string, unknown> | null | und
     currencyCode: pickString(record, 'currencyCode', 'currency_code'),
     customerPersonId: pickString(record, 'customerPersonId', 'customer_person_id'),
     customerCompanyId: pickString(record, 'customerCompanyId', 'customer_company_id'),
+    paymentType,
     status: pickString(record, 'status') ?? 'new',
     notes: pickString(record, 'notes'),
-    metadata: record.metadata ?? null,
+    metadata,
+    receiptAttachmentId: pickString(record, 'receiptAttachmentId', 'receipt_attachment_id'),
+    ocrStatus: pickString(record, 'ocrStatus', 'ocr_status'),
+    warnings: Array.isArray(record.warnings)
+      ? record.warnings
+      : Array.isArray(record.receiptWarnings)
+        ? record.receiptWarnings
+        : [],
     createdAt: readIso(record.createdAt ?? record.created_at),
     updatedAt: readIso(record.updatedAt ?? record.updated_at),
   }

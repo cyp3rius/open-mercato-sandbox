@@ -33,4 +33,12 @@ describe('formatReceiptOcrWarningLabel', () => {
     expect(label).toContain('150.00')
     expect(label).toContain('140.00')
   })
+
+  it('explains Polcard payment confirmation is not a receipt', () => {
+    const label = formatReceiptOcrWarningLabel(t, {
+      code: 'polcard_payment_confirmation',
+    })
+    expect(label.toLowerCase()).toContain('polcard')
+    expect(label.toLowerCase()).toContain('not a fiscal receipt')
+  })
 })

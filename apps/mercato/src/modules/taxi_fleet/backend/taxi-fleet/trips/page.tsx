@@ -16,13 +16,17 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { formatDateTime } from '@open-mercato/shared/lib/time'
+import { formatMoneyDisplay } from '@open-mercato/shared/lib/numeric'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { TAXI_FLEET_BASE } from '../paths'
 import { useFleetDriverDirectory } from '../../../components/useFleetDriverDirectory'
 import { useTaxiFleetLabels, TAXI_FLEET_TRIP_TYPES } from '../../../components/useTaxiFleetLabels'
 import { useTaxiFleetPermissions } from '../../../components/useTaxiFleetPermissions'
 import { useFleetBackendSession } from '../../../components/useFleetBackendSession'
+import { useTaxiFleetSettings } from '../../../components/useTaxiFleetSettings'
+import { useResourceLabels } from '../../../components/useResourceLabels'
 import { TripCustomerPreview } from '../../../components/TripCustomerPreview'
+import { TripListOcrIcon } from '../../../components/TripListOcrIcon'
 import { useTripStatusDictionary } from '../../../components/useTripStatusDictionary'
 import { DictionaryAppearancePreview } from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
 import { PlatformTripIngestBadge } from '../../../components/PlatformTripIngestBadge'
@@ -31,6 +35,14 @@ import {
   formatPlatformSyncRunFlashMessage,
   resolvePlatformSyncFlashVariant,
 } from '../../../components/platformSyncResultSummary'
+import { remoteSearchFleetResources } from '../../../lib/fleetResourceSearch'
+import {
+  remoteSearchFleetCustomers,
+  resolveFleetCustomerDisplayLabel,
+} from '../../../lib/fleetCustomerEntitySearch'
+import { TAXI_FLEET_TRIP_PLATFORMS } from '../../../lib/tripPlatforms'
+import { TRIP_FORM_PAYMENT_OPTIONS } from '../../../lib/tripRequestForm'
+import type { DriverTripReceiptWarning } from '../../../lib/driverTripReceiptStatus'
 
 const PAGE_SIZE = 20
 
@@ -41,14 +53,24 @@ type TripRow = {
   platform?: string | null
   externalTripId?: string | null
   teamMemberId?: string | null
+  resourceId?: string | null
   customerPersonId?: string | null
   customerCompanyId?: string | null
+  paymentType?: string | null
   revenueAmount?: string | null
   startedAt?: string | null
   metadata?: Record<string, unknown> | null
+  receiptAttachmentId?: string | null
+  ocrStatus?: string | null
+  warnings?: DriverTripReceiptWarning[]
 }
 
-type ListResponse = { items: TripRow[]; totalPages: number; total?: number }
+type ListResponse = {
+  items: TripRow[]
+  totalPages: number
+  total?: number
+  revenueSummary?: { revenueAmount: number; currencyCode: string } | null
+}
 
 export default function TaxiFleetTripsPage() {
   const t = useT()
@@ -56,65 +78,201 @@ export default function TaxiFleetTripsPage() {
   const searchParams = useSearchParams()
   const scopeVersion = useOrganizationScopeVersion()
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
-  const { resolveName } = useFleetDriverDirectory()
+  const { profiles, resolveName } = useFleetDriverDirectory()
   const { resolveTripTypeLabel } = useTaxiFleetLabels()
   const { statusOptions, findDefinition } = useTripStatusDictionary()
   const { canManageTrips, canManagePlatformSync } = useTaxiFleetPermissions()
   const { isDriverOnly } = useFleetBackendSession()
+  const { resourceTypeId } = useTaxiFleetSettings()
   const [importOpen, setImportOpen] = React.useState(false)
   const [syncBusy, setSyncBusy] = React.useState(false)
   const [rows, setRows] = React.useState<TripRow[]>([])
   const [page, setPage] = React.useState(1)
   const [totalPages, setTotalPages] = React.useState(1)
   const [total, setTotal] = React.useState(0)
+  const [revenueSummary, setRevenueSummary] = React.useState<{
+    revenueAmount: number
+    currencyCode: string
+  } | null>(null)
   const unscheduledOnly = searchParams.get('unscheduled') === '1' || searchParams.get('unscheduled') === 'true'
+  const [vehicleFilterOptions, setVehicleFilterOptions] = React.useState<Array<{ value: string; label: string }>>([])
+  const [customerFilterOptions, setCustomerFilterOptions] = React.useState<Array<{ value: string; label: string }>>([])
 
-  const [filterValues, setFilterValues] = React.useState<FilterValues>(() =>
-    unscheduledOnly ? { unscheduled: 'true' } : {},
-  )
+  const [filterValues, setFilterValues] = React.useState<FilterValues>({})
 
-  React.useEffect(() => {
-    if (unscheduledOnly) {
-      setFilterValues((current) => (current.unscheduled === 'true' ? current : { ...current, unscheduled: 'true' }))
-    }
-  }, [unscheduledOnly])
   const [isLoading, setIsLoading] = React.useState(true)
   const [reloadToken, setReloadToken] = React.useState(0)
 
+  const selectedResourceId =
+    typeof filterValues.resourceId === 'string' && filterValues.resourceId.length > 0
+      ? filterValues.resourceId
+      : null
+  const selectedCustomerEntityId =
+    typeof filterValues.customerEntityId === 'string' && filterValues.customerEntityId.length > 0
+      ? filterValues.customerEntityId
+      : null
+
+  const resourceIds = React.useMemo(() => {
+    const ids = new Set<string>()
+    rows.forEach((row) => {
+      if (row.resourceId) ids.add(row.resourceId)
+    })
+    if (selectedResourceId) ids.add(selectedResourceId)
+    return [...ids]
+  }, [rows, selectedResourceId])
+  const { resolveLabel: resolveResourceLabel } = useResourceLabels(resourceIds)
+
+  const driverFilterOptions = React.useMemo(
+    () =>
+      profiles.map((profile) => ({
+        value: profile.teamMemberId,
+        label: resolveName(profile.teamMemberId),
+      })),
+    [profiles, resolveName],
+  )
+
+  const customerKindLabels = React.useMemo(
+    () => ({
+      person: t('taxi_fleet.trips.customerKind.person', 'Person'),
+      company: t('taxi_fleet.trips.customerKind.company', 'Company'),
+    }),
+    [t],
+  )
+
+  React.useEffect(() => {
+    let cancelled = false
+    async function loadVehicleOptions() {
+      const rows = await remoteSearchFleetResources('', resourceTypeId)
+      if (cancelled) return
+      setVehicleFilterOptions(rows.map((row) => ({ value: row.value, label: row.label })))
+    }
+    void loadVehicleOptions()
+    return () => {
+      cancelled = true
+    }
+  }, [resourceTypeId, scopeVersion])
+
+  React.useEffect(() => {
+    if (!selectedCustomerEntityId) return
+    let cancelled = false
+    async function ensureCustomerOption() {
+      const label = await resolveFleetCustomerDisplayLabel(selectedCustomerEntityId!)
+      if (cancelled || !label) return
+      setCustomerFilterOptions((current) => {
+        if (current.some((option) => option.value === selectedCustomerEntityId)) return current
+        return [...current, { value: selectedCustomerEntityId!, label }]
+      })
+    }
+    void ensureCustomerOption()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedCustomerEntityId])
+
   const filters = React.useMemo<FilterDef[]>(
-    () => {
-      const items: FilterDef[] = []
-      if (!isDriverOnly) {
-        items.push({
-          id: 'unscheduled',
-          label: t('taxi_fleet.trips.unscheduledFilter', 'Awaiting scheduling only'),
-          type: 'select',
-          options: [
-            { value: 'true', label: t('common.yes', 'Yes') },
-            { value: 'false', label: t('common.no', 'No') },
-          ],
-        })
-      }
-      items.push(
-        {
-          id: 'status',
-          label: t('taxi_fleet.trips.status', 'Status'),
-          type: 'select',
-          options: statusOptions,
+    () => [
+      {
+        id: 'startedAt',
+        label: t('taxi_fleet.trips.date', 'Date'),
+        type: 'dateRange',
+        dateTime: true,
+      },
+      {
+        id: 'status',
+        label: t('taxi_fleet.trips.status', 'Status'),
+        type: 'select',
+        options: statusOptions,
+      },
+      {
+        id: 'tripType',
+        label: t('taxi_fleet.trips.type', 'Type'),
+        type: 'select',
+        options: TAXI_FLEET_TRIP_TYPES.map((type) => ({
+          value: type,
+          label: t(`taxi_fleet.trips.types.${type}`, type),
+        })),
+      },
+      {
+        id: 'platform',
+        label: t('taxi_fleet.trips.platform', 'Platform'),
+        type: 'select',
+        options: TAXI_FLEET_TRIP_PLATFORMS.map((platform) => ({
+          value: platform,
+          label: t(`taxi_fleet.trips.platforms.${platform}`, platform),
+        })),
+      },
+      {
+        id: 'customerEntityId',
+        label: t('taxi_fleet.trips.customer', 'Customer'),
+        type: 'combobox',
+        options: customerFilterOptions,
+        formatValue: (id) =>
+          customerFilterOptions.find((option) => option.value === id)?.label ?? id,
+        loadOptions: async (query) => {
+          const rows = await remoteSearchFleetCustomers(query ?? '', customerKindLabels)
+          const mapped = rows.map((row) => ({ value: row.value, label: row.label }))
+          setCustomerFilterOptions((current) => {
+            const byValue = new Map(current.map((option) => [option.value, option]))
+            for (const option of mapped) byValue.set(option.value, option)
+            return [...byValue.values()]
+          })
+          return mapped
         },
-        {
-          id: 'tripType',
-          label: t('taxi_fleet.trips.type', 'Type'),
-          type: 'select',
-          options: TAXI_FLEET_TRIP_TYPES.map((type) => ({
-            value: type,
-            label: t(`taxi_fleet.trips.types.${type}`, type),
-          })),
+        placeholder: t('taxi_fleet.trips.customerSearch', 'Search customer…'),
+      },
+      ...(isDriverOnly
+        ? []
+        : [
+            {
+              id: 'teamMemberId',
+              label: t('taxi_fleet.trips.driver', 'Driver'),
+              type: 'combobox' as const,
+              options: driverFilterOptions,
+              formatValue: (id: string) => resolveName(id),
+              loadOptions: async (query?: string) => {
+                const normalized = query?.trim().toLowerCase() ?? ''
+                if (!normalized) return driverFilterOptions
+                return driverFilterOptions.filter((option) =>
+                  option.label.toLowerCase().includes(normalized),
+                )
+              },
+              placeholder: t('taxi_fleet.assignments.filterDriver', 'Select driver…'),
+            },
+          ]),
+      {
+        id: 'resourceId',
+        label: t('taxi_fleet.assignments.vehicle', 'Vehicle'),
+        type: 'combobox',
+        options: vehicleFilterOptions,
+        formatValue: (id) => resolveResourceLabel(id),
+        loadOptions: async (query) => {
+          const rows = await remoteSearchFleetResources(query ?? '', resourceTypeId)
+          return rows.map((row) => ({ value: row.value, label: row.label }))
         },
-      )
-      return items
-    },
-    [isDriverOnly, statusOptions, t],
+        placeholder: t('taxi_fleet.assignments.filterVehicle', 'Select vehicle…'),
+      },
+      {
+        id: 'paymentType',
+        label: t('taxi_fleet.trips.form.paymentType', 'Payment method'),
+        type: 'select',
+        options: TRIP_FORM_PAYMENT_OPTIONS.map((value) => ({
+          value,
+          label: t(`taxi_fleet.trips.form.paymentTypes.${value}`, value),
+        })),
+      },
+    ],
+    [
+      customerFilterOptions,
+      customerKindLabels,
+      driverFilterOptions,
+      isDriverOnly,
+      resolveName,
+      resolveResourceLabel,
+      resourceTypeId,
+      statusOptions,
+      t,
+      vehicleFilterOptions,
+    ],
   )
 
   const queryParams = React.useMemo(() => {
@@ -124,14 +282,54 @@ export default function TaxiFleetTripsPage() {
       sortField: 'startedAt',
       sortDir: 'desc',
     })
-    const unscheduled = filterValues.unscheduled
-    if (unscheduled === 'true' || unscheduled === true) params.set('unscheduled', 'true')
+    if (unscheduledOnly) params.set('unscheduled', 'true')
+    const startedAtRange =
+      filterValues.startedAt && typeof filterValues.startedAt === 'object'
+        ? (filterValues.startedAt as { from?: string; to?: string })
+        : null
+    const dateFrom = typeof startedAtRange?.from === 'string' ? startedAtRange.from.trim() : ''
+    const dateTo = typeof startedAtRange?.to === 'string' ? startedAtRange.to.trim() : ''
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom)
+      params.set('dateFrom', Number.isNaN(fromDate.getTime()) ? dateFrom : fromDate.toISOString())
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo)
+      params.set('dateTo', Number.isNaN(toDate.getTime()) ? dateTo : toDate.toISOString())
+    }
     const status = filterValues.status
     if (typeof status === 'string' && status.trim()) params.set('status', status.trim())
     const tripType = filterValues.tripType
     if (typeof tripType === 'string' && tripType.trim()) params.set('tripType', tripType.trim())
+    const platform = filterValues.platform
+    if (typeof platform === 'string' && platform.trim()) params.set('platform', platform.trim())
+    const customerEntityId = filterValues.customerEntityId
+    if (typeof customerEntityId === 'string' && customerEntityId.trim()) {
+      params.set('customerEntityId', customerEntityId.trim())
+    }
+    const teamMemberId = filterValues.teamMemberId
+    if (typeof teamMemberId === 'string' && teamMemberId.trim()) {
+      params.set('teamMemberId', teamMemberId.trim())
+    }
+    const resourceId = filterValues.resourceId
+    if (typeof resourceId === 'string' && resourceId.trim()) params.set('resourceId', resourceId.trim())
+    const paymentType = filterValues.paymentType
+    if (typeof paymentType === 'string' && paymentType.trim()) {
+      params.set('paymentType', paymentType.trim())
+    }
     return params.toString()
-  }, [filterValues.status, filterValues.tripType, filterValues.unscheduled, page])
+  }, [
+    filterValues.customerEntityId,
+    filterValues.paymentType,
+    filterValues.platform,
+    filterValues.resourceId,
+    filterValues.startedAt,
+    filterValues.status,
+    filterValues.teamMemberId,
+    filterValues.tripType,
+    page,
+    unscheduledOnly,
+  ])
 
   React.useEffect(() => {
     let cancelled = false
@@ -142,6 +340,7 @@ export default function TaxiFleetTripsPage() {
       setRows(Array.isArray(call.result?.items) ? call.result.items : [])
       setTotalPages(call.result?.totalPages ?? 1)
       setTotal(call.result?.total ?? call.result?.items?.length ?? 0)
+      setRevenueSummary(call.result?.revenueSummary ?? null)
       setIsLoading(false)
     }
     void load()
@@ -149,6 +348,14 @@ export default function TaxiFleetTripsPage() {
       cancelled = true
     }
   }, [queryParams, reloadToken, scopeVersion])
+
+  const revenueSummaryLabel = React.useMemo(() => {
+    if (!revenueSummary) return null
+    const amount = formatMoneyDisplay(revenueSummary.revenueAmount, {
+      currency: revenueSummary.currencyCode || 'PLN',
+    })
+    return t('taxi_fleet.trips.list.revenueSummary', 'Filtered revenue: {amount}', { amount })
+  }, [revenueSummary, t])
 
   const detailHref = (id: string) => `${TAXI_FLEET_BASE}/trips/${encodeURIComponent(id)}`
 
@@ -209,8 +416,12 @@ export default function TaxiFleetTripsPage() {
         accessorKey: 'startedAt',
         header: t('taxi_fleet.trips.date', 'Date'),
         enableSorting: true,
+        meta: { truncate: false, maxWidth: '12rem' },
         cell: ({ row }) => (
-          <Link href={detailHref(row.original.id)} className="font-medium tabular-nums hover:underline">
+          <Link
+            href={detailHref(row.original.id)}
+            className="whitespace-nowrap font-medium tabular-nums hover:underline"
+          >
             {formatDateTime(row.original.startedAt) ?? '—'}
           </Link>
         ),
@@ -255,6 +466,12 @@ export default function TaxiFleetTripsPage() {
             : t('taxi_fleet.trips.unassigned', 'Unassigned'),
       },
       {
+        id: 'vehicle',
+        header: t('taxi_fleet.assignments.vehicle', 'Vehicle'),
+        cell: ({ row }) =>
+          row.original.resourceId ? resolveResourceLabel(row.original.resourceId) : '—',
+      },
+      {
         id: 'customer',
         header: t('taxi_fleet.trips.customer', 'Customer'),
         cell: ({ row }) => (
@@ -264,9 +481,32 @@ export default function TaxiFleetTripsPage() {
           />
         ),
       },
+      {
+        id: 'paymentType',
+        header: t('taxi_fleet.trips.form.paymentType', 'Payment method'),
+        cell: ({ row }) => {
+          const paymentType = row.original.paymentType
+          if (!paymentType) return '—'
+          return t(`taxi_fleet.trips.form.paymentTypes.${paymentType}`, paymentType)
+        },
+      },
       { accessorKey: 'revenueAmount', header: t('taxi_fleet.trips.revenue', 'Revenue') },
+      {
+        id: 'ocr',
+        header: t('taxi_fleet.trips.list.ocr', 'OCR'),
+        cell: ({ row }) => (
+          <TripListOcrIcon
+            item={{
+              receiptAttachmentId: row.original.receiptAttachmentId,
+              ocrStatus: row.original.ocrStatus,
+              warnings: row.original.warnings,
+              metadata: row.original.metadata,
+            }}
+          />
+        ),
+      },
     ],
-    [findDefinition, resolveName, resolveTripTypeLabel, t],
+    [findDefinition, resolveName, resolveResourceLabel, resolveTripTypeLabel, t],
   )
 
   return (
@@ -274,6 +514,7 @@ export default function TaxiFleetTripsPage() {
       <PageBody>
         <DataTable<TripRow>
           title={t('taxi_fleet.trips.list.title', 'Trips')}
+          description={revenueSummaryLabel ?? undefined}
           sortable
           sorting={[{ id: 'startedAt', desc: true }]}
           refreshButton={{

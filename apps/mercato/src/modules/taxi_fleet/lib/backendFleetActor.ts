@@ -4,7 +4,7 @@ import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { StaffTeamMember } from '@open-mercato/core/modules/staff/data/entities'
 import { TaxiFleetDriverProfile } from '../data/entities'
 
-type FleetActorScopeCtx = {
+export type FleetActorScopeCtx = {
   container: { resolve: (name: string) => unknown }
   auth: { sub?: string | null; tenantId?: string | null; orgId?: string | null } | null
   selectedOrganizationId?: string | null
@@ -102,10 +102,10 @@ export async function applyFleetDriverListScope(
 ): Promise<Record<string, unknown>> {
   const actor = await resolveFleetBackendActor(ctx)
   if (!actor || actor.role !== 'driver') {
-    if (queryTeamMemberId) filters.team_member_id = queryTeamMemberId
+    if (queryTeamMemberId) filters.teamMemberId = queryTeamMemberId
     return filters
   }
-  filters.team_member_id = actor.teamMemberId
+  filters.teamMemberId = actor.teamMemberId
   return filters
 }
 

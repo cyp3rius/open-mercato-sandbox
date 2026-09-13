@@ -72,37 +72,51 @@ function pushToBuffer(ping: DriverLocationPingInput) {
 async function flushBuffer(): Promise<void> {
   const batch = buffer.pings.splice(0, MAX_BATCH)
   if (!batch.length) return
-  if (!buffer.online) {
+
+  const enqueueBatch = async () => {
     await enqueueDriverMutation({
       type: 'location.batch',
       payload: { pings: batch },
     })
+  }
+
+  if (!buffer.online) {
+    await enqueueBatch()
     return
   }
+
   try {
-    await apiCall('/api/taxi_fleet/driver/location', {
+    const call = await apiCall('/api/taxi_fleet/driver/location', {
       method: 'POST',
       body: JSON.stringify({ pings: batch }),
     })
+    if (!call.ok) {
+      await enqueueBatch()
+    }
   } catch {
-    await enqueueDriverMutation({
-      type: 'location.batch',
-      payload: { pings: batch },
-    })
+    try {
+      await enqueueBatch()
+    } catch {
+      // Best-effort only: never block clock-out / UI on GPS flush.
+    }
   }
-  // Keep flushing if buffer still has points
+
   if (buffer.pings.length) {
     await flushBuffer()
   }
 }
 
-/** Flush pending GPS points (call before clock-out). */
+/** Flush pending GPS points (call before clock-out). Never throws. */
 export async function flushDriverLocationTracking(): Promise<void> {
-  if (flushImpl) {
-    await flushImpl()
-    return
+  try {
+    if (flushImpl) {
+      await flushImpl()
+      return
+    }
+    await flushBuffer()
+  } catch {
+    // Clock-out must proceed even if GPS flush/outbox fails.
   }
-  await flushBuffer()
 }
 
 /** Pause shell watch while another screen feeds location (e.g. live trip). */

@@ -38,6 +38,13 @@ export function formatReceiptOcrWarningLabel(
   const driver = displayValue(warning.driverValue)
   const hasValues = warning.ocrValue != null || warning.driverValue != null
 
+  if (code === 'polcard_payment_confirmation') {
+    return t(
+      'taxi_fleet.receiptOcr.warnings.polcardPaymentConfirmation',
+      'Attached document is not a fiscal receipt — it is a Polcard card payment confirmation. Please verify.',
+    )
+  }
+
   if (code === 'distance_mismatch_trip') {
     return t(
       'taxi_fleet.receiptOcr.warnings.distanceMismatch',

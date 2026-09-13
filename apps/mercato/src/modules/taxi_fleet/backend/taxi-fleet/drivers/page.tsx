@@ -8,6 +8,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
 import { RowActions } from '@open-mercato/ui/backend/RowActions'
+import type { FilterDef, FilterValues } from '@open-mercato/ui/backend/FilterBar'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
@@ -16,10 +17,14 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
+import { cn } from '@open-mercato/shared/lib/utils'
+import { formatPercentDisplay } from '@open-mercato/shared/lib/numeric'
 import { TAXI_FLEET_BASE } from '../paths'
 import { useFleetDriverDirectory } from '../../../components/useFleetDriverDirectory'
 import { useTaxiFleetPermissions } from '../../../components/useTaxiFleetPermissions'
-import { formatPercentDisplay } from '@open-mercato/shared/lib/numeric'
+import { useTaxiFleetSettings } from '../../../components/useTaxiFleetSettings'
+import { useResourceLabels } from '../../../components/useResourceLabels'
+import { remoteSearchFleetResources } from '../../../lib/fleetResourceSearch'
 
 const PAGE_SIZE = 20
 
@@ -30,6 +35,9 @@ type DriverRow = {
   payoutPercent: string
   payoutTiersJson?: unknown
   externalAppEnabled: boolean
+  onShift?: boolean
+  defaultResourceId?: string | null
+  defaultResourceIds?: string[] | null
 }
 
 type ListResponse = { items: DriverRow[]; totalPages: number; total?: number }
@@ -41,18 +49,123 @@ export default function TaxiFleetDriversPage() {
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const { resolveName, reload: reloadDirectory } = useFleetDriverDirectory()
   const { canManageSettlements } = useTaxiFleetPermissions()
+  const { resourceTypeId } = useTaxiFleetSettings()
   const [rows, setRows] = React.useState<DriverRow[]>([])
   const [page, setPage] = React.useState(1)
   const [totalPages, setTotalPages] = React.useState(1)
   const [total, setTotal] = React.useState(0)
   const [isLoading, setIsLoading] = React.useState(true)
   const [reloadToken, setReloadToken] = React.useState(0)
+  const [filterValues, setFilterValues] = React.useState<FilterValues>({})
+  const [vehicleFilterOptions, setVehicleFilterOptions] = React.useState<
+    Array<{ value: string; label: string }>
+  >([])
+
+  const selectedResourceId =
+    typeof filterValues.resourceId === 'string' && filterValues.resourceId.length > 0
+      ? filterValues.resourceId
+      : null
+
+  const resourceIds = React.useMemo(() => {
+    const ids = new Set<string>()
+    rows.forEach((row) => {
+      const list = Array.isArray(row.defaultResourceIds) ? row.defaultResourceIds : []
+      list.forEach((id) => {
+        if (id) ids.add(id)
+      })
+      if (row.defaultResourceId) ids.add(row.defaultResourceId)
+    })
+    if (selectedResourceId) ids.add(selectedResourceId)
+    return [...ids]
+  }, [rows, selectedResourceId])
+  const { resolveLabel: resolveResourceLabel } = useResourceLabels(resourceIds)
+
+  React.useEffect(() => {
+    let cancelled = false
+    async function loadVehicleOptions() {
+      const loaded = await remoteSearchFleetResources('', resourceTypeId)
+      if (cancelled) return
+      setVehicleFilterOptions(loaded.map((row) => ({ value: row.value, label: row.label })))
+    }
+    void loadVehicleOptions()
+    return () => {
+      cancelled = true
+    }
+  }, [resourceTypeId, scopeVersion])
+
+  const filters = React.useMemo<FilterDef[]>(
+    () => [
+      {
+        id: 'onShift',
+        label: t('taxi_fleet.drivers.list.filters.onShift', 'Shift status'),
+        type: 'select',
+        options: [
+          { value: 'true', label: t('taxi_fleet.drivers.list.filters.onShiftYes', 'On shift') },
+          { value: 'false', label: t('taxi_fleet.drivers.list.filters.onShiftNo', 'Off shift') },
+        ],
+      },
+      {
+        id: 'name',
+        label: t('taxi_fleet.drivers.list.filters.name', 'Name'),
+        type: 'text',
+        placeholder: t('taxi_fleet.drivers.list.filters.namePlaceholder', 'First and last name…'),
+      },
+      {
+        id: 'externalAppEnabled',
+        label: t('taxi_fleet.drivers.mobileApp', 'Mobile app'),
+        type: 'select',
+        options: [
+          { value: 'true', label: t('common.yes', 'Yes') },
+          { value: 'false', label: t('common.no', 'No') },
+        ],
+      },
+      {
+        id: 'resourceId',
+        label: t('taxi_fleet.drivers.list.filters.vehicle', 'Vehicle'),
+        type: 'combobox',
+        options: vehicleFilterOptions,
+        formatValue: (id) => resolveResourceLabel(id),
+        loadOptions: async (query) => {
+          const loaded = await remoteSearchFleetResources(query ?? '', resourceTypeId)
+          return loaded.map((row) => ({ value: row.value, label: row.label }))
+        },
+        placeholder: t('taxi_fleet.drivers.vehicleSearch', 'Search vehicle…'),
+      },
+    ],
+    [resolveResourceLabel, resourceTypeId, t, vehicleFilterOptions],
+  )
+
+  const queryParams = React.useMemo(() => {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(PAGE_SIZE),
+    })
+    const onShift = filterValues.onShift
+    if (onShift === 'true' || onShift === 'false') params.set('onShift', onShift)
+    const name = filterValues.name
+    if (typeof name === 'string' && name.trim()) params.set('name', name.trim())
+    const externalAppEnabled = filterValues.externalAppEnabled
+    if (externalAppEnabled === 'true' || externalAppEnabled === 'false') {
+      params.set('externalAppEnabled', externalAppEnabled)
+    }
+    const resourceId = filterValues.resourceId
+    if (typeof resourceId === 'string' && resourceId.trim()) {
+      params.set('resourceId', resourceId.trim())
+    }
+    return params.toString()
+  }, [
+    filterValues.externalAppEnabled,
+    filterValues.name,
+    filterValues.onShift,
+    filterValues.resourceId,
+    page,
+  ])
+
   React.useEffect(() => {
     let cancelled = false
     async function load() {
       setIsLoading(true)
-      const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) })
-      const call = await apiCall<ListResponse>(`/api/taxi_fleet/driver-profiles?${params}`)
+      const call = await apiCall<ListResponse>(`/api/taxi_fleet/driver-profiles?${queryParams}`)
       if (cancelled) return
       setRows(Array.isArray(call.result?.items) ? call.result.items : [])
       setTotalPages(call.result?.totalPages ?? 1)
@@ -63,7 +176,7 @@ export default function TaxiFleetDriversPage() {
     return () => {
       cancelled = true
     }
-  }, [page, reloadToken, scopeVersion])
+  }, [queryParams, reloadToken, scopeVersion])
 
   const detailHref = (id: string) => `${TAXI_FLEET_BASE}/drivers/${encodeURIComponent(id)}`
 
@@ -94,11 +207,54 @@ export default function TaxiFleetDriversPage() {
       {
         accessorKey: 'teamMemberId',
         header: t('taxi_fleet.drivers.member', 'Team member'),
-        cell: ({ row }) => (
-          <Link href={detailHref(row.original.id)} className="font-medium hover:underline">
-            {resolveName(row.original.teamMemberId)}
-          </Link>
-        ),
+        cell: ({ row }) => {
+          const onShift = row.original.onShift === true
+          return (
+            <Link
+              href={detailHref(row.original.id)}
+              className="inline-flex items-center gap-2 font-medium hover:underline"
+            >
+              <span
+                className={cn(
+                  'inline-block size-2.5 shrink-0 rounded-full',
+                  onShift ? 'bg-emerald-500' : 'bg-muted-foreground/35',
+                )}
+                title={
+                  onShift
+                    ? t('taxi_fleet.drivers.list.filters.onShiftYes', 'On shift')
+                    : t('taxi_fleet.drivers.list.filters.onShiftNo', 'Off shift')
+                }
+                aria-label={
+                  onShift
+                    ? t('taxi_fleet.drivers.list.filters.onShiftYes', 'On shift')
+                    : t('taxi_fleet.drivers.list.filters.onShiftNo', 'Off shift')
+                }
+              />
+              <span>{resolveName(row.original.teamMemberId)}</span>
+            </Link>
+          )
+        },
+      },
+      {
+        id: 'assignedVehicle',
+        header: t('taxi_fleet.drivers.list.assignedVehicle', 'Assigned vehicle'),
+        cell: ({ row }) => {
+          const ids = Array.isArray(row.original.defaultResourceIds)
+            ? row.original.defaultResourceIds
+            : row.original.defaultResourceId
+              ? [row.original.defaultResourceId]
+              : []
+          if (!ids.length) return '—'
+          const primary = resolveResourceLabel(ids[0]!)
+          const extra = ids.length - 1
+          if (extra <= 0) return primary
+          return (
+            <span className="whitespace-nowrap">
+              {primary}{' '}
+              <span className="text-muted-foreground">+{extra}</span>
+            </span>
+          )
+        },
       },
       {
         accessorKey: 'payoutPercent',
@@ -125,7 +281,7 @@ export default function TaxiFleetDriversPage() {
           ),
       },
     ],
-    [resolveName, t],
+    [resolveName, resolveResourceLabel, t],
   )
 
   return (
@@ -150,6 +306,16 @@ export default function TaxiFleetDriversPage() {
           }
           columns={columns}
           data={rows}
+          filters={filters}
+          filterValues={filterValues}
+          onFiltersApply={(values) => {
+            setFilterValues(values)
+            setPage(1)
+          }}
+          onFiltersClear={() => {
+            setFilterValues({})
+            setPage(1)
+          }}
           rowActions={(row) => (
             <RowActions
               items={[

@@ -1,10 +1,11 @@
 'use client'
 
-import { Check, Loader2 } from 'lucide-react'
+import { AlertTriangle, Check, Loader2 } from 'lucide-react'
 import {
   driverBadgeInfoClass,
   driverBadgeNeutralClass,
   driverBadgeSuccessClass,
+  driverBadgeWarningClass,
 } from './driverUi'
 import {
   isTripReceiptProcessing,
@@ -19,13 +20,20 @@ type Props = {
 }
 
 export function DriverTripReceiptStatusBadge({ item, t }: Props) {
-  if (tripReceiptHasWarnings(item)) return null
-
   if (isTripReceiptProcessing(item)) {
     return (
       <span className={`${driverBadgeInfoClass} gap-1`}>
         <Loader2 className="size-3 animate-spin" aria-hidden />
         {t('taxi_fleet.driverApp.trips.processingBadge', 'Processing')}
+      </span>
+    )
+  }
+
+  if (tripReceiptHasWarnings(item) || item.ocrStatus === 'needs_review' || item.ocrStatus === 'failed') {
+    return (
+      <span className={`${driverBadgeWarningClass} gap-1`}>
+        <AlertTriangle className="size-3" aria-hidden />
+        {t('taxi_fleet.driverApp.trips.needsReviewBadge', 'Needs review')}
       </span>
     )
   }

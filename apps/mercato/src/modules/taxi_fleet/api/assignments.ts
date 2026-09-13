@@ -85,14 +85,14 @@ const crud = makeCrudRoute({
       const filters: Record<string, unknown> = {}
       const ids = parseIds(query.ids)
       if (ids.length) filters.id = { $in: ids }
-      if (query.resourceId) filters.resource_id = query.resourceId
-      if (query.assignmentDate) filters.assignment_date = query.assignmentDate
+      if (query.resourceId) filters.resourceId = query.resourceId
+      if (query.assignmentDate) filters.assignmentDate = query.assignmentDate
       if (query.status) filters.status = query.status
       if (query.dateFrom || query.dateTo) {
         const range: Record<string, string> = {}
         if (query.dateFrom) range.$gte = query.dateFrom
         if (query.dateTo) range.$lte = query.dateTo
-        filters.assignment_date = range
+        filters.assignmentDate = range
       }
       return applyFleetDriverListScope(ctx, filters, query.teamMemberId)
     },

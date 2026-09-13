@@ -1,14 +1,13 @@
 'use client'
 
 import * as React from 'react'
-import { ExternalLink, Loader2, RefreshCw, Save, Upload } from 'lucide-react'
+import { ExternalLink, Loader2, RefreshCw, Upload } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Badge } from '@open-mercato/ui/primitives/badge'
-import { CRUD_FORM_TEXT_INPUT_CLASS } from '@open-mercato/ui/backend/CrudForm'
-import { Label } from '@open-mercato/ui/primitives/label'
+import { Separator } from '@open-mercato/ui/primitives/separator'
 import { formatReceiptOcrWarningLabel } from '../lib/receiptOcrWarningLabel'
 
 type ExtractionItem = {
@@ -30,12 +29,16 @@ type ExtractionItem = {
   distanceSource: string | null
 }
 
+type ApplyField = 'distance' | 'amount' | 'documentNumber'
+
 type TripReceiptOcrPanelProps = {
   tripId: string
-  /** Retry OCR / overwrite document number */
+  /** Retry OCR / apply OCR fields */
   canManage: boolean
   /** Upload or replace receipt file (unlocked trips / edit-completed) */
   canReplaceReceipt?: boolean
+  /** Called after OCR field is applied so the parent form can reload. */
+  onApplied?: () => void
 }
 
 const statusClass: Record<string, string> = {
@@ -47,16 +50,41 @@ const statusClass: Record<string, string> = {
   applied: 'border-emerald-300 bg-emerald-50 text-emerald-950',
 }
 
+const buttonGroupClass =
+  'inline-flex flex-wrap overflow-hidden rounded-md border border-border divide-x divide-border'
+
+const groupButtonClass =
+  'h-8 rounded-none border-0 shadow-none px-2.5 text-xs font-medium'
+
+function hasWarningCode(item: ExtractionItem, code: string): boolean {
+  return (item.warnings ?? []).some((warning) => String(warning.code ?? '') === code)
+}
+
+function hasAmountConflict(item: ExtractionItem): boolean {
+  return (item.warnings ?? []).some((warning) => {
+    const code = String(warning.code ?? '')
+    const field = String(warning.field ?? '')
+    return code === 'amount_mismatch_trip' || (code === 'field_conflict' && field === 'amount')
+  })
+}
+
+function hasDocumentConflict(item: ExtractionItem): boolean {
+  return (item.warnings ?? []).some((warning) => {
+    const code = String(warning.code ?? '')
+    const field = String(warning.field ?? '')
+    return code === 'field_conflict' && field === 'documentNumber'
+  })
+}
+
 export function TripReceiptOcrPanel({
   tripId,
   canManage,
   canReplaceReceipt = false,
+  onApplied,
 }: TripReceiptOcrPanelProps) {
   const t = useT()
   const [item, setItem] = React.useState<ExtractionItem | null>(null)
   const [loading, setLoading] = React.useState(true)
-  const [overwriteValue, setOverwriteValue] = React.useState('')
-  const [overwriteBaseline, setOverwriteBaseline] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const fileRef = React.useRef<HTMLInputElement | null>(null)
 
@@ -65,12 +93,7 @@ export function TripReceiptOcrPanel({
     const call = await apiCall<{ item: ExtractionItem | null }>(
       `/api/taxi_fleet/trips/${encodeURIComponent(tripId)}/receipt-extraction`,
     )
-    const next = call.result?.item ?? null
-    setItem(next)
-    const documentNumber =
-      next?.appliedDocumentNumber || next?.ocrDocumentNumber || next?.driverDocumentNumber || ''
-    setOverwriteValue(documentNumber)
-    setOverwriteBaseline(documentNumber)
+    setItem(call.result?.item ?? null)
     setLoading(false)
   }, [tripId])
 
@@ -78,7 +101,7 @@ export function TripReceiptOcrPanel({
     void load()
   }, [load])
 
-  const runAction = async (action: 'retry' | 'overwrite') => {
+  const runRetry = async () => {
     setBusy(true)
     try {
       const call = await apiCall<{ item: ExtractionItem }>(
@@ -86,29 +109,42 @@ export function TripReceiptOcrPanel({
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(
-            action === 'overwrite'
-              ? { action, documentNumber: overwriteValue }
-              : { action },
-          ),
+          body: JSON.stringify({ action: 'retry' }),
         },
       )
       if (!call.ok || !call.result?.item) {
         flash(t('taxi_fleet.receiptOcr.actionFailed', 'Could not update receipt OCR.'), 'error')
         return
       }
-      const updated = call.result.item
-      setItem(updated)
-      if (action === 'overwrite') {
-        const documentNumber =
-          updated.appliedDocumentNumber ||
-          updated.ocrDocumentNumber ||
-          updated.driverDocumentNumber ||
-          overwriteValue
-        setOverwriteValue(documentNumber)
-        setOverwriteBaseline(documentNumber)
-      }
+      setItem(call.result.item)
       flash(t('taxi_fleet.receiptOcr.actionSuccess', 'Receipt OCR updated.'), 'success')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const applyField = async (field: ApplyField) => {
+    setBusy(true)
+    try {
+      const call = await apiCall<{ item: ExtractionItem; error?: string }>(
+        `/api/taxi_fleet/trips/${encodeURIComponent(tripId)}/receipt-extraction`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'apply_field', field }),
+        },
+      )
+      if (!call.ok || !call.result?.item) {
+        flash(
+          (typeof call.result?.error === 'string' && call.result.error) ||
+            t('taxi_fleet.receiptOcr.actionFailed', 'Could not update receipt OCR.'),
+          'error',
+        )
+        return
+      }
+      setItem(call.result.item)
+      flash(t('taxi_fleet.receiptOcr.applySuccess', 'Form updated from OCR.'), 'success')
+      onApplied?.()
     } finally {
       setBusy(false)
     }
@@ -133,43 +169,25 @@ export function TripReceiptOcrPanel({
       }
       flash(t('taxi_fleet.receiptOcr.uploadSuccess', 'Receipt uploaded. OCR started.'), 'success')
       await load()
+      onApplied?.()
     } finally {
       setBusy(false)
     }
   }
 
-  const uploadControls =
-    canReplaceReceipt ? (
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          ref={fileRef}
-          type="file"
-          className="hidden"
-          accept="image/*,.pdf,application/pdf"
-          onChange={(event) => {
-            const file = event.target.files?.[0]
-            event.target.value = ''
-            if (file) void uploadReceipt(file)
-          }}
-        />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={busy}
-          onClick={() => fileRef.current?.click()}
-        >
-          {busy ? (
-            <Loader2 className="mr-2 size-3.5 animate-spin" aria-hidden />
-          ) : (
-            <Upload className="mr-2 size-3.5" aria-hidden />
-          )}
-          {item
-            ? t('taxi_fleet.receiptOcr.replace', 'Replace receipt')
-            : t('taxi_fleet.receiptOcr.upload', 'Upload receipt')}
-        </Button>
-      </div>
-    ) : null
+  const uploadInput = canReplaceReceipt ? (
+    <input
+      ref={fileRef}
+      type="file"
+      className="hidden"
+      accept="image/*,.pdf,application/pdf"
+      onChange={(event) => {
+        const file = event.target.files?.[0]
+        event.target.value = ''
+        if (file) void uploadReceipt(file)
+      }}
+    />
+  ) : null
 
   if (loading) {
     return (
@@ -183,10 +201,42 @@ export function TripReceiptOcrPanel({
     return (
       <section className="mt-6 space-y-3 rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground">
         <div>{t('taxi_fleet.receiptOcr.empty', 'No receipt OCR for this trip yet.')}</div>
-        {uploadControls}
+        {uploadInput}
+        {canReplaceReceipt ? (
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-foreground">
+              {t('taxi_fleet.receiptOcr.receiptActions', 'Receipt')}
+            </div>
+            <div className={buttonGroupClass}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={groupButtonClass}
+                disabled={busy}
+                onClick={() => fileRef.current?.click()}
+              >
+                {busy ? (
+                  <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <Upload className="mr-1.5 size-3.5" aria-hidden />
+                )}
+                {t('taxi_fleet.receiptOcr.upload', 'Upload receipt')}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </section>
     )
   }
+
+  const distanceMismatch = hasWarningCode(item, 'distance_mismatch_trip')
+  const amountMismatch = hasAmountConflict(item)
+  const showOverwriteSection =
+    canManage &&
+    (Boolean(item.ocrDistanceKm) ||
+      Boolean(item.ocrGrossAmount) ||
+      Boolean(item.ocrDocumentNumber?.trim()))
 
   return (
     <section className="mt-6 space-y-3 rounded-lg border bg-card px-4 py-3">
@@ -273,51 +323,105 @@ export function TripReceiptOcrPanel({
       ) : null}
       {item.errorMessage ? <p className="text-xs text-destructive">{item.errorMessage}</p> : null}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" variant="outline" size="sm" asChild>
-          <a href={item.attachmentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2">
-            <ExternalLink className="size-3.5" aria-hidden />
-            {t('taxi_fleet.receiptOcr.openDocument', 'Open document')}
-          </a>
-        </Button>
-        {canManage ? (
-          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void runAction('retry')}>
-            <RefreshCw className="mr-2 size-3.5" aria-hidden />
-            {t('taxi_fleet.receiptOcr.retry', 'Retry OCR')}
-          </Button>
-        ) : null}
-        {uploadControls}
-      </div>
+      <Separator />
 
-      {canManage ? (
-        <div className="space-y-3 border-t pt-3">
-          <div className="space-y-1">
-            <Label htmlFor="receipt-ocr-overwrite" className="block text-sm font-medium">
-              {t('taxi_fleet.receiptOcr.overwriteLabel', 'Overwrite document number')}
-            </Label>
-            <input
-              id="receipt-ocr-overwrite"
-              value={overwriteValue}
-              onChange={(event) => setOverwriteValue(event.target.value)}
-              className={`${CRUD_FORM_TEXT_INPUT_CLASS} max-w-sm`}
-              disabled={busy}
-            />
-          </div>
-          <div className="flex justify-end">
+      <div className="space-y-2">
+        <div className="text-xs font-medium">
+          {t('taxi_fleet.receiptOcr.receiptActions', 'Receipt')}
+        </div>
+        {uploadInput}
+        <div className={buttonGroupClass}>
+          <Button type="button" variant="ghost" size="sm" className={groupButtonClass} asChild>
+            <a
+              href={item.attachmentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center"
+            >
+              <ExternalLink className="mr-1.5 size-3.5" aria-hidden />
+              {t('taxi_fleet.receiptOcr.openDocument', 'Open')}
+            </a>
+          </Button>
+          {canReplaceReceipt ? (
             <Button
               type="button"
-              disabled={busy || overwriteValue === overwriteBaseline}
-              onClick={() => void runAction('overwrite')}
+              variant="ghost"
+              size="sm"
+              className={groupButtonClass}
+              disabled={busy}
+              onClick={() => fileRef.current?.click()}
             >
               {busy ? (
-                <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+                <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden />
               ) : (
-                <Save className="mr-2 size-4" aria-hidden />
+                <Upload className="mr-1.5 size-3.5" aria-hidden />
               )}
-              {t('ui.forms.actions.save', 'Save')}
+              {t('taxi_fleet.receiptOcr.reupload', 'Upload again')}
             </Button>
-          </div>
+          ) : null}
+          {canManage ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={groupButtonClass}
+              disabled={busy}
+              onClick={() => void runRetry()}
+            >
+              <RefreshCw className="mr-1.5 size-3.5" aria-hidden />
+              {t('taxi_fleet.receiptOcr.retry', 'Retry OCR')}
+            </Button>
+          ) : null}
         </div>
+      </div>
+
+      {showOverwriteSection ? (
+        <>
+          <Separator />
+          <div className="space-y-2">
+            <div className="text-xs font-medium">
+              {t('taxi_fleet.receiptOcr.overwriteActions', 'Overwrite')}
+            </div>
+            <div className={buttonGroupClass}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={`${groupButtonClass}${distanceMismatch ? ' bg-amber-50 text-amber-950' : ''}`}
+                disabled={busy || !item.ocrDistanceKm}
+                onClick={() => void applyField('distance')}
+              >
+                {t('taxi_fleet.receiptOcr.applyDistance', 'Distance')}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={`${groupButtonClass}${amountMismatch ? ' bg-amber-50 text-amber-950' : ''}`}
+                disabled={busy || !item.ocrGrossAmount}
+                onClick={() => void applyField('amount')}
+              >
+                {t('taxi_fleet.receiptOcr.applyAmount', 'Amount')}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={`${groupButtonClass}${hasDocumentConflict(item) ? ' bg-amber-50 text-amber-950' : ''}`}
+                disabled={busy || !item.ocrDocumentNumber?.trim()}
+                onClick={() => void applyField('documentNumber')}
+              >
+                {t('taxi_fleet.receiptOcr.applyDocumentNumber', 'Document number')}
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {t(
+                'taxi_fleet.receiptOcr.overwriteHint',
+                'One click replaces the form value with OCR and saves.',
+              )}
+            </p>
+          </div>
+        </>
       ) : null}
     </section>
   )

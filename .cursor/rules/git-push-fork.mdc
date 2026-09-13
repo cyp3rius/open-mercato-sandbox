@@ -1,0 +1,23 @@
+---
+description: Git push only to the fork remote — never push to origin/upstream
+alwaysApply: true
+---
+
+# Git push → fork only
+
+In this repo remotes are:
+
+| Remote | Role |
+|--------|------|
+| **`fork`** | Your GitHub fork — **push here** |
+| **`origin`** | Upstream (`open-mercato/open-mercato`) — **fetch/pull only**; do not push |
+
+## Rules
+
+1. When the user asks to **push**, push to **`fork`**, not `origin`:
+   ```bash
+   git push -u fork HEAD
+   ```
+2. **Never** `git push origin …` (or any push to upstream) unless the user explicitly names `origin` / upstream and insists.
+3. Prefer setting upstream to fork: `-u fork HEAD` / `-u fork <branch>`.
+4. PRs: open from **`fork/<branch>`** against upstream (via `gh pr create` after push to `fork`).

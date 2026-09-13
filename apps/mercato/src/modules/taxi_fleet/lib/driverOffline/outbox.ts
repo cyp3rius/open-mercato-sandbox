@@ -227,7 +227,18 @@ export async function flushDriverOutbox(): Promise<void> {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ ...item.payload, clientMutationId: item.clientMutationId }),
         })
-        if (!res.ok) throw new Error(`location ${res.status}`)
+        if (!res.ok) {
+          // After clock-out, leftover GPS batches are expected to fail — drop them so
+          // the outbox can continue with later mutations (trips/expenses).
+          if (res.status === 400) {
+            const body = (await res.json().catch(() => null)) as { code?: string } | null
+            if (body?.code === 'SHIFT_REQUIRED') {
+              await removeOutboxItem(item.id)
+              continue
+            }
+          }
+          throw new Error(`location ${res.status}`)
+        }
       }
       await removeOutboxItem(item.id)
     } catch {

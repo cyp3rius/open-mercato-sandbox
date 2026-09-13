@@ -24,6 +24,7 @@ import {
   snapExpenseOccurredAtToDriverShift,
 } from './receiptExpenseFieldApply'
 import { normalizeExpenseVatRatePercent } from './expenseVat'
+import { isPolcardPaymentConfirmation } from './receiptDocumentKind'
 import {
   extractReceiptFieldsFromImage,
   hasAnthropicReceiptOcrKey,
@@ -37,7 +38,7 @@ import { ensureTaxiFleetDriverReceiptsPartition } from './receiptPartition'
 import { recalculateWeeklySettlementsForFinancialEntry, recalculateWeeklySettlementsForTrip } from './settlementWeekScope'
 import { syncFinancialEntryDocumentDuplicates } from './documentDuplicates'
 import { mergeReceiptTripDistance, readTripRouteDistanceKm } from './receiptTripDistanceApply'
-import { formatDistanceKm } from './settlementTripDistance'
+import { formatDistanceKm, parseTripDistanceKm } from './settlementTripDistance'
 import { scheduleAfterResponse } from './scheduleAfterResponse'
 
 const STALE_PROCESSING_MS = 2 * 60 * 1000
@@ -352,6 +353,14 @@ export async function processReceiptExtraction(
     const warnings: ReceiptOcrWarning[] = []
     let resolvedCompanyId: string | null = null
     let normalizedBuyerNip: string | null = null
+
+    if (isPolcardPaymentConfirmation(fields)) {
+      warnings.push({
+        code: 'polcard_payment_confirmation',
+        message:
+          'Attached document is not a fiscal receipt — it is a Polcard card payment confirmation.',
+      })
+    }
 
     if (fields.buyerNip?.trim()) {
       const ensured = await ensureCrmCompanyFromBuyerNipEm(em, {
@@ -847,6 +856,137 @@ export async function overwriteReceiptExtraction(
   await applyReceiptExtractionToLinkedRecords(em, row.id, {
     forceDocumentNumber: params.documentNumber,
   })
+  const refreshed = await em.findOne(TaxiFleetReceiptExtraction, { id: row.id })
+  if (!refreshed) throw new Error('Receipt extraction not found')
+  return refreshed
+}
+
+export type ReceiptOcrApplyField = 'distance' | 'amount' | 'documentNumber'
+
+/**
+ * One-click apply of an OCR value onto the linked trip (and income sync),
+ * even when the driver/route already provided a different value.
+ */
+export async function applyReceiptOcrFieldToTrip(
+  em: EntityManager,
+  params: {
+    extractionId: string
+    field: ReceiptOcrApplyField
+    tenantId: string
+    organizationId: string
+  },
+): Promise<TaxiFleetReceiptExtraction> {
+  const row = await em.findOne(TaxiFleetReceiptExtraction, {
+    id: params.extractionId,
+    tenantId: params.tenantId,
+    organizationId: params.organizationId,
+    deletedAt: null,
+  })
+  if (!row) throw new Error('Receipt extraction not found')
+  if (!row.tripId) throw new Error('Receipt extraction is not linked to a trip')
+
+  const trip = await em.findOne(TaxiFleetTrip, { id: row.tripId, deletedAt: null })
+  if (!trip) throw new Error('Trip not found')
+
+  const previousWarnings = Array.isArray(row.warningsJson)
+    ? (row.warningsJson as ReceiptOcrWarning[])
+    : []
+  let warnings = [...previousWarnings]
+  const now = new Date()
+
+  if (params.field === 'distance') {
+    const ocrDistance =
+      row.ocrDistanceKm != null && Number.isFinite(Number(row.ocrDistanceKm))
+        ? Number(row.ocrDistanceKm)
+        : null
+    if (ocrDistance == null || ocrDistance <= 0) {
+      throw new Error('OCR distance is not available')
+    }
+    const formatted = formatDistanceKm(ocrDistance)
+    const existingMetadata =
+      trip.metadata && typeof trip.metadata === 'object'
+        ? (trip.metadata as Record<string, unknown>)
+        : {}
+    const routeDistanceKm =
+      readTripRouteDistanceKm(existingMetadata) ?? parseTripDistanceKm(trip.distanceKm)
+    trip.distanceKm = formatted
+    trip.metadata = mergeTripMetadata(trip, {
+      distanceSource: 'ocr',
+      receiptOcrDistanceKm: formatted,
+      ...(routeDistanceKm != null ? { routeDistanceKm: formatDistanceKm(routeDistanceKm) } : {}),
+      distanceKm: formatted,
+    })
+    if (trip.metadata && typeof trip.metadata === 'object') {
+      const meta = { ...(trip.metadata as Record<string, unknown>) }
+      const tripRequest =
+        meta.tripRequest && typeof meta.tripRequest === 'object'
+          ? { ...(meta.tripRequest as Record<string, unknown>) }
+          : null
+      if (tripRequest) {
+        tripRequest.distanceKm = formatted
+        meta.tripRequest = tripRequest
+        trip.metadata = meta
+      }
+    }
+    trip.updatedAt = now
+    warnings = warnings.filter((w) => w.code !== 'distance_mismatch_trip' && w.field !== 'distanceKm')
+  } else if (params.field === 'amount') {
+    const ocrAmount =
+      row.ocrGrossAmount != null && Number.isFinite(Number(row.ocrGrossAmount))
+        ? Number(row.ocrGrossAmount)
+        : null
+    if (ocrAmount == null || ocrAmount <= 0) {
+      throw new Error('OCR amount is not available')
+    }
+    const formatted = ocrAmount.toFixed(2)
+    trip.revenueAmount = formatted
+    trip.updatedAt = now
+    if (row.financialEntryId) {
+      const entry = await em.findOne(TaxiFleetFinancialEntry, {
+        id: row.financialEntryId,
+        deletedAt: null,
+      })
+      if (entry) {
+        entry.amount = formatted
+        entry.updatedAt = now
+      }
+    }
+    warnings = warnings.filter(
+      (w) =>
+        !(w.code === 'amount_mismatch_trip' || (w.code === 'field_conflict' && w.field === 'amount')),
+    )
+  } else {
+    const documentNumber =
+      row.ocrDocumentNumber?.trim() ||
+      row.appliedDocumentNumber?.trim() ||
+      null
+    if (!documentNumber) {
+      throw new Error('OCR document number is not available')
+    }
+    await applyReceiptExtractionToLinkedRecords(em, row.id, {
+      forceDocumentNumber: documentNumber,
+    })
+    const refreshed = await em.findOne(TaxiFleetReceiptExtraction, { id: row.id })
+    if (!refreshed) throw new Error('Receipt extraction not found')
+    return refreshed
+  }
+
+  row.warningsJson = toWarningRecords(warnings)
+  row.status = resolveFinalStatus({
+    documentNumber: row.appliedDocumentNumber ?? row.ocrDocumentNumber ?? null,
+    mergeNeedsReview: false,
+    warnings,
+  })
+  row.updatedAt = now
+  await em.flush()
+  await syncTripIncomeFromReceiptExtraction(
+    em,
+    row,
+    trip,
+    row.appliedDocumentNumber ?? row.ocrDocumentNumber ?? null,
+  )
+  await recalculateWeeklySettlementsForTrip(em, trip)
+
   const refreshed = await em.findOne(TaxiFleetReceiptExtraction, { id: row.id })
   if (!refreshed) throw new Error('Receipt extraction not found')
   return refreshed

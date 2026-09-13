@@ -63,6 +63,8 @@ export type TripFormValues = {
   quoteSnapshotJson: string
   routeDurationSeconds: string
   routeSyncedFingerprint: string
+  receiptDocumentNumber: string
+  receiptAttachmentId: string
 } & TripRequestDetails
 
 export type TripFormOptions = {
@@ -136,6 +138,8 @@ export function defaultTripFormValues(reference = new Date()): TripFormValues {
     quoteSnapshotJson: '',
     routeDurationSeconds: '',
     routeSyncedFingerprint: buildTripRouteFingerprint(request),
+    receiptDocumentNumber: '',
+    receiptAttachmentId: '',
     ...request,
   }
 }
@@ -229,6 +233,8 @@ export function tripFormSchema(t: TranslateFn, options?: TripFormValidationOptio
       quoteSnapshotJson: z.string().optional(),
       routeDurationSeconds: z.string().optional(),
       routeSyncedFingerprint: z.string().optional(),
+      receiptDocumentNumber: z.string().max(120).optional(),
+      receiptAttachmentId: z.string().optional(),
       ...tripRequestSchemaShape(),
     })
     .superRefine((data, ctx) => {
@@ -386,6 +392,7 @@ const INTERNAL_TRIP_FORM_FIELD_IDS = [
   'routeSyncedFingerprint',
   'vehicleCategory',
   'basePrice',
+  'receiptAttachmentId',
 ]
 const DETAILS_FIELD_IDS = [
   'passengers',
@@ -411,6 +418,7 @@ const CUSTOMER_FIELD_IDS = [
   'contactEmail',
   'contactPhone',
   'paymentType',
+  'receiptDocumentNumber',
   '__tripQuoteSummary',
   'revenueAmount',
   'referringPartnerEntityId',
@@ -422,6 +430,7 @@ const PAGE_CUSTOMER_FIELD_IDS = [
   'contactEmail',
   'contactPhone',
   'paymentType',
+  'receiptDocumentNumber',
   'referringPartnerEntityId',
   'notes',
 ]
@@ -698,6 +707,17 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
     ),
   ]
 
+  customerFields.splice(
+    customerFields.findIndex((field) => field.id === 'paymentType') + 1,
+    0,
+    {
+      id: 'receiptDocumentNumber',
+      type: 'text',
+      label: t('taxi_fleet.trips.form.documentNumber', 'Document number'),
+      layout: 'half',
+    },
+  )
+
   if (surface === 'dialog') {
     customerFields.push({
       id: 'revenueAmount',
@@ -880,6 +900,12 @@ export function mapTripRowToFormValues(row: {
     quoteSnapshotJson: quoteSnapshot ? JSON.stringify(quoteSnapshot) : '',
     routeDurationSeconds: '',
     routeSyncedFingerprint: '',
+    receiptDocumentNumber:
+      typeof row.metadata?.receiptDocumentNumber === 'string'
+        ? row.metadata.receiptDocumentNumber
+        : '',
+    receiptAttachmentId:
+      typeof row.metadata?.receiptAttachmentId === 'string' ? row.metadata.receiptAttachmentId : '',
     ...request,
   }
   formValues.routeSyncedFingerprint = buildTripRouteFingerprint(formValues)
@@ -912,6 +938,10 @@ function buildTripPayloadExtras(values: TripFormValues) {
       routeDistanceKm: distanceKm.toFixed(2),
     }
   }
+  const receiptDocumentNumber = values.receiptDocumentNumber?.trim() || ''
+  const receiptAttachmentId = values.receiptAttachmentId?.trim() || ''
+  if (receiptDocumentNumber) metadata.receiptDocumentNumber = receiptDocumentNumber
+  if (receiptAttachmentId) metadata.receiptAttachmentId = receiptAttachmentId
   return {
     distanceKm,
     revenueAmount,

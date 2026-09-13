@@ -311,11 +311,16 @@ const shiftAssignmentCommand: CommandHandler<
       if (!row.shiftEnd) {
         row.shiftEnd = now
         row.status = 'completed'
-        const gps = await computeAssignmentGpsDistanceKm(em, row.id, {
-          tenantId: row.tenantId,
-          organizationId: row.organizationId,
-        })
-        row.gpsDistanceKm = gps.formatted
+        try {
+          const gps = await computeAssignmentGpsDistanceKm(em, row.id, {
+            tenantId: row.tenantId,
+            organizationId: row.organizationId,
+          })
+          row.gpsDistanceKm = gps.formatted
+        } catch {
+          // Never block clock-out if GPS aggregation fails mid-deploy / transient DB issue.
+          if (row.gpsDistanceKm == null) row.gpsDistanceKm = '0.00'
+        }
         mutated = true
       }
     }

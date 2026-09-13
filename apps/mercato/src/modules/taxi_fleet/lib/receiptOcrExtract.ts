@@ -14,22 +14,33 @@ const receiptOcrFieldsSchema = z.object({
   occurredAt: z.string().nullable().optional(),
   confidence: z.number().min(0).max(1).nullable().optional(),
   rawExcerpt: z.string().nullable().optional(),
+  documentKind: z
+    .enum([
+      'fiscal_receipt',
+      'invoice',
+      'polcard_payment_confirmation',
+      'payment_confirmation',
+      'unknown',
+    ])
+    .nullable()
+    .optional(),
 })
 
 export type ReceiptOcrFields = z.infer<typeof receiptOcrFieldsSchema>
 export type ReceiptOcrProviderId = 'openai' | 'anthropic'
 
-const PROMPT = `You extract fields from a Polish fiscal receipt (paragon fiskalny) or invoice photo/PDF.
+const PROMPT = `You extract fields from a Polish fiscal receipt (paragon fiskalny), invoice, or card-payment confirmation (e.g. Polcard terminal slip) photo/PDF.
 Return ONLY valid JSON with keys:
-documentNumber (string|null) — receipt/invoice NUMBER only (e.g. W001776, FV/12/2026). NEVER put a NIP here.
-grossAmount (number|null) — total gross amount PLN after discounts if shown (DO ZAPŁATY / SUMA after Obniżka), else SUMA / RAZEM,
+documentKind (string|null) — one of: "fiscal_receipt" (paragon fiskalny), "invoice", "polcard_payment_confirmation" (Polcard / POLCARD card payment confirmation slip), "payment_confirmation" (other card/terminal payment confirmation that is NOT a fiscal receipt), "unknown",
+documentNumber (string|null) — receipt/invoice NUMBER only (e.g. W001776, FV/12/2026). NEVER put a NIP here. For Polcard slips use auth/reference number if present,
+grossAmount (number|null) — total gross amount PLN after discounts if shown (DO ZAPŁATY / SUMA after Obniżka), else SUMA / RAZEM / KWOTA,
 distanceKm (number|null) — trip distance in kilometers if printed (Odległość / Dystans / km),
 vatRatePercent (number|null) — VAT rate percent (typically 8 or 23),
 buyerNip (string|null) — buyer (nabywca) NIP when printed. Accept dashed or compact form (701-053-39-02 or 7010533902); prefer digits-only in JSON. Look carefully near the BOTTOM for "NIP nabywcy". This is NOT the header NIP.
 sellerNip (string|null) — seller/issuer (sprzedawca) NIP; accept dashed or compact (945-218-91-52 or 9452189152); prefer digits-only. On taxi fiscal receipts this is the HEADER NIP near company name/address,
 occurredAt (ISO date or datetime string|null) — course/document date-time (Początek kursu / print time). Polish dates are DD-MM-YYYY,
 confidence (0..1),
-rawExcerpt (short string of key lines — MUST include header NIP and "NIP nabywcy" lines when visible).
+rawExcerpt (short string of key lines — MUST include header NIP and "NIP nabywcy" lines when visible; for Polcard include the word POLCARD when printed).
 
 Critical rules for Polish taxi fiscal receipts (paragon fiskalny) and invoices:
 - The company block at the TOP (name, address, NIP) is the SELLER/issuer. Put that NIP in sellerNip, NOT documentNumber and NOT buyerNip.
@@ -38,6 +49,10 @@ Critical rules for Polish taxi fiscal receipts (paragon fiskalny) and invoices:
 - documentNumber is typically a short code in a corner (often top-right), e.g. W001776 — not the NIP.
 - buyerNip is often present on card/invoice-style taxi receipts as "NIP nabywcy: XXX-XXX-XX-XX" near the footer. Do NOT skip it. It is different from the header seller NIP.
 - Do not confuse NIP with documentNumber even if NIP is the most prominent number on the page.
+
+Polcard / card payment confirmation (NOT a fiscal receipt):
+- If the document says POLCARD, "Potwierdzenie płatności", terminal/card authorization slip — set documentKind to "polcard_payment_confirmation" (or "payment_confirmation" if brand is unclear).
+- Still extract amount and date when readable. Do NOT invent a fiscal receipt number.
 If a field is unreadable, use null.`
 
 const DEFAULT_MODELS: Record<ReceiptOcrProviderId, string> = {

@@ -9,8 +9,10 @@ import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { TaxiFleetReceiptExtraction, TaxiFleetTrip } from '@/modules/taxi_fleet/data/entities'
 import {
+  applyReceiptOcrFieldToTrip,
   overwriteReceiptExtraction,
   processReceiptExtraction,
+  type ReceiptOcrApplyField,
 } from '@/modules/taxi_fleet/lib/receiptExtractionPipeline'
 import { maybeEnsureCompanyForExtraction } from '@/modules/taxi_fleet/lib/receiptExtractionCompany'
 import type { CommandBus } from '@open-mercato/shared/lib/commands'
@@ -123,8 +125,9 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
 }
 
 const postSchema = z.object({
-  action: z.enum(['retry', 'overwrite']),
+  action: z.enum(['retry', 'overwrite', 'apply_field']),
   documentNumber: z.string().trim().min(1).max(120).optional(),
+  field: z.enum(['distance', 'amount', 'documentNumber']).optional(),
 })
 
 export async function POST(req: Request, ctx: { params?: { id?: string } }) {
@@ -157,6 +160,33 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
       await em.flush()
       await processReceiptExtraction(em, extraction.id)
       extraction = await em.findOne(TaxiFleetReceiptExtraction, { id: extraction.id })
+    } else if (body.action === 'apply_field') {
+      if (!body.field) {
+        throw new CrudHttpError(400, {
+          error: translate('taxi_fleet.receiptOcr.applyFieldRequired', 'Choose a field to overwrite.'),
+        })
+      }
+      try {
+        extraction = await applyReceiptOcrFieldToTrip(em, {
+          extractionId: extraction.id,
+          field: body.field as ReceiptOcrApplyField,
+          tenantId: trip.tenantId,
+          organizationId: trip.organizationId,
+        })
+      } catch (error) {
+        throw new CrudHttpError(400, {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+      if (body.field === 'documentNumber') {
+        const commandBus = context.container.resolve('commandBus') as CommandBus
+        await maybeEnsureCompanyForExtraction({
+          em,
+          commandBus,
+          ctx: context,
+          extraction,
+        })
+      }
     } else {
       if (!body.documentNumber) {
         throw new CrudHttpError(400, {
@@ -183,7 +213,8 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
     }
 
     if (!extraction) throw new CrudHttpError(404, { error: 'Not found' })
-    return NextResponse.json({ item: serializeExtraction(extraction, trip) })
+    const freshTrip = await em.findOne(TaxiFleetTrip, { id: tripId, deletedAt: null })
+    return NextResponse.json({ item: serializeExtraction(extraction, freshTrip ?? trip) })
   } catch (err) {
     if (err instanceof CrudHttpError) return NextResponse.json(err.body, { status: err.status })
     if (err instanceof z.ZodError) {

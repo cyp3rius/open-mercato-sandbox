@@ -17,6 +17,8 @@ export type FilterDef = {
   multiple?: boolean
   placeholder?: string
   group?: string
+  /** When type is dateRange, use datetime-local inputs instead of date-only. */
+  dateTime?: boolean
   formatValue?: (value: string) => string
   formatDescription?: (value: string) => string | null | undefined
 }
@@ -224,7 +226,7 @@ export function FilterOverlay({
                       <div>
                         <div className="text-xs text-muted-foreground mb-1">{t('ui.filters.dateRange.from', 'From')}</div>
                         <input
-                          type="date"
+                          type={f.dateTime ? 'datetime-local' : 'date'}
                           className="w-full h-11 rounded border px-2 text-sm"
                           value={values[f.id]?.from ?? ''}
                           onChange={(e) => setValue(f.id, { ...(values[f.id] ?? {}), from: e.target.value || undefined })}
@@ -233,7 +235,7 @@ export function FilterOverlay({
                       <div>
                         <div className="text-xs text-muted-foreground mb-1">{t('ui.filters.dateRange.to', 'To')}</div>
                         <input
-                          type="date"
+                          type={f.dateTime ? 'datetime-local' : 'date'}
                           className="w-full h-11 rounded border px-2 text-sm"
                           value={values[f.id]?.to ?? ''}
                           onChange={(e) => setValue(f.id, { ...(values[f.id] ?? {}), to: e.target.value || undefined })}
