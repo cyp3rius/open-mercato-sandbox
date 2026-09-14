@@ -75,6 +75,7 @@ export function extractFiscalDocumentNumberFromExcerpt(excerpt: string | null | 
 /**
  * Recover buyer NIP from excerpt when the model skipped "NIP nabywcy" near the footer.
  * Accepts dashed (701-053-39-02) and compact (7010533902) forms.
+ * Never treats BDO (waste registry) numbers as NIP.
  */
 export function extractBuyerNipFromExcerpt(
   excerpt: string | null | undefined,
@@ -86,23 +87,28 @@ export function extractBuyerNipFromExcerpt(
     /NIP\s*nabyw\w*\s*[:#]?\s*(?:PL)?([0-9][\d\-./ ]{8,14}[0-9])/i,
   )
   if (!match?.[1]) {
-    const other = text.match(
-      /(?:NIP|Inne informacje)\s*[:#]?\s*(?:PL)?([0-9][\d\-./ ]{8,14}[0-9])/i,
-    )
-    if (!other?.[1]) return null
-    const digits = canonicalizeFleetNip(other[1]) ?? normalizeReceiptOcrNip(other[1])
-    if (!digits) return null
-    if (isKnownFleetIssuerNip(digits) && !options?.allowFleetNip) return null
-    return digits
+    const lines = text.split(/\n+/)
+    for (const line of lines) {
+      if (lineLooksLikeBdo(line) || /nabyw/i.test(line)) continue
+      const other = line.match(/\bNIP\s*[:#]?\s*(?:PL)?([0-9][\d\-./ ]{8,14}[0-9])/i)
+      if (!other?.[1]) continue
+      const digits = canonicalizeFleetNip(other[1]) ?? normalizeReceiptOcrNip(other[1])
+      if (!digits) continue
+      if (isKnownFleetIssuerNip(digits) && !options?.allowFleetNip) continue
+      if (isBdoNumberInExcerpt(digits, excerpt)) continue
+      return digits
+    }
+    return null
   }
   const digits = canonicalizeFleetNip(match[1]) ?? normalizeReceiptOcrNip(match[1])
   if (!digits) return null
   if (isKnownFleetIssuerNip(digits) && !options?.allowFleetNip) return null
+  if (isBdoNumberInExcerpt(digits, excerpt)) return null
   return digits
 }
 
 /**
- * Recover seller/issuer NIP from header "NIP:" line (not "NIP nabywcy").
+ * Recover seller/issuer NIP from header "NIP:" line (not "NIP nabywcy", not BDO).
  * Accepts dashed and compact forms; normalizes to digits only.
  */
 export function extractSellerNipFromExcerpt(excerpt: string | null | undefined): string | null {
@@ -111,12 +117,54 @@ export function extractSellerNipFromExcerpt(excerpt: string | null | undefined):
   const lines = text.split(/\n+/)
   for (const line of lines) {
     if (/nabyw/i.test(line)) continue
+    if (lineLooksLikeBdo(line)) continue
     const match = line.match(/\bNIP\s*[:#]?\s*(?:PL)?([0-9][\d\-./ ]{8,14}[0-9])/i)
     if (!match?.[1]) continue
     const digits = normalizeReceiptOcrNip(match[1])
-    if (digits) return digits
+    if (!digits) continue
+    if (isBdoNumberInExcerpt(digits, excerpt)) continue
+    return digits
   }
   return null
+}
+
+/** True when the line is a BDO (waste registry) label — never a NIP source. */
+export function lineLooksLikeBdo(line: string): boolean {
+  return /\bBDO\b/i.test(line)
+}
+
+/**
+ * Collect digit-normalized BDO registry numbers from excerpt labels.
+ * BDO is not a tax ID; OCR often misreads it as sellerNip.
+ */
+export function extractBdoNumbersFromExcerpt(excerpt: string | null | undefined): string[] {
+  if (!excerpt?.trim()) return []
+  const text = excerpt.replace(/\r/g, '\n')
+  const found: string[] = []
+  const labeled = text.matchAll(
+    /\bBDO\b\s*[:#]?\s*(?:nr\.?\s*)?([0-9][\d\-./ ]{6,18}[0-9])/gi,
+  )
+  for (const match of labeled) {
+    const digits = normalizeNipDigits(match[1] ?? '')
+    if (digits && digits.length >= 7) found.push(digits)
+  }
+  return found
+}
+
+export function isBdoNumberInExcerpt(
+  value: string | null | undefined,
+  excerpt: string | null | undefined,
+): boolean {
+  const digits = normalizeNipDigits(value ?? '')
+  if (!digits) return false
+  return extractBdoNumbersFromExcerpt(excerpt).some(
+    (bdo) => bdo === digits || bdo.endsWith(digits) || digits.endsWith(bdo),
+  )
+}
+
+export function excerptLooksLikeWzSlip(excerpt: string | null | undefined): boolean {
+  if (!excerpt?.trim()) return false
+  return /\bkwit\s*wz\b|\bwz\s*[:/]|\bdokument\s+wz\b/i.test(excerpt)
 }
 
 /**
@@ -174,13 +222,33 @@ export function sanitizeReceiptOcrFields(
   let registrationPlate =
     typeof fields.registrationPlate === 'string' ? fields.registrationPlate.trim() || null : null
 
+  const documentKind = resolveReceiptDocumentKind({
+    documentKind: fields.documentKind ?? null,
+    rawExcerpt: fields.rawExcerpt,
+  })
+  const isWzExpense =
+    mode === 'expense' && (documentKind === 'wz_slip' || excerptLooksLikeWzSlip(fields.rawExcerpt))
+
+  // BDO registry numbers look numeric; never treat them as tax IDs.
+  if (sellerNip && isBdoNumberInExcerpt(sellerNip, fields.rawExcerpt)) {
+    sellerNip = null
+  }
+  if (buyerNip && isBdoNumberInExcerpt(buyerNip, fields.rawExcerpt)) {
+    buyerNip = null
+  }
+
+  // KWIT WZ has no issuer NIP — drop model/BDO guesses entirely.
+  if (isWzExpense) {
+    sellerNip = null
+  }
+
   if (documentNumber && looksLikeNipAsDocumentNumber(documentNumber)) {
     const digits = normalizeReceiptOcrNip(documentNumber)
-    if (digits) {
+    if (digits && !isBdoNumberInExcerpt(digits, fields.rawExcerpt)) {
       if (mode === 'expense') {
         if (isKnownFleetIssuerNip(digits)) {
           buyerNip = buyerNip ?? canonicalizeFleetNip(digits)
-        } else if (!sellerNip) {
+        } else if (!sellerNip && !isWzExpense) {
           sellerNip = digits
         }
       } else if (!sellerNip || isKnownFleetIssuerNip(digits)) {
@@ -190,7 +258,7 @@ export function sanitizeReceiptOcrFields(
     documentNumber = null
   }
 
-  if (!sellerNip) {
+  if (!sellerNip && !isWzExpense) {
     sellerNip = extractSellerNipFromExcerpt(fields.rawExcerpt)
   }
 
@@ -198,8 +266,13 @@ export function sanitizeReceiptOcrFields(
     if (sellerNip && isKnownFleetIssuerNip(sellerNip)) {
       buyerNip = buyerNip ?? canonicalizeFleetNip(sellerNip)
       sellerNip = null
-      sellerNip = extractSellerNipFromExcerpt(fields.rawExcerpt)
-      if (sellerNip && isKnownFleetIssuerNip(sellerNip)) sellerNip = null
+      if (!isWzExpense) {
+        sellerNip = extractSellerNipFromExcerpt(fields.rawExcerpt)
+        if (sellerNip && isKnownFleetIssuerNip(sellerNip)) sellerNip = null
+      }
+    }
+    if (sellerNip && isBdoNumberInExcerpt(sellerNip, fields.rawExcerpt)) {
+      sellerNip = null
     }
     if (buyerNip && isKnownFleetIssuerNip(buyerNip)) {
       buyerNip = RS_MOTO_ISSUER_NIP_DIGITS
@@ -233,11 +306,6 @@ export function sanitizeReceiptOcrFields(
     grossAmount: fields.grossAmount ?? null,
     vatAmount: fields.vatAmount ?? null,
     vatRatePercent: fields.vatRatePercent ?? null,
-  })
-
-  const documentKind = resolveReceiptDocumentKind({
-    documentKind: fields.documentKind ?? null,
-    rawExcerpt: fields.rawExcerpt,
   })
 
   return {

@@ -41,7 +41,7 @@ distanceKm (number|null) — trip distance in kilometers if printed,
 vatRatePercent (number|null) — VAT rate percent when printed as % (typically 8 or 23). If only VAT amount is shown, leave null,
 vatAmount (number|null) — total VAT amount PLN when printed (suma VAT / VAT), even if % is missing,
 buyerNip (string|null) — buyer (nabywca) NIP when printed (often "NIP nabywcy" or company block near card confirmation). Accept dashed/compact/PL prefix; prefer digits-only,
-sellerNip (string|null) — seller/issuer (sprzedawca) NIP from the HEADER company block. On fuel/WZ slips this is the station/issuer — NOT the fleet buyer NIP,
+sellerNip (string|null) — seller/issuer (sprzedawca) NIP from a labeled NIP line in the HEADER. NEVER use BDO. On KWIT WZ leave null (no issuer NIP). On fuel fiscal receipts this may be the station NIP — NOT the fleet buyer NIP,
 registrationPlate (string|null) — vehicle plate when labeled Rejestracja / Nr rejestracyjny (e.g. KK3666G),
 occurredAt (ISO date or datetime string|null),
 confidence (0..1),
@@ -49,10 +49,13 @@ rawExcerpt (short string of key lines — include NIPs, Rejestracja, VAT lines w
 
 Critical rules:
 - Taxi fiscal receipts (paragon): TOP company NIP is sellerNip (often fleet 9452189152). buyerNip is "NIP nabywcy" near footer when present.
-- Expense / fuel / KWIT WZ / BP / Routex: TOP company is seller (station). Fleet company NIP (9452189152) under "Nazwa firmy" / buyer block is buyerNip — NEVER sellerNip.
-- documentNumber is never a NIP.
+- Expense / fuel / KWIT WZ / BP / Routex: Fleet company NIP (9452189152) under "Nazwa firmy" / buyer block is buyerNip — NEVER sellerNip.
+- BDO (Baza Danych o Odpadach) numbers are NOT a NIP — never put BDO into sellerNip or buyerNip.
+- KWIT WZ / wz_slip: usually has NO issuer (seller) NIP — leave sellerNip null. Buyer NIP may still be present.
+- Fuel station fiscal receipts may have seller NIP in the header; WZ release notes typically do not.
+- documentNumber is never a NIP and never a BDO number.
 - If VAT % is missing but VAT amount and gross are visible, still return vatAmount and grossAmount (leave vatRatePercent null).
-- WZ and card payment slips are valid cost documents — still extract amount, date, plate, NIPs.
+- WZ and card payment slips are valid cost documents — still extract amount, date, plate, buyer NIP when present.
 If a field is unreadable, use null.`
 
 const DEFAULT_MODELS: Record<ReceiptOcrProviderId, string> = {

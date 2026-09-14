@@ -10,6 +10,7 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { DriverCostTypePicker } from '../../../../components/driverApp/DriverCostTypePicker'
 import { DriverDateTimeField } from '../../../../components/driverApp/DriverDateTimeField'
 import { DriverReceiptFields } from '../../../../components/driverApp/DriverReceiptFields'
+import { DriverVatRatePicker } from '../../../../components/driverApp/DriverVatRatePicker'
 import { DriverShell } from '../../../../components/driverApp/DriverShell'
 import {
   driverFieldClass,
@@ -19,6 +20,7 @@ import {
   driverSectionTitleClass,
 } from '../../../../components/driverApp/driverUi'
 import { type TaxiFleetCostType } from '../../../../lib/costTypes'
+import type { ExpenseVatRatePercent } from '../../../../lib/expenseVat'
 import {
   appendPendingExpenseToCache,
   enqueueDriverMutation,
@@ -44,6 +46,7 @@ export default function DriverExpenseCreatePage() {
   const router = useRouter()
   const [costType, setCostType] = React.useState<CostType>('fuel')
   const [amount, setAmount] = React.useState('')
+  const [vatRatePercent, setVatRatePercent] = React.useState<ExpenseVatRatePercent | null>(null)
   const [occurredAtLocal, setOccurredAtLocal] = React.useState(() => toDateTimeLocalValue(new Date()))
   const [notes, setNotes] = React.useState('')
   const [documentNumber, setDocumentNumber] = React.useState('')
@@ -69,6 +72,7 @@ export default function DriverExpenseCreatePage() {
       costType,
       amount: parsedAmount,
       currencyCode: 'PLN',
+      vatRatePercent,
       documentNumber: documentNumber.trim() || null,
       occurredAt: occurredAt.toISOString(),
       notes: notes.trim() || null,
@@ -85,7 +89,7 @@ export default function DriverExpenseCreatePage() {
           kind: 'expense',
           costType,
           amount: parsedAmount !== null ? parsedAmount.toFixed(2) : '0.00',
-          vatRatePercent: null,
+          vatRatePercent: vatRatePercent != null ? String(vatRatePercent) : null,
           currencyCode: 'PLN',
           documentNumber: documentNumber.trim() || null,
           occurredAt: occurredAt.toISOString(),
@@ -106,6 +110,7 @@ export default function DriverExpenseCreatePage() {
           costType,
           amount: parsedAmount,
           currencyCode: 'PLN',
+          vatRatePercent,
           documentNumber: documentNumber.trim() || null,
           occurredAt: occurredAt.toISOString(),
           notes: notes.trim() || null,
@@ -134,7 +139,7 @@ export default function DriverExpenseCreatePage() {
           <p className={driverSectionDescClass}>
             {t(
               'taxi_fleet.driverApp.expenses.hint',
-              'Fuel and other costs are included in the weekly settlement. Amount is gross; VAT rate is read from the receipt.',
+              'Fuel and other costs are included in the weekly settlement. Amount is gross; VAT is optional and can be filled from the receipt.',
             )}
           </p>
         </div>
@@ -170,12 +175,7 @@ export default function DriverExpenseCreatePage() {
 
         <DriverCostTypePicker value={costType} disabled={busy} onChange={setCostType} />
 
-        <p className={`${driverSectionDescClass} -mt-2`}>
-          {t(
-            'taxi_fleet.driverApp.expenses.vatFromOcrHint',
-            'VAT rate will be read automatically from the receipt photo.',
-          )}
-        </p>
+        <DriverVatRatePicker value={vatRatePercent} disabled={busy} onChange={setVatRatePercent} />
 
         <div>
           <label htmlFor="expenseAmount" className={driverLabelClass}>

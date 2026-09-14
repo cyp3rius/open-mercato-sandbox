@@ -519,7 +519,10 @@ export const driverExpenseCreateSchema = z.object({
     return value
   }, z.coerce.number().positive().nullable().optional()),
   currencyCode: z.string().min(3).max(3).optional().default('PLN'),
-  vatRatePercent: expenseVatRateSchema.optional().default(23),
+  vatRatePercent: z.preprocess((value) => {
+    if (value === '' || value === null || value === undefined) return null
+    return value
+  }, expenseVatRateSchema.nullable().optional()),
   documentNumber: z.string().max(120).optional().nullable(),
   occurredAt: z.coerce.date().optional(),
   receiptAttachmentId: optionalUuid,

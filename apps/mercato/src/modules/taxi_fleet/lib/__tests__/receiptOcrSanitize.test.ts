@@ -107,7 +107,7 @@ describe('receiptOcrSanitize', () => {
         grossAmount: 200,
         vatAmount: 37.4,
         rawExcerpt:
-          'BP\nNIP: 7740001454\nKwit WZ\nRejestracja: KK3666G\nNIP nabywcy: 945-218-91-82',
+          'BP\nNIP: 7740001454\nParagon fiskalny\nRejestracja: KK3666G\nNIP nabywcy: 945-218-91-82',
       },
       { mode: 'expense' },
     )
@@ -115,6 +115,31 @@ describe('receiptOcrSanitize', () => {
     expect(sanitized.buyerNip).toBe(RS_MOTO_ISSUER_NIP_DIGITS)
     expect(sanitized.registrationPlate).toBe('KK3666G')
     expect(sanitized.vatRatePercent).toBe(23)
+  })
+
+  it('expense WZ does not treat BDO as seller NIP and leaves issuer empty', () => {
+    const sanitized = sanitizeReceiptOcrFields(
+      {
+        documentKind: 'wz_slip',
+        sellerNip: '0000579410',
+        buyerNip: null,
+        grossAmount: 200,
+        rawExcerpt:
+          'KWIT WZ\nBDO: 0000579410\nRejestracja: KK3666G\nNazwa firmy\nNIP: 945-218-91-82',
+      },
+      { mode: 'expense' },
+    )
+    expect(sanitized.documentKind).toBe('wz_slip')
+    expect(sanitized.sellerNip).toBeNull()
+    expect(sanitized.buyerNip).toBe(RS_MOTO_ISSUER_NIP_DIGITS)
+    expect(sanitized.registrationPlate).toBe('KK3666G')
+  })
+
+  it('extractSellerNipFromExcerpt skips BDO lines', () => {
+    expect(
+      extractSellerNipFromExcerpt('BDO: 0000579410\nKWIT WZ\nNIP nabywcy: 9452189152'),
+    ).toBeNull()
+    expect(extractSellerNipFromExcerpt('NIP: 7740001454\nBDO: 0000579410')).toBe('7740001454')
   })
 
   it('derives VAT % from vatAmount when rate is missing', () => {

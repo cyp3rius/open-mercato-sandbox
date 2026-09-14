@@ -43,6 +43,9 @@ export function resolveReceiptDocumentKind(
   fields: Pick<ReceiptOcrFields, 'documentKind' | 'rawExcerpt'>,
 ): NonNullable<ReceiptOcrFields['documentKind']> {
   if (isPolcardPaymentConfirmation(fields)) return 'polcard_payment_confirmation'
+  if (fields.documentKind === 'wz_slip') return 'wz_slip'
+  const excerpt = fields.rawExcerpt ?? ''
+  if (/\bkwit\s*wz\b|\bwz\s*[:/]|\bdokument\s+wz\b/i.test(excerpt)) return 'wz_slip'
   if (fields.documentKind && fields.documentKind !== 'unknown') return fields.documentKind
   return 'unknown'
 }

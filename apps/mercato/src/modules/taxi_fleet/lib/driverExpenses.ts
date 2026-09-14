@@ -16,7 +16,7 @@ export type DriverExpenseListItem = {
   kind: 'expense'
   costType: string | null
   amount: string
-  vatRatePercent: string
+  vatRatePercent: string | null
   currencyCode: string
   documentNumber: string | null
   occurredAt: string | null

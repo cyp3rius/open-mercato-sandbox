@@ -35,6 +35,9 @@ const listSchema = z
     ids: z.string().optional(),
     teamMemberId: z.string().uuid().optional(),
     kind: z.enum(['income', 'expense']).optional(),
+    costType: z.enum(['fuel', 'toll', 'parking', 'maintenance', 'other']).optional(),
+    incomeDocumentType: z.enum(['receipt', 'invoice']).optional(),
+    documentNumber: z.string().optional(),
     dateFrom: z.string().optional(),
     dateTo: z.string().optional(),
     sortField: z.string().optional(),
@@ -69,6 +72,7 @@ const crud = makeCrudRoute({
       'trip_id',
       'customer_person_id',
       'customer_company_id',
+      'resource_id',
       'amount',
       'vat_rate_percent',
       'currency_code',
@@ -92,10 +96,23 @@ const crud = makeCrudRoute({
       if (ids.length) filters.id = { $in: ids }
       if (query.teamMemberId) filters.team_member_id = query.teamMemberId
       if (query.kind) filters.kind = query.kind
+      if (query.costType) filters.cost_type = query.costType
+      if (query.incomeDocumentType) filters.income_document_type = query.incomeDocumentType
+      const documentNumber =
+        typeof query.documentNumber === 'string' ? query.documentNumber.trim() : ''
+      if (documentNumber) {
+        filters.document_number = { $ilike: `%${documentNumber}%` }
+      }
       if (query.dateFrom || query.dateTo) {
         const range: Record<string, Date> = {}
-        if (query.dateFrom) range.$gte = new Date(`${query.dateFrom}T00:00:00`)
-        if (query.dateTo) range.$lte = new Date(`${query.dateTo}T23:59:59`)
+        if (query.dateFrom) {
+          const day = String(query.dateFrom).slice(0, 10)
+          range.$gte = new Date(`${day}T00:00:00`)
+        }
+        if (query.dateTo) {
+          const day = String(query.dateTo).slice(0, 10)
+          range.$lte = new Date(`${day}T23:59:59`)
+        }
         filters.occurred_at = range
       }
       return filters

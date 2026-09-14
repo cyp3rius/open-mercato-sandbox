@@ -19,6 +19,8 @@ import { z } from 'zod'
 type MonthlySettlementGenerateDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** When set, generate only for this driver (driver profile tab). */
+  teamMemberId?: string
   onGenerated?: () => void
 }
 
@@ -35,6 +37,7 @@ function monthlyGenerateSchema() {
 export function MonthlySettlementGenerateDialog({
   open,
   onOpenChange,
+  teamMemberId,
   onGenerated,
 }: MonthlySettlementGenerateDialogProps) {
   const t = useT()
@@ -160,6 +163,7 @@ export function MonthlySettlementGenerateDialog({
             monthStart: values.monthStart,
             tenantId,
             organizationId,
+            ...(teamMemberId ? { teamMemberId } : {}),
           }),
         },
       )
@@ -187,7 +191,7 @@ export function MonthlySettlementGenerateDialog({
       onGenerated?.()
       router.push(`${TAXI_FLEET_BASE}/monthly-settlements/${encodeURIComponent(newId)}`)
     },
-    [availableMonths, onGenerated, onOpenChange, organizationId, router, t, tenantId],
+    [availableMonths, onGenerated, onOpenChange, organizationId, router, t, teamMemberId, tenantId],
   )
 
   return (
