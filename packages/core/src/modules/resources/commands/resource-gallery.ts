@@ -18,7 +18,7 @@ import {
   type ResourcesResourceGalleryReorderInput,
 } from '../data/validators'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
-import { RESOURCES_RESOURCE_FIELDSET_VEHICLE, resolveResourcesResourceFieldsetCode } from '../lib/resourceCustomFields'
+import { isResourcesVehicleFieldsetCode, resolveResourcesResourceFieldsetCode } from '../lib/resourceCustomFields'
 import { E } from '#generated/entities.ids.generated'
 
 async function loadTypeName(
@@ -43,7 +43,7 @@ async function assertVehicleResource(
   scope: { tenantId: string; organizationId: string },
 ): Promise<void> {
   const hostName = await loadTypeName(em, resource.resourceTypeId ?? null, scope)
-  if (resolveResourcesResourceFieldsetCode(hostName) !== RESOURCES_RESOURCE_FIELDSET_VEHICLE) {
+  if (!isResourcesVehicleFieldsetCode(resolveResourcesResourceFieldsetCode(hostName))) {
     throw new CrudHttpError(400, { error: 'Gallery items are only allowed on vehicle resources.' })
   }
 }

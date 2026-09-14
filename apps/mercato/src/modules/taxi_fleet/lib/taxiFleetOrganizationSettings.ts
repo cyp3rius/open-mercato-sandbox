@@ -75,6 +75,7 @@ export async function saveTaxiFleetOrganizationSettings(
     platformSyncBoltRefreshToken: current.platformSync.bolt.refreshToken,
     platformSyncUberRefreshToken: current.platformSync.uber.refreshToken,
     platformSyncFreeRefreshToken: current.platformSync.free.refreshToken,
+    bpOpenFleetClientSecret: current.bpOpenFleet.clientSecret,
   })
   const normalized = taxiFleetSettingsSchema.parse(merged)
 
@@ -93,6 +94,7 @@ export async function saveTaxiFleetOrganizationSettings(
         paypal: normalized.paypal,
         calendar: normalized.calendar,
         platformSync: normalized.platformSync,
+        bpOpenFleet: normalized.bpOpenFleet,
         customerEmails: normalized.customerEmails,
         settlementIndicatorRanges: normalized.settlementIndicatorRanges,
       },
@@ -112,6 +114,7 @@ export async function saveTaxiFleetOrganizationSettings(
       paypal: normalized.paypal,
       calendar: normalized.calendar,
       platformSync: normalized.platformSync,
+      bpOpenFleet: normalized.bpOpenFleet,
       customerEmails: normalized.customerEmails,
       settlementIndicatorRanges: normalized.settlementIndicatorRanges,
     }

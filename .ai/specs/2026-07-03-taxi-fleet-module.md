@@ -106,7 +106,8 @@ When operator creates/receives a trip with `started_at` / `ended_at`:
 | GET | `/api/taxi_fleet/trips/suggest-drivers` | Availability-based driver ranking |
 | GET | `/api/taxi_fleet/route/places-autocomplete` | Address autocomplete (OpenRouteService proxy) |
 | POST | `/api/taxi_fleet/route/distance` | Driving distance + duration for route stops |
-| POST | `/api/taxi_fleet/quote` | Trip price quote from fleet pricing settings (tariffs, surcharges) |
+| POST | `/api/taxi_fleet/pricing/quote` | Canonical trip price quote (CRM, driver app, future calculator inject); auth any-of `view`/`driver`/`trips.inject` |
+| POST | `/api/taxi_fleet/quote` | Legacy alias of `/pricing/quote` (same contract) |
 | GET | `/api/taxi_fleet/route/reverse-geocode` | Reverse geocode coordinates to address |
 | POST | `/api/taxi_fleet/trips/{id}/approve` | Operator approval |
 | CRUD | `/api/taxi_fleet/financial-entries` | Paragony/faktury (wpływy) i koszty kierowcy |
@@ -173,6 +174,9 @@ Preferencje użytkownika: `/backend/profile/notifications` (`NotificationPrefere
 
 ## Changelog
 
+### 2026-09-14
+- Canonical quote endpoint `POST /api/taxi_fleet/pricing/quote` (CRM + driver app + inject auth); legacy `/quote` remains an alias. Source of trip pricing for CRM forms, driver commercial step, and future external calculator.
+
 ### 2026-09-09
 - Monthly settlements become **per-driver payout** documents (hybrid calendar + platform-from-weeklies with trip-ID dedupe). Weeklies are control-only (no close payout). Driver PWA gains monthly read-only preview. Spec: `.ai/specs/2026-09-09-taxi-fleet-monthly-driver-settlement.md`.
 
@@ -186,7 +190,7 @@ Preferencje użytkownika: `/backend/profile/notifications` (`NotificationPrefere
 - Wycena: dopłaty procentowe `NIGHT` + `HOLIDAY` w trybie **stack** (łącznie +40% od `basePrice`); minimalne wyprzedzenie zamówienia **24 h** (UI create); max pasażerów **8**.
 
 ### 2026-07-16
-- Wycena kursu: silnik kalkulatora RS Moto (`lib/pricing`), konfiguracja taryf w `settingsJson.pricing`, `POST /api/taxi_fleet/quote`; formularz kursu automatycznie wylicza cenę (bez ręcznego pola „Przychód”).
+- Wycena kursu: silnik kalkulatora RS Moto (`lib/pricing`), konfiguracja taryf w `settingsJson.pricing`, kanoniczny `POST /api/taxi_fleet/pricing/quote` (alias `POST /api/taxi_fleet/quote`); formularz kursu automatycznie wylicza cenę (bez ręcznego pola „Przychód”).
 - Formularz trasy: autouzupełnianie adresów (OpenRouteService, jak kalkulator RS Moto), geolokalizacja, przystanki z podpowiedziami, automatyczne wyliczanie dystansu i czasu (`GET /api/taxi_fleet/route/places-autocomplete`, `POST /api/taxi_fleet/route/distance`, `GET /api/taxi_fleet/route/reverse-geocode`; env `OPENROUTESERVICE_API_KEY`).
 - Formularz przejazdu: pełna definicja zgodna z kalkulatorem RS Moto (trasa, pasażerowie, bagaż, lotnisko, kontakt, płatność); zakładki w dialogu tworzenia; dane w `metadata.tripRequest`.
 

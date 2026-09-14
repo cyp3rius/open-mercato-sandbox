@@ -425,7 +425,21 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
   const updateOwnerUser = React.useCallback(
     async (next: string | null) => {
       const normalized = typeof next === 'string' ? next.trim() : ''
-      if (!normalized) throw new Error(t('customers.form.ownerRequired', 'Guardian is required.'))
+      if (!normalized) {
+        setOwnerLabel(null)
+        await saveCompany(
+          { ownerUserId: null },
+          (prev) => ({
+            ...prev,
+            company: {
+              ...prev.company,
+              ownerUserId: null,
+              ownerUserName: null,
+            },
+          }),
+        )
+        return
+      }
       const knownLabel = ownerOptions.find((option) => option.value === normalized)?.label
       if (knownLabel && knownLabel !== normalized) setOwnerLabel(knownLabel)
       await saveCompany(
@@ -444,7 +458,7 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
         if (resolved) setOwnerLabel(resolved)
       }
     },
-    [ownerOptions, saveCompany, t],
+    [ownerOptions, saveCompany],
   )
 
   const updateCompanyField = React.useCallback(
@@ -862,29 +876,40 @@ export default function CustomerCompanyDetailPage({ params }: { params?: { id?: 
           onSave={updateOwnerUser}
           variant="muted"
           activateOnClick
-          renderEditor={({ value: draft, onChange }) => (
-            <EntitySearchCombobox
-              value={draft}
-              onChange={onChange}
-              options={mergeEntitySearchOption(
-                ownerOptions,
+          renderEditor={({ value: draft, onChange }) => {
+            const clearOption = {
+              value: '',
+              label: t('customers.form.ownerClear', 'No guardian'),
+            }
+            const withClear = (rows: typeof ownerOptions) => {
+              const merged = mergeEntitySearchOption(
+                rows,
                 draft,
                 draft === ownerUserId ? ownerLabel ?? draft : draft,
-              )}
-              onRemoteSearch={async (query) => {
-                const rows = await remoteSearchAuthUsers(query)
-                return mergeEntitySearchOption(
-                  rows,
-                  draft,
-                  draft === ownerUserId ? ownerLabel ?? draft : draft,
-                )
-              }}
-              placeholder={t('customers.form.ownerPlaceholder', 'Choose a guardian…')}
-              searchPlaceholder={t('customers.form.ownerSearch', 'Search users…')}
-              createInNewTabHref="/backend/users/create"
-              createInNewTabAriaLabel={t('customers.form.ownerAddUser', 'Create user in a new tab')}
-            />
-          )}
+              )
+              if (!draft.trim()) return merged
+              if (merged.some((row) => row.value === '')) return merged
+              return [clearOption, ...merged]
+            }
+            return (
+              <EntitySearchCombobox
+                value={draft}
+                onChange={onChange}
+                options={withClear(ownerOptions)}
+                selectedDisplayOverride={
+                  draft === ownerUserId ? ownerLabel ?? undefined : undefined
+                }
+                onRemoteSearch={async (query) => {
+                  const rows = await remoteSearchAuthUsers(query)
+                  return withClear(rows)
+                }}
+                placeholder={t('customers.form.ownerPlaceholder', 'Choose a guardian…')}
+                searchPlaceholder={t('customers.form.ownerSearch', 'Search users…')}
+                createInNewTabHref="/backend/users/create"
+                createInNewTabAriaLabel={t('customers.form.ownerAddUser', 'Create user in a new tab')}
+              />
+            )
+          }}
         />
       ),
     },

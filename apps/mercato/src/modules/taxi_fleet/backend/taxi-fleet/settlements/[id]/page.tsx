@@ -330,7 +330,12 @@ export default function TaxiFleetSettlementDetailPage({ params }: { params?: { i
       <ApplyBreadcrumb
         breadcrumb={[
           { label: 'Dashboard', labelKey: 'taxi_fleet.hub.dashboardTitle', href: TAXI_FLEET_BASE },
-          { label: 'Settlements', labelKey: 'taxi_fleet.settlements.list.title', href: `${TAXI_FLEET_BASE}/settlements-overview/weekly` },
+          { label: 'Settlements', labelKey: 'taxi_fleet.settlements.title', href: `${TAXI_FLEET_BASE}/settlements-overview` },
+          {
+            label: 'Weekly settlements',
+            labelKey: 'taxi_fleet.settlements.weeklyTitle',
+            href: `${TAXI_FLEET_BASE}/settlements-overview/weekly`,
+          },
           { label: titleText },
         ]}
         title={titleText}

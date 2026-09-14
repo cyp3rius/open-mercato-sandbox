@@ -8,7 +8,7 @@ export const metadata = {
   navHidden: true,
   breadcrumb: [
     { label: 'Dashboard', labelKey: 'taxi_fleet.hub.dashboardTitle', href: '/backend/taxi-fleet' },
-    { label: 'Driver profiles', labelKey: 'taxi_fleet.drivers.list.title', href: '/backend/taxi-fleet/drivers' },
+    { label: 'Driver profiles', labelKey: 'taxi_fleet.drivers.title', href: '/backend/taxi-fleet/drivers' },
     { label: 'Create', labelKey: 'taxi_fleet.drivers.createTitle' },
   ],
 }

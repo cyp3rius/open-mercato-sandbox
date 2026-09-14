@@ -13,7 +13,7 @@ import {
   type ResourcesResourceAccessoryLinkUpdateInput,
 } from '../data/validators'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
-import { RESOURCES_RESOURCE_FIELDSET_VEHICLE, resolveResourcesResourceFieldsetCode } from '../lib/resourceCustomFields'
+import { isResourcesVehicleFieldsetCode, resolveResourcesResourceFieldsetCode } from '../lib/resourceCustomFields'
 
 async function loadTypeName(
   em: EntityManager,
@@ -41,10 +41,10 @@ async function assertVehicleHostAndNonVehicleAccessory(
   const accessoryName = await loadTypeName(em, accessory.resourceTypeId ?? null, scope)
   const hostFieldset = resolveResourcesResourceFieldsetCode(hostName)
   const accessoryFieldset = resolveResourcesResourceFieldsetCode(accessoryName)
-  if (hostFieldset !== RESOURCES_RESOURCE_FIELDSET_VEHICLE) {
+  if (!isResourcesVehicleFieldsetCode(hostFieldset)) {
     throw new CrudHttpError(400, { error: 'Accessories can only be linked to vehicle resources.' })
   }
-  if (accessoryFieldset === RESOURCES_RESOURCE_FIELDSET_VEHICLE) {
+  if (isResourcesVehicleFieldsetCode(accessoryFieldset)) {
     throw new CrudHttpError(400, { error: 'Cannot link another vehicle as an accessory.' })
   }
   if (host.id === accessory.id) {

@@ -190,10 +190,7 @@ export function tripRequestDetailsFromMetadata(
     companyName: str(source.companyName) || mapped?.companyName || '',
     companyTaxId: str(source.companyTaxId) || mapped?.companyTaxId || '',
     vehicleCategory: str(source.vehicleCategory) || mapped?.vehicleCategory || '',
-    basePrice:
-      str(source.basePrice) ||
-      (mapped?.basePrice != null ? String(mapped.basePrice) : '') ||
-      (row?.revenueAmount != null ? String(row.revenueAmount) : ''),
+    basePrice: str(source.basePrice) || (mapped?.basePrice != null ? String(mapped.basePrice) : ''),
     referringPartnerEntityId:
       str(source.referringPartnerEntityId) ||
       str(root?.referringPartnerEntityId) ||
@@ -244,18 +241,11 @@ export function parseTripRequestNumericDistance(details: TripRequestDetails): nu
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
-export function parseTripRequestRevenueAmount(details: TripRequestDetails, revenueAmount: string): number | undefined {
+export function parseTripRequestRevenueAmount(_details: TripRequestDetails, revenueAmount: string): number | undefined {
   const revenueRaw = revenueAmount.trim()
-  if (revenueRaw.length) {
-    const parsed = Number(revenueRaw)
-    if (Number.isFinite(parsed)) return parsed
-  }
-  const baseRaw = details.basePrice.trim()
-  if (baseRaw.length) {
-    const parsed = Number(baseRaw)
-    if (Number.isFinite(parsed)) return parsed
-  }
-  return undefined
+  if (!revenueRaw.length) return undefined
+  const parsed = Number(revenueRaw)
+  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 export function buildTripRouteNotes(details: TripRequestDetails): string | null {

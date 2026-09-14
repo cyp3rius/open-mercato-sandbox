@@ -16,6 +16,8 @@ import { sanitizeSearchTerm, parseBooleanFlag } from './helpers'
 import { E } from '#generated/entities.ids.generated'
 import { createResourcesCrudOpenApi, createPagedListResponseSchema, defaultOkResponseSchema } from './openapi'
 import {
+  isResourcesVehicleFieldsetCode,
+  RESOURCES_RESOURCE_FIELDSET_TAXI,
   RESOURCES_RESOURCE_FIELDSET_VEHICLE,
   resolveResourcesResourceFieldsetCode,
 } from '../lib/resourceCustomFields'
@@ -173,7 +175,7 @@ const crud = makeCrudRoute({
       }
       const fieldsetRaw =
         typeof query.resourcesResourceFieldset === 'string' ? query.resourcesResourceFieldset.trim() : ''
-      if (fieldsetRaw === RESOURCES_RESOURCE_FIELDSET_VEHICLE) {
+      if (fieldsetRaw === RESOURCES_RESOURCE_FIELDSET_VEHICLE || fieldsetRaw === RESOURCES_RESOURCE_FIELDSET_TAXI) {
         const em = (ctx.container.resolve('em') as EntityManager).fork()
         const scopeTenantId = ctx.organizationScope?.tenantId ?? ctx.auth?.tenantId ?? null
         const organizationIds = ctx.organizationIds ?? ctx.organizationScope?.filterIds ?? null
@@ -187,7 +189,13 @@ const crud = makeCrudRoute({
         }
         const allTypes = await em.find(ResourcesResourceType, typeWhere)
         let vehicleTypeIds = allTypes
-          .filter((rt) => resolveResourcesResourceFieldsetCode(rt.name) === RESOURCES_RESOURCE_FIELDSET_VEHICLE)
+          .filter((rt) => {
+            const code = resolveResourcesResourceFieldsetCode(rt.name)
+            if (fieldsetRaw === RESOURCES_RESOURCE_FIELDSET_TAXI) {
+              return code === RESOURCES_RESOURCE_FIELDSET_TAXI
+            }
+            return isResourcesVehicleFieldsetCode(code)
+          })
           .map((rt) => rt.id)
         const requestedTypeId = typeof query.resourceTypeId === 'string' ? query.resourceTypeId.trim() : ''
         if (requestedTypeId.length) {

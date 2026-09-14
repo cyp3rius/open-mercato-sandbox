@@ -515,6 +515,14 @@ function DriverLiveTripPageInner() {
                 value={commercial}
                 disabled={busy}
                 receiptDraftRecordId={receiptDraftRecordId}
+                quoteRoute={
+                  route
+                    ? {
+                        startedAtLocal: route.startedAtLocal,
+                        distanceKm: route.distanceKm,
+                      }
+                    : null
+                }
                 onChange={setCommercial}
                 onReceiptFileOffline={async (file) => {
                   const dataBase64 = await fileToBase64(file)

@@ -1,53 +1,62 @@
-"use client"
+'use client'
 
 import * as React from 'react'
-import Link from 'next/link'
-import { Page, PageBody } from '@open-mercato/ui/backend/Page'
+import { Page, PageHeader, PageBody } from '@open-mercato/ui/backend/Page'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { TAXI_FLEET_BASE } from '../paths'
+import { WeeklySettlementsHubSection } from '../../../components/hub/WeeklySettlementsHubSection'
+import { MonthlySettlementsHubSection } from '../../../components/hub/MonthlySettlementsHubSection'
+import { VehicleSettlementsHubSection } from '../../../components/hub/VehicleSettlementsHubSection'
 
 export default function TaxiFleetSettlementsOverviewPage() {
   const t = useT()
 
   return (
     <Page>
-      <PageBody className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold">{t('taxi_fleet.settlements.title', 'Rozliczenia')}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t('taxi_fleet.settlements.overview.hint', 'Choose weekly or monthly settlements.')}
-          </p>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Link
-            href={`${TAXI_FLEET_BASE}/settlements-overview/weekly`}
-            className="rounded-lg border bg-card p-4 hover:bg-muted/30"
-          >
-            <div className="text-sm font-medium">{t('taxi_fleet.settlements.weeklyTitle', 'Weekly settlements')}</div>
-            <div className="mt-1 text-sm text-muted-foreground">
-              {t(
-                'taxi_fleet.hub.settlementsHelp',
-                'Weekly control settlements (no payout).',
-              )}
+      <PageHeader
+        title={t('taxi_fleet.settlements.title', 'Settlements')}
+        description={t(
+          'taxi_fleet.settlements.overview.hint',
+          'Driver settlements now; vehicle settlements will follow.',
+        )}
+      />
+      <PageBody>
+        <div className="space-y-8">
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+                {t('taxi_fleet.settlements.overview.driversSection', 'Drivers')}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t(
+                  'taxi_fleet.settlements.overview.driversHint',
+                  'Weekly control settlements and monthly payout settlements per driver.',
+                )}
+              </p>
             </div>
-          </Link>
-
-          <Link
-            href={`${TAXI_FLEET_BASE}/settlements-overview/monthly`}
-            className="rounded-lg border bg-card p-4 hover:bg-muted/30"
-          >
-            <div className="text-sm font-medium">{t('taxi_fleet.monthlySettlements.title', 'Monthly settlements')}</div>
-            <div className="mt-1 text-sm text-muted-foreground">
-              {t(
-                'taxi_fleet.hub.monthlySettlementsHelp',
-                'Per-driver monthly settlements used for payout.',
-              )}
+            <div className="grid gap-4 lg:grid-cols-2">
+              <WeeklySettlementsHubSection />
+              <MonthlySettlementsHubSection />
             </div>
-          </Link>
+          </section>
+
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+                {t('taxi_fleet.settlements.overview.vehiclesSection', 'Vehicles')}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t(
+                  'taxi_fleet.settlements.overview.vehiclesHint',
+                  'Separate vehicle settlement submodule (details coming next).',
+                )}
+              </p>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <VehicleSettlementsHubSection />
+            </div>
+          </section>
         </div>
       </PageBody>
     </Page>
   )
 }
-

@@ -8,6 +8,7 @@ import {
 import { ResourcesResourceType } from '@open-mercato/core/modules/resources/data/entities'
 import {
   RESOURCES_RESOURCE_FIELDSETS,
+  RESOURCES_RESOURCE_FIELDSET_TAXI,
   RESOURCES_RESOURCE_FIELDSET_VEHICLE,
 } from '@open-mercato/core/modules/resources/lib/resourceCustomFields'
 import { E } from '@/.mercato/generated/entities.ids.generated'
@@ -117,13 +118,13 @@ function resolveFieldsetsForWrite(
 }
 
 /**
- * Ensures vehicle fieldset bindings include the given resource type IDs.
+ * Ensures the given fieldset includes the resource type IDs (and exists in config).
  * Never persists an empty fieldset list (that would shadow richer tenant config).
- * If org-scoped config was emptied earlier, restores defaults / parent fieldsets.
  */
-export async function attachVehicleResourceTypesToVehicleFieldset(
+export async function attachResourceTypesToFieldset(
   em: EntityManager,
   scope: TaxiFleetResourceScope,
+  fieldsetCode: string,
   resourceTypeIds: string[],
 ): Promise<void> {
   const uniqueIds = Array.from(
@@ -150,15 +151,22 @@ export async function attachVehicleResourceTypesToVehicleFieldset(
   const sourceFieldsets = resolveFieldsetsForWrite(orgConfig, parentFieldsets)
   let fieldsets = sourceFieldsets.map((fieldset) => ({ ...fieldset }))
 
-  if (!fieldsets.some((fieldset) => fieldset.code === RESOURCES_RESOURCE_FIELDSET_VEHICLE)) {
-    const vehicleDefault = cloneDefaultResourceFieldsets().find(
-      (fieldset) => fieldset.code === RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+  if (!fieldsets.some((fieldset) => fieldset.code === fieldsetCode)) {
+    const defaultFieldset = cloneDefaultResourceFieldsets().find(
+      (fieldset) => fieldset.code === fieldsetCode,
     )
-    if (vehicleDefault) fieldsets.push(vehicleDefault)
+    if (defaultFieldset) fieldsets.push(defaultFieldset)
   }
 
   fieldsets = fieldsets.map((fieldset) => {
-    if (fieldset.code !== RESOURCES_RESOURCE_FIELDSET_VEHICLE) return fieldset
+    if (fieldset.code !== fieldsetCode) {
+      // Keep other fieldsets exclusive: drop these IDs if previously attached elsewhere.
+      if (!fieldset.resourceTypeIds?.length) return fieldset
+      const remaining = fieldset.resourceTypeIds.filter((id) => !uniqueIds.includes(id))
+      return remaining.length === fieldset.resourceTypeIds.length
+        ? fieldset
+        : { ...fieldset, resourceTypeIds: remaining }
+    }
     const mergedIds = Array.from(new Set([...(fieldset.resourceTypeIds ?? []), ...uniqueIds]))
     return { ...fieldset, resourceTypeIds: mergedIds }
   })
@@ -168,8 +176,6 @@ export async function attachVehicleResourceTypesToVehicleFieldset(
   }
 
   if (!orgConfig) {
-    // Prefer attaching on tenant-wide config when it already owns the fieldsets,
-    // instead of creating an empty org-scoped row that would shadow them.
     if (tenantConfig && parentFieldsets.length > 0) {
       const tenantCurrent = mergeEntityFieldsetConfig(
         normalizeEntityFieldsetConfig(tenantConfig.configJson ?? null),
@@ -212,6 +218,15 @@ export async function attachVehicleResourceTypesToVehicleFieldset(
   await em.flush()
 }
 
+/** @deprecated Prefer attachResourceTypesToFieldset */
+export async function attachVehicleResourceTypesToVehicleFieldset(
+  em: EntityManager,
+  scope: TaxiFleetResourceScope,
+  resourceTypeIds: string[],
+): Promise<void> {
+  await attachResourceTypesToFieldset(em, scope, RESOURCES_RESOURCE_FIELDSET_VEHICLE, resourceTypeIds)
+}
+
 export async function restoreResourcesResourceFieldsetsIfEmpty(
   em: EntityManager,
   scope: TaxiFleetResourceScope,
@@ -249,8 +264,9 @@ export async function syncTaxiVehicleCustomFieldScope(
   await restoreResourcesResourceFieldsetsIfEmpty(em, scope)
   const taxiType = await ensureTaxiVehicleResourceType(em, scope)
   const internalType = await findResourceTypeByNames(em, scope, INTERNAL_VEHICLE_RESOURCE_TYPE_NAMES)
-  const ids = [taxiType.id]
-  if (internalType) ids.push(internalType.id)
-  await attachVehicleResourceTypesToVehicleFieldset(em, scope, ids)
+  await attachResourceTypesToFieldset(em, scope, RESOURCES_RESOURCE_FIELDSET_TAXI, [taxiType.id])
+  if (internalType) {
+    await attachResourceTypesToFieldset(em, scope, RESOURCES_RESOURCE_FIELDSET_VEHICLE, [internalType.id])
+  }
   return taxiType
 }

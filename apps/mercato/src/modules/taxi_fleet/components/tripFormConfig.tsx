@@ -13,6 +13,11 @@ import { TAXI_FLEET_TRIP_TYPES } from './useTaxiFleetLabels'
 import type { FleetDriverProfile } from './useFleetDriverDirectory'
 import { readTripCustomerEntityId } from '../lib/customerLink'
 import {
+  decodePendingTripCustomerPhone,
+  isPendingTripCustomerPhone,
+  resolveTripCustomerPayloadFields,
+} from '../lib/pendingTripCustomerPhone'
+import {
   defaultTripDateTimeLocalRange,
   earliestTripStartDate,
   isoToDateTimeLocalValue,
@@ -219,7 +224,15 @@ export function tripFormSchema(t: TranslateFn, options?: TripFormValidationOptio
     .object({
       teamMemberId: requireDriver ? z.string().uuid() : z.string(),
       resourceId: z.string().uuid(),
-      customerEntityId: z.union([z.string().uuid(), z.literal('')]).optional(),
+      customerEntityId: z
+        .union([
+          z.string().uuid(),
+          z.literal(''),
+          z.string().refine((value) => isPendingTripCustomerPhone(value), {
+            message: t('taxi_fleet.trips.form.errors.customerPhoneInvalid', 'Enter a valid phone number.'),
+          }),
+        ])
+        .optional(),
       tripType: z.enum(['client', 'private', 'internal', 'empty', 'event', 'other', 'platform']),
       platform: z.string(),
       startedAtLocal: z.string().min(1),
@@ -688,7 +701,7 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
       label: t('taxi_fleet.trips.customer', 'Customer'),
       required: false,
       layout: 'full',
-      component: ({ value, setValue, disabled, readOnly: fieldReadOnly, values }) => {
+      component: ({ value, setValue, disabled, readOnly: fieldReadOnly, values, setFormValue }) => {
         const companyName =
           typeof values?.companyName === 'string' ? values.companyName.trim() : ''
         const contactName =
@@ -696,7 +709,13 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
         return (
           <TripCustomerField
             value={typeof value === 'string' ? value : ''}
-            onChange={(next) => setValue(next)}
+            onChange={(next) => {
+              setValue(next)
+              const pendingPhone = decodePendingTripCustomerPhone(next)
+              if (pendingPhone) {
+                setFormValue?.('contactPhone', pendingPhone)
+              }
+            }}
             disabled={disabled || fieldReadOnly || readOnly}
             fallbackLabel={companyName || contactName || undefined}
           />
@@ -892,7 +911,7 @@ export function mapTripRowToFormValues(row: {
     platform: row.platform ?? '',
     startedAtLocal: row.startedAt ? normalizeDateTimeLocalInput(isoToDateTimeLocalValue(row.startedAt)) : '',
     endedAtLocal: row.endedAt ? normalizeDateTimeLocalInput(isoToDateTimeLocalValue(row.endedAt)) : '',
-    revenueAmount: row.revenueAmount ?? quotedTotal ?? request.basePrice ?? '',
+    revenueAmount: row.revenueAmount ?? quotedTotal ?? '',
     notes: row.notes ?? '',
     status: row.status,
     fromLon: '',
@@ -962,12 +981,13 @@ export function tripFormValuesToPayload(
   const endedAt = new Date(values.endedAtLocal)
   const extras = buildTripPayloadExtras(values)
   const assignmentId = options?.assignmentId?.trim()
+  const customerFields = resolveTripCustomerPayloadFields(values.customerEntityId)
   return {
     tenantId: scope.tenantId,
     organizationId: scope.organizationId,
     teamMemberId: values.teamMemberId,
     resourceId: values.resourceId,
-    ...(values.customerEntityId ? { customerEntityId: values.customerEntityId } : {}),
+    ...customerFields,
     tripType: values.tripType,
     platform: values.platform?.trim() ? values.platform : null,
     startedAt: startedAt.toISOString(),
@@ -985,11 +1005,19 @@ export function tripFormValuesToUpdatePayload(id: string, values: TripFormValues
   const startedAt = new Date(values.startedAtLocal)
   const endedAt = new Date(values.endedAtLocal)
   const extras = buildTripPayloadExtras(values)
+  const customerFields = resolveTripCustomerPayloadFields(values.customerEntityId)
   return {
     id,
     teamMemberId: values.teamMemberId,
     resourceId: values.resourceId,
-    ...(values.customerEntityId ? { customerEntityId: values.customerEntityId } : {}),
+    ...(customerFields.customerPrimaryPhone
+      ? {
+          customerPrimaryPhone: customerFields.customerPrimaryPhone,
+          customerEntityId: null,
+          customerPersonId: null,
+          customerCompanyId: null,
+        }
+      : customerFields),
     tripType: values.tripType,
     platform: values.platform?.trim() ? values.platform : null,
     startedAt: startedAt.toISOString(),

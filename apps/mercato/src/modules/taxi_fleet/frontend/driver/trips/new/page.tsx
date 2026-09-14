@@ -739,6 +739,10 @@ export default function DriverTripCreatePage() {
                 value={commercial}
                 disabled={busy}
                 receiptDraftRecordId={receiptDraftRecordId}
+                quoteRoute={{
+                  startedAtLocal: route.startedAtLocal,
+                  distanceKm: route.distanceKm,
+                }}
                 onChange={setCommercial}
                 onReceiptFileOffline={async (file) => {
                   const dataBase64 = await fileToBase64(file)
@@ -882,6 +886,10 @@ export default function DriverTripCreatePage() {
                 value={commercial}
                 disabled={busy}
                 receiptDraftRecordId={receiptDraftRecordId}
+                quoteRoute={{
+                  startedAtLocal: route.startedAtLocal,
+                  distanceKm: route.distanceKm,
+                }}
                 onChange={setCommercial}
                 onReceiptFileOffline={async (file) => {
                   const dataBase64 = await fileToBase64(file)

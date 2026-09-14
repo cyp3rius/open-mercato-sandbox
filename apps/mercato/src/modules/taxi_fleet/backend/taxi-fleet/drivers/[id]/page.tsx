@@ -135,7 +135,7 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
       <ApplyBreadcrumb
         breadcrumb={[
           { label: 'Dashboard', labelKey: 'taxi_fleet.hub.dashboardTitle', href: TAXI_FLEET_BASE },
-          { label: 'Driver profiles', labelKey: 'taxi_fleet.drivers.list.title', href: `${TAXI_FLEET_BASE}/drivers` },
+          { label: 'Driver profiles', labelKey: 'taxi_fleet.drivers.title', href: `${TAXI_FLEET_BASE}/drivers` },
           { label: displayName },
         ]}
         title={displayName}

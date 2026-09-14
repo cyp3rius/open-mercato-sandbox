@@ -19,4 +19,3 @@ export const metadata = {
     { label: 'Weekly settlements', labelKey: 'taxi_fleet.settlements.weeklyTitle' },
   ],
 }
-

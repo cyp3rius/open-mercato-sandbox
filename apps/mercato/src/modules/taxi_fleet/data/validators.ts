@@ -319,6 +319,7 @@ export const tripCreateSchema = z
     customerPersonId: optionalUuid,
     customerCompanyId: optionalUuid,
     customerEntityId: optionalUuid,
+    customerPrimaryPhone: z.string().trim().min(5).max(50).optional().nullable(),
     status: tripStatusSchema.optional().default('new'),
     notes: z.string().max(10000).optional().nullable(),
     metadata: z.record(z.string(), z.unknown()).optional().nullable(),
@@ -327,6 +328,7 @@ export const tripCreateSchema = z
     const hasPerson = Boolean(data.customerPersonId)
     const hasCompany = Boolean(data.customerCompanyId)
     const hasEntity = Boolean(data.customerEntityId)
+    const hasPhone = Boolean(data.customerPrimaryPhone?.trim())
     if (hasPerson && hasCompany) {
       ctx.addIssue({
         code: 'custom',
@@ -338,7 +340,8 @@ export const tripCreateSchema = z
       (data.tripType === 'client' || data.tripType === 'other') &&
       !hasPerson &&
       !hasCompany &&
-      !hasEntity
+      !hasEntity &&
+      !hasPhone
     ) {
       ctx.addIssue({
         code: 'custom',
@@ -366,6 +369,7 @@ export const tripUpdateSchema = z
     customerPersonId: optionalUuid,
     customerCompanyId: optionalUuid,
     customerEntityId: optionalUuid,
+    customerPrimaryPhone: z.string().trim().min(5).max(50).optional().nullable(),
     status: tripStatusSchema.optional(),
     notes: z.string().max(10000).optional().nullable(),
     metadata: z.record(z.string(), z.unknown()).optional().nullable(),
@@ -374,11 +378,13 @@ export const tripUpdateSchema = z
     const touched =
       data.customerPersonId !== undefined ||
       data.customerCompanyId !== undefined ||
-      data.customerEntityId !== undefined
+      data.customerEntityId !== undefined ||
+      data.customerPrimaryPhone !== undefined
     if (!touched) return
     const hasPerson = Boolean(data.customerPersonId)
     const hasCompany = Boolean(data.customerCompanyId)
     const hasEntity = Boolean(data.customerEntityId)
+    const hasPhone = Boolean(data.customerPrimaryPhone?.trim())
     if (hasPerson && hasCompany) {
       ctx.addIssue({
         code: 'custom',
@@ -386,7 +392,7 @@ export const tripUpdateSchema = z
         path: ['customerEntityId'],
       })
     }
-    if (!hasPerson && !hasCompany && !hasEntity) {
+    if (!hasPerson && !hasCompany && !hasEntity && !hasPhone) {
       ctx.addIssue({
         code: 'custom',
         message: 'taxi_fleet.trips.errors.customerRequired',
@@ -861,3 +867,31 @@ export type MonthlySettlementUpdateInput = z.infer<typeof monthlySettlementUpdat
 export type MonthlySettlementDeleteInput = z.infer<typeof monthlySettlementDeleteSchema>
 export type MonthlySettlementDocumentCreateInput = z.infer<typeof monthlySettlementDocumentCreateSchema>
 export type MonthlySettlementDocumentDeleteInput = z.infer<typeof monthlySettlementDocumentDeleteSchema>
+
+export const vehicleMonthlySettlementStatusSchema = z.enum(['draft', 'submitted', 'approved'])
+
+export const vehicleMonthlySettlementGenerateSchema = z.object({
+  tenantId: uuid,
+  organizationId: uuid,
+  monthStart: dateOnly.refine((value) => value.endsWith('-01'), {
+    message: 'taxi_fleet.vehicleMonthlySettlements.errors.monthStartInvalid',
+  }),
+  resourceId: uuid.optional(),
+})
+
+export const vehicleMonthlySettlementUpdateSchema = z.object({
+  id: uuid,
+  status: vehicleMonthlySettlementStatusSchema.optional(),
+  notes: z.string().max(20000).optional().nullable(),
+  recalculateSettlement: z.boolean().optional(),
+  cashReported: z.coerce.number().min(0).optional(),
+})
+
+export const vehicleMonthlySettlementDeleteSchema = z.object({ id: uuid })
+
+export const vehicleMonthlySettlementSyncBpSchema = z.object({ id: uuid })
+
+export type VehicleMonthlySettlementGenerateInput = z.infer<typeof vehicleMonthlySettlementGenerateSchema>
+export type VehicleMonthlySettlementUpdateInput = z.infer<typeof vehicleMonthlySettlementUpdateSchema>
+export type VehicleMonthlySettlementDeleteInput = z.infer<typeof vehicleMonthlySettlementDeleteSchema>
+export type VehicleMonthlySettlementSyncBpInput = z.infer<typeof vehicleMonthlySettlementSyncBpSchema>

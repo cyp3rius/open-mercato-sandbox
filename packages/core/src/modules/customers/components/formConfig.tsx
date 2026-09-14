@@ -55,6 +55,7 @@ import { createCompanyRegistrySyncBridgeField } from './companyRegistrySync'
 import {
   mergeEntitySearchOption,
   remoteSearchAuthUsers,
+  resolveUserDisplayLabel,
 } from '../../procurement/lib/procurementEntitySearch'
 
 export const metadata = {
@@ -163,7 +164,7 @@ export type PersonFormValues = {
   displayName: string
   firstName: string
   lastName: string
-  ownerUserId: string
+  ownerUserId?: string
   pesel?: string
   residenceStreet?: string
   residencePostalCode?: string
@@ -184,7 +185,7 @@ export type PersonFormValues = {
 
 export type CompanyFormValues = {
   displayName: string
-  ownerUserId: string
+  ownerUserId?: string
   primaryEmail?: string
   primaryPhone?: string
   status?: string
@@ -532,18 +533,44 @@ const createOwnerUserField = (t: Translator): CrudField => ({
   id: 'ownerUserId',
   label: t('customers.form.owner', 'Guardian'),
   type: 'custom',
-  required: true,
+  required: false,
   layout: 'half',
   component: ({ value, setValue, disabled }: CrudCustomFieldRenderProps) => {
     const ownerUserId = typeof value === 'string' ? value : ''
+    const [ownerLabel, setOwnerLabel] = React.useState(ownerUserId)
+    React.useEffect(() => {
+      let cancelled = false
+      if (!ownerUserId.trim()) {
+        setOwnerLabel('')
+        return
+      }
+      void resolveUserDisplayLabel(ownerUserId).then((label) => {
+        if (!cancelled) setOwnerLabel(label ?? ownerUserId)
+      })
+      return () => {
+        cancelled = true
+      }
+    }, [ownerUserId])
+    const displayLabel = ownerLabel || ownerUserId
+    const clearOption = {
+      value: '',
+      label: t('customers.form.ownerClear', 'No guardian'),
+    }
+    const withClear = (rows: ReturnType<typeof mergeEntitySearchOption>) => {
+      const merged = mergeEntitySearchOption(rows, ownerUserId, displayLabel)
+      if (!ownerUserId.trim()) return merged
+      if (merged.some((row) => row.value === '')) return merged
+      return [clearOption, ...merged]
+    }
     return (
       <EntitySearchCombobox
         value={ownerUserId}
-        onChange={setValue}
-        options={mergeEntitySearchOption([], ownerUserId, ownerUserId)}
+        onChange={(next) => setValue(next)}
+        options={withClear([])}
+        selectedDisplayOverride={ownerLabel || undefined}
         onRemoteSearch={async (query) => {
           const rows = await remoteSearchAuthUsers(query)
-          return mergeEntitySearchOption(rows, ownerUserId, ownerUserId)
+          return withClear(rows)
         }}
         placeholder={t('customers.form.ownerPlaceholder', 'Choose a guardian…')}
         searchPlaceholder={t('customers.form.ownerSearch', 'Search users…')}
@@ -1371,7 +1398,14 @@ export const createPersonFormSchema = () =>
       displayName: z.string().trim().min(1),
       firstName: z.string().trim().min(1),
       lastName: z.string().trim().min(1),
-      ownerUserId: z.string().trim().uuid(),
+      ownerUserId: z
+        .string()
+        .trim()
+        .uuid()
+        .optional()
+        .or(z.literal(''))
+        .transform((val) => (val === '' ? undefined : val))
+        .optional(),
       jobTitle: z
         .string()
         .trim()
@@ -1840,8 +1874,9 @@ export function buildPersonPayload(
   payload.displayName = displayNameValue
   payload.firstName = typeof values.firstName === 'string' ? values.firstName.trim() : ''
   payload.lastName = typeof values.lastName === 'string' ? values.lastName.trim() : ''
-  payload.ownerUserId =
+  const personOwnerId =
     typeof values.ownerUserId === 'string' ? values.ownerUserId.trim() : ''
+  payload.ownerUserId = personOwnerId.length ? personOwnerId : null
 
   const assign = (key: string, val?: string | null) => {
     if (val === null) {
@@ -1907,7 +1942,14 @@ export const createCompanyFormSchema = () =>
   z
     .object({
       displayName: z.string().trim().min(1),
-      ownerUserId: z.string().trim().uuid(),
+      ownerUserId: z
+        .string()
+        .trim()
+        .uuid()
+        .optional()
+        .or(z.literal(''))
+        .transform((val) => (val === '' ? undefined : val))
+        .optional(),
       primaryEmail: z
         .string()
         .trim()
@@ -2385,8 +2427,9 @@ export function buildCompanyPayload(
     throw new Error('DISPLAY_NAME_REQUIRED')
   }
   payload.displayName = displayNameValue
-  payload.ownerUserId =
+  const companyOwnerId =
     typeof values.ownerUserId === 'string' ? values.ownerUserId.trim() : ''
+  payload.ownerUserId = companyOwnerId.length ? companyOwnerId : null
 
   const assign = (key: string, val?: string) => {
     const normalized = blankToUndefined(val)

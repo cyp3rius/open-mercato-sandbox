@@ -23,6 +23,7 @@ import { ResourceTypeSearchField } from '../ResourceTypeSearchField'
 import { PercentInputField } from '@open-mercato/ui/backend/inputs/PercentInputField'
 import { TripStatusSettingsSection } from './TripStatusSettingsSection'
 import { PlatformSyncSettingsSection } from './PlatformSyncSettingsSection'
+import { BpOpenFleetSettingsSection } from './BpOpenFleetSettingsSection'
 import {
   normalizeTripStatusDefinition,
   tripStatusDictionarySchema,
@@ -651,6 +652,16 @@ export function TaxiFleetModuleSettings() {
           saving={saving}
           onChange={setSettings}
         />
+      </SettingsSection>
+
+      <SettingsSection
+        title={t('taxi_fleet.config.bpOpenFleet.title', 'BP Open Fleet')}
+        description={t(
+          'taxi_fleet.config.bpOpenFleet.description',
+          'Credentials for manual fuel-card cost sync on vehicle monthly settlements.',
+        )}
+      >
+        <BpOpenFleetSettingsSection settings={settings} saving={saving} onChange={setSettings} />
       </SettingsSection>
 
       <SettingsSection

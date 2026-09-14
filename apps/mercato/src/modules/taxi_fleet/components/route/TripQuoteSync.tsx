@@ -57,7 +57,7 @@ export function TripQuoteSync({ values, setFormValue, disabled = false }: TripQu
       void (async () => {
         try {
           const call = await apiCall<QuoteApiResponse>(
-            '/api/taxi_fleet/quote',
+            '/api/taxi_fleet/pricing/quote',
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -99,11 +99,7 @@ export function TripQuoteSync({ values, setFormValue, disabled = false }: TripQu
             lastAutoRevenueRef.current = quotedTotal
           }
           setFormValue('quoteSnapshotJson', JSON.stringify(snapshot))
-          const currentCategory =
-            values.vehicleCategory === 'standard' || values.vehicleCategory === 'van'
-              ? values.vehicleCategory
-              : ''
-          if (!currentCategory && typeof data.vehicleCategory === 'string' && data.vehicleCategory.length) {
+          if (data.vehicleCategory === 'standard' || data.vehicleCategory === 'van') {
             setFormValue('vehicleCategory', data.vehicleCategory)
           }
         } catch (err) {
@@ -120,7 +116,7 @@ export function TripQuoteSync({ values, setFormValue, disabled = false }: TripQu
       clearTimeout(debounceRef.current)
       abortRef.current?.abort()
     }
-  }, [disabled, quoteInput, setFormValue, values.vehicleCategory])
+  }, [disabled, quoteInput, setFormValue])
 
   return null
 }

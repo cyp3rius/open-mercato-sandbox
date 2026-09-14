@@ -4,6 +4,7 @@ import * as React from 'react'
 import { Building2, Plus, UserRound } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { EntitySearchCombobox } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
+import type { EntitySearchComboboxOption } from '@open-mercato/ui/backend/inputs/EntitySearchCombobox'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { IconButton } from '@open-mercato/ui/primitives/icon-button'
 import { Popover, PopoverContent, PopoverTrigger } from '@open-mercato/ui/primitives/popover'
@@ -12,6 +13,12 @@ import {
   remoteSearchFleetCustomers,
   resolveFleetCustomerDisplayLabel,
 } from '../lib/fleetCustomerEntitySearch'
+import { normalizeDriverCustomerPhone } from '../lib/driverCustomerPhone'
+import {
+  decodePendingTripCustomerPhone,
+  encodePendingTripCustomerPhone,
+  isPendingTripCustomerPhone,
+} from '../lib/pendingTripCustomerPhone'
 
 const UUID_LIKE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -25,9 +32,31 @@ type TripCustomerFieldProps = {
 }
 
 function pickInitialLabel(value: string, fallbackLabel?: string): string {
+  const pendingPhone = decodePendingTripCustomerPhone(value)
+  if (pendingPhone) return pendingPhone
   const fallback = fallbackLabel?.trim() ?? ''
   if (fallback.length && !UUID_LIKE.test(fallback)) return fallback
   return ''
+}
+
+function buildPendingPhoneOption(
+  query: string,
+  t: (key: string, fallback: string, params?: Record<string, string>) => string,
+): EntitySearchComboboxOption | null {
+  const normalized = normalizeDriverCustomerPhone(query)
+  if (!normalized) return null
+  return {
+    value: encodePendingTripCustomerPhone(normalized),
+    label: t(
+      'taxi_fleet.trips.customerUsePhone',
+      'Use phone {phone} (create on save)',
+      { phone: normalized },
+    ),
+    description: t(
+      'taxi_fleet.trips.customerUsePhoneHint',
+      'No matching customer — a person will be created when you save the trip.',
+    ),
+  }
 }
 
 export function TripCustomerField({
@@ -53,6 +82,10 @@ export function TripCustomerField({
     const trimmed = value.trim()
     if (!trimmed.length) {
       setLabel('')
+      return
+    }
+    if (isPendingTripCustomerPhone(trimmed)) {
+      setLabel(pickInitialLabel(trimmed, fallbackLabel))
       return
     }
     setLabel(pickInitialLabel(trimmed, fallbackLabel))
@@ -96,10 +129,18 @@ export function TripCustomerField({
         selectedDisplayOverride={displayLabel || undefined}
         onRemoteSearch={async (query) => {
           const rows = await remoteSearchFleetCustomers(query, kindLabels)
-          return mergeEntitySearchOption(rows, value, displayLabel || value)
+          const pending = buildPendingPhoneOption(query, t)
+          const withPending =
+            pending && !rows.some((row) => row.value === pending.value)
+              ? [pending, ...rows]
+              : rows
+          return mergeEntitySearchOption(withPending, value, displayLabel || value)
         }}
         placeholder={t('taxi_fleet.trips.customerSearch', 'Search customer…')}
-        searchPlaceholder={t('taxi_fleet.trips.customerSearch', 'Search customer…')}
+        searchPlaceholder={t(
+          'taxi_fleet.trips.customerSearchPhoneHint',
+          'Search by name or phone…',
+        )}
         emptyText={t('taxi_fleet.trips.customerEmpty', 'No customers found.')}
       />
       <Popover open={createMenuOpen} onOpenChange={setCreateMenuOpen}>

@@ -315,9 +315,10 @@ export default function TaxiFleetMonthlySettlementDetailPage({ params }: { param
       <ApplyBreadcrumb
         breadcrumb={[
           { label: 'Dashboard', labelKey: 'taxi_fleet.hub.dashboardTitle', href: TAXI_FLEET_BASE },
+          { label: 'Settlements', labelKey: 'taxi_fleet.settlements.title', href: `${TAXI_FLEET_BASE}/settlements-overview` },
           {
             label: 'Monthly settlements',
-            labelKey: 'taxi_fleet.monthlySettlements.list.title',
+            labelKey: 'taxi_fleet.monthlySettlements.title',
             href: `${TAXI_FLEET_BASE}/settlements-overview/monthly`,
           },
           { label: titleText },

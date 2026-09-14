@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { RESOURCES_RESOURCE_FIELDSET_VEHICLE } from '@open-mercato/core/modules/resources/lib/resourceCustomFields'
+import { isResourcesVehicleFieldsetCode } from '@open-mercato/core/modules/resources/lib/resourceCustomFields'
 
 type PolicyItem = {
   id: string
@@ -35,7 +35,7 @@ export function ResourceVehicleCommercialSection(props: {
       ? values.resourceTypeId.trim()
       : null
   const fieldsetCode = resolveFieldsetCode(resourceTypeId)
-  const isVehicle = fieldsetCode === RESOURCES_RESOURCE_FIELDSET_VEHICLE
+  const isVehicle = isResourcesVehicleFieldsetCode(fieldsetCode)
   const financingOk = resourceTypeId ? financingEligibleByTypeId.get(resourceTypeId) === true : false
 
   const [policies, setPolicies] = React.useState<PolicyItem[]>([])

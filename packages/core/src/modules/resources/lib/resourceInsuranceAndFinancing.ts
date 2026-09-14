@@ -7,7 +7,7 @@ import {
   ResourcesResourceType,
 } from '../data/entities'
 import {
-  RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+  isResourcesVehicleFieldsetCode,
   resolveResourcesResourceFieldsetCode,
 } from './resourceCustomFields'
 import type { ResourcesResourceFinancingProfileInput } from '../data/validators'
@@ -21,7 +21,7 @@ export async function loadResourceTypeForResource(
 }
 
 export function isVehicleResourceTypeName(typeName: string | null | undefined): boolean {
-  return resolveResourcesResourceFieldsetCode(typeName) === RESOURCES_RESOURCE_FIELDSET_VEHICLE
+  return isResourcesVehicleFieldsetCode(resolveResourcesResourceFieldsetCode(typeName))
 }
 
 export async function assertInsurancePolicyAllowedForResourceType(

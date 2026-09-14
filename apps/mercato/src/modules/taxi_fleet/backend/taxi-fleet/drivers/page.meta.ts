@@ -15,6 +15,6 @@ export const metadata = {
   icon,
   breadcrumb: [
     { label: 'Dashboard', labelKey: 'taxi_fleet.hub.dashboardTitle', href: '/backend/taxi-fleet' },
-    { label: 'Drivers', labelKey: 'taxi_fleet.drivers.title' },
+    { label: 'Driver profiles', labelKey: 'taxi_fleet.drivers.title' },
   ],
 }

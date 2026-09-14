@@ -30,6 +30,7 @@ import {
   readCachedDriverJson,
 } from '../../../../lib/driverOffline/outbox'
 import { tripRequestDetailsFromMetadata } from '../../../../lib/tripRequestForm'
+import { readQuoteSnapshotFromMetadata } from '../../../../lib/pricing/tripFormQuote'
 import { isDriverTripElectronicallyPrepaid } from '../../../../lib/driverTripPayment'
 import { findDriverTripOverlap } from '../../../../lib/driverTripOverlapClient'
 import { useTaxiFleetLabels } from '../../../../components/useTaxiFleetLabels'
@@ -417,6 +418,7 @@ function DriverTripDetailContent({
         revenueAmount: trip.revenueAmount != null ? String(trip.revenueAmount) : null,
       })
     : null
+  const quoteSnapshot = trip ? readQuoteSnapshotFromMetadata(trip.metadata ?? null) : null
   const currency = hasText(trip?.currencyCode) ? trip!.currencyCode!.trim() : 'PLN'
   const unitKm = t('taxi_fleet.driverApp.trips.unitKm', 'km')
   const prepaidLabel = t('taxi_fleet.driverApp.trips.prepaid', 'Prepayment')
@@ -424,7 +426,20 @@ function DriverTripDetailContent({
     ? prepaidLabel
     : withUnit(formatAmount(trip?.revenueAmount), currency)
   const distanceDisplay = withUnit(formatAmount(trip?.distanceKm), unitKm)
-  const basePriceDisplay = withUnit(request?.basePrice || null, currency)
+  const basePriceRaw =
+    typeof quoteSnapshot?.basePrice === 'number' && Number.isFinite(quoteSnapshot.basePrice)
+      ? String(quoteSnapshot.basePrice)
+      : request?.basePrice?.trim() || null
+  const basePriceDisplay = withUnit(basePriceRaw, currency)
+  const quoteSurcharges = Array.isArray(quoteSnapshot?.surcharges)
+    ? (quoteSnapshot.surcharges as Array<{ code?: string; label?: string; amount?: number }>)
+    : []
+  const nightOrHolidaySurcharges = quoteSurcharges.filter(
+    (line) =>
+      (line.code === 'NIGHT' || line.code === 'HOLIDAY') &&
+      typeof line.amount === 'number' &&
+      Number.isFinite(line.amount),
+  )
   const receiptNumber =
     trip?.metadata && typeof trip.metadata.receiptDocumentNumber === 'string'
       ? trip.metadata.receiptDocumentNumber.trim()
@@ -676,6 +691,21 @@ function DriverTripDetailContent({
                     label={t('taxi_fleet.driverApp.trips.basePrice', 'Base price')}
                     value={basePriceDisplay}
                   />
+                  {nightOrHolidaySurcharges.map((line) => (
+                    <OptionalDetailRow
+                      key={line.code ?? line.label}
+                      label={
+                        line.label?.trim() ||
+                        (line.code === 'NIGHT'
+                          ? t('taxi_fleet.driverApp.trips.surchargeNight', 'Night surcharge')
+                          : t('taxi_fleet.driverApp.trips.surchargeHoliday', 'Sunday/holiday surcharge'))
+                      }
+                      value={withUnit(
+                        typeof line.amount === 'number' ? line.amount.toFixed(2) : null,
+                        currency,
+                      )}
+                    />
+                  ))}
                   <OptionalDetailRow
                     label={t('taxi_fleet.driverApp.trips.contactName', 'Contact')}
                     value={request.contactName || null}

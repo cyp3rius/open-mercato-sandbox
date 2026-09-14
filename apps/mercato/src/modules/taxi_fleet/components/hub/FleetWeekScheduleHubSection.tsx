@@ -1,9 +1,8 @@
-"use client"
+'use client'
 
 import * as React from 'react'
 import Link from 'next/link'
-import { endOfWeek, format, startOfWeek } from 'date-fns'
-import { pl } from 'date-fns/locale/pl'
+import { addDays, format } from 'date-fns'
 import { ArrowRight } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
@@ -18,6 +17,8 @@ import { buildFleetCalendarItems, type CalendarAssignment, type CalendarTrip } f
 type AssignmentsResponse = { items: CalendarAssignment[] }
 type TripsResponse = { items: CalendarTrip[] }
 
+const FORWARD_DAYS = 14
+
 export function FleetWeekScheduleHubSection() {
   const t = useT()
   const scopeVersion = useOrganizationScopeVersion()
@@ -26,12 +27,13 @@ export function FleetWeekScheduleHubSection() {
   const [assignments, setAssignments] = React.useState<CalendarAssignment[]>([])
   const [trips, setTrips] = React.useState<CalendarTrip[]>([])
   const [loading, setLoading] = React.useState(true)
+  const [now, setNow] = React.useState(() => new Date())
 
-  const weekRange = React.useMemo(() => {
-    const start = startOfWeek(new Date(), { locale: pl, weekStartsOn: 1 })
-    const end = endOfWeek(new Date(), { locale: pl, weekStartsOn: 1 })
+  const range = React.useMemo(() => {
+    const start = now
+    const end = addDays(now, FORWARD_DAYS)
     return { start, end }
-  }, [])
+  }, [now])
 
   const resourceIds = React.useMemo(() => {
     const ids = new Set<string>()
@@ -45,13 +47,16 @@ export function FleetWeekScheduleHubSection() {
     let cancelled = false
     async function load() {
       setLoading(true)
-      const dateFrom = format(weekRange.start, 'yyyy-MM-dd')
-      const dateTo = format(weekRange.end, "yyyy-MM-dd'T'23:59:59")
+      const currentNow = new Date()
+      setNow(currentNow)
+      const dateFrom = format(currentNow, 'yyyy-MM-dd')
+      const dateToEnd = addDays(currentNow, FORWARD_DAYS)
+      const dateTo = format(dateToEnd, "yyyy-MM-dd'T'23:59:59")
       const assignmentParams = new URLSearchParams({
         page: '1',
         pageSize: '100',
         dateFrom,
-        dateTo: format(weekRange.end, 'yyyy-MM-dd'),
+        dateTo: format(dateToEnd, 'yyyy-MM-dd'),
       })
       const tripParams = new URLSearchParams({
         page: '1',
@@ -72,9 +77,9 @@ export function FleetWeekScheduleHubSection() {
     return () => {
       cancelled = true
     }
-  }, [scopeVersion, weekRange.end, weekRange.start])
+  }, [scopeVersion])
 
-  const previewItems = React.useMemo(() => {
+  const upcomingItems = React.useMemo(() => {
     const items = buildFleetCalendarItems(
       assignments,
       trips,
@@ -87,24 +92,29 @@ export function FleetWeekScheduleHubSection() {
       },
     )
     return items
-      .filter((item) => item.startsAt >= weekRange.start && item.startsAt <= weekRange.end)
+      .filter((item) => item.startsAt >= now && item.startsAt <= range.end)
       .sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime())
-      .slice(0, 8)
-  }, [assignments, resolveName, resolveResourceColor, resolveResourceLabel, resolveTripTypeLabel, t, trips, weekRange.end, weekRange.start])
+  }, [assignments, now, range.end, resolveName, resolveResourceColor, resolveResourceLabel, resolveTripTypeLabel, t, trips])
 
-  const assignmentCount = assignments.length
-  const tripCount = trips.length
+  const previewItems = upcomingItems.slice(0, 8)
+  const assignmentCount = upcomingItems.filter((item) => item.metadata?.recordType === 'assignment').length
+  const tripCount = upcomingItems.filter((item) => item.metadata?.recordType !== 'assignment').length
 
   return (
     <section className="rounded-lg border bg-card px-4 py-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold">{t('taxi_fleet.hub.weekSchedule.title', 'This week schedule')}</h2>
+          <h2 className="text-sm font-semibold">
+            {t('taxi_fleet.hub.weekSchedule.title', 'Upcoming schedule')}
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {t('taxi_fleet.hub.weekSchedule.description', 'Driver allocations and planned trips for the current week.')}
+            {t(
+              'taxi_fleet.hub.weekSchedule.description',
+              'Upcoming driver allocations and planned trips.',
+            )}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            {format(weekRange.start, 'dd.MM')} – {format(weekRange.end, 'dd.MM.yyyy')}
+            {format(range.start, 'dd.MM')} – {format(range.end, 'dd.MM.yyyy')}
             {' · '}
             {t('taxi_fleet.hub.weekSchedule.counts', '{assignments} allocations, {trips} trips', {
               assignments: String(assignmentCount),
@@ -123,7 +133,9 @@ export function FleetWeekScheduleHubSection() {
         {loading ? (
           <p className="text-sm text-muted-foreground">{t('taxi_fleet.hub.loading', 'Loading…')}</p>
         ) : previewItems.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t('taxi_fleet.hub.weekSchedule.empty', 'Nothing scheduled this week yet.')}</p>
+          <p className="text-sm text-muted-foreground">
+            {t('taxi_fleet.hub.weekSchedule.empty', 'Nothing upcoming in the next two weeks.')}
+          </p>
         ) : (
           previewItems.map((item) => (
             <div key={item.id} className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm">

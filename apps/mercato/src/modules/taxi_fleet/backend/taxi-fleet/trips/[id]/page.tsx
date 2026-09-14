@@ -221,7 +221,7 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
       <ApplyBreadcrumb
         breadcrumb={[
           { label: 'Dashboard', labelKey: 'taxi_fleet.hub.dashboardTitle', href: TAXI_FLEET_BASE },
-          { label: 'Trips', labelKey: 'taxi_fleet.trips.list.title', href: `${TAXI_FLEET_BASE}/trips` },
+          { label: 'Trips', labelKey: 'taxi_fleet.trips.title', href: `${TAXI_FLEET_BASE}/trips` },
           { label: breadcrumbTitle },
         ]}
         title={breadcrumbTitle}

@@ -20,7 +20,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { cn } from '@open-mercato/shared/lib/utils'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import {
-  RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+  isResourcesVehicleFieldsetCode,
   resolveResourcesResourceFieldsetCode,
 } from '@open-mercato/core/modules/resources/lib/resourceCustomFields'
 import { renderDictionaryColor, renderDictionaryIcon } from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
@@ -223,7 +223,7 @@ export function VehicleAccessoriesSection({ hostResourceId }: { hostResourceId: 
       const meta = typeById.get(resourceTypeId) ?? null
       const name = meta?.name ?? null
       if (!name) return true
-      return resolveResourcesResourceFieldsetCode(name) !== RESOURCES_RESOURCE_FIELDSET_VEHICLE
+      return !isResourcesVehicleFieldsetCode(resolveResourcesResourceFieldsetCode(name))
     },
     [typeById],
   )

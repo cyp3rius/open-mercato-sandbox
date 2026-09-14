@@ -9,6 +9,7 @@ export const RESOURCES_RESOURCE_FIELDSET_SEAT = 'resources_resource_seat'
 export const RESOURCES_RESOURCE_FIELDSET_HAIR_KIT = 'resources_resource_hair_kit'
 export const RESOURCES_RESOURCE_FIELDSET_DENTAL_CHAIR = 'resources_resource_dental_chair'
 export const RESOURCES_RESOURCE_FIELDSET_VEHICLE = 'resources_resource_vehicle'
+export const RESOURCES_RESOURCE_FIELDSET_TAXI = 'resources_resource_taxi'
 
 export const RESOURCES_RESOURCE_FIELDSETS = [
   {
@@ -79,7 +80,22 @@ export const RESOURCES_RESOURCE_FIELDSETS = [
       { code: 'maintenance', title: 'Maintenance' },
     ],
   },
+  {
+    code: RESOURCES_RESOURCE_FIELDSET_TAXI,
+    label: 'Taxi',
+    description: 'Taxi vehicle identity, platform IDs, fuel card, and devices.',
+    groups: [
+      { code: 'identity', title: 'Identity' },
+      { code: 'specs', title: 'Specs' },
+      { code: 'platforms', title: 'Platforms' },
+      { code: 'fuel_card', title: 'Fuel card' },
+      { code: 'devices', title: 'Devices' },
+      { code: 'maintenance', title: 'Maintenance' },
+    ],
+  },
 ] as const
+
+const FLEET_VEHICLE_FIELDSETS = [RESOURCES_RESOURCE_FIELDSET_VEHICLE, RESOURCES_RESOURCE_FIELDSET_TAXI]
 
 export const RESOURCES_RESOURCE_CUSTOM_FIELD_SETS: FieldSetInput[] = [
   defineFields(E.resources.resources_resource, [
@@ -232,76 +248,105 @@ export const RESOURCES_RESOURCE_CUSTOM_FIELD_SETS: FieldSetInput[] = [
     cf.text('vehicle_plate', {
       label: 'License plate',
       fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
-      group: { code: 'identity' },
-      filterable: true,
-    }),
-    cf.text('uber_vehicle_id', {
-      label: 'Uber vehicle ID',
-      description: 'Fleet vehicle UUID from Uber partner console.',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
-      group: { code: 'identity' },
-      filterable: true,
-    }),
-    cf.text('bolt_vehicle_id', {
-      label: 'Bolt vehicle ID',
-      description: 'Fleet vehicle ID from Bolt partner console.',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
-      group: { code: 'identity' },
-      filterable: true,
-    }),
-    cf.text('free_vehicle_id', {
-      label: 'Free vehicle ID',
-      description: 'Fleet vehicle ID from Free partner console.',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+      fieldsets: FLEET_VEHICLE_FIELDSETS,
       group: { code: 'identity' },
       filterable: true,
     }),
     cf.text('vehicle_model', {
       label: 'Model',
       fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+      fieldsets: FLEET_VEHICLE_FIELDSETS,
       group: { code: 'identity' },
     }),
     cf.text('vehicle_vin_number', {
       label: 'VIN',
       fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+      fieldsets: FLEET_VEHICLE_FIELDSETS,
       group: { code: 'identity' },
       filterable: true,
     }),
     cf.integer('vehicle_year_of_manufacture', {
       label: 'Year of manufacture',
       fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+      fieldsets: FLEET_VEHICLE_FIELDSETS,
       group: { code: 'specs' },
     }),
     cf.select('vehicle_fuel_type', ['petrol', 'diesel', 'hybrid', 'electric'], {
       label: 'Fuel type',
       fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+      fieldsets: FLEET_VEHICLE_FIELDSETS,
       group: { code: 'specs' },
-    }),
-    cf.select('taxi', ['standard', 'van'], {
-      label: 'Taxi vehicle type',
-      description: 'Standard or van — used for fleet trip pricing.',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
-      group: { code: 'specs' },
-      filterable: true,
-      listVisible: true,
-      formEditable: true,
     }),
     cf.integer('vehicle_mileage_km', {
       label: 'Mileage (km)',
       fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+      fieldsets: FLEET_VEHICLE_FIELDSETS,
       group: { code: 'specs' },
     }),
     cf.text('vehicle_registration_date', {
       label: 'Registration date',
       description: 'YYYY-MM-DD',
       fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+      fieldsets: FLEET_VEHICLE_FIELDSETS,
       group: { code: 'specs' },
     }),
     cf.text('vehicle_last_service', {
       label: 'Last service date',
       description: 'YYYY-MM-DD',
       fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+      fieldsets: FLEET_VEHICLE_FIELDSETS,
       group: { code: 'maintenance' },
+    }),
+    cf.select('taxi', ['standard', 'van'], {
+      label: 'Taxi vehicle type',
+      description: 'Standard or van — used for fleet trip pricing.',
+      fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
+      group: { code: 'specs' },
+      filterable: true,
+      listVisible: true,
+      formEditable: true,
+    }),
+    cf.text('uber_vehicle_id', {
+      label: 'Uber vehicle ID',
+      description: 'Fleet vehicle UUID from Uber partner console.',
+      fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
+      group: { code: 'platforms' },
+      filterable: true,
+    }),
+    cf.text('bolt_vehicle_id', {
+      label: 'Bolt vehicle ID',
+      description: 'Fleet vehicle ID from Bolt partner console.',
+      fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
+      group: { code: 'platforms' },
+      filterable: true,
+    }),
+    cf.text('free_vehicle_id', {
+      label: 'Free vehicle ID',
+      description: 'Fleet vehicle ID from Free partner console.',
+      fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
+      group: { code: 'platforms' },
+      filterable: true,
+    }),
+    cf.text('bp_fuel_card_number', {
+      label: 'BP fuel card number',
+      description: 'Fleet fuel card number used to match BP Open Fleet transactions.',
+      fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
+      group: { code: 'fuel_card' },
+      filterable: true,
+    }),
+    cf.text('payment_terminal_id', {
+      label: 'Payment terminal ID',
+      description: 'In-vehicle payment terminal identifier.',
+      fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
+      group: { code: 'devices' },
+      filterable: true,
+    }),
+    cf.text('geneta_vehicle_id', {
+      label: 'Geneta vehicle ID',
+      description: 'Vehicle ID in Geneta telematics.',
+      fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
+      group: { code: 'devices' },
+      filterable: true,
     }),
   ]),
   defineFields(E.resources.resources_resource_activity, [
@@ -340,17 +385,21 @@ export function resolveResourcesResourceFieldsetCode(name?: string | null): stri
   if (normalized.includes('seat')) return RESOURCES_RESOURCE_FIELDSET_SEAT
   if (normalized.includes('hair')) return RESOURCES_RESOURCE_FIELDSET_HAIR_KIT
   if (normalized.includes('dental')) return RESOURCES_RESOURCE_FIELDSET_DENTAL_CHAIR
+  if (normalized.includes('taxi')) return RESOURCES_RESOURCE_FIELDSET_TAXI
   if (
     normalized.includes('car')
     || normalized.includes('vehicle')
     || normalized.includes('pojazd')
-    || normalized.includes('taxi')
   ) {
     return RESOURCES_RESOURCE_FIELDSET_VEHICLE
   }
   return RESOURCES_RESOURCE_FIELDSET_DEFAULT
 }
 
+/** Vehicle or taxi fleet fieldsets (insurance, accessories, gallery, financing UI). */
 export function isResourcesVehicleFieldsetCode(fieldsetCode: string | null | undefined): boolean {
-  return fieldsetCode === RESOURCES_RESOURCE_FIELDSET_VEHICLE
+  return (
+    fieldsetCode === RESOURCES_RESOURCE_FIELDSET_VEHICLE
+    || fieldsetCode === RESOURCES_RESOURCE_FIELDSET_TAXI
+  )
 }

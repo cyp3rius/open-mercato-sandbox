@@ -632,6 +632,7 @@
   "customers.errors.unauthorized": "Unauthorized",
   "customers.form.owner": "Guardian",
   "customers.form.ownerAddUser": "Create user in a new tab",
+  "customers.form.ownerClear": "No guardian",
   "customers.form.ownerPlaceholder": "Choose a guardian…",
   "customers.form.ownerRequired": "Guardian is required.",
   "customers.form.ownerSearch": "Search users…",

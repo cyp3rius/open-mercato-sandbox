@@ -15,7 +15,7 @@ import {
   type DictionarySelectLabels,
 } from '@open-mercato/core/modules/dictionaries/components/DictionaryEntrySelect'
 import {
-  RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+  isResourcesVehicleFieldsetCode,
   resolveResourcesResourceFieldsetCode,
 } from '@open-mercato/core/modules/resources/lib/resourceCustomFields'
 
@@ -65,7 +65,7 @@ async function fetchResourcesByIds(
 
 function isVehicleRow(row: ResourceRow): boolean {
   const tname = row.resource_type_name ?? null
-  return resolveResourcesResourceFieldsetCode(tname) === RESOURCES_RESOURCE_FIELDSET_VEHICLE
+  return isResourcesVehicleFieldsetCode(resolveResourcesResourceFieldsetCode(tname))
 }
 
 function rowTypeId(row: ResourceRow): string | null {

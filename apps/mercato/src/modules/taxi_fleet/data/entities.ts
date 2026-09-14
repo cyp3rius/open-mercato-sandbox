@@ -560,6 +560,84 @@ export class TaxiFleetMonthlySettlement {
   deletedAt?: Date | null
 }
 
+@Entity({ tableName: 'taxi_fleet_vehicle_monthly_settlements' })
+@Unique({ properties: ['tenantId', 'organizationId', 'resourceId', 'monthStart'] })
+@Index({ name: 'taxi_fleet_vehicle_monthly_settlements_scope_idx', properties: ['tenantId', 'organizationId'] })
+@Index({ name: 'taxi_fleet_vehicle_monthly_settlements_month_idx', properties: ['monthStart', 'tenantId'] })
+export class TaxiFleetVehicleMonthlySettlement {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'resource_id', type: 'uuid' })
+  resourceId!: string
+
+  @Property({ name: 'month_start', type: 'date' })
+  monthStart!: string
+
+  @Property({ name: 'shift_gps_km', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  shiftGpsKm: string = '0'
+
+  @Property({ name: 'trip_km', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  tripKm: string = '0'
+
+  @Property({ name: 'empty_km', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  emptyKm: string = '0'
+
+  /** Reserved for Geneta telematics import (phase 3). */
+  @Property({ name: 'geneta_km', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  genetaKm?: string | null
+
+  @Property({ name: 'revenue_gross', type: 'numeric', precision: 14, scale: 2, default: 0 })
+  revenueGross: string = '0'
+
+  @Property({ name: 'revenue_net', type: 'numeric', precision: 14, scale: 2, default: 0 })
+  revenueNet: string = '0'
+
+  /** Reserved for BP fleet-card fuel costs (phase 3). */
+  @Property({ name: 'bp_fuel_cost', type: 'numeric', precision: 14, scale: 2, default: 0 })
+  bpFuelCost: string = '0'
+
+  @Property({ name: 'cash_expected', type: 'numeric', precision: 14, scale: 2, default: 0 })
+  cashExpected: string = '0'
+
+  /** Operator-entered cash register summary for this vehicle/month. */
+  @Property({ name: 'cash_reported', type: 'numeric', precision: 14, scale: 2, default: 0 })
+  cashReported: string = '0'
+
+  @Property({ type: 'text', default: 'draft' })
+  status: 'draft' | 'submitted' | 'approved' = 'draft'
+
+  @Property({ name: 'submitted_at', type: Date, nullable: true })
+  submittedAt?: Date | null
+
+  @Property({ name: 'approved_by_user_id', type: 'uuid', nullable: true })
+  approvedByUserId?: string | null
+
+  @Property({ name: 'approved_at', type: Date, nullable: true })
+  approvedAt?: Date | null
+
+  @Property({ type: 'text', nullable: true })
+  notes?: string | null
+
+  @Property({ name: 'snapshot_json', type: 'json', nullable: true })
+  snapshotJson?: Record<string, unknown> | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
 export const MONTHLY_SETTLEMENT_DOCUMENT_KINDS = ['cash_register', 'fuel', 'treasury', 'other'] as const
 export type MonthlySettlementDocumentKind = (typeof MONTHLY_SETTLEMENT_DOCUMENT_KINDS)[number]
 

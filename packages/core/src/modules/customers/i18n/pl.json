@@ -631,6 +631,7 @@
   "customers.errors.unauthorized": "Brak autoryzacji",
   "customers.form.owner": "Opiekun",
   "customers.form.ownerAddUser": "Utwórz użytkownika w nowej karcie",
+  "customers.form.ownerClear": "Bez opiekuna",
   "customers.form.ownerPlaceholder": "Wybierz opiekuna…",
   "customers.form.ownerRequired": "Opiekun jest wymagany.",
   "customers.form.ownerSearch": "Szukaj użytkowników…",

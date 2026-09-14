@@ -13,6 +13,8 @@ export const metadata = {
   navFlat: true,
   pageOrder: 4603,
   icon,
-  breadcrumb: [{ label: 'Dashboard', labelKey: 'taxi_fleet.hub.dashboardTitle', href: '/backend/taxi-fleet' }],
+  breadcrumb: [
+    { label: 'Dashboard', labelKey: 'taxi_fleet.hub.dashboardTitle', href: '/backend/taxi-fleet' },
+    { label: 'Settlements', labelKey: 'taxi_fleet.settlements.title' },
+  ],
 }
-

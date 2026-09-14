@@ -8,7 +8,12 @@ export const metadata = {
   navHidden: true,
   breadcrumb: [
     { label: 'Dashboard', labelKey: 'taxi_fleet.hub.dashboardTitle', href: '/backend/taxi-fleet' },
-    { label: 'Monthly settlements', labelKey: 'taxi_fleet.monthlySettlements.list.title', href: '/backend/taxi-fleet/monthly-settlements' },
+    { label: 'Settlements', labelKey: 'taxi_fleet.settlements.title', href: '/backend/taxi-fleet/settlements-overview' },
+    {
+      label: 'Monthly settlements',
+      labelKey: 'taxi_fleet.monthlySettlements.title',
+      href: '/backend/taxi-fleet/settlements-overview/monthly',
+    },
     { label: 'Detail', labelKey: 'taxi_fleet.monthlySettlements.detail.title' },
   ],
 }

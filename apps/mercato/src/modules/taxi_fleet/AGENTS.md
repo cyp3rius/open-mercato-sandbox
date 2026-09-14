@@ -2,6 +2,17 @@
 
 App module: `apps/mercato/src/modules/taxi_fleet/`
 
+## Trip pricing quote (canonical)
+
+- **Canonical endpoint:** `POST /api/taxi_fleet/pricing/quote`
+- **Legacy alias (BC):** `POST /api/taxi_fleet/quote` — same body/response; prefer `/pricing/quote` for new clients
+- **Auth:** session required; access if the user has **any of** `taxi_fleet.view` | `taxi_fleet.driver` | `taxi_fleet.trips.inject` (checked in handler via `userHasAnyFeature`; no public unauthenticated quote)
+- **Service:** `lib/pricing/runFleetQuote.ts` — loads org settings → `resolveFleetPricingConfig` → Nager PL holiday when `isPublicHoliday` omitted → `calculateQuote`
+- **Request / response:** `quoteBodySchema` / `quoteResponseSchema` in `data/validators.ts` (`currency`, `vehicleCategory`, `basePrice`, `surcharges[]`, `totalPrice`, optional `warnings`)
+- **Vehicle category:** omit from client body so `selectVehicle` always runs (optional field is explicit API override only)
+- **CRM:** `TripQuoteSync` → `/api/taxi_fleet/pricing/quote`
+- **Driver app:** `buildDriverQuoteInputFromRoute` defaults (`local`, 1 passenger, no luggage/seats, no meet-and-greet); `DriverQuoteSync` auto-fills `revenueAmount` when blank/zero or still matching last auto quote
+
 ## Platform trip sync (Phase 3)
 
 ### Architecture
@@ -64,7 +75,8 @@ Vendor JSON items are normalized by `lib/platformSync/adapters/mapVendorTrip.ts`
 
 `lib/platformSync/resolvePlatformTripVehicle.ts` (create, or update when `resourceId` is null):
 
-1. Match resource CF `uber_vehicle_id` / `bolt_vehicle_id` / `free_vehicle_id` (set on vehicle resources)
+1. Match resource CF `uber_vehicle_id` / `bolt_vehicle_id` / `free_vehicle_id` (taxi fieldset `resources_resource_taxi`)
+2. Match BP fuel costs via CF `bp_fuel_card_number` on manual sync from vehicle monthly settlement detail
 2. Else match normalized `vehicle_plate`
 3. Else daily assignment for driver + trip date (`TaxiFleetDailyAssignment`)
 

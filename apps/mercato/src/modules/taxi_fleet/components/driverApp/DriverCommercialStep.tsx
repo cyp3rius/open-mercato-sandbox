@@ -22,6 +22,7 @@ import {
   resolveDriverCommercialFieldVisibility,
   tripTypeRequiresCustomer,
 } from '../../lib/driverTripCommercialFields'
+import { DriverQuoteSync, type DriverQuoteRouteInput } from './DriverQuoteSync'
 
 export type DriverCommercialValue = {
   completionMode: DriverTripCompletionMode
@@ -42,6 +43,7 @@ type Props = {
   value: DriverCommercialValue
   disabled?: boolean
   receiptDraftRecordId: string
+  quoteRoute?: DriverQuoteRouteInput | null
   onChange: (next: DriverCommercialValue) => void
   onReceiptFileOffline?: (file: File) => Promise<{ blobId: string; fileName: string } | null>
 }
@@ -50,11 +52,14 @@ export function DriverCommercialStep({
   value,
   disabled,
   receiptDraftRecordId,
+  quoteRoute = null,
   onChange,
   onReceiptFileOffline,
 }: Props) {
   const t = useT()
   const fields = resolveDriverCommercialFieldVisibility(value.tripType)
+  const valueRef = React.useRef(value)
+  valueRef.current = value
 
   return (
     <div className="space-y-4">
@@ -146,6 +151,14 @@ export function DriverCommercialStep({
             PLN
           </div>
         </div>
+        {quoteRoute ? (
+          <DriverQuoteSync
+            route={quoteRoute}
+            revenueAmount={value.revenueAmount}
+            disabled={disabled}
+            onAutoRevenue={(amount) => onChange({ ...valueRef.current, revenueAmount: amount })}
+          />
+        ) : null}
       </div>
 
       <div className="border-t border-[#F1F1F4] pt-4">

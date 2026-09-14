@@ -22,6 +22,7 @@ import {
 } from '../data/validators'
 import { assertTeamMemberHasDriverProfile } from '../lib/driverProfileGuard'
 import { resolveTripCustomerLink } from '../lib/customerLink.server'
+import { ensureTripCustomerPersonFromPhone } from '../lib/ensureTripCustomerFromPhone'
 import { resolveFleetBackendActor } from '../lib/backendFleetActor'
 import { normalizeTripStatus } from '../lib/tripStatuses'
 import {
@@ -74,6 +75,51 @@ async function assertDriverScopedTeamMember(
   }
 }
 
+function readTripRequestContactName(metadata: Record<string, unknown> | null | undefined): string | null {
+  if (!metadata || typeof metadata !== 'object') return null
+  const tripRequest = metadata.tripRequest
+  if (!tripRequest || typeof tripRequest !== 'object' || Array.isArray(tripRequest)) return null
+  const contactName = (tripRequest as Record<string, unknown>).contactName
+  return typeof contactName === 'string' && contactName.trim() ? contactName.trim() : null
+}
+
+async function resolveTripCustomerForCommand(
+  ctx: Parameters<CommandHandler<TripCreateInput, { tripId: string }>['execute']>[1],
+  em: EntityManager,
+  parsed: {
+    tenantId: string
+    organizationId: string
+    customerPersonId?: string | null
+    customerCompanyId?: string | null
+    customerEntityId?: string | null
+    customerPrimaryPhone?: string | null
+    metadata?: Record<string, unknown> | null
+  },
+  options?: { required?: boolean },
+) {
+  const { translate } = await resolveTranslations()
+  const phone = parsed.customerPrimaryPhone?.trim()
+  if (phone) {
+    return ensureTripCustomerPersonFromPhone(ctx, translate, {
+      tenantId: parsed.tenantId,
+      organizationId: parsed.organizationId,
+      primaryPhone: phone,
+      displayName: readTripRequestContactName(parsed.metadata),
+      source: 'taxi_fleet_crm_trip',
+    })
+  }
+  return resolveTripCustomerLink(
+    em,
+    {
+      customerPersonId: parsed.customerPersonId,
+      customerCompanyId: parsed.customerCompanyId,
+      customerEntityId: parsed.customerEntityId,
+    },
+    { tenantId: parsed.tenantId, organizationId: parsed.organizationId },
+    options,
+  )
+}
+
 const createTripCommand: CommandHandler<TripCreateInput, { tripId: string }> = {
   id: 'taxi_fleet.trips.create',
   async execute(input, ctx) {
@@ -92,14 +138,18 @@ const createTripCommand: CommandHandler<TripCreateInput, { tripId: string }> = {
       translate,
     })
 
-    const customer = await resolveTripCustomerLink(
+    const customer = await resolveTripCustomerForCommand(
+      ctx,
       em,
       {
+        tenantId: parsed.tenantId,
+        organizationId: parsed.organizationId,
         customerPersonId: parsed.customerPersonId,
         customerCompanyId: parsed.customerCompanyId,
         customerEntityId: parsed.customerEntityId,
+        customerPrimaryPhone: parsed.customerPrimaryPhone,
+        metadata: parsed.metadata ?? null,
       },
-      { tenantId: parsed.tenantId, organizationId: parsed.organizationId },
       { required: parsed.tripType === 'client' },
     )
     const initialStatus = normalizeTripStatus(parsed.status ?? 'new')
@@ -259,16 +309,21 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
     const customerTouched =
       parsed.customerPersonId !== undefined ||
       parsed.customerCompanyId !== undefined ||
-      parsed.customerEntityId !== undefined
+      parsed.customerEntityId !== undefined ||
+      parsed.customerPrimaryPhone !== undefined
     if (customerTouched) {
-      const customer = await resolveTripCustomerLink(
+      const customer = await resolveTripCustomerForCommand(
+        ctx,
         em,
         {
+          tenantId: row.tenantId,
+          organizationId: row.organizationId,
           customerPersonId: parsed.customerPersonId,
           customerCompanyId: parsed.customerCompanyId,
           customerEntityId: parsed.customerEntityId,
+          customerPrimaryPhone: parsed.customerPrimaryPhone,
+          metadata: parsed.metadata ?? (row.metadata as Record<string, unknown> | null) ?? null,
         },
-        { tenantId: row.tenantId, organizationId: row.organizationId },
         { required: true },
       )
       row.customerPersonId = customer.customerPersonId

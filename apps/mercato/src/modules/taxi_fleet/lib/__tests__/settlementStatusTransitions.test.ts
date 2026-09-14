@@ -1,12 +1,16 @@
 import {
   canApproveMonthlySettlement,
+  canApproveVehicleMonthlySettlement,
   canApproveWeeklySettlement,
   canCloseMonthlySettlementPayout,
   canCloseWeeklySettlementPayout,
   canDeleteMonthlySettlement,
+  canDeleteVehicleMonthlySettlement,
   canDeleteWeeklySettlement,
   isAllowedMonthlySettlementStatusTransition,
+  isAllowedVehicleMonthlySettlementStatusTransition,
   isAllowedWeeklySettlementStatusTransition,
+  isVehicleMonthlySettlementLocked,
   MONTHLY_SETTLEMENT_OPERATOR_STATUSES,
 } from '../settlementStatusTransitions'
 
@@ -45,5 +49,15 @@ describe('settlementStatusTransitions', () => {
 
   it('exposes operator monthly statuses without submitted', () => {
     expect(MONTHLY_SETTLEMENT_OPERATOR_STATUSES).toEqual(['draft', 'approved', 'paid'])
+  })
+
+  it('locks vehicle monthly after approve', () => {
+    expect(canApproveVehicleMonthlySettlement('draft')).toBe(true)
+    expect(canApproveVehicleMonthlySettlement('approved')).toBe(false)
+    expect(canDeleteVehicleMonthlySettlement('draft')).toBe(true)
+    expect(canDeleteVehicleMonthlySettlement('approved')).toBe(false)
+    expect(isVehicleMonthlySettlementLocked('approved')).toBe(true)
+    expect(isAllowedVehicleMonthlySettlementStatusTransition('draft', 'approved')).toBe(true)
+    expect(isAllowedVehicleMonthlySettlementStatusTransition('approved', 'draft')).toBe(false)
   })
 })

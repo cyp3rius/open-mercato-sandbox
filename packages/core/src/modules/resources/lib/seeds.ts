@@ -21,6 +21,7 @@ import {
   RESOURCES_RESOURCE_FIELDSET_LAPTOP,
   RESOURCES_RESOURCE_FIELDSET_ROOM,
   RESOURCES_RESOURCE_FIELDSET_SEAT,
+  RESOURCES_RESOURCE_FIELDSET_TAXI,
   RESOURCES_RESOURCE_FIELDSET_VEHICLE,
   resolveResourcesResourceFieldsetCode,
 } from './resourceCustomFields'
@@ -489,6 +490,7 @@ function buildResourceTypeCustomValues(
         chair_inspection_notes: 'Monthly inspection scheduled.',
       }
     case RESOURCES_RESOURCE_FIELDSET_VEHICLE:
+    case RESOURCES_RESOURCE_FIELDSET_TAXI:
       return buildVehicleCustomValues(seedKey)
     default:
       return {}

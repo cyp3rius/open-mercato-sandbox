@@ -18,7 +18,7 @@ import { createTranslatorWithFallback } from '@open-mercato/shared/lib/i18n/tran
 import { buildResourceScheduleItems } from '@open-mercato/core/modules/resources/lib/resourceSchedule'
 import {
   RESOURCES_RESOURCE_FIELDSET_DEFAULT,
-  RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+  isResourcesVehicleFieldsetCode,
 } from '@open-mercato/core/modules/resources/lib/resourceCustomFields'
 import type { AvailabilityScheduleItemBuilder } from '@open-mercato/core/modules/planner/components/AvailabilityRulesEditor'
 import { AvailabilityRulesEditor } from '@open-mercato/core/modules/planner/components/AvailabilityRulesEditor'
@@ -352,7 +352,7 @@ export default function ResourcesResourceDetailPage({ params }: { params?: { id?
 
   const showServiceBookSection =
     typeof initialValues?.customFieldsetCode === 'string' &&
-    initialValues.customFieldsetCode === RESOURCES_RESOURCE_FIELDSET_VEHICLE
+    isResourcesVehicleFieldsetCode(initialValues.customFieldsetCode)
 
   const tabs = React.useMemo(() => {
     const out: Array<{ id: 'details' | 'availability' | 'serviceBook' | 'accessories'; label: string }> = [

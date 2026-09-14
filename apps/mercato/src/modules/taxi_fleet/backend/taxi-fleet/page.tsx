@@ -1,12 +1,13 @@
-"use client"
+'use client'
 
 import * as React from 'react'
 import { Page, PageHeader, PageBody } from '@open-mercato/ui/backend/Page'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { TAXI_FLEET_BASE } from './paths'
 import { PendingTripsHubSection } from '../../components/hub/PendingTripsHubSection'
 import { FleetWeekScheduleHubSection } from '../../components/hub/FleetWeekScheduleHubSection'
-import { FleetHubLinkSection } from '../../components/hub/FleetHubLinkSection'
+import { WeeklySettlementsHubSection } from '../../components/hub/WeeklySettlementsHubSection'
+import { MonthlySettlementsHubSection } from '../../components/hub/MonthlySettlementsHubSection'
+import { OnlineDriversHubSection } from '../../components/hub/OnlineDriversHubSection'
 
 export default function TaxiFleetHubPage() {
   const t = useT()
@@ -24,35 +25,11 @@ export default function TaxiFleetHubPage() {
             <FleetWeekScheduleHubSection />
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
-            <FleetHubLinkSection
-              titleKey="taxi_fleet.settlements.weeklyTitle"
-              titleFallback="Weekly settlements"
-              descriptionKey="taxi_fleet.hub.settlementsHelp"
-              descriptionFallback="Weekly driver settlements and payouts."
-              href={`${TAXI_FLEET_BASE}/settlements-overview/weekly`}
-              actionKey="taxi_fleet.hub.settlements.open"
-              actionFallback="Open weekly settlements"
-            />
-            <FleetHubLinkSection
-              titleKey="taxi_fleet.monthlySettlements.title"
-              titleFallback="Monthly settlements"
-              descriptionKey="taxi_fleet.hub.monthlySettlementsHelp"
-              descriptionFallback="Fleet monthly rollup from weekly settlements."
-              href={`${TAXI_FLEET_BASE}/settlements-overview/monthly`}
-              actionKey="taxi_fleet.hub.monthlySettlements.open"
-              actionFallback="Open monthly settlements"
-            />
+            <WeeklySettlementsHubSection />
+            <MonthlySettlementsHubSection />
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
-            <FleetHubLinkSection
-              titleKey="taxi_fleet.drivers.title"
-              titleFallback="Driver profiles"
-              descriptionKey="taxi_fleet.hub.driversHelp"
-              descriptionFallback="Payout percent and mobile app access."
-              href={`${TAXI_FLEET_BASE}/drivers`}
-              actionKey="taxi_fleet.hub.drivers.open"
-              actionFallback="Open driver profiles"
-            />
+            <OnlineDriversHubSection />
           </div>
         </div>
       </PageBody>

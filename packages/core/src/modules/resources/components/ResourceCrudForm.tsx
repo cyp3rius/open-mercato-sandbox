@@ -14,7 +14,7 @@ import { RESOURCES_CAPACITY_UNIT_DICTIONARY_KEY } from '@open-mercato/core/modul
 import { RESOURCES_RESOURCE_STATUS_DICTIONARY_KEY } from '@open-mercato/core/modules/resources/lib/resourceStatus'
 import {
   RESOURCES_RESOURCE_FIELDSET_DEFAULT,
-  RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+  isResourcesVehicleFieldsetCode,
   resolveResourcesResourceFieldsetCode,
 } from '@open-mercato/core/modules/resources/lib/resourceCustomFields'
 import Link from 'next/link'
@@ -470,7 +470,7 @@ export function ResourcesResourceForm(props: ResourcesResourceFormProps) {
         }
       : null
     const galleryGroup: CrudFormGroup | null =
-      recordId && initialValues?.customFieldsetCode === RESOURCES_RESOURCE_FIELDSET_VEHICLE
+      recordId && isResourcesVehicleFieldsetCode(initialValues?.customFieldsetCode as string | undefined)
         ? {
             id: 'vehicleGallery',
             column: 1,

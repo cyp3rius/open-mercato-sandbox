@@ -71,6 +71,30 @@ export const taxiFleetPlatformSyncSettingsSchema = z.object({
 
 export type TaxiFleetPlatformSyncSettings = z.infer<typeof taxiFleetPlatformSyncSettingsSchema>
 
+export const taxiFleetBpOpenFleetSettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  apiBaseUrl: z.string().max(2000).optional().default('https://api.fleet.bp.com'),
+  apiPrefix: z.string().max(200).optional().default(''),
+  clientId: z.string().max(500).optional().default(''),
+  clientSecret: z.string().max(500).optional().default(''),
+  authorityId: z.string().max(191).optional().default(''),
+  parentId: z.string().max(191).optional().default(''),
+})
+
+export type TaxiFleetBpOpenFleetSettings = z.infer<typeof taxiFleetBpOpenFleetSettingsSchema>
+
+export function defaultBpOpenFleetSettings(): TaxiFleetBpOpenFleetSettings {
+  return {
+    enabled: false,
+    apiBaseUrl: 'https://api.fleet.bp.com',
+    apiPrefix: '',
+    clientId: '',
+    clientSecret: '',
+    authorityId: '',
+    parentId: '',
+  }
+}
+
 export function defaultPlatformSyncPlatformSettings(): TaxiFleetPlatformSyncPlatformSettings {
   return {
     enabled: false,
@@ -140,6 +164,7 @@ export const taxiFleetSettingsSchema = z.object({
   paypal: taxiFleetPaypalSettingsSchema,
   calendar: taxiFleetCalendarSettingsSchema,
   platformSync: taxiFleetPlatformSyncSettingsSchema,
+  bpOpenFleet: taxiFleetBpOpenFleetSettingsSchema,
   customerEmails: customerEmailsSchema,
   settlementIndicatorRanges: settlementIndicatorRangesSchema.default(defaultSettlementIndicatorRanges()),
 })
@@ -157,6 +182,7 @@ export type TaxiFleetSettingsSecretsMeta = {
   platformSyncBoltRefreshTokenConfigured: boolean
   platformSyncUberRefreshTokenConfigured: boolean
   platformSyncFreeRefreshTokenConfigured: boolean
+  bpOpenFleetClientSecretConfigured: boolean
 }
 
 export type TaxiFleetSettingsResponse = TaxiFleetSettings &
@@ -247,6 +273,7 @@ export function defaultTaxiFleetSettings(): TaxiFleetSettings {
       defaultDurationMinutes: 60,
     },
     platformSync: defaultPlatformSyncSettings(),
+    bpOpenFleet: defaultBpOpenFleetSettings(),
     customerEmails: defaultCustomerEmailTemplates,
     settlementIndicatorRanges: defaultSettlementIndicatorRanges(),
   })
@@ -282,6 +309,7 @@ export function parseTaxiFleetSettingsJson(raw: unknown): TaxiFleetSettings {
       uber: { ...base.platformSync.uber, ...asRecord(asRecord(record.platformSync).uber) },
       free: { ...base.platformSync.free, ...asRecord(asRecord(record.platformSync).free) },
     },
+    bpOpenFleet: { ...base.bpOpenFleet, ...asRecord(record.bpOpenFleet) },
     customerEmails: {
       trip_created: { ...base.customerEmails.trip_created, ...asRecord(customerEmailsRaw.trip_created) },
       trip_approved: { ...base.customerEmails.trip_approved, ...asRecord(customerEmailsRaw.trip_approved) },
@@ -331,6 +359,9 @@ export function normalizeTaxiFleetSettingsResponse(
     platformSyncFreeRefreshTokenConfigured:
       record.platformSyncFreeRefreshTokenConfigured === true ||
       response.platformSyncFreeRefreshTokenConfigured,
+    bpOpenFleetClientSecretConfigured:
+      record.bpOpenFleetClientSecretConfigured === true ||
+      response.bpOpenFleetClientSecretConfigured,
   }
 }
 
@@ -355,6 +386,7 @@ export function mergeTaxiFleetSettingsForSave(
     platformSyncBoltRefreshToken?: string | null
     platformSyncUberRefreshToken?: string | null
     platformSyncFreeRefreshToken?: string | null
+    bpOpenFleetClientSecret?: string | null
   },
 ): TaxiFleetSettings {
   const paypalSecret = incoming.paypal.clientSecret?.trim()
@@ -410,6 +442,13 @@ export function mergeTaxiFleetSettingsForSave(
         ),
       },
     },
+    bpOpenFleet: {
+      ...incoming.bpOpenFleet,
+      clientSecret: mergePlatformSyncSecretField(
+        incoming.bpOpenFleet.clientSecret,
+        secrets.bpOpenFleetClientSecret ?? current.bpOpenFleet.clientSecret,
+      ),
+    },
   }
 }
 
@@ -448,6 +487,10 @@ export function toTaxiFleetSettingsResponse(
       uber: platformSyncPlatformResponse(settings.platformSync.uber),
       free: platformSyncPlatformResponse(settings.platformSync.free),
     },
+    bpOpenFleet: {
+      ...settings.bpOpenFleet,
+      clientSecret: maskSecret(settings.bpOpenFleet.clientSecret),
+    },
     paypalClientSecretConfigured: Boolean(settings.paypal.clientSecret?.trim()),
     calendarPrivateKeyConfigured: Boolean(settings.calendar.serviceAccountPrivateKey?.trim()),
     platformSyncBoltClientSecretConfigured: Boolean(settings.platformSync.bolt.clientSecret?.trim()),
@@ -456,5 +499,6 @@ export function toTaxiFleetSettingsResponse(
     platformSyncBoltRefreshTokenConfigured: Boolean(settings.platformSync.bolt.refreshToken?.trim()),
     platformSyncUberRefreshTokenConfigured: Boolean(settings.platformSync.uber.refreshToken?.trim()),
     platformSyncFreeRefreshTokenConfigured: Boolean(settings.platformSync.free.refreshToken?.trim()),
+    bpOpenFleetClientSecretConfigured: Boolean(settings.bpOpenFleet.clientSecret?.trim()),
   }
 }

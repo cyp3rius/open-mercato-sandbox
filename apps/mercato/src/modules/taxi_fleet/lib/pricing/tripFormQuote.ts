@@ -1,4 +1,5 @@
 import type { TripFormValues } from '../../components/tripFormConfig'
+import { toDateTimeLocalValue } from '../datetimeLocal'
 import type { QuoteInput } from './quote-types'
 
 export function splitTripScheduleLocal(startedAtLocal: string): { date: string; time: string } | null {
@@ -10,12 +11,17 @@ export function splitTripScheduleLocal(startedAtLocal: string): { date: string; 
   }
   const parsed = new Date(trimmed)
   if (Number.isNaN(parsed.getTime())) return null
-  const date = parsed.toISOString().slice(0, 10)
-  const hours = String(parsed.getHours()).padStart(2, '0')
-  const minutes = String(parsed.getMinutes()).padStart(2, '0')
-  return { date, time: `${hours}:${minutes}` }
+  // Always use local calendar date + clock (never UTC from toISOString) so NIGHT/HOLIDAY match the trip form.
+  const local = toDateTimeLocalValue(parsed)
+  const localMatch = local.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/)
+  if (!localMatch?.[1] || !localMatch[2]) return null
+  return { date: localMatch[1], time: localMatch[2] }
 }
 
+/**
+ * Builds quote input for fleet pricing. Vehicle category is intentionally omitted so
+ * `calculateQuote` always runs `selectVehicle` (same as the public RS Moto calculator).
+ */
 export function buildQuoteInputFromTripForm(values: TripFormValues): QuoteInput | null {
   const schedule = splitTripScheduleLocal(values.startedAtLocal)
   const distanceKm = Number(values.distanceKm)
@@ -36,9 +42,32 @@ export function buildQuoteInputFromTripForm(values: TripFormValues): QuoteInput 
     boosterSeats: Math.max(0, Number(values.boosterSeats) || 0),
     meetAndGreet: serviceType === 'airport' ? values.meetAndGreet === true : false,
     englishSpeakingDriver: values.englishSpeakingDriver === true,
-    ...(values.vehicleCategory === 'standard' || values.vehicleCategory === 'van'
-      ? { vehicleCategory: values.vehicleCategory }
-      : {}),
+  }
+}
+
+/**
+ * Driver-app quote defaults when luggage/passenger fields are not collected in the wizard.
+ */
+export function buildDriverQuoteInputFromRoute(input: {
+  startedAtLocal: string
+  distanceKm: string | number
+}): QuoteInput | null {
+  const schedule = splitTripScheduleLocal(input.startedAtLocal)
+  const distanceKm = typeof input.distanceKm === 'number' ? input.distanceKm : Number(input.distanceKm)
+  if (!schedule || !Number.isFinite(distanceKm) || distanceKm <= 0) return null
+
+  return {
+    serviceType: 'local',
+    passengers: 1,
+    distanceKm,
+    date: schedule.date,
+    time: schedule.time,
+    handLuggage: 0,
+    holdLuggage: 0,
+    childSeats: 0,
+    boosterSeats: 0,
+    meetAndGreet: false,
+    englishSpeakingDriver: false,
   }
 }
 
