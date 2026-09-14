@@ -29,6 +29,18 @@ describe('mapVendorTripRecord', () => {
     })
   })
 
+  it('drops cancelled vendor trips', () => {
+    expect(
+      mapVendorTripRecord('uber', {
+        trip_id: 'uber-cancel',
+        driver_id: 'driver-1',
+        started_at: '2026-08-20T08:00:00Z',
+        revenue_amount: 12,
+        status: 'rider_cancelled',
+      }),
+    ).toBeNull()
+  })
+
   it('extracts trips array from wrapped payload', () => {
     const rows = extractVendorTripList({
       data: [{ id: 'trip-1', driver_id: 'd1', started_at: '2026-01-01T10:00:00Z', revenue_amount: 10 }],

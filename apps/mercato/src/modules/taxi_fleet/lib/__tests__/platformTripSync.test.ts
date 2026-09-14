@@ -25,13 +25,13 @@ describe('platformTrip sync helpers', () => {
       expect(readTripPaymentType(metadata)).toBe('cash')
     })
 
-    it('defaults payment type to electronic', () => {
-      expect(resolvePlatformTripPaymentType(null)).toBe('electronic')
+    it('defaults payment type to platform_app', () => {
+      expect(resolvePlatformTripPaymentType(null)).toBe('platform_app')
       const metadata = buildPlatformTripMetadata({
         ingestSource: 'platform_csv',
         platformDriverId: 'driver-1',
       })
-      expect(readTripPaymentType(metadata)).toBe('electronic')
+      expect(readTripPaymentType(metadata)).toBe('platform_app')
     })
 
     it('stores from/to addresses under tripRequest and vehicle fields on metadata', () => {

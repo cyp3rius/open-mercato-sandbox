@@ -5,10 +5,19 @@ import type { PlatformTripIngestSource } from './types'
 export function resolvePlatformTripPaymentType(
   value: TripRequestPaymentType | null | undefined,
 ): TripRequestPaymentType {
-  if (value === 'cash' || value === 'card' || value === 'electronic' || value === 'transfer' || value === 'loyalty_program' || value === 'other') {
+  if (
+    value === 'cash' ||
+    value === 'card' ||
+    value === 'electronic' ||
+    value === 'transfer' ||
+    value === 'loyalty_program' ||
+    value === 'platform_app' ||
+    value === 'other'
+  ) {
     return value
   }
-  return 'electronic'
+  // Imported platform trips without an explicit type are paid in the vendor app.
+  return 'platform_app'
 }
 
 export function buildPlatformTripMetadata(params: {

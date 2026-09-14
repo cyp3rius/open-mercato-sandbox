@@ -10,6 +10,7 @@ import { TripWaypointFields } from './route/TripWaypointFields'
 import {
   TRIP_CONTACT_TYPES,
   TRIP_FORM_PAYMENT_OPTIONS,
+  TRIP_REQUEST_PAYMENT_TYPES,
   TRIP_SERVICE_TYPES,
   type TripRequestDetails,
 } from '../lib/tripRequestForm'
@@ -17,6 +18,30 @@ import { searchPartnerEntityOptions } from '../lib/partnerEntitySearch'
 
 type TripRequestFieldOptions = {
   readOnly?: boolean
+  /** When set to an import-only type (e.g. platform_app), include it so the select can display. */
+  currentPaymentType?: string | null
+}
+
+function buildPaymentTypeSelectOptions(
+  t: TranslateFn,
+  currentPaymentType?: string | null,
+): Array<{ value: string; label: string }> {
+  const options: Array<{ value: string; label: string }> = TRIP_FORM_PAYMENT_OPTIONS.map((value) => ({
+    value,
+    label: t(`taxi_fleet.trips.form.paymentTypes.${value}`, value),
+  }))
+  const current = typeof currentPaymentType === 'string' ? currentPaymentType.trim() : ''
+  if (
+    current &&
+    !(TRIP_FORM_PAYMENT_OPTIONS as readonly string[]).includes(current) &&
+    (TRIP_REQUEST_PAYMENT_TYPES as readonly string[]).includes(current)
+  ) {
+    options.push({
+      value: current,
+      label: t(`taxi_fleet.trips.form.paymentTypes.${current}`, current),
+    })
+  }
+  return options
 }
 
 function readPassengers(values: Record<string, unknown> | undefined): number {
@@ -37,7 +62,8 @@ function isAirportPickup(values: Record<string, unknown>): boolean {
 }
 
 export function buildTripRequestFormFields(t: TranslateFn, options: TripRequestFieldOptions = {}): CrudField[] {
-  const { readOnly: formReadOnly = false } = options
+  const { readOnly: formReadOnly = false, currentPaymentType = null } = options
+  const paymentTypeOptions = buildPaymentTypeSelectOptions(t, currentPaymentType)
 
   return [
     {
@@ -302,10 +328,7 @@ export function buildTripRequestFormFields(t: TranslateFn, options: TripRequestF
       type: 'select',
       label: t('taxi_fleet.trips.form.paymentType', 'Payment method'),
       layout: 'half',
-      options: TRIP_FORM_PAYMENT_OPTIONS.map((value) => ({
-        value,
-        label: t(`taxi_fleet.trips.form.paymentTypes.${value}`, value),
-      })),
+      options: paymentTypeOptions,
     },
     {
       id: 'referringPartnerEntityId',
@@ -350,7 +373,9 @@ export function pickTripRequestDetails(values: TripRequestDetails & Record<strin
       values.paymentType === 'card' ||
       values.paymentType === 'transfer' ||
       values.paymentType === 'loyalty_program' ||
-      values.paymentType === 'other'
+      values.paymentType === 'platform_app' ||
+      values.paymentType === 'other' ||
+      values.paymentType === 'electronic'
         ? values.paymentType
         : 'electronic',
     contactName: String(values.contactName ?? ''),

@@ -1,5 +1,6 @@
 import type { PlatformTripUpsertInput } from '../../../data/validators'
 import type { TaxiFleetTripPlatform } from '../../tripPlatforms'
+import { isCancelledPlatformImportStatus } from '../platformImportStatus'
 import type { PlatformTripAdapterRow } from './types'
 
 type VendorTripRecord = Record<string, unknown>
@@ -27,18 +28,21 @@ function readNumber(record: VendorTripRecord, ...keys: string[]): number | null 
 
 function parseVendorStatus(value: string | null): PlatformTripUpsertInput['status'] {
   const normalized = (value ?? 'completed').trim().toLowerCase()
-  if (normalized === 'cancelled' || normalized === 'canceled') return 'cancelled'
+  if (isCancelledPlatformImportStatus(normalized)) return 'cancelled'
   if (normalized === 'paid') return 'paid'
   return 'completed'
 }
 
 function parseVendorPaymentType(value: string | null): PlatformTripUpsertInput['paymentType'] {
-  const normalized = (value ?? 'electronic').trim().toLowerCase()
+  const normalized = (value ?? 'platform_app').trim().toLowerCase()
   if (normalized === 'cash') return 'cash'
   if (normalized === 'card') return 'card'
-  if (normalized === 'electronic' || normalized === 'online' || normalized === 'app') return 'electronic'
+  if (normalized === 'electronic' || normalized === 'paypal') return 'electronic'
+  if (normalized === 'platform_app' || normalized === 'online' || normalized === 'app') {
+    return 'platform_app'
+  }
   if (normalized === 'transfer') return 'transfer'
-  return 'electronic'
+  return 'platform_app'
 }
 
 function parseVendorDate(value: string | null): Date | null {
@@ -84,6 +88,7 @@ export function mapVendorTripRecord(
   const distanceKm = readNumber(record, 'distanceKm', 'distance_km', 'distance')
   const currencyCode = readString(record, 'currencyCode', 'currency_code', 'currency') ?? 'PLN'
   const status = parseVendorStatus(readString(record, 'status', 'trip_status', 'order_status'))
+  if (status === 'cancelled') return null
   const paymentType = parseVendorPaymentType(
     readString(record, 'paymentType', 'payment_type', 'payment_method'),
   )

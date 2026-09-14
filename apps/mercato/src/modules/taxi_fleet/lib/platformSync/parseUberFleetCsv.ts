@@ -11,6 +11,7 @@ import {
   parseCsvLine,
 } from './parsePlatformTripCsv'
 import type { PlatformTripIngestSource } from './types'
+import { isCancelledPlatformImportStatus } from './platformImportStatus'
 
 const TRIP_ACTIVITY_REQUIRED: ReadonlyArray<readonly string[]> = [
   ['Identyfikator UUID przejazdu', 'Trip UUID'],
@@ -112,16 +113,7 @@ function missingRequiredHeaders(
 
 function mapUberStatus(raw: string): PlatformTripUpsertInput['status'] {
   const normalized = raw.trim().toLowerCase()
-  if (
-    normalized === 'cancelled' ||
-    normalized === 'canceled' ||
-    normalized === 'rider_cancelled' ||
-    normalized === 'rider_canceled' ||
-    normalized === 'driver_cancelled' ||
-    normalized === 'driver_canceled'
-  ) {
-    return 'cancelled'
-  }
+  if (isCancelledPlatformImportStatus(normalized)) return 'cancelled'
   if (normalized === 'paid') return 'paid'
   return 'completed'
 }
@@ -281,6 +273,9 @@ export function parseUberFleetCsv(params: {
     const platformDriverId = readCellAt(cells, driverIdPos)
     const startedAtRaw = readCellAt(cells, startedAtPos)
     const statusRaw = readCellAt(cells, statusPos)
+    const status = mapUberStatus(statusRaw)
+    // Import only realized trips — cancelled vendor rows are ignored.
+    if (status === 'cancelled') return
 
     if (!externalTripId || !platformDriverId || !startedAtRaw) {
       errors.push({ row: rowNumber, message: 'Missing required Trip Activity field values.' })
@@ -326,13 +321,13 @@ export function parseUberFleetCsv(params: {
       platform: 'uber',
       externalTripId,
       platformDriverId,
-      status: mapUberStatus(statusRaw),
+      status,
       startedAt,
       endedAt,
       distanceKm,
       revenueAmount: payment.revenueAmount,
       currencyCode: 'PLN',
-      paymentType: payment.cashCollectedAbs > 0 ? 'cash' : 'electronic',
+      paymentType: payment.cashCollectedAbs > 0 ? 'cash' : 'platform_app',
       rawExternalStatus: statusRaw || null,
       fromAddress,
       toAddress,

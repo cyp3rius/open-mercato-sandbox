@@ -16,6 +16,7 @@ const events = [
   { id: 'taxi_fleet.platform_sync.completed', label: 'Platform trip sync completed', entity: 'platform_sync', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.settlement.submitted', label: 'Weekly settlement submitted', entity: 'settlement', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.settlement.approved', label: 'Weekly settlement approved', entity: 'settlement', category: 'lifecycle', persistent: true },
+  { id: 'taxi_fleet.monthly_settlement.approved', label: 'Monthly settlement approved', entity: 'monthly_settlement', category: 'lifecycle', persistent: true },
 ] as const
 
 export const eventsConfig = createModuleEvents({

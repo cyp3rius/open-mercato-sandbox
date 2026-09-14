@@ -26,6 +26,14 @@ const settlementViewAction = {
   icon: 'external-link',
 }
 
+const monthlySettlementDriverViewAction = {
+  id: 'view',
+  labelKey: 'common.view',
+  variant: 'outline' as const,
+  href: '/driver/monthly-settlements/{sourceEntityId}',
+  icon: 'external-link',
+}
+
 export const notificationTypes: NotificationTypeDefinition[] = [
   {
     type: 'taxi_fleet.trip.order_created',
@@ -173,6 +181,21 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     },
     actions: [settlementViewAction],
     linkHref: '/backend/taxi-fleet/settlements/{sourceEntityId}',
+    expiresAfterHours: 168,
+  },
+  {
+    type: 'taxi_fleet.monthly_settlement.ready',
+    module: 'taxi_fleet',
+    titleKey: 'taxi_fleet.notifications.monthly_settlement_ready.title',
+    bodyKey: 'taxi_fleet.notifications.monthly_settlement_ready.body',
+    icon: 'wallet',
+    severity: 'success',
+    userPreference: {
+      labelKey: 'taxi_fleet.notifications.preferences.monthly_settlement_ready',
+      scopeFeature: 'taxi_fleet.view',
+    },
+    actions: [monthlySettlementDriverViewAction],
+    linkHref: '/driver/monthly-settlements/{sourceEntityId}',
     expiresAfterHours: 168,
   },
   {

@@ -94,7 +94,7 @@ function missingRequiredHeaders(
 function mapBoltPaymentType(raw: string): PlatformTripUpsertInput['paymentType'] {
   const normalized = raw.trim().toLowerCase()
   if (normalized === 'gotówką' || normalized === 'gotowka' || normalized === 'cash') return 'cash'
-  return 'electronic'
+  return 'platform_app'
 }
 
 function isCompletedStatus(raw: string): boolean {

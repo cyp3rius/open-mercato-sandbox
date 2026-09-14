@@ -9,6 +9,7 @@ export const TRIP_REQUEST_PAYMENT_TYPES = [
   'card',
   'transfer',
   'loyalty_program',
+  'platform_app',
   'other',
 ] as const
 export type TripRequestPaymentType = (typeof TRIP_REQUEST_PAYMENT_TYPES)[number]
@@ -22,6 +23,13 @@ export const TRIP_FORM_PAYMENT_OPTIONS = [
   'loyalty_program',
 ] as const
 export type TripFormPaymentOption = (typeof TRIP_FORM_PAYMENT_OPTIONS)[number]
+
+/** List/filter labels — includes import-only `platform_app`. */
+export const TRIP_PAYMENT_TYPE_FILTER_OPTIONS = [
+  ...TRIP_FORM_PAYMENT_OPTIONS,
+  'platform_app',
+] as const
+export type TripPaymentTypeFilterOption = (typeof TRIP_PAYMENT_TYPE_FILTER_OPTIONS)[number]
 
 export const TRIP_CONTACT_TYPES = ['private', 'company'] as const
 export type TripContactType = (typeof TRIP_CONTACT_TYPES)[number]
@@ -83,6 +91,7 @@ function parseServiceType(value: unknown): TripServiceType {
 function parsePaymentType(value: unknown): TripRequestPaymentType {
   const raw = str(value)
   if (raw === 'electronic' || raw === 'paypal') return 'electronic'
+  if (raw === 'platform_app' || raw === 'app' || raw === 'platform') return 'platform_app'
   if (
     raw === 'cash' ||
     raw === 'card' ||

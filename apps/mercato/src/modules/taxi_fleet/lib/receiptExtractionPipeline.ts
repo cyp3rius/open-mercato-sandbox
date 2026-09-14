@@ -12,6 +12,7 @@ import {
 } from '../data/entities'
 import {
   buildReceiptExtractionMerge,
+  shouldAutoApplyHighConfidenceOcr,
   type ReceiptOcrWarning,
 } from './receiptExtractionRules'
 import {
@@ -59,6 +60,7 @@ async function syncTripIncomeFromReceiptExtraction(
   row: TaxiFleetReceiptExtraction,
   trip: TaxiFleetTrip,
   documentNumber: string | null,
+  options?: { forceOcrValues?: boolean },
 ): Promise<void> {
   const revenueAmount = Number(trip.revenueAmount ?? 0)
   const hasCustomer = Boolean(trip.customerCompanyId || trip.customerPersonId)
@@ -79,7 +81,7 @@ async function syncTripIncomeFromReceiptExtraction(
       deletedAt: null,
     })
     if (entry) {
-      if (documentNumber && !entry.documentNumber?.trim()) {
+      if (documentNumber && (options?.forceOcrValues || !entry.documentNumber?.trim())) {
         entry.documentNumber = documentNumber
         entry.updatedAt = new Date()
       }
@@ -87,7 +89,9 @@ async function syncTripIncomeFromReceiptExtraction(
       const currentAmount = Number(entry.amount)
       if (ocrAmount != null && Number.isFinite(ocrAmount) && ocrAmount > 0) {
         const amountEmpty = !Number.isFinite(currentAmount) || currentAmount <= 0
-        if (amountEmpty) {
+        const amountDiffers =
+          Number.isFinite(currentAmount) && Math.abs(currentAmount - ocrAmount) > 0.05
+        if (amountEmpty || (options?.forceOcrValues && amountDiffers)) {
           entry.amount = ocrAmount.toFixed(2)
           entry.updatedAt = new Date()
         }
@@ -96,7 +100,10 @@ async function syncTripIncomeFromReceiptExtraction(
         entry.receiptAttachmentId = row.attachmentId
         entry.updatedAt = new Date()
       }
-      if (!entry.customerCompanyId && trip.customerCompanyId) {
+      if (
+        trip.customerCompanyId &&
+        (options?.forceOcrValues || !entry.customerCompanyId)
+      ) {
         entry.customerCompanyId = trip.customerCompanyId
         entry.updatedAt = new Date()
       }
@@ -354,7 +361,8 @@ export async function processReceiptExtraction(
     let resolvedCompanyId: string | null = null
     let normalizedBuyerNip: string | null = null
 
-    if (isPolcardPaymentConfirmation(fields)) {
+    const isNonReceipt = isPolcardPaymentConfirmation(fields)
+    if (isNonReceipt) {
       warnings.push({
         code: 'polcard_payment_confirmation',
         message:
@@ -394,6 +402,10 @@ export async function processReceiptExtraction(
       tripRevenue = Number.isFinite(parsed) ? parsed : null
     }
 
+    const preferOcrOnConflict = shouldAutoApplyHighConfidenceOcr({
+      confidence: fields.confidence ?? null,
+      isNonReceipt,
+    })
     const merge = buildReceiptExtractionMerge({
       driverDocumentNumber: row.driverDocumentNumber,
       ocrDocumentNumber: fields.documentNumber,
@@ -401,6 +413,7 @@ export async function processReceiptExtraction(
       ocrGrossAmount: fields.grossAmount ?? null,
       tripRevenueAmount: tripRevenue,
       confidence: fields.confidence ?? null,
+      preferOcrOnConflict,
     })
     warnings.push(...merge.warnings)
 
@@ -586,13 +599,20 @@ export async function applyReceiptExtractionToLinkedRecords(
     ? (row.warningsJson as ReceiptOcrWarning[])
     : []
 
+  const confidence = row.confidence != null ? Number(row.confidence) : null
+  const preferOcrOnConflict = shouldAutoApplyHighConfidenceOcr({
+    confidence,
+    warnings: previousWarnings,
+  })
+
   const merge = buildReceiptExtractionMerge({
     driverDocumentNumber: row.driverDocumentNumber,
     ocrDocumentNumber: options?.forceDocumentNumber ?? row.ocrDocumentNumber,
     driverAmount: row.driverAmount != null ? Number(row.driverAmount) : null,
     ocrGrossAmount: row.ocrGrossAmount != null ? Number(row.ocrGrossAmount) : null,
     tripRevenueAmount: options?.tripRevenueAmount ?? null,
-    confidence: row.confidence != null ? Number(row.confidence) : null,
+    confidence,
+    preferOcrOnConflict,
   })
 
   const documentNumber = options?.forceDocumentNumber?.trim() || merge.documentNumber
@@ -601,7 +621,21 @@ export async function applyReceiptExtractionToLinkedRecords(
         ...previousWarnings.filter((w) => w.field !== 'documentNumber' && w.code !== 'field_conflict'),
         ...merge.warnings.filter((w) => w.field !== 'documentNumber'),
       ]
-    : [...previousWarnings, ...merge.warnings]
+    : preferOcrOnConflict
+      ? [
+          ...previousWarnings.filter(
+            (w) =>
+              !(
+                (w.code === 'field_conflict' &&
+                  (w.field === 'documentNumber' || w.field === 'amount')) ||
+                w.code === 'amount_mismatch_trip' ||
+                w.code === 'distance_mismatch_trip' ||
+                w.code === 'customer_nip_conflict'
+              ),
+          ),
+          ...merge.warnings,
+        ]
+      : [...previousWarnings, ...merge.warnings]
 
   const deduped: ReceiptOcrWarning[] = []
   for (const warning of combinedWarnings) {
@@ -630,8 +664,17 @@ export async function applyReceiptExtractionToLinkedRecords(
     })
     if (entry) {
       const existing = entry.documentNumber?.trim() || ''
-      if (options?.forceDocumentNumber || !existing || merge.documentNumberSource !== 'conflict') {
-        if (options?.forceDocumentNumber || merge.documentNumberSource !== 'conflict') {
+      if (
+        options?.forceDocumentNumber ||
+        preferOcrOnConflict ||
+        !existing ||
+        merge.documentNumberSource !== 'conflict'
+      ) {
+        if (
+          options?.forceDocumentNumber ||
+          preferOcrOnConflict ||
+          merge.documentNumberSource !== 'conflict'
+        ) {
           if (documentNumber) {
             entry.documentNumber = documentNumber
             entry.updatedAt = new Date()
@@ -643,7 +686,11 @@ export async function applyReceiptExtractionToLinkedRecords(
       if (ocrAmount != null && Number.isFinite(ocrAmount) && ocrAmount > 0) {
         const amountEmpty = !Number.isFinite(currentAmount) || currentAmount <= 0
         const amountDiffers = Number.isFinite(currentAmount) && Math.abs(currentAmount - ocrAmount) > 0.05
-        if (amountEmpty || (entry.kind === 'expense' && amountDiffers)) {
+        if (
+          amountEmpty ||
+          (entry.kind === 'expense' && amountDiffers) ||
+          (preferOcrOnConflict && amountDiffers)
+        ) {
           entry.amount = ocrAmount.toFixed(2)
           entry.updatedAt = new Date()
         }
@@ -712,9 +759,11 @@ export async function applyReceiptExtractionToLinkedRecords(
       }
 
       if (row.resolvedCompanyId) {
-        if (!entry.customerCompanyId) {
-          entry.customerCompanyId = row.resolvedCompanyId
-          entry.updatedAt = new Date()
+        if (!entry.customerCompanyId || preferOcrOnConflict) {
+          if (entry.customerCompanyId !== row.resolvedCompanyId) {
+            entry.customerCompanyId = row.resolvedCompanyId
+            entry.updatedAt = new Date()
+          }
         } else if (
           entry.customerCompanyId !== row.resolvedCompanyId &&
           row.ocrBuyerNip &&
@@ -757,7 +806,11 @@ export async function applyReceiptExtractionToLinkedRecords(
       const ocrAmount = row.ocrGrossAmount != null ? Number(row.ocrGrossAmount) : null
       if (ocrAmount != null && Number.isFinite(ocrAmount) && ocrAmount > 0) {
         const currentRevenue = Number(trip.revenueAmount ?? 0)
-        if (!Number.isFinite(currentRevenue) || currentRevenue <= 0) {
+        if (
+          !Number.isFinite(currentRevenue) ||
+          currentRevenue <= 0 ||
+          (preferOcrOnConflict && Math.abs(currentRevenue - ocrAmount) > 0.05)
+        ) {
           trip.revenueAmount = ocrAmount.toFixed(2)
           trip.updatedAt = new Date()
         }
@@ -770,6 +823,7 @@ export async function applyReceiptExtractionToLinkedRecords(
       const distanceMerge = mergeReceiptTripDistance({
         tripDistanceKm: trip.distanceKm,
         ocrDistanceKm: ocrDistance,
+        suppressMismatchWarning: preferOcrOnConflict,
       })
       if (distanceMerge.applied && distanceMerge.distanceKm) {
         const existingMetadata =
@@ -794,6 +848,13 @@ export async function applyReceiptExtractionToLinkedRecords(
             ),
         ))
         row.warningsJson = toWarningRecords(deduped)
+      } else if (preferOcrOnConflict) {
+        const withoutDistance = deduped.filter(
+          (w) => w.code !== 'distance_mismatch_trip' && w.field !== 'distanceKm',
+        )
+        deduped.length = 0
+        deduped.push(...withoutDistance)
+        row.warningsJson = toWarningRecords(deduped)
       }
 
       if (documentNumber || row.attachmentId) {
@@ -804,12 +865,14 @@ export async function applyReceiptExtractionToLinkedRecords(
         trip.updatedAt = new Date()
       }
 
-      if (row.resolvedCompanyId && !trip.customerCompanyId) {
-        trip.customerCompanyId = row.resolvedCompanyId
-        if (trip.tripType !== 'client') {
-          trip.tripType = 'client'
+      if (row.resolvedCompanyId && (!trip.customerCompanyId || preferOcrOnConflict)) {
+        if (trip.customerCompanyId !== row.resolvedCompanyId) {
+          trip.customerCompanyId = row.resolvedCompanyId
+          if (trip.tripType !== 'client') {
+            trip.tripType = 'client'
+          }
+          trip.updatedAt = new Date()
         }
-        trip.updatedAt = new Date()
       } else if (
         trip.customerCompanyId &&
         row.resolvedCompanyId &&
@@ -828,9 +891,16 @@ export async function applyReceiptExtractionToLinkedRecords(
       }
 
       await em.flush()
-      await syncTripIncomeFromReceiptExtraction(em, row, trip, documentNumber)
+      await syncTripIncomeFromReceiptExtraction(em, row, trip, documentNumber, {
+        forceOcrValues: preferOcrOnConflict,
+      })
       await recalculateWeeklySettlementsForTrip(em, trip)
     }
+  }
+
+  if (preferOcrOnConflict && !extractionHasReviewWarnings(deduped)) {
+    row.status = documentNumber ? 'applied' : 'extracted'
+    row.warningsJson = toWarningRecords(deduped)
   }
 
   row.updatedAt = new Date()

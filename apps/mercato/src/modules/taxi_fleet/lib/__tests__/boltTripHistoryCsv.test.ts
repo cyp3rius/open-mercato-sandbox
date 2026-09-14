@@ -34,13 +34,13 @@ describe('parseBoltTripHistoryCsv', () => {
     expect(first.vehiclePlate).toBe('WX10001')
     expect(first.fromAddress).toBe('ul. Przykładowa 1, Warszawa')
     expect(first.toAddress).toBe('ul. Testowa 10, Warszawa')
-    expect(first.paymentType).toBe('electronic')
+    expect(first.paymentType).toBe('platform_app')
 
     const cashRow = result.rows.find((row) => row.revenueAmount === 30.42)
     expect(cashRow?.paymentType).toBe('cash')
 
     const businessRow = result.rows.find((row) => row.revenueAmount === 28.9)
-    expect(businessRow?.paymentType).toBe('electronic')
+    expect(businessRow?.paymentType).toBe('platform_app')
     expect(businessRow?.platformDriverId).toBe('22222222-2222-2222-2222-222222222222')
   })
 

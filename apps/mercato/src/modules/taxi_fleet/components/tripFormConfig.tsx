@@ -84,6 +84,8 @@ export type TripFormOptions = {
   /** Frozen when the create form opens — keeps min-advance / datetime `min` stable. */
   minAdvanceReference?: Date
   minAdvanceHours?: number
+  /** Existing payment type (e.g. import-only `platform_app`) so the select can render it. */
+  currentPaymentType?: string | null
 }
 
 const TRIP_REQUEST_FIELD_IDS = new Set<string>([
@@ -530,6 +532,7 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
     defaultStatusCode,
     minAdvanceReference,
     minAdvanceHours = TRIP_MIN_ADVANCE_HOURS,
+    currentPaymentType = null,
   } = options
   const fieldLocked = (fieldId: string) =>
     readOnly || (Boolean(lockStatus) && !isTripDetailFieldEditable(lockStatus as string, fieldId))
@@ -700,7 +703,7 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
         )
       },
     },
-    ...buildTripRequestFormFields(t, { readOnly }).filter((field) =>
+    ...buildTripRequestFormFields(t, { readOnly, currentPaymentType }).filter((field) =>
       ['contactName', 'contactPhone', 'contactEmail', 'paymentType', 'referringPartnerEntityId'].includes(
         field.id,
       ),
@@ -742,7 +745,7 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
     layout: 'full',
   })
 
-  const requestFields = buildTripRequestFormFields(t, { readOnly }).filter((field) =>
+  const requestFields = buildTripRequestFormFields(t, { readOnly, currentPaymentType }).filter((field) =>
     TRIP_REQUEST_FIELD_IDS.has(field.id) &&
     !['contactName', 'contactPhone', 'contactEmail', 'referringPartnerEntityId', 'contactType', 'companyName', 'companyTaxId', 'paymentType', 'vehicleCategory', 'basePrice', 'revenueAmount', 'quoteSnapshotJson'].includes(
       field.id,

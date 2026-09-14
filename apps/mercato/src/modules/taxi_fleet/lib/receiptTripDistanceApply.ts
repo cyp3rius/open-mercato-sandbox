@@ -18,6 +18,8 @@ export function mergeReceiptTripDistance(params: {
   tripDistanceKm?: string | null
   ocrDistanceKm?: number | null
   tolerance?: number
+  /** High-confidence OCR: still apply distance, but do not keep a mismatch warning. */
+  suppressMismatchWarning?: boolean
 }): ReceiptTripDistanceMergeResult {
   const tolerance = params.tolerance ?? 0.05
   const ocrRaw =
@@ -38,16 +40,17 @@ export function mergeReceiptTripDistance(params: {
 
   const corrected =
     tripDistance != null && !distancesEqual(tripDistance, ocrDistance, tolerance)
-  const warnings: ReceiptOcrWarning[] = corrected
-    ? [
-        {
-          code: 'distance_mismatch_trip',
-          field: 'distanceKm',
-          driverValue: formatDistanceKm(tripDistance),
-          ocrValue: formatDistanceKm(ocrDistance),
-        },
-      ]
-    : []
+  const warnings: ReceiptOcrWarning[] =
+    corrected && !params.suppressMismatchWarning
+      ? [
+          {
+            code: 'distance_mismatch_trip',
+            field: 'distanceKm',
+            driverValue: formatDistanceKm(tripDistance),
+            ocrValue: formatDistanceKm(ocrDistance),
+          },
+        ]
+      : []
 
   return {
     distanceKm: formatDistanceKm(ocrDistance),

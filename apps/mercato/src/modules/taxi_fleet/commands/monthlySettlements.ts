@@ -32,6 +32,24 @@ import { loadDriverPayoutScheduleForMember } from '../lib/monthlySettlementPayou
 import { getMonthEnd, isMonthFullyCompleted } from '../lib/weekUtils'
 import { ensureOrganizationScope, ensureTenantScope, numericToString } from './shared'
 
+async function emitMonthlySettlementEvent(
+  ctx: { container: { resolve: (name: string) => unknown } },
+  eventId: string,
+  row: TaxiFleetMonthlySettlement,
+) {
+  const eventBus = ctx.container.resolve('eventBus') as {
+    emitEvent: (event: string, data: unknown) => Promise<void>
+  }
+  await eventBus.emitEvent(eventId, {
+    id: row.id,
+    tenantId: row.tenantId,
+    organizationId: row.organizationId,
+    teamMemberId: row.teamMemberId,
+    monthStart: row.monthStart,
+    status: row.status,
+  })
+}
+
 function applyMonthlyTotals(
   row: TaxiFleetMonthlySettlement,
   totals: Awaited<ReturnType<typeof calculateMonthlySettlementForDriver>>,
@@ -249,6 +267,7 @@ const updateMonthlySettlementCommand: CommandHandler<MonthlySettlementUpdateInpu
     ensureTenantScope(ctx, row.tenantId)
     ensureOrganizationScope(ctx, row.organizationId)
     const { translate } = await resolveTranslations()
+    const previousStatus = row.status
 
     const closureUpdate = isMonthlyClosureUpdate(parsed)
 
@@ -351,6 +370,9 @@ const updateMonthlySettlementCommand: CommandHandler<MonthlySettlementUpdateInpu
     }
 
     await em.flush()
+    if (previousStatus !== 'approved' && row.status === 'approved') {
+      await emitMonthlySettlementEvent(ctx, 'taxi_fleet.monthly_settlement.approved', row)
+    }
     return { settlementId: row.id }
   },
 }

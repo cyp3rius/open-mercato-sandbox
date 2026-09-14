@@ -1,8 +1,8 @@
 import { tripRequestDetailsFromMetadata } from './tripRequestForm'
 
 /**
- * Electronic prepayment: driver should not collect cash — show "Przedpłata".
- * Detected via mark_paid markers and/or trip request payment type `electronic`.
+ * Electronic / platform prepayment: driver should not collect cash — show "Przedpłata".
+ * Detected via mark_paid markers and/or trip request payment type `electronic` / `platform_app`.
  */
 export function isDriverTripElectronicallyPrepaid(trip: {
   status?: string | null
@@ -14,10 +14,14 @@ export function isDriverTripElectronicallyPrepaid(trip: {
     metadata && typeof metadata.paymentMethod === 'string' ? metadata.paymentMethod.trim().toLowerCase() : ''
   const paidAt = metadata && typeof metadata.paidAt === 'string' ? metadata.paidAt.trim() : ''
   const request = tripRequestDetailsFromMetadata(metadata)
+  const prepaidType =
+    request.paymentType === 'electronic' || request.paymentType === 'platform_app'
 
-  if (paymentMethod === 'paypal' || paymentMethod === 'electronic') return true
-  if (paidAt.length > 0 && (request.paymentType === 'electronic' || !paymentMethod)) return true
+  if (paymentMethod === 'paypal' || paymentMethod === 'electronic' || paymentMethod === 'platform_app') {
+    return true
+  }
+  if (paidAt.length > 0 && (prepaidType || !paymentMethod)) return true
   if (status === 'paid') return true
-  if (request.paymentType === 'electronic') return true
+  if (prepaidType) return true
   return false
 }

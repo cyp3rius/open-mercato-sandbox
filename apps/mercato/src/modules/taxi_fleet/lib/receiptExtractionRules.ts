@@ -35,6 +35,39 @@ export type ReceiptOcrWarning = {
   ocrValue?: string | null
 }
 
+/** Below this → `low_confidence` + needs_review. */
+export const RECEIPT_OCR_LOW_CONFIDENCE_THRESHOLD = 0.55
+
+/**
+ * At/above this confidence, OCR wins over driver/trip conflicts for
+ * document number, amount, distance, and client — and those warnings are dropped.
+ * Does not apply when the attachment is not a fiscal receipt (e.g. Polcard).
+ */
+export const RECEIPT_OCR_HIGH_CONFIDENCE_THRESHOLD = 0.85
+
+export function isHighConfidenceReceiptOcr(confidence: number | null | undefined): boolean {
+  return (
+    confidence != null &&
+    Number.isFinite(confidence) &&
+    confidence >= RECEIPT_OCR_HIGH_CONFIDENCE_THRESHOLD
+  )
+}
+
+export function shouldAutoApplyHighConfidenceOcr(params: {
+  confidence?: number | null
+  warnings?: Array<{ code?: string } | null | undefined> | null
+  isNonReceipt?: boolean
+}): boolean {
+  if (params.isNonReceipt) return false
+  if (
+    Array.isArray(params.warnings) &&
+    params.warnings.some((warning) => warning?.code === 'polcard_payment_confirmation')
+  ) {
+    return false
+  }
+  return isHighConfidenceReceiptOcr(params.confidence)
+}
+
 export type ReceiptFieldMergeInput = {
   driverDocumentNumber?: string | null
   ocrDocumentNumber?: string | null
@@ -44,6 +77,11 @@ export type ReceiptFieldMergeInput = {
   confidence?: number | null
   amountTolerance?: number
   lowConfidenceThreshold?: number
+  /**
+   * When true, OCR overrides driver/trip conflicts and skips conflict warnings.
+   * When omitted, derived from `confidence >= RECEIPT_OCR_HIGH_CONFIDENCE_THRESHOLD`.
+   */
+  preferOcrOnConflict?: boolean
 }
 
 export type ReceiptFieldMergeResult = {
@@ -71,6 +109,7 @@ function amountsEqual(a: number, b: number, tolerance: number): boolean {
 export function mergeReceiptDocumentNumber(params: {
   driverDocumentNumber?: string | null
   ocrDocumentNumber?: string | null
+  preferOcrOnConflict?: boolean
 }): Pick<ReceiptFieldMergeResult, 'documentNumber' | 'documentNumberSource' | 'warnings' | 'needsReview'> {
   const driver = normalizeDocumentNumber(params.driverDocumentNumber)
   // OCR sometimes returns seller NIP as documentNumber — treat as missing OCR number
@@ -101,6 +140,9 @@ export function mergeReceiptDocumentNumber(params: {
     if (same) {
       return { documentNumber: driver, documentNumberSource: 'driver', warnings, needsReview: false }
     }
+    if (params.preferOcrOnConflict) {
+      return { documentNumber: ocr, documentNumberSource: 'ocr', warnings, needsReview: false }
+    }
     warnings.push({
       code: 'field_conflict',
       field: 'documentNumber',
@@ -119,10 +161,13 @@ export function mergeReceiptDocumentNumber(params: {
 
 export function buildReceiptExtractionMerge(input: ReceiptFieldMergeInput): ReceiptFieldMergeResult {
   const tolerance = input.amountTolerance ?? 0.05
-  const lowConfidenceThreshold = input.lowConfidenceThreshold ?? 0.55
+  const lowConfidenceThreshold = input.lowConfidenceThreshold ?? RECEIPT_OCR_LOW_CONFIDENCE_THRESHOLD
+  const preferOcrOnConflict =
+    input.preferOcrOnConflict ?? isHighConfidenceReceiptOcr(input.confidence ?? null)
   const doc = mergeReceiptDocumentNumber({
     driverDocumentNumber: input.driverDocumentNumber,
     ocrDocumentNumber: input.ocrDocumentNumber,
+    preferOcrOnConflict,
   })
   const warnings = [...doc.warnings]
   let needsReview = doc.needsReview
@@ -132,7 +177,12 @@ export function buildReceiptExtractionMerge(input: ReceiptFieldMergeInput): Rece
   const ocrAmount =
     input.ocrGrossAmount != null && Number.isFinite(input.ocrGrossAmount) ? input.ocrGrossAmount : null
 
-  if (driverAmount != null && ocrAmount != null && !amountsEqual(driverAmount, ocrAmount, tolerance)) {
+  if (
+    !preferOcrOnConflict &&
+    driverAmount != null &&
+    ocrAmount != null &&
+    !amountsEqual(driverAmount, ocrAmount, tolerance)
+  ) {
     warnings.push({
       code: 'field_conflict',
       field: 'amount',
@@ -146,7 +196,12 @@ export function buildReceiptExtractionMerge(input: ReceiptFieldMergeInput): Rece
     input.tripRevenueAmount != null && Number.isFinite(input.tripRevenueAmount)
       ? input.tripRevenueAmount
       : null
-  if (ocrAmount != null && tripRevenue != null && !amountsEqual(ocrAmount, tripRevenue, tolerance)) {
+  if (
+    !preferOcrOnConflict &&
+    ocrAmount != null &&
+    tripRevenue != null &&
+    !amountsEqual(ocrAmount, tripRevenue, tolerance)
+  ) {
     warnings.push({
       code: 'amount_mismatch_trip',
       field: 'amount',

@@ -133,6 +133,12 @@ Operator close payout | Driver PWA read-only
 
 ## Changelog
 
+### 2026-09-13
+- Operator monthly detail header: **Recalculate** is the first action, visually separated from Accept / Pay out / Delete.
+- Monthly list filters hide `submitted` (operator statuses: draft / accepted / paid out); enum retained in API.
+- Labels: `approved` → Accepted / Zaakceptowany; `paid` → Paid out / Wypłacony; actions Accept / Pay out.
+- On monthly → `approved`, emit `taxi_fleet.monthly_settlement.approved` and notify the driver (`taxi_fleet.monthly_settlement.ready` → `/driver/monthly-settlements/{id}`).
+
 ### 2026-09-09
 - Initial spec: per-driver monthly payout settlements, weekly control-only, hybrid aggregation, platform trip dedupe, driver PWA monthly preview, document uploads without auto-validation.
 - Operator monthly detail: trips + costs tabs (same content as weekly reconcile lists for items entering the monthly formula), optional weekly settlement link per row (`target=_blank`); snapshot stores `trips` / `costs` with `weeklySettlementId` / `weekStart`.

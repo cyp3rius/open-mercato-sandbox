@@ -1,6 +1,7 @@
 import type { PlatformTripUpsertInput } from '../../data/validators'
 import type { TaxiFleetTripPlatform } from '../tripPlatforms'
 import type { PlatformTripIngestSource } from './types'
+import { isCancelledPlatformImportStatus } from './platformImportStatus'
 
 export const PLATFORM_TRIP_CSV_MAX_BYTES = 5 * 1024 * 1024
 export const PLATFORM_TRIP_CSV_MAX_ROWS = 5_000
@@ -87,20 +88,23 @@ export function parseCsvDateValue(value: string): Date | null {
 
 function parseStatus(value: string | undefined): PlatformTripUpsertInput['status'] {
   const normalized = (value ?? 'completed').trim().toLowerCase()
-  if (normalized === 'cancelled' || normalized === 'canceled') return 'cancelled'
+  if (isCancelledPlatformImportStatus(normalized)) return 'cancelled'
   if (normalized === 'paid') return 'paid'
   return 'completed'
 }
 
 function parsePaymentType(value: string | undefined): PlatformTripUpsertInput['paymentType'] {
-  const normalized = (value ?? 'electronic').trim().toLowerCase()
+  const normalized = (value ?? 'platform_app').trim().toLowerCase()
   if (normalized === 'cash') return 'cash'
   if (normalized === 'card') return 'card'
   if (normalized === 'electronic') return 'electronic'
+  if (normalized === 'platform_app' || normalized === 'app' || normalized === 'platform') {
+    return 'platform_app'
+  }
   if (normalized === 'transfer') return 'transfer'
   if (normalized === 'loyalty_program' || normalized === 'loyalty') return 'loyalty_program'
   if (normalized === 'other') return 'other'
-  return 'electronic'
+  return 'platform_app'
 }
 
 export function buildCsvHeaderIndex(headers: string[]): Map<string, number> {
@@ -221,12 +225,16 @@ export function parsePlatformTripCsv(params: {
     }
 
     const currencyRaw = readCell('currencyCode').trim()
+    const status = parseStatus(readCell('status'))
+    // Import only realized trips — cancelled vendor rows are ignored.
+    if (status === 'cancelled') return
+
     rows.push({
       ingestSource: params.ingestSource,
       platform: params.platform,
       externalTripId,
       platformDriverId,
-      status: parseStatus(readCell('status')),
+      status,
       startedAt,
       endedAt,
       distanceKm,

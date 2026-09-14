@@ -179,6 +179,7 @@ export const tripInjectPaymentTypeSchema = z.enum([
   'card',
   'transfer',
   'loyalty_program',
+  'platform_app',
   'other',
 ])
 export const tripInjectContactTypeSchema = z.enum(['private', 'company'])
@@ -773,6 +774,7 @@ export const platformTripPaymentTypeSchema = z.enum([
   'electronic',
   'transfer',
   'loyalty_program',
+  'platform_app',
   'other',
 ])
 

@@ -164,7 +164,9 @@ For each of `documentNumber` and (optionally stored) driver amount:
 | value | different | **do not overwrite**; `needs_review` + warning `field_conflict` |
 | empty | empty | leave empty; blocks settlement approve |
 
-Amount vs **trip revenue**: if both finite and `|ocr - revenue| > tolerance` (np. 0.05 PLN) → warning `amount_mismatch_trip` (nie zmienia `trip.revenueAmount` ani domyślnie `financial_entry.amount` — kwota income entry pochodzi z przychodu kursu).
+**High confidence (≥ 0.850):** when OCR confidence is ≥ `RECEIPT_OCR_HIGH_CONFIDENCE_THRESHOLD` (0.85), conflicts for document number, amount, distance, and client are auto-resolved in favour of OCR — values are overwritten and those warnings are cleared (status can become `applied`). **Exception:** Polcard / non-fiscal payment confirmation (`polcard_payment_confirmation`) never auto-applies; operator resolves manually.
+
+Amount vs **trip revenue**: if both finite and `|ocr - revenue| > tolerance` (np. 0.05 PLN) → warning `amount_mismatch_trip` (nie zmienia `trip.revenueAmount` ani domyślnie `financial_entry.amount` — kwota income entry pochodzi z przychodu kursu), **unless** high-confidence auto-apply above applies.
 
 NIP:
 
@@ -172,7 +174,7 @@ NIP:
 2. Invalid → warning `nip_invalid`, no CRM write.
 3. Valid → `fetchCompanyFromMfVatRegistry`.
 4. Not found / API error → warning `nip_not_found` / `nip_lookup_failed`, `needs_review` if no other hard conflicts.
-5. Found → find company by NIP in tenant/org or create via customers command; set `customer_company_id` on trip + financial_entry when previously empty or person-only (policy: if trip already has company with different NIP → warning `customer_nip_conflict`, needs_review).
+5. Found → find company by NIP in tenant/org or create via customers command; set `customer_company_id` on trip + financial_entry when previously empty or person-only (policy: if trip already has company with different NIP → warning `customer_nip_conflict`, needs_review — **unless** high-confidence auto-apply overwrites with OCR company).
 
 ## API Contracts
 
@@ -382,6 +384,9 @@ None for draft approval.
 **Fully compliant** for implementation in `apps/mercato` taxi_fleet module.
 
 ## Changelog
+
+### 2026-09-13
+- High-confidence auto-apply (≥ 0.850): OCR overwrites document number, amount, distance, and client conflicts and drops those warnings; Polcard / non-receipt stays manual (`needs_review`).
 
 ### 2026-08-20 (implementation)
 - Encja + migracja `taxi_fleet_receipt_extractions`.

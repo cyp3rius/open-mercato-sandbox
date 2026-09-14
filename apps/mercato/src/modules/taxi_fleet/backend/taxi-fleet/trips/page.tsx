@@ -41,7 +41,7 @@ import {
   resolveFleetCustomerDisplayLabel,
 } from '../../../lib/fleetCustomerEntitySearch'
 import { TAXI_FLEET_TRIP_PLATFORMS } from '../../../lib/tripPlatforms'
-import { TRIP_FORM_PAYMENT_OPTIONS } from '../../../lib/tripRequestForm'
+import { TRIP_PAYMENT_TYPE_FILTER_OPTIONS } from '../../../lib/tripRequestForm'
 import type { DriverTripReceiptWarning } from '../../../lib/driverTripReceiptStatus'
 
 const PAGE_SIZE = 20
@@ -270,7 +270,7 @@ export default function TaxiFleetTripsPage() {
         id: 'paymentType',
         label: t('taxi_fleet.trips.form.paymentType', 'Payment method'),
         type: 'select',
-        options: TRIP_FORM_PAYMENT_OPTIONS.map((value) => ({
+        options: TRIP_PAYMENT_TYPE_FILTER_OPTIONS.map((value) => ({
           value,
           label: t(`taxi_fleet.trips.form.paymentTypes.${value}`, value),
         })),

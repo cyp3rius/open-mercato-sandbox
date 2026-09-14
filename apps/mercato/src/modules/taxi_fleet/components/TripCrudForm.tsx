@@ -109,11 +109,14 @@ export function TripCrudForm(props: TripCrudFormProps) {
         minAdvanceReference,
         // CRM may schedule/add trips without the public booking lead-time rule.
         minAdvanceHours: 0,
+        currentPaymentType:
+          typeof initialValues.paymentType === 'string' ? initialValues.paymentType : null,
       }),
     [
       allowDriverEdit,
       driverLocked,
       driverProfiles,
+      initialValues.paymentType,
       layout,
       lockStatus,
       lockedTeamMemberId,

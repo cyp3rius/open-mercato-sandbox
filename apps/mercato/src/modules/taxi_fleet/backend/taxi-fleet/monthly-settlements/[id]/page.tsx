@@ -223,16 +223,12 @@ export default function TaxiFleetMonthlySettlementDetailPage({ params }: { param
   }, [confirm, row, router, t])
 
   const headerActions = React.useMemo(() => {
-    if (!canApprove && !canClosePayout && !canDelete && readOnly) return null
+    const showRecalculate = !readOnly
+    const showLifecycle = canDelete || canApprove || canClosePayout
+    if (!showRecalculate && !showLifecycle) return null
     return (
       <div className="flex w-full flex-wrap items-center justify-end gap-2 md:ml-auto md:w-auto">
-        {canDelete ? (
-          <Button type="button" variant="destructive" disabled={isDeleting} onClick={() => void deleteSettlement()}>
-            {isDeleting ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : <Trash2 className="mr-2 size-4" aria-hidden />}
-            {t('taxi_fleet.settlements.actions.delete', 'Delete draft')}
-          </Button>
-        ) : null}
-        {!readOnly ? (
+        {showRecalculate ? (
           <Button type="button" variant="outline" disabled={isRecalculating} onClick={() => void recalculate()}>
             {isRecalculating ? (
               <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
@@ -240,6 +236,15 @@ export default function TaxiFleetMonthlySettlementDetailPage({ params }: { param
               <RefreshCw className="mr-2 size-4" aria-hidden />
             )}
             {t('taxi_fleet.monthlySettlements.recalculate', 'Recalculate')}
+          </Button>
+        ) : null}
+        {showRecalculate && showLifecycle ? (
+          <span className="mx-1 hidden h-6 w-px shrink-0 bg-border sm:inline-block" aria-hidden />
+        ) : null}
+        {canDelete ? (
+          <Button type="button" variant="destructive" disabled={isDeleting} onClick={() => void deleteSettlement()}>
+            {isDeleting ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : <Trash2 className="mr-2 size-4" aria-hidden />}
+            {t('taxi_fleet.settlements.actions.delete', 'Delete draft')}
           </Button>
         ) : null}
         {canApprove ? (

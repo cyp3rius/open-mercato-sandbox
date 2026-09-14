@@ -7,6 +7,7 @@ import {
   canDeleteWeeklySettlement,
   isAllowedMonthlySettlementStatusTransition,
   isAllowedWeeklySettlementStatusTransition,
+  MONTHLY_SETTLEMENT_OPERATOR_STATUSES,
 } from '../settlementStatusTransitions'
 
 describe('settlementStatusTransitions', () => {
@@ -40,5 +41,9 @@ describe('settlementStatusTransitions', () => {
     expect(canCloseMonthlySettlementPayout('approved')).toBe(true)
     expect(canApproveMonthlySettlement('draft')).toBe(true)
     expect(canDeleteMonthlySettlement('draft')).toBe(true)
+  })
+
+  it('exposes operator monthly statuses without submitted', () => {
+    expect(MONTHLY_SETTLEMENT_OPERATOR_STATUSES).toEqual(['draft', 'approved', 'paid'])
   })
 })

@@ -9,6 +9,9 @@ export const MONTHLY_SETTLEMENT_STATUSES = ['draft', 'submitted', 'approved', 'p
 
 export type MonthlySettlementStatus = (typeof MONTHLY_SETTLEMENT_STATUSES)[number]
 
+/** Operator-facing monthly statuses (`submitted` kept in schema/API for parity, hidden in UI). */
+export const MONTHLY_SETTLEMENT_OPERATOR_STATUSES = ['draft', 'approved', 'paid'] as const
+
 export function isAllowedWeeklySettlementStatusTransition(
   from: string,
   to: string,

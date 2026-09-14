@@ -19,11 +19,11 @@ describe('parseUberFleetCsv', () => {
     })
 
     expect(result.rows).toHaveLength(2)
-    expect(result.errors.some((error) => error.message.includes('No matching payment'))).toBe(true)
+    expect(result.errors.every((error) => !error.message.includes('No matching payment'))).toBe(true)
 
     const first = result.rows.find((row) => row.externalTripId === 'trip-uber-001')
     expect(first?.revenueAmount).toBe(18.72)
-    expect(first?.paymentType).toBe('electronic')
+    expect(first?.paymentType).toBe('platform_app')
     expect(first?.platform).toBe('uber')
     expect(first?.fromAddress).toBe('ul. Marszałkowska 1 Warszawa')
     expect(first?.toAddress).toBe('ul. Puławska 10 Warszawa')

@@ -9,11 +9,14 @@ import { revenueGrossToNet } from '../settlementVat'
 describe('settlementRevenue', () => {
   it('classifies platform and payment combinations', () => {
     expect(classifySettlementRevenueLine({ platform: 'uber', paymentType: 'electronic' })).toBe('uber_platform')
+    expect(classifySettlementRevenueLine({ platform: 'uber', paymentType: 'platform_app' })).toBe('uber_platform')
     expect(classifySettlementRevenueLine({ platform: 'bolt', paymentType: 'card' })).toBe('bolt_platform')
+    expect(classifySettlementRevenueLine({ platform: 'bolt', paymentType: 'platform_app' })).toBe('bolt_platform')
     expect(classifySettlementRevenueLine({ platform: 'uber', paymentType: 'cash' })).toBe('uber_cash')
     expect(classifySettlementRevenueLine({ platform: null, paymentType: 'cash' })).toBe('taxi_cash')
     expect(classifySettlementRevenueLine({ platform: null, paymentType: 'card' })).toBe('taxi_card')
     expect(classifySettlementRevenueLine({ platform: 'free', paymentType: 'cash' })).toBe('free')
+    expect(classifySettlementRevenueLine({ platform: 'free', paymentType: 'platform_app' })).toBe('free')
   })
 
   it('aggregates completed trips into spreadsheet lines', () => {

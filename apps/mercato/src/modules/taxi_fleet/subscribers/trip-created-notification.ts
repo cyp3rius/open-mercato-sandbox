@@ -15,6 +15,7 @@ type TripCreatedPayload = {
   organizationId: string
   tripType?: string
   requestId?: string | null
+  ingestSource?: string | null
 }
 
 type ResolverContext = {
@@ -23,6 +24,8 @@ type ResolverContext = {
 
 export default async function handle(payload: TripCreatedPayload, ctx: ResolverContext) {
   if (!payload.id || !payload.tenantId || !payload.organizationId) return
+  // Platform CSV imports must not create order notifications.
+  if (payload.ingestSource === 'platform_csv') return
 
   await notifyTaxiFleetBroadcast(ctx, {
     notificationType: 'taxi_fleet.trip.order_created',

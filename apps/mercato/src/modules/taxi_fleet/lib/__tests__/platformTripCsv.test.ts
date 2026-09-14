@@ -18,6 +18,21 @@ describe('parsePlatformTripCsv', () => {
     expect(result.rows[1]?.paymentType).toBe('cash')
   })
 
+  it('silently skips cancelled rows', () => {
+    const result = parsePlatformTripCsv({
+      csvText: `externalTripId,platformDriverId,startedAt,revenueAmount,status
+ok-1,driver-1,2026-08-20T08:15:00,10,completed
+cancel-1,driver-1,2026-08-20T09:00:00,20,cancelled
+ok-2,driver-1,2026-08-20T10:00:00,15,paid
+cancel-2,driver-1,2026-08-20T11:00:00,5,rider_canceled`,
+      platform: 'free',
+      ingestSource: 'platform_csv',
+    })
+    expect(result.errors).toEqual([])
+    expect(result.rows.map((row) => row.externalTripId)).toEqual(['ok-1', 'ok-2'])
+    expect(result.rows.every((row) => row.status === 'completed' || row.status === 'paid')).toBe(true)
+  })
+
   it('rejects missing required headers', () => {
     const result = parsePlatformTripCsv({
       csvText: 'externalTripId,startedAt\nabc,2026-01-01T10:00:00',

@@ -69,11 +69,15 @@ const upsertPlatformTripCommand: CommandHandler<PlatformTripUpsertInput, Platfor
         platform: trip.platform ?? null,
         externalTripId: trip.externalTripId ?? null,
         status: trip.status,
+        ingestSource: parsed.ingestSource,
       }
-      if (result.created) {
-        await eventBus.emitEvent('taxi_fleet.trip.created', payload)
-      } else {
-        await eventBus.emitEvent('taxi_fleet.trip.updated', payload)
+      // CSV file imports (Bolt / Uber / Free) must stay silent — no per-trip inbox noise.
+      if (parsed.ingestSource !== 'platform_csv') {
+        if (result.created) {
+          await eventBus.emitEvent('taxi_fleet.trip.created', payload)
+        } else {
+          await eventBus.emitEvent('taxi_fleet.trip.updated', payload)
+        }
       }
     }
 

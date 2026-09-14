@@ -22,7 +22,7 @@ import { useTaxiFleetPermissions } from '../../../components/useTaxiFleetPermiss
 import { MonthlySettlementGenerateDialog } from '../../../components/MonthlySettlementGenerateDialog'
 import { SettlementStatusBadge } from '../../../components/SettlementStatusBadge'
 import { formatSettlementMoney } from '../../../lib/settlementPayoutDisplay'
-import { canDeleteMonthlySettlement } from '../../../lib/settlementStatusTransitions'
+import { canDeleteMonthlySettlement, MONTHLY_SETTLEMENT_OPERATOR_STATUSES } from '../../../lib/settlementStatusTransitions'
 
 const PAGE_SIZE = 20
 
@@ -66,7 +66,7 @@ export default function TaxiFleetMonthlySettlementsPage() {
         id: 'status',
         label: t('taxi_fleet.settlements.status', 'Status'),
         type: 'select',
-        options: ['draft', 'submitted', 'approved', 'paid'].map((status) => ({
+        options: MONTHLY_SETTLEMENT_OPERATOR_STATUSES.map((status) => ({
           value: status,
           label: t(`taxi_fleet.settlements.statuses.${status}`, status),
         })),

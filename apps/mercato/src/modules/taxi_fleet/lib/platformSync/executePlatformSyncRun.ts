@@ -27,6 +27,7 @@ import {
   resolvePlatformSyncWindow,
   resolveScheduledPlatformSyncWindow,
 } from './resolvePlatformSyncWindow'
+import { isRealizedPlatformImportStatus } from './platformImportStatus'
 import {
   filterPlatformTripRowsForKnownDrivers,
   loadKnownPlatformDriverIds,
@@ -182,6 +183,11 @@ async function upsertPlatformTripBatch(params: {
         continue
       }
       seenExternalTripIds.add(externalTripId)
+    }
+
+    // Defense in depth — parsers should already drop cancelled rows.
+    if (!isRealizedPlatformImportStatus(row.status)) {
+      continue
     }
 
     try {
