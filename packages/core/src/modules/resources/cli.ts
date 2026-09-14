@@ -1,7 +1,14 @@
 import type { ModuleCli } from '@open-mercato/shared/modules/registry'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { seedResourcesActivityTypes, seedResourcesAddressTypes, seedResourcesCapacityUnits, seedResourcesResourceExamples, type ResourcesSeedScope } from './lib/seeds'
+import {
+  ensureResourceCustomFields,
+  seedResourcesActivityTypes,
+  seedResourcesAddressTypes,
+  seedResourcesCapacityUnits,
+  seedResourcesResourceExamples,
+  type ResourcesSeedScope,
+} from './lib/seeds'
 
 function parseArgs(rest: string[]) {
   const args: Record<string, string> = {}
@@ -128,4 +135,37 @@ const seedExamplesCommand: ModuleCli = {
   },
 }
 
-export default [seedCapacityUnitsCommand, seedActivityTypesCommand, seedAddressTypesCommand, seedExamplesCommand]
+const ensureCustomFieldsCommand: ModuleCli = {
+  command: 'ensure-custom-fields',
+  async run(rest) {
+    const args = parseArgs(rest)
+    const tenantId = String(args.tenantId ?? args.tenant ?? '')
+    const organizationId = String(args.organizationId ?? args.org ?? args.orgId ?? '')
+    if (!tenantId || !organizationId) {
+      console.error('Usage: mercato resources ensure-custom-fields --tenant <tenantId> --org <organizationId>')
+      return
+    }
+    const container = await createRequestContainer()
+    const scope: ResourcesSeedScope = { tenantId, organizationId }
+    try {
+      const em = container.resolve<EntityManager>('em')
+      await em.transactional(async (tem) => {
+        await ensureResourceCustomFields(tem, scope)
+      })
+      console.log('🧩 Resources custom fields ensured for organization', organizationId)
+    } finally {
+      const disposable = container as unknown as { dispose?: () => Promise<void> }
+      if (typeof disposable.dispose === 'function') {
+        await disposable.dispose()
+      }
+    }
+  },
+}
+
+export default [
+  seedCapacityUnitsCommand,
+  seedActivityTypesCommand,
+  seedAddressTypesCommand,
+  seedExamplesCommand,
+  ensureCustomFieldsCommand,
+]

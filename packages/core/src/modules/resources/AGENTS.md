@@ -9,6 +9,7 @@ Typed assets with capacity, scheduling, and optional vehicle/fleet fields. **Req
 3. **MUST link to CRM via optional `customerEntityId`** — use `ResourceCustomerLinkField`
 4. **MUST use tabbed detail layout** — form, service book, notes, activities, version history
 5. **MUST scope by `organization_id`**
+6. **MUST declare default custom fields in `ce.ts`** (from `lib/resourceCustomFields.ts`) so `yarn mercato entities install` repairs existing tenants; org fieldset+defs also via `yarn mercato resources ensure-custom-fields --tenant <id> --org <id>`
 
 ## Key Reference Files
 

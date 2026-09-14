@@ -1,5 +1,6 @@
 import type { ModuleSetupConfig } from '@open-mercato/shared/modules/setup'
 import {
+  ensureResourceCustomFields,
   seedResourcesAddressTypes,
   seedResourcesCapacityUnits,
   seedResourcesResourceExamples,
@@ -11,6 +12,7 @@ export const setup: ModuleSetupConfig = {
     const scope = { tenantId: ctx.tenantId, organizationId: ctx.organizationId }
     await seedResourcesAddressTypes(ctx.em, scope)
     await seedResourcesResourceStatus(ctx.em, scope)
+    await ensureResourceCustomFields(ctx.em, scope)
   },
 
   seedExamples: async (ctx) => {

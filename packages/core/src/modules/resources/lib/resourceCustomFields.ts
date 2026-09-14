@@ -1,4 +1,5 @@
 import type { FieldSetInput } from '@open-mercato/core/modules/entities/lib/field-definitions'
+import type { CustomFieldDefinition } from '@open-mercato/shared/modules/entities'
 import { E } from '#generated/entities.ids.generated'
 import { defineFields, cf } from '@open-mercato/shared/modules/dsl'
 
@@ -97,280 +98,273 @@ export const RESOURCES_RESOURCE_FIELDSETS = [
 
 const FLEET_VEHICLE_FIELDSETS = [RESOURCES_RESOURCE_FIELDSET_VEHICLE, RESOURCES_RESOURCE_FIELDSET_TAXI]
 
+/** Declared in ce.ts so `yarn mercato entities install` can repair existing tenants. */
+export const RESOURCES_RESOURCE_CUSTOM_FIELDS: CustomFieldDefinition[] = [
+  cf.text('asset_tag', {
+    label: 'Asset tag',
+    description: 'Internal tracking tag or code.',
+    filterable: true,
+    fieldset: RESOURCES_RESOURCE_FIELDSET_DEFAULT,
+    group: { code: 'identity' },
+  }),
+  cf.text('owner', {
+    label: 'Owner',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_DEFAULT,
+    group: { code: 'ownership' },
+  }),
+  cf.text('warranty_expires', {
+    label: 'Warranty expires',
+    description: 'YYYY-MM-DD',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_DEFAULT,
+    group: { code: 'ownership' },
+  }),
+  cf.multiline('ops_notes', {
+    label: 'Operational notes',
+    editor: 'markdown',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_DEFAULT,
+    group: { code: 'notes' },
+  }),
+  cf.text('room_floor', {
+    label: 'Floor',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_ROOM,
+    group: { code: 'location' },
+  }),
+  cf.text('room_zone', {
+    label: 'Zone',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_ROOM,
+    group: { code: 'location' },
+  }),
+  cf.boolean('room_projector', {
+    label: 'Projector available',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_ROOM,
+    group: { code: 'equipment' },
+  }),
+  cf.boolean('room_whiteboard', {
+    label: 'Whiteboard available',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_ROOM,
+    group: { code: 'equipment' },
+  }),
+  cf.multiline('room_access_notes', {
+    label: 'Access notes',
+    editor: 'markdown',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_ROOM,
+    group: { code: 'access' },
+  }),
+  cf.text('laptop_serial', {
+    label: 'Serial number',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_LAPTOP,
+    group: { code: 'hardware' },
+    filterable: true,
+  }),
+  cf.text('laptop_cpu', {
+    label: 'CPU model',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_LAPTOP,
+    group: { code: 'hardware' },
+  }),
+  cf.integer('laptop_ram_gb', {
+    label: 'RAM (GB)',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_LAPTOP,
+    group: { code: 'hardware' },
+  }),
+  cf.integer('laptop_storage_gb', {
+    label: 'Storage (GB)',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_LAPTOP,
+    group: { code: 'hardware' },
+  }),
+  cf.select('laptop_os', ['windows', 'macos', 'linux', 'chrome_os'], {
+    label: 'Operating system',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_LAPTOP,
+    group: { code: 'software' },
+  }),
+  cf.multiline('laptop_accessories', {
+    label: 'Accessories',
+    editor: 'markdown',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_LAPTOP,
+    group: { code: 'accessories' },
+  }),
+  cf.select('seat_style', ['standard', 'reclining', 'barber', 'massage'], {
+    label: 'Seat style',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_SEAT,
+    group: { code: 'comfort' },
+  }),
+  cf.boolean('seat_heated', {
+    label: 'Heated seat',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_SEAT,
+    group: { code: 'comfort' },
+  }),
+  cf.text('seat_positioning', {
+    label: 'Positioning notes',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_SEAT,
+    group: { code: 'service' },
+  }),
+  cf.text('kit_inventory', {
+    label: 'Inventory list',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_HAIR_KIT,
+    group: { code: 'inventory' },
+  }),
+  cf.text('kit_restock_cycle', {
+    label: 'Restock cycle',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_HAIR_KIT,
+    group: { code: 'inventory' },
+  }),
+  cf.multiline('kit_maintenance', {
+    label: 'Maintenance notes',
+    editor: 'markdown',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_HAIR_KIT,
+    group: { code: 'maintenance' },
+  }),
+  cf.text('chair_model', {
+    label: 'Model',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_DENTAL_CHAIR,
+    group: { code: 'chair' },
+  }),
+  cf.boolean('chair_ultrasonic', {
+    label: 'Ultrasonic scaler',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_DENTAL_CHAIR,
+    group: { code: 'chair' },
+  }),
+  cf.text('chair_last_disinfected', {
+    label: 'Last disinfected',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_DENTAL_CHAIR,
+    group: { code: 'hygiene' },
+  }),
+  cf.multiline('chair_inspection_notes', {
+    label: 'Inspection notes',
+    editor: 'markdown',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_DENTAL_CHAIR,
+    group: { code: 'maintenance' },
+  }),
+  cf.text('vehicle_plate', {
+    label: 'License plate',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+    fieldsets: FLEET_VEHICLE_FIELDSETS,
+    group: { code: 'identity' },
+    filterable: true,
+  }),
+  cf.text('vehicle_model', {
+    label: 'Model',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+    fieldsets: FLEET_VEHICLE_FIELDSETS,
+    group: { code: 'identity' },
+  }),
+  cf.text('vehicle_vin_number', {
+    label: 'VIN',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+    fieldsets: FLEET_VEHICLE_FIELDSETS,
+    group: { code: 'identity' },
+    filterable: true,
+  }),
+  cf.integer('vehicle_year_of_manufacture', {
+    label: 'Year of manufacture',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+    fieldsets: FLEET_VEHICLE_FIELDSETS,
+    group: { code: 'specs' },
+  }),
+  cf.select('vehicle_fuel_type', ['petrol', 'diesel', 'hybrid', 'electric'], {
+    label: 'Fuel type',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+    fieldsets: FLEET_VEHICLE_FIELDSETS,
+    group: { code: 'specs' },
+  }),
+  cf.integer('vehicle_mileage_km', {
+    label: 'Mileage (km)',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+    fieldsets: FLEET_VEHICLE_FIELDSETS,
+    group: { code: 'specs' },
+  }),
+  cf.text('vehicle_registration_date', {
+    label: 'Registration date',
+    description: 'YYYY-MM-DD',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+    fieldsets: FLEET_VEHICLE_FIELDSETS,
+    group: { code: 'specs' },
+  }),
+  cf.text('vehicle_last_service', {
+    label: 'Last service date',
+    description: 'YYYY-MM-DD',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
+    fieldsets: FLEET_VEHICLE_FIELDSETS,
+    group: { code: 'maintenance' },
+  }),
+  cf.select('taxi', ['standard', 'van'], {
+    label: 'Taxi vehicle type',
+    description: 'Standard or van — used for fleet trip pricing.',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
+    group: { code: 'specs' },
+    filterable: true,
+    listVisible: true,
+    formEditable: true,
+  }),
+  cf.text('uber_vehicle_id', {
+    label: 'Uber vehicle ID',
+    description: 'Fleet vehicle UUID from Uber partner console.',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
+    group: { code: 'platforms' },
+    filterable: true,
+  }),
+  cf.text('bolt_vehicle_id', {
+    label: 'Bolt vehicle ID',
+    description: 'Fleet vehicle ID from Bolt partner console.',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
+    group: { code: 'platforms' },
+    filterable: true,
+  }),
+  cf.text('free_vehicle_id', {
+    label: 'Free vehicle ID',
+    description: 'Fleet vehicle ID from Free partner console.',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
+    group: { code: 'platforms' },
+    filterable: true,
+  }),
+  cf.text('bp_fuel_card_number', {
+    label: 'BP fuel card number',
+    description: 'Fleet fuel card number used to match BP Open Fleet transactions.',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
+    group: { code: 'fuel_card' },
+    filterable: true,
+  }),
+  cf.text('payment_terminal_id', {
+    label: 'Payment terminal ID',
+    description: 'In-vehicle payment terminal identifier.',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
+    group: { code: 'devices' },
+    filterable: true,
+  }),
+  cf.text('geneta_vehicle_id', {
+    label: 'Geneta vehicle ID',
+    description: 'Vehicle ID in Geneta telematics.',
+    fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
+    group: { code: 'devices' },
+    filterable: true,
+  }),
+]
+
+export const RESOURCES_RESOURCE_ACTIVITY_CUSTOM_FIELDS: CustomFieldDefinition[] = [
+  cf.select('activity_priority', ['low', 'normal', 'high'], {
+    label: 'Priority',
+    description: 'Urgency of the activity.',
+    filterable: true,
+    formEditable: true,
+    listVisible: true,
+  }),
+  cf.text('work_order', {
+    label: 'Work order',
+    description: 'External or internal reference ID.',
+    formEditable: true,
+    listVisible: true,
+  }),
+  cf.boolean('requires_follow_up', {
+    label: 'Requires follow-up',
+    description: 'Track if another action is needed.',
+    defaultValue: false,
+    formEditable: true,
+    listVisible: true,
+  }),
+]
+
 export const RESOURCES_RESOURCE_CUSTOM_FIELD_SETS: FieldSetInput[] = [
-  defineFields(E.resources.resources_resource, [
-    cf.text('asset_tag', {
-      label: 'Asset tag',
-      description: 'Internal tracking tag or code.',
-      filterable: true,
-      fieldset: RESOURCES_RESOURCE_FIELDSET_DEFAULT,
-      group: { code: 'identity' },
-    }),
-    cf.text('owner', {
-      label: 'Owner',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_DEFAULT,
-      group: { code: 'ownership' },
-    }),
-    cf.text('warranty_expires', {
-      label: 'Warranty expires',
-      description: 'YYYY-MM-DD',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_DEFAULT,
-      group: { code: 'ownership' },
-    }),
-    cf.multiline('ops_notes', {
-      label: 'Operational notes',
-      editor: 'markdown',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_DEFAULT,
-      group: { code: 'notes' },
-    }),
-  ]),
-  defineFields(E.resources.resources_resource, [
-    cf.text('room_floor', {
-      label: 'Floor',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_ROOM,
-      group: { code: 'location' },
-    }),
-    cf.text('room_zone', {
-      label: 'Zone',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_ROOM,
-      group: { code: 'location' },
-    }),
-    cf.boolean('room_projector', {
-      label: 'Projector available',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_ROOM,
-      group: { code: 'equipment' },
-    }),
-    cf.boolean('room_whiteboard', {
-      label: 'Whiteboard available',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_ROOM,
-      group: { code: 'equipment' },
-    }),
-    cf.multiline('room_access_notes', {
-      label: 'Access notes',
-      editor: 'markdown',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_ROOM,
-      group: { code: 'access' },
-    }),
-  ]),
-  defineFields(E.resources.resources_resource, [
-    cf.text('laptop_serial', {
-      label: 'Serial number',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_LAPTOP,
-      group: { code: 'hardware' },
-      filterable: true,
-    }),
-    cf.text('laptop_cpu', {
-      label: 'CPU model',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_LAPTOP,
-      group: { code: 'hardware' },
-    }),
-    cf.integer('laptop_ram_gb', {
-      label: 'RAM (GB)',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_LAPTOP,
-      group: { code: 'hardware' },
-    }),
-    cf.integer('laptop_storage_gb', {
-      label: 'Storage (GB)',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_LAPTOP,
-      group: { code: 'hardware' },
-    }),
-    cf.select('laptop_os', ['windows', 'macos', 'linux', 'chrome_os'], {
-      label: 'Operating system',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_LAPTOP,
-      group: { code: 'software' },
-    }),
-    cf.multiline('laptop_accessories', {
-      label: 'Accessories',
-      editor: 'markdown',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_LAPTOP,
-      group: { code: 'accessories' },
-    }),
-  ]),
-  defineFields(E.resources.resources_resource, [
-    cf.select('seat_style', ['standard', 'reclining', 'barber', 'massage'], {
-      label: 'Seat style',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_SEAT,
-      group: { code: 'comfort' },
-    }),
-    cf.boolean('seat_heated', {
-      label: 'Heated seat',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_SEAT,
-      group: { code: 'comfort' },
-    }),
-    cf.text('seat_positioning', {
-      label: 'Positioning notes',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_SEAT,
-      group: { code: 'service' },
-    }),
-  ]),
-  defineFields(E.resources.resources_resource, [
-    cf.text('kit_inventory', {
-      label: 'Inventory list',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_HAIR_KIT,
-      group: { code: 'inventory' },
-    }),
-    cf.text('kit_restock_cycle', {
-      label: 'Restock cycle',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_HAIR_KIT,
-      group: { code: 'inventory' },
-    }),
-    cf.multiline('kit_maintenance', {
-      label: 'Maintenance notes',
-      editor: 'markdown',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_HAIR_KIT,
-      group: { code: 'maintenance' },
-    }),
-  ]),
-  defineFields(E.resources.resources_resource, [
-    cf.text('chair_model', {
-      label: 'Model',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_DENTAL_CHAIR,
-      group: { code: 'chair' },
-    }),
-    cf.boolean('chair_ultrasonic', {
-      label: 'Ultrasonic scaler',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_DENTAL_CHAIR,
-      group: { code: 'chair' },
-    }),
-    cf.text('chair_last_disinfected', {
-      label: 'Last disinfected',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_DENTAL_CHAIR,
-      group: { code: 'hygiene' },
-    }),
-    cf.multiline('chair_inspection_notes', {
-      label: 'Inspection notes',
-      editor: 'markdown',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_DENTAL_CHAIR,
-      group: { code: 'maintenance' },
-    }),
-  ]),
-  defineFields(E.resources.resources_resource, [
-    cf.text('vehicle_plate', {
-      label: 'License plate',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
-      fieldsets: FLEET_VEHICLE_FIELDSETS,
-      group: { code: 'identity' },
-      filterable: true,
-    }),
-    cf.text('vehicle_model', {
-      label: 'Model',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
-      fieldsets: FLEET_VEHICLE_FIELDSETS,
-      group: { code: 'identity' },
-    }),
-    cf.text('vehicle_vin_number', {
-      label: 'VIN',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
-      fieldsets: FLEET_VEHICLE_FIELDSETS,
-      group: { code: 'identity' },
-      filterable: true,
-    }),
-    cf.integer('vehicle_year_of_manufacture', {
-      label: 'Year of manufacture',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
-      fieldsets: FLEET_VEHICLE_FIELDSETS,
-      group: { code: 'specs' },
-    }),
-    cf.select('vehicle_fuel_type', ['petrol', 'diesel', 'hybrid', 'electric'], {
-      label: 'Fuel type',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
-      fieldsets: FLEET_VEHICLE_FIELDSETS,
-      group: { code: 'specs' },
-    }),
-    cf.integer('vehicle_mileage_km', {
-      label: 'Mileage (km)',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
-      fieldsets: FLEET_VEHICLE_FIELDSETS,
-      group: { code: 'specs' },
-    }),
-    cf.text('vehicle_registration_date', {
-      label: 'Registration date',
-      description: 'YYYY-MM-DD',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
-      fieldsets: FLEET_VEHICLE_FIELDSETS,
-      group: { code: 'specs' },
-    }),
-    cf.text('vehicle_last_service', {
-      label: 'Last service date',
-      description: 'YYYY-MM-DD',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_VEHICLE,
-      fieldsets: FLEET_VEHICLE_FIELDSETS,
-      group: { code: 'maintenance' },
-    }),
-    cf.select('taxi', ['standard', 'van'], {
-      label: 'Taxi vehicle type',
-      description: 'Standard or van — used for fleet trip pricing.',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
-      group: { code: 'specs' },
-      filterable: true,
-      listVisible: true,
-      formEditable: true,
-    }),
-    cf.text('uber_vehicle_id', {
-      label: 'Uber vehicle ID',
-      description: 'Fleet vehicle UUID from Uber partner console.',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
-      group: { code: 'platforms' },
-      filterable: true,
-    }),
-    cf.text('bolt_vehicle_id', {
-      label: 'Bolt vehicle ID',
-      description: 'Fleet vehicle ID from Bolt partner console.',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
-      group: { code: 'platforms' },
-      filterable: true,
-    }),
-    cf.text('free_vehicle_id', {
-      label: 'Free vehicle ID',
-      description: 'Fleet vehicle ID from Free partner console.',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
-      group: { code: 'platforms' },
-      filterable: true,
-    }),
-    cf.text('bp_fuel_card_number', {
-      label: 'BP fuel card number',
-      description: 'Fleet fuel card number used to match BP Open Fleet transactions.',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
-      group: { code: 'fuel_card' },
-      filterable: true,
-    }),
-    cf.text('payment_terminal_id', {
-      label: 'Payment terminal ID',
-      description: 'In-vehicle payment terminal identifier.',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
-      group: { code: 'devices' },
-      filterable: true,
-    }),
-    cf.text('geneta_vehicle_id', {
-      label: 'Geneta vehicle ID',
-      description: 'Vehicle ID in Geneta telematics.',
-      fieldset: RESOURCES_RESOURCE_FIELDSET_TAXI,
-      group: { code: 'devices' },
-      filterable: true,
-    }),
-  ]),
-  defineFields(E.resources.resources_resource_activity, [
-    cf.select('activity_priority', ['low', 'normal', 'high'], {
-      label: 'Priority',
-      description: 'Urgency of the activity.',
-      filterable: true,
-      formEditable: true,
-      listVisible: true,
-    }),
-    cf.text('work_order', {
-      label: 'Work order',
-      description: 'External or internal reference ID.',
-      formEditable: true,
-      listVisible: true,
-    }),
-    cf.boolean('requires_follow_up', {
-      label: 'Requires follow-up',
-      description: 'Track if another action is needed.',
-      defaultValue: false,
-      formEditable: true,
-      listVisible: true,
-    }),
-  ]),
+  defineFields(E.resources.resources_resource, RESOURCES_RESOURCE_CUSTOM_FIELDS, 'resources'),
+  defineFields(E.resources.resources_resource_activity, RESOURCES_RESOURCE_ACTIVITY_CUSTOM_FIELDS, 'resources'),
 ]
 
 function normalizeName(value?: string | null): string {

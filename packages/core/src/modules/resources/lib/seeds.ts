@@ -165,7 +165,8 @@ async function ensureResourceFieldsetConfig(em: EntityManager, scope: ResourcesS
   em.persist(config)
 }
 
-async function ensureResourceCustomFields(em: EntityManager, scope: ResourcesSeedScope) {
+/** Idempotent: fieldset config + resource/activity custom field defs for an org. */
+export async function ensureResourceCustomFields(em: EntityManager, scope: ResourcesSeedScope) {
   await ensureResourceFieldsetConfig(em, scope)
   await ensureCustomFieldDefinitions(em, RESOURCES_RESOURCE_CUSTOM_FIELD_SETS, {
     organizationId: scope.organizationId,
