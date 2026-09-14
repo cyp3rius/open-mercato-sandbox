@@ -20,7 +20,6 @@ const systemEntities: CustomEntitySpec[] = [
     description: 'Timeline events logged against a resource.',
     labelField: 'subject',
     showInSidebar: false,
-    defaultEditor: false,
     fields: RESOURCES_RESOURCE_ACTIVITY_CUSTOM_FIELDS,
   },
 ]
