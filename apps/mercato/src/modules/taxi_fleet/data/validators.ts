@@ -173,6 +173,19 @@ export const driverLocationBatchSchema = z.object({
   clientMutationId: z.string().trim().min(1).max(191).optional(),
 })
 
+export const driverPushSubscriptionSchema = z.object({
+  endpoint: z.string().trim().url().max(2048),
+  expirationTime: z.number().nullable().optional(),
+  keys: z.object({
+    p256dh: z.string().trim().min(1).max(512),
+    auth: z.string().trim().min(1).max(512),
+  }),
+})
+
+export const driverPushUnsubscribeSchema = z.object({
+  endpoint: z.string().trim().url().max(2048),
+})
+
 export const tripInjectPaymentTypeSchema = z.enum([
   'electronic',
   'cash',

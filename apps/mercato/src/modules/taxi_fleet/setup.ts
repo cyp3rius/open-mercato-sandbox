@@ -4,6 +4,7 @@ import { Role } from '@open-mercato/core/modules/auth/data/entities'
 import { syncTaxiVehicleCustomFieldScope } from './lib/vehicleResourceTypes'
 import { ensureTaxiFleetDriverReceiptsPartition } from './lib/receiptPartition'
 import { registerPlatformSyncSchedule } from './lib/platformSync/registerPlatformSyncSchedule'
+import { registerDriverPushReminderSchedule } from './lib/driverPush/registerDriverPushReminderSchedule'
 
 const DRIVER_ROLE_NAME = 'driver'
 
@@ -33,6 +34,10 @@ export const setup: ModuleSetupConfig = {
       organizationId: ctx.organizationId,
     })
     await registerPlatformSyncSchedule(ctx.container, {
+      tenantId: ctx.tenantId,
+      organizationId: ctx.organizationId,
+    })
+    await registerDriverPushReminderSchedule(ctx.container, {
       tenantId: ctx.tenantId,
       organizationId: ctx.organizationId,
     })

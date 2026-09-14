@@ -34,6 +34,7 @@ import { ensureOrganizationScope, ensureTenantScope, numericToString } from './s
 import { assertDriverTripShift } from '../lib/assertDriverTripShift'
 import { assertNoTripOverlap } from '../lib/assertNoTripOverlap'
 import { assertNoVehicleTripOverlap } from '../lib/assertNoVehicleTripOverlap'
+import { clearDriverReminderPushIfStartedAtChanged } from '../lib/driverPush/reminders'
 import {
   isTripDriverChangeAllowed,
   tripDetailLockMode,
@@ -295,6 +296,7 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
       })
     }
     const previousTeamMemberId = row.teamMemberId ?? null
+    const previousStartedAt = row.startedAt ?? null
     const previousWeekStart = resolveTripWeekStart(row)
     const previousStatus = normalizeTripStatus(row.status)
     if (parsed.teamMemberId !== undefined) {
@@ -404,6 +406,8 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
         translate,
       })
     }
+
+    clearDriverReminderPushIfStartedAtChanged(row, previousStartedAt, row.startedAt ?? null)
 
     await em.flush()
     await emitTripAssignedIfNeeded(ctx, row, previousTeamMemberId)

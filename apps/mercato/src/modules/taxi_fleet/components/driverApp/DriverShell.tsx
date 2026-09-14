@@ -13,6 +13,7 @@ import { useDriverDefaultLocale } from './useDriverDefaultLocale'
 import { useDriverOnlineStatus } from './useDriverOnlineStatus'
 import { useDriverGpsStatus } from './useDriverGpsStatus'
 import { useDriverPwa } from './useDriverPwa'
+import { useDriverPush } from './useDriverPush'
 import { useDriverForcedLightTheme } from './useDriverForcedLightTheme'
 import { clearDriverLocalData } from '../../lib/driverOffline/clearDriverLocalData'
 import { flushDriverOutbox, getPendingOutboxCount } from '../../lib/driverOffline/outbox'
@@ -131,8 +132,14 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
     showConsentBanner,
     requestAccess: requestGpsAccess,
   } = useDriverGpsStatus()
+  const {
+    status: pushStatus,
+    showConsentBanner: showPushBanner,
+    requestAccess: requestPushAccess,
+  } = useDriverPush()
   const { canInstall, install } = useDriverPwa()
   const [gpsBusy, setGpsBusy] = React.useState(false)
+  const [pushBusy, setPushBusy] = React.useState(false)
   const [pending, setPending] = React.useState(0)
   const [driverName, setDriverName] = React.useState<string | null>(null)
   const [liveTripId, setLiveTripId] = React.useState<string | null>(null)
@@ -409,6 +416,41 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
                 ? t('taxi_fleet.driverApp.gpsRequesting', 'GPS…')
                 : t('taxi_fleet.driverApp.gpsEnable', 'Enable GPS')}
           </button>
+          {pushStatus !== 'unsupported' && pushStatus !== 'unavailable' ? (
+            <button
+              type="button"
+              disabled={pushBusy || pushStatus === 'ready'}
+              onClick={() => {
+                if (pushStatus === 'ready' || pushBusy) return
+                setPushBusy(true)
+                void requestPushAccess().finally(() => setPushBusy(false))
+              }}
+              className={`${
+                pushStatus === 'ready' ? driverBadgeSuccessClass : driverBadgeWarningClass
+              } gap-1.5 disabled:opacity-100`}
+              title={
+                pushStatus === 'ready'
+                  ? t('taxi_fleet.driverApp.pushReady', 'Notifications enabled')
+                  : t('taxi_fleet.driverApp.pushTapToEnable', 'Tap to enable notifications')
+              }
+            >
+              <span
+                className={
+                  pushStatus === 'ready'
+                    ? driverStatusLampSuccessClass
+                    : pushStatus === 'denied'
+                      ? driverStatusLampDangerClass
+                      : driverStatusLampWarningClass
+                }
+                aria-hidden
+              />
+              {pushStatus === 'ready'
+                ? t('taxi_fleet.driverApp.push', 'Alerts')
+                : pushBusy
+                  ? t('taxi_fleet.driverApp.pushRequesting', 'Alerts…')
+                  : t('taxi_fleet.driverApp.pushEnable', 'Enable alerts')}
+            </button>
+          ) : null}
           {pending > 0 ? (
             <span className={driverBadgeInfoClass}>
               {t('taxi_fleet.driverApp.pendingSync', 'Pending sync')}: {pending}
@@ -474,6 +516,34 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
                   'taxi_fleet.driverApp.gpsBannerDenied',
                   'Location was blocked. On iPhone: Settings → Safari (or this app) → Location → Allow, then tap here.',
                 )}
+              </div>
+            </button>
+          </div>
+        ) : null}
+        {showPushBanner && !impersonation?.active ? (
+          <div className="mx-auto w-full max-w-lg px-4 pb-3">
+            <button
+              type="button"
+              disabled={pushBusy}
+              onClick={() => {
+                setPushBusy(true)
+                void requestPushAccess().finally(() => setPushBusy(false))
+              }}
+              className="w-full rounded-lg border border-[#FFE8A3] bg-[#FFF8DD] px-3 py-2.5 text-left text-sm text-[#9A7700]"
+            >
+              <div className="font-medium text-[#071437]">
+                {t('taxi_fleet.driverApp.pushBannerTitle', 'Enable trip notifications')}
+              </div>
+              <div className="mt-0.5">
+                {pushStatus === 'denied'
+                  ? t(
+                      'taxi_fleet.driverApp.pushBannerDenied',
+                      'Notifications were blocked. On iPhone: install the app to Home Screen, then allow Notifications in Settings.',
+                    )
+                  : t(
+                      'taxi_fleet.driverApp.pushBannerPrompt',
+                      'Get alerts for new scheduled trips and 1 hour before pickup. Tap to allow.',
+                    )}
               </div>
             </button>
           </div>

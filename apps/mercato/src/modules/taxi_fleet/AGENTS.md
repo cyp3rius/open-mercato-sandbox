@@ -122,3 +122,14 @@ Vendor JSON items are normalized by `lib/platformSync/adapters/mapVendorTrip.ts`
 - Driver PWA cost create: optional VAT picker (8/23, default empty); when unset, VAT comes from OCR / defaults to 23 on persist; operator can still correct in CRM
 - Spec: `.ai/specs/2026-08-20-taxi-fleet-receipt-ocr.md`
 
+## Driver PWA Web Push
+
+- Spec: `.ai/specs/2026-09-14-taxi-fleet-driver-pwa-push-notifications.md`
+- Subscriptions: `taxi_fleet_push_subscriptions`; API `GET|POST|DELETE /api/taxi_fleet/driver/push-subscription`
+- Env: `WEB_PUSH_ENABLED` (default false) + `WEB_PUSH_VAPID_*` + `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY` (see `.env.example`)
+- When disabled: GET `configured:false`, no driver alerts UI, POST → 403 (not 503)
+- SW: `apps/mercato/public/driver-sw.js` — `push` + `notificationclick` → `/driver/trips/{id}`
+- Assign push: `subscribers/trip-assigned-notification.ts` after in-app notify
+- T−1h reminders: cron `*/5` → queue `taxi-fleet-driver-push-reminders` → stamps `trips.driver_reminder_push_sent_at`
+- UX: `useDriverPush` + banner/badge in `DriverShell`
+

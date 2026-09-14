@@ -179,6 +179,10 @@ export class TaxiFleetTrip {
   @Property({ name: 'ended_at', type: Date, nullable: true })
   endedAt?: Date | null
 
+  /** Set when the T−1h driver Web Push reminder was sent; cleared when startedAt changes. */
+  @Property({ name: 'driver_reminder_push_sent_at', type: Date, nullable: true })
+  driverReminderPushSentAt?: Date | null
+
   @Property({ name: 'odometer_start', type: 'numeric', precision: 12, scale: 2, nullable: true })
   odometerStart?: string | null
 
@@ -738,6 +742,50 @@ export class TaxiFleetLocationPing {
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
+}
+
+
+@Entity({ tableName: 'taxi_fleet_push_subscriptions' })
+@Index({ name: 'taxi_fleet_push_subscriptions_scope_idx', properties: ['tenantId', 'organizationId'] })
+@Index({ name: 'taxi_fleet_push_subscriptions_member_idx', properties: ['teamMemberId', 'tenantId'] })
+@Index({ name: 'taxi_fleet_push_subscriptions_user_idx', properties: ['userId', 'tenantId'] })
+@Unique({ name: 'taxi_fleet_push_subscriptions_endpoint_uidx', properties: ['endpoint'] })
+export class TaxiFleetPushSubscription {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'user_id', type: 'uuid' })
+  userId!: string
+
+  @Property({ name: 'team_member_id', type: 'uuid' })
+  teamMemberId!: string
+
+  @Property({ type: 'text' })
+  endpoint!: string
+
+  @Property({ type: 'text' })
+  p256dh!: string
+
+  @Property({ type: 'text' })
+  auth!: string
+
+  @Property({ name: 'user_agent', type: 'text', nullable: true })
+  userAgent?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
 }
 
 @Entity({ tableName: 'taxi_fleet_receipt_extractions' })

@@ -5,6 +5,7 @@ import {
   notifyTaxiFleetPersonal,
 } from '../lib/taxiFleetNotificationDelivery'
 import { resolveTeamMemberUserId } from '../lib/resolveTeamMemberUserId'
+import { sendDriverTripAssignedPush } from '../lib/driverPush/reminders'
 
 export const metadata = {
   event: 'taxi_fleet.trip.assigned',
@@ -52,4 +53,16 @@ export default async function handle(payload: TripAssignedPayload, ctx: Resolver
     linkHref: buildTripLink(payload.id),
     logLabel: 'taxi_fleet:trip-assigned-notification',
   })
+
+  try {
+    await sendDriverTripAssignedPush(em, {
+      tripId: payload.id,
+      tenantId: payload.tenantId,
+      organizationId: payload.organizationId,
+      teamMemberId: payload.teamMemberId,
+      requestId: payload.requestId,
+    })
+  } catch (error) {
+    console.error('[taxi_fleet:trip-assigned-notification] web push failed', error)
+  }
 }
