@@ -11,7 +11,8 @@
 - Kierowca **zawsze** dołącza zdjęcie/PDF paragonu (dla kursów wymagających income receipt). Numer dokumentu i kwota są **opcjonalne** w PWA.
 - Serwer robi structured OCR → zapis w osobnej encji `taxi_fleet_receipt_extractions` → uzupełnia / weryfikuje `financial_entry`.
 - Puste pola → OCR wpisuje wynik. Jeśli kierowca podał wartość i OCR zwróci inną → status `needs_review` (operator).
-- NIP: lookup MF (`wl-api.mf.gov.pl`) jak w CRM; **kursy/income → NIP nabywcy (buyer)**; **koszty → NIP wystawcy (seller)** → ensure company w CRM; przy błędzie/braku → ostrzeżenie operatora.
+- NIP: lookup MF (`wl-api.mf.gov.pl`) jak w CRM; **kursy/income → NIP nabywcy (buyer)**; **koszty → NIP wystawcy (seller) only** (fleet NIP na WZ = nabywca, nigdy ensure); przy błędzie/braku → ostrzeżenie operatora.
+- Koszty: WZ / potwierdzenie karty **bez** ostrzeżenia „to nie paragon”; rejestracja → `resourceId`; VAT% z kwoty VAT gdy brak %; dialog CRM: nazwa firmy + pojazd.
 - CRM: upload załącznika kosztu też odpala OCR (`POST /api/taxi_fleet/financial-entries/receipt` + link przy create/update).
 - Driver PWA kosztów: **bez wyboru VAT** — stawka tylko z OCR; korekty VAT w CRM (szeroki modal).
 - Brak finalnego `documentNumber` **blokuje** akceptację tygodniowego rozliczenia.

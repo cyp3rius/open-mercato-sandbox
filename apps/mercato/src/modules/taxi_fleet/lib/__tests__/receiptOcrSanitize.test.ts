@@ -98,6 +98,37 @@ describe('receiptOcrSanitize', () => {
     expect(sanitized.buyerNip).toBeNull()
     expect(sanitized.sellerNip).toBe(RS_MOTO_ISSUER_NIP_DIGITS)
   })
+
+  it('expense mode keeps fleet NIP as buyer and never promotes to seller', () => {
+    const sanitized = sanitizeReceiptOcrFields(
+      {
+        sellerNip: '9452189182',
+        buyerNip: null,
+        grossAmount: 200,
+        vatAmount: 37.4,
+        rawExcerpt:
+          'BP\nNIP: 7740001454\nKwit WZ\nRejestracja: KK3666G\nNIP nabywcy: 945-218-91-82',
+      },
+      { mode: 'expense' },
+    )
+    expect(sanitized.sellerNip).toBe('7740001454')
+    expect(sanitized.buyerNip).toBe(RS_MOTO_ISSUER_NIP_DIGITS)
+    expect(sanitized.registrationPlate).toBe('KK3666G')
+    expect(sanitized.vatRatePercent).toBe(23)
+  })
+
+  it('derives VAT % from vatAmount when rate is missing', () => {
+    const sanitized = sanitizeReceiptOcrFields(
+      {
+        grossAmount: 108,
+        vatAmount: 8,
+        vatRatePercent: null,
+        rawExcerpt: null,
+      },
+      { mode: 'expense' },
+    )
+    expect(sanitized.vatRatePercent).toBe(8)
+  })
 })
 
 describe('mergeReceiptDocumentNumber with NIP false-positive OCR', () => {

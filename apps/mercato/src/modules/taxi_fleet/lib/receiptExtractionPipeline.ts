@@ -2,7 +2,11 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 import { getStorageDriverFactory } from '@open-mercato/core/modules/attachments/lib/drivers'
 import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attachments/lib/storage'
-import { normalizeReceiptOcrNip } from '@/modules/taxi_fleet/lib/receiptOcrSanitize'
+import {
+  isKnownFleetIssuerNip,
+  normalizeReceiptOcrNip,
+  sanitizeReceiptOcrFields,
+} from '@/modules/taxi_fleet/lib/receiptOcrSanitize'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import {
   TaxiFleetDailyAssignment,
@@ -26,6 +30,10 @@ import {
 } from './receiptExpenseFieldApply'
 import { normalizeExpenseVatRatePercent } from './expenseVat'
 import { isPolcardPaymentConfirmation } from './receiptDocumentKind'
+import {
+  findResourceIdByNormalizedPlate,
+  normalizeVehiclePlate,
+} from './platformSync/resolvePlatformTripVehicle'
 import {
   extractReceiptFieldsFromImage,
   hasAnthropicReceiptOcrKey,
@@ -316,6 +324,7 @@ export async function processReceiptExtraction(
     const storageDriverKey = attachment.storageDriver || 'local'
     const mimeType = attachment.mimeType
 
+    const sanitizeMode = row.tripId ? 'trip' : 'expense'
     let ocrResult: Awaited<ReturnType<typeof extractReceiptFieldsFromImage>>
     if (isLocalAttachmentStorageDriver(storageDriverKey)) {
       const filePath = resolveAttachmentAbsolutePath(
@@ -329,10 +338,12 @@ export async function processReceiptExtraction(
         mimeType,
         storageDriver: storageDriverKey,
         filePath,
+        sanitizeMode,
       })
       ocrResult = await extractReceiptFieldsFromImage({
         filePath,
         mimeType,
+        sanitizeMode,
       })
     } else {
       const driver = getStorageDriverFactory().resolve(storageDriverKey)
@@ -348,21 +359,26 @@ export async function processReceiptExtraction(
         storageDriver: storageDriverKey,
         source: 'storage_driver.read',
         bytes: buffer.length,
+        sanitizeMode,
       })
       ocrResult = await extractReceiptFieldsFromImage({
         fileBuffer: buffer,
         fileName,
         mimeType,
+        sanitizeMode,
       })
     }
-    const { fields, model, provider } = ocrResult
+    const { model, provider } = ocrResult
+    const fields = sanitizeReceiptOcrFields(ocrResult.fields, { mode: sanitizeMode })
 
     const warnings: ReceiptOcrWarning[] = []
     let resolvedCompanyId: string | null = null
     let normalizedBuyerNip: string | null = null
+    const isExpensePath = !row.tripId
 
     const isNonReceipt = isPolcardPaymentConfirmation(fields)
-    if (isNonReceipt) {
+    // Expense costs may be WZ / card confirms — do not flag as review.
+    if (isNonReceipt && !isExpensePath) {
       warnings.push({
         code: 'polcard_payment_confirmation',
         message:
@@ -370,30 +386,35 @@ export async function processReceiptExtraction(
       })
     }
 
-    // Trip/income receipts use buyer NIP; expense uploads (no trip link) use seller (issuer).
-    const preferSellerCompany = !row.tripId
-    if (preferSellerCompany && fields.sellerNip?.trim()) {
-      const ensuredSeller = await ensureCrmCompanyFromBuyerNipEm(em, {
-        tenantId: row.tenantId,
-        organizationId: row.organizationId,
-        buyerNip: fields.sellerNip,
-      })
-      const normalizedSeller = normalizeReceiptOcrNip(fields.sellerNip)
-      if (ensuredSeller.companyEntityId) {
-        resolvedCompanyId = ensuredSeller.companyEntityId
-        console.info('[taxi_fleet.receipt_ocr] CRM company resolved by NIP', {
-          extractionId,
-          companyEntityId: ensuredSeller.companyEntityId,
-          reusedExisting: ensuredSeller.reusedExisting,
-          nip: normalizedSeller,
-          nipRole: 'seller',
+    // Trip/income receipts use buyer NIP; expense uploads use seller (issuer) only — never fleet buyer.
+    if (isExpensePath) {
+      const sellerNip = fields.sellerNip?.trim() || null
+      if (sellerNip && !isKnownFleetIssuerNip(sellerNip)) {
+        const ensuredSeller = await ensureCrmCompanyFromBuyerNipEm(em, {
+          tenantId: row.tenantId,
+          organizationId: row.organizationId,
+          buyerNip: sellerNip,
         })
-      } else if (ensuredSeller.warningCode) {
-        warnings.push({
-          code: ensuredSeller.warningCode,
-          field: 'sellerNip',
-          ocrValue: normalizedSeller ?? fields.sellerNip,
-        })
+        const normalizedSeller = normalizeReceiptOcrNip(sellerNip)
+        if (ensuredSeller.companyEntityId) {
+          resolvedCompanyId = ensuredSeller.companyEntityId
+          console.info('[taxi_fleet.receipt_ocr] CRM company resolved by NIP', {
+            extractionId,
+            companyEntityId: ensuredSeller.companyEntityId,
+            reusedExisting: ensuredSeller.reusedExisting,
+            nip: normalizedSeller,
+            nipRole: 'seller',
+          })
+        } else if (ensuredSeller.warningCode) {
+          warnings.push({
+            code: ensuredSeller.warningCode,
+            field: 'sellerNip',
+            ocrValue: normalizedSeller ?? sellerNip,
+          })
+        }
+      }
+      if (fields.buyerNip?.trim()) {
+        normalizedBuyerNip = normalizeReceiptOcrNip(fields.buyerNip)
       }
     } else if (fields.buyerNip?.trim()) {
       const ensured = await ensureCrmCompanyFromBuyerNipEm(em, {
@@ -401,7 +422,6 @@ export async function processReceiptExtraction(
         organizationId: row.organizationId,
         buyerNip: fields.buyerNip,
       })
-      // Store OCR NIP as 10 digits (dashed or compact input both OK); CRM lookup may still warn on checksum
       normalizedBuyerNip = normalizeReceiptOcrNip(fields.buyerNip)
       if (ensured.companyEntityId) {
         resolvedCompanyId = ensured.companyEntityId
@@ -434,7 +454,7 @@ export async function processReceiptExtraction(
 
     const preferOcrOnConflict = shouldAutoApplyHighConfidenceOcr({
       confidence: fields.confidence ?? null,
-      isNonReceipt,
+      isNonReceipt: isNonReceipt && !isExpensePath,
     })
     const merge = buildReceiptExtractionMerge({
       driverDocumentNumber: row.driverDocumentNumber,
@@ -462,6 +482,9 @@ export async function processReceiptExtraction(
         : null
     row.ocrBuyerNip = normalizedBuyerNip
     row.ocrSellerNip = normalizeReceiptOcrNip(fields.sellerNip)
+    row.ocrRegistrationPlate = fields.registrationPlate
+      ? normalizeVehiclePlate(fields.registrationPlate) || null
+      : null
     row.ocrOccurredAt = fields.occurredAt ? new Date(fields.occurredAt) : null
     if (row.ocrOccurredAt && Number.isNaN(row.ocrOccurredAt.getTime())) row.ocrOccurredAt = null
     row.confidence =
@@ -477,7 +500,9 @@ export async function processReceiptExtraction(
     row.status = resolveFinalStatus({
       documentNumber: merge.documentNumber,
       mergeNeedsReview: merge.needsReview,
-      warnings,
+      warnings: isExpensePath
+        ? warnings.filter((w) => w.code !== 'polcard_payment_confirmation')
+        : warnings,
     })
     if (merge.documentNumber && row.status !== 'needs_review') {
       row.appliedDocumentNumber = merge.documentNumber
@@ -781,10 +806,24 @@ export async function applyReceiptExtractionToLinkedRecords(
           }
         }
 
-        const documentNip = row.ocrSellerNip || row.ocrBuyerNip || null
+        // Expense document NIP = seller (issuer) only — never fleet buyer NIP.
+        const documentNip = row.ocrSellerNip || null
         if (documentNip && entry.documentNip !== documentNip) {
           entry.documentNip = documentNip
           entry.updatedAt = new Date()
+        }
+
+        if (row.ocrRegistrationPlate && !entry.resourceId) {
+          const matchedResourceId = await findResourceIdByNormalizedPlate({
+            em,
+            tenantId: entry.tenantId,
+            organizationId: entry.organizationId,
+            vehiclePlate: row.ocrRegistrationPlate,
+          })
+          if (matchedResourceId) {
+            entry.resourceId = matchedResourceId
+            entry.updatedAt = new Date()
+          }
         }
       }
 

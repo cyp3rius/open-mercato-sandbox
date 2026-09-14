@@ -269,6 +269,7 @@ export class TaxiFleetTripCostLine {
 @Index({ name: 'taxi_fleet_financial_entries_scope_idx', properties: ['tenantId', 'organizationId'] })
 @Index({ name: 'taxi_fleet_financial_entries_member_idx', properties: ['teamMemberId', 'tenantId'] })
 @Index({ name: 'taxi_fleet_financial_entries_occurred_idx', properties: ['occurredAt', 'tenantId'] })
+@Index({ name: 'taxi_fleet_financial_entries_resource_idx', properties: ['resourceId'] })
 export class TaxiFleetFinancialEntry {
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -299,6 +300,10 @@ export class TaxiFleetFinancialEntry {
 
   @Property({ name: 'customer_company_id', type: 'uuid', nullable: true })
   customerCompanyId?: string | null
+
+  /** Linked vehicle resource (expense OCR plate match or manual CRM pick). */
+  @Property({ name: 'resource_id', type: 'uuid', nullable: true })
+  resourceId?: string | null
 
   @Property({ type: 'numeric', precision: 14, scale: 2 })
   amount!: string
@@ -786,6 +791,9 @@ export class TaxiFleetReceiptExtraction {
 
   @Property({ name: 'ocr_seller_nip', type: 'text', nullable: true })
   ocrSellerNip?: string | null
+
+  @Property({ name: 'ocr_registration_plate', type: 'text', nullable: true })
+  ocrRegistrationPlate?: string | null
 
   @Property({ name: 'ocr_occurred_at', type: Date, nullable: true })
   ocrOccurredAt?: Date | null

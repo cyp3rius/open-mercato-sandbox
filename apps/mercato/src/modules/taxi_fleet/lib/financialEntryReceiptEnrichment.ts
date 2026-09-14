@@ -102,6 +102,7 @@ export type FinancialEntryReceiptOcrExtras = {
   ocrVatRatePercent: string | null
   ocrGrossAmount: string | null
   ocrDocumentNumber: string | null
+  ocrRegistrationPlate: string | null
   resolvedCompanyId: string | null
 }
 
@@ -125,6 +126,7 @@ export function buildFinancialEntryReceiptOcrExtras(
     ocrVatRatePercent: extraction?.ocrVatRatePercent ?? null,
     ocrGrossAmount: extraction?.ocrGrossAmount ?? null,
     ocrDocumentNumber: extraction?.ocrDocumentNumber ?? null,
+    ocrRegistrationPlate: extraction?.ocrRegistrationPlate ?? null,
     resolvedCompanyId: extraction?.resolvedCompanyId ?? entry.customerCompanyId ?? null,
   }
 }
@@ -143,5 +145,6 @@ export function mergeReceiptOcrOntoListItem(
   item.ocrVatRatePercent = extras.ocrVatRatePercent
   item.ocrGrossAmount = extras.ocrGrossAmount
   item.ocrDocumentNumber = extras.ocrDocumentNumber
+  item.ocrRegistrationPlate = extras.ocrRegistrationPlate
   item.resolvedCompanyId = extras.resolvedCompanyId
 }

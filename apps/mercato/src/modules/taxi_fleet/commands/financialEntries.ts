@@ -79,6 +79,7 @@ const createFinancialEntryCommand: CommandHandler<FinancialEntryCreateInput, { e
       tripId: customer.tripId,
       customerPersonId: customer.customerPersonId,
       customerCompanyId: customer.customerCompanyId,
+      resourceId: parsed.resourceId ?? null,
       amount: numericToString(parsed.amount),
       vatRatePercent: numericToString(
         parsed.kind === 'expense'
@@ -160,6 +161,7 @@ const updateFinancialEntryCommand: CommandHandler<FinancialEntryUpdateInput, { e
       row.customerPersonId = customer.customerPersonId
       row.customerCompanyId = customer.customerCompanyId
     }
+    if (parsed.resourceId !== undefined) row.resourceId = parsed.resourceId
     if (parsed.amount !== undefined) row.amount = numericToString(parsed.amount)
     if (parsed.vatRatePercent !== undefined && row.kind === 'expense') {
       row.vatRatePercent = numericToString(normalizeExpenseVatRatePercent(parsed.vatRatePercent))

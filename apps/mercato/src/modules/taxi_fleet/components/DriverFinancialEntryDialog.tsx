@@ -1,7 +1,6 @@
 'use client'
 
 import * as React from 'react'
-import Link from 'next/link'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeDetail } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { CRUD_FORM_TEXT_INPUT_CLASS } from '@open-mercato/ui/backend/CrudForm'
@@ -12,7 +11,9 @@ import { createCrud, updateCrud } from '@open-mercato/ui/backend/utils/crud'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { parseNumericValue } from '@open-mercato/shared/lib/numeric'
 import { TripCustomerField } from './TripCustomerField'
+import { TripCustomerPreview } from './TripCustomerPreview'
 import { ExpenseReceiptOcrPanel } from './ExpenseReceiptOcrPanel'
+import { ExpenseVehicleField } from './ExpenseVehicleField'
 import { useTaxiFleetLabels } from './useTaxiFleetLabels'
 import { isoToDateOnlyValue, parseDateOnlyValue } from '../lib/datetimeLocal'
 import { readTripCustomerEntityId } from '../lib/customerLink'
@@ -48,6 +49,7 @@ export type FinancialEntryRow = {
   tripId?: string | null
   customerPersonId?: string | null
   customerCompanyId?: string | null
+  resourceId?: string | null
   amount: string
   vatRatePercent?: string | number | null
   currencyCode: string
@@ -63,6 +65,7 @@ export type FinancialEntryRow = {
   ocrVatRatePercent?: string | null
   ocrGrossAmount?: string | null
   ocrDocumentNumber?: string | null
+  ocrRegistrationPlate?: string | null
   resolvedCompanyId?: string | null
 }
 
@@ -179,6 +182,7 @@ export function DriverFinancialEntryDialog({
   const [receiptAttachmentId, setReceiptAttachmentId] = React.useState<string | null>(null)
   const [attachmentUrl, setAttachmentUrl] = React.useState<string | null>(null)
   const [issuerCompanyId, setIssuerCompanyId] = React.useState<string | null>(null)
+  const [resourceId, setResourceId] = React.useState('')
   const [isSaving, setIsSaving] = React.useState(false)
   const [isPrefilling, setIsPrefilling] = React.useState(false)
 
@@ -206,6 +210,7 @@ export function DriverFinancialEntryDialog({
         (entry?.receiptAttachmentId ? `/api/attachments/file/${entry.receiptAttachmentId}` : null),
     )
     setIssuerCompanyId(entry?.resolvedCompanyId ?? entry?.customerCompanyId ?? null)
+    setResourceId(entry?.resourceId ?? '')
   }, [entry, isIncomeCreate, open])
 
   const netAmount = React.useMemo(() => {
@@ -280,6 +285,7 @@ export function DriverFinancialEntryDialog({
         customerEntityId: kind === 'income' ? customerEntityId.trim() || undefined : undefined,
         customerCompanyId:
           kind === 'expense' && issuerCompanyId ? issuerCompanyId : undefined,
+        resourceId: kind === 'expense' ? resourceId.trim() || null : undefined,
         amount: parsedAmount,
         vatRatePercent: kind === 'expense' ? vatRatePercent : undefined,
         currencyCode: 'PLN',
@@ -325,6 +331,7 @@ export function DriverFinancialEntryDialog({
     organizationId,
     readOnly,
     receiptAttachmentId,
+    resourceId,
     t,
     teamMemberId,
     tenantId,
@@ -499,14 +506,11 @@ export function DriverFinancialEntryDialog({
         </FieldBlock>
         <FieldBlock label={t('taxi_fleet.financial.issuerCompany', 'Issuer company')}>
           {issuerCompanyId ? (
-            <Link
-              href={`/backend/customers/companies/${encodeURIComponent(issuerCompanyId)}`}
-              className="text-sm text-primary hover:underline"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {t('taxi_fleet.financial.openIssuerCompany', 'Open company in CRM')}
-            </Link>
+            <TripCustomerPreview
+              customerCompanyId={issuerCompanyId}
+              openInNewWindow
+              fallbackLabel={t('taxi_fleet.financial.issuerCompanyUnknown', 'Linked company')}
+            />
           ) : (
             <p className="text-sm text-muted-foreground">
               {t(
@@ -515,6 +519,21 @@ export function DriverFinancialEntryDialog({
               )}
             </p>
           )}
+        </FieldBlock>
+        <FieldBlock label={t('taxi_fleet.financial.vehicle', 'Vehicle')}>
+          <ExpenseVehicleField
+            teamMemberId={teamMemberId}
+            occurredAtDate={occurredAtDate}
+            value={resourceId}
+            onChange={setResourceId}
+            disabled={readOnly || isSaving}
+          />
+          {!resourceId && entry?.ocrRegistrationPlate ? (
+            <p className="mt-1 text-xs text-amber-800">
+              {t('taxi_fleet.receiptOcr.registrationPlateUnmatched', 'OCR plate (no vehicle match)')}:{' '}
+              <span className="font-medium tabular-nums">{entry.ocrRegistrationPlate}</span>
+            </p>
+          ) : null}
         </FieldBlock>
         {renderLinkedTripField(false)}
         <FieldBlock label={t('taxi_fleet.financial.attachment', 'Attachment')}>
@@ -546,6 +565,7 @@ export function DriverFinancialEntryDialog({
             if (ocrItem.entryDocumentNumber) setDocumentNumber(ocrItem.entryDocumentNumber)
             if (ocrItem.entryCustomerCompanyId) setIssuerCompanyId(ocrItem.entryCustomerCompanyId)
             else if (ocrItem.resolvedCompanyId) setIssuerCompanyId(ocrItem.resolvedCompanyId)
+            if (ocrItem.entryResourceId) setResourceId(ocrItem.entryResourceId)
             if (ocrItem.attachmentUrl) setAttachmentUrl(ocrItem.attachmentUrl)
           }}
         />

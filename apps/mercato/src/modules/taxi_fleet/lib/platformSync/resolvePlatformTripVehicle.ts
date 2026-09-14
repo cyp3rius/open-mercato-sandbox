@@ -40,7 +40,7 @@ async function findResourceIdByCustomField(params: {
   return row?.recordId ?? null
 }
 
-async function findResourceIdByNormalizedPlate(params: {
+export async function findResourceIdByNormalizedPlate(params: {
   em: EntityManager
   tenantId: string
   organizationId: string

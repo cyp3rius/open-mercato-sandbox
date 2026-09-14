@@ -116,7 +116,9 @@ Vendor JSON items are normalized by `lib/platformSync/adapters/mapVendorTrip.ts`
 - Link on create/update: `linkReceiptExtractionToFinancialEntry` (also in `financial_entries` commands)
 - Trip OCR panel: `GET|POST /api/taxi_fleet/trips/[id]/receipt-extraction`
 - Expense OCR panel: `GET|POST /api/taxi_fleet/financial-entries/[id]/receipt-extraction`
-- Company from NIP: **buyer** when extraction has `tripId`; **seller (issuer)** for expense uploads
+- Company from NIP: **buyer** when extraction has `tripId`; **seller (issuer) only** for expense uploads (never buyer/fleet NIP; WZ/Polcard not flagged as non-receipt)
+- Expense OCR may set `resourceId` from registration plate; CRM dialog shows company name + vehicle picker
+- VAT%: OCR rate or derived from `vatAmount` + gross (snapped to 8/23)
 - Driver PWA cost create: no VAT picker — VAT comes from OCR; operator corrects VAT in CRM expense dialog
 - Spec: `.ai/specs/2026-08-20-taxi-fleet-receipt-ocr.md`
 

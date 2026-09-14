@@ -20,6 +20,7 @@ type ExtractionItem = {
   ocrVatRatePercent: string | null
   ocrBuyerNip: string | null
   ocrSellerNip: string | null
+  ocrRegistrationPlate: string | null
   appliedDocumentNumber: string | null
   confidence: string | null
   warnings: Array<Record<string, unknown>>
@@ -30,6 +31,7 @@ type ExtractionItem = {
   entryVatRatePercent?: string | null
   entryDocumentNumber?: string | null
   entryCustomerCompanyId?: string | null
+  entryResourceId?: string | null
 }
 
 type ApplyField = 'amount' | 'documentNumber' | 'vatRatePercent'
@@ -224,14 +226,23 @@ export function ExpenseReceiptOcrPanel({
           <div className="font-medium tabular-nums">{item.ocrBuyerNip || '—'}</div>
         </div>
         <div className="space-y-1 text-sm">
+          <div className="text-xs text-muted-foreground">
+            {t('taxi_fleet.receiptOcr.registrationPlate', 'OCR registration plate')}
+          </div>
+          <div className="font-medium tabular-nums">{item.ocrRegistrationPlate || '—'}</div>
+        </div>
+        <div className="space-y-1 text-sm">
           <div className="text-xs text-muted-foreground">{t('taxi_fleet.receiptOcr.confidence', 'Confidence')}</div>
           <div className="font-medium tabular-nums">{item.confidence ?? '—'}</div>
         </div>
       </div>
 
-      {item.warnings?.length ? (
+      {item.warnings?.filter((warning) => String(warning.code ?? '') !== 'polcard_payment_confirmation')
+        .length ? (
         <ul className="list-disc space-y-1 pl-5 text-xs text-amber-800">
-          {item.warnings.map((warning, index) => (
+          {item.warnings
+            .filter((warning) => String(warning.code ?? '') !== 'polcard_payment_confirmation')
+            .map((warning, index) => (
             <li key={`${String(warning.code)}-${String(warning.field ?? '')}-${index}`}>
               {formatReceiptOcrWarningLabel(t, warning)}
             </li>

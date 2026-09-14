@@ -54,6 +54,7 @@ function serializeExtraction(row: TaxiFleetReceiptExtraction, entry?: TaxiFleetF
     ocrVatRatePercent: row.ocrVatRatePercent ?? null,
     ocrBuyerNip: row.ocrBuyerNip ?? null,
     ocrSellerNip: row.ocrSellerNip ?? null,
+    ocrRegistrationPlate: row.ocrRegistrationPlate ?? null,
     ocrOccurredAt: row.ocrOccurredAt?.toISOString() ?? null,
     confidence: row.confidence ?? null,
     rawTextExcerpt: row.rawTextExcerpt ?? null,
@@ -68,6 +69,7 @@ function serializeExtraction(row: TaxiFleetReceiptExtraction, entry?: TaxiFleetF
     entryVatRatePercent: entry?.vatRatePercent ?? null,
     entryDocumentNumber: entry?.documentNumber ?? null,
     entryCustomerCompanyId: entry?.customerCompanyId ?? null,
+    entryResourceId: entry?.resourceId ?? null,
   }
 }
 

@@ -150,16 +150,13 @@ export function DriverSettlementsTab({
       },
       {
         id: 'customer',
-        header: t('taxi_fleet.trips.customer', 'Customer'),
-        cell: ({ row }) =>
-          row.original.kind === 'income' ? (
-            <TripCustomerPreview
-              customerPersonId={row.original.customerPersonId}
-              customerCompanyId={row.original.customerCompanyId}
-            />
-          ) : (
-            '—'
-          ),
+        header: t('taxi_fleet.financial.customerCounterparty', 'Customer / Counterparty'),
+        cell: ({ row }) => (
+          <TripCustomerPreview
+            customerPersonId={row.original.customerPersonId}
+            customerCompanyId={row.original.customerCompanyId}
+          />
+        ),
       },
       {
         accessorKey: 'documentNumber',

@@ -11,6 +11,7 @@ import {
 import { isValidNip, normalizeNipDigits } from '@open-mercato/core/modules/customers/lib/nip'
 import type { TaxiFleetReceiptExtraction } from '../data/entities'
 import type { ReceiptOcrWarning } from './receiptExtractionRules'
+import { isKnownFleetIssuerNip } from '@/modules/taxi_fleet/lib/receiptOcrSanitize'
 
 export type EnsureCompanyResult = {
   companyEntityId: string | null
@@ -222,11 +223,14 @@ export async function maybeEnsureCompanyForExtraction(params: {
 }): Promise<void> {
   if (params.extraction.resolvedCompanyId) return
 
-  const preferSeller = !params.extraction.tripId
-  const nip = preferSeller
-    ? params.extraction.ocrSellerNip || params.extraction.ocrBuyerNip
+  const isExpensePath = !params.extraction.tripId
+  // Expense: seller (issuer) only — never fall back to buyer (often fleet NIP).
+  const nip = isExpensePath
+    ? params.extraction.ocrSellerNip
     : params.extraction.ocrBuyerNip
   if (!nip) return
+
+  if (isExpensePath && isKnownFleetIssuerNip(nip)) return
 
   const ensured =
     params.commandBus && params.ctx
@@ -258,7 +262,7 @@ export async function maybeEnsureCompanyForExtraction(params: {
   if (!warnings.some((w) => w?.code === ensured.warningCode)) {
     warnings.push({
       code: ensured.warningCode,
-      field: preferSeller && params.extraction.ocrSellerNip ? 'sellerNip' : 'buyerNip',
+      field: isExpensePath ? 'sellerNip' : 'buyerNip',
       ocrValue: nip,
     })
     params.extraction.warningsJson = warnings as unknown as Record<string, unknown>[]

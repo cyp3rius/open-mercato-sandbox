@@ -2,15 +2,17 @@ import { generateText, type LanguageModel } from 'ai'
 import { z } from 'zod'
 import fs from 'fs/promises'
 import path from 'path'
-import { sanitizeReceiptOcrFields } from './receiptOcrSanitize'
+import { sanitizeReceiptOcrFields, type ReceiptOcrSanitizeMode } from './receiptOcrSanitize'
 
 const receiptOcrFieldsSchema = z.object({
   documentNumber: z.string().nullable().optional(),
   grossAmount: z.number().nullable().optional(),
   distanceKm: z.number().nullable().optional(),
   vatRatePercent: z.number().nullable().optional(),
+  vatAmount: z.number().nullable().optional(),
   buyerNip: z.string().nullable().optional(),
   sellerNip: z.string().nullable().optional(),
+  registrationPlate: z.string().nullable().optional(),
   occurredAt: z.string().nullable().optional(),
   confidence: z.number().min(0).max(1).nullable().optional(),
   rawExcerpt: z.string().nullable().optional(),
@@ -20,6 +22,7 @@ const receiptOcrFieldsSchema = z.object({
       'invoice',
       'polcard_payment_confirmation',
       'payment_confirmation',
+      'wz_slip',
       'unknown',
     ])
     .nullable()
@@ -29,30 +32,27 @@ const receiptOcrFieldsSchema = z.object({
 export type ReceiptOcrFields = z.infer<typeof receiptOcrFieldsSchema>
 export type ReceiptOcrProviderId = 'openai' | 'anthropic'
 
-const PROMPT = `You extract fields from a Polish fiscal receipt (paragon fiskalny), invoice, or card-payment confirmation (e.g. Polcard terminal slip) photo/PDF.
+const PROMPT = `You extract fields from Polish fiscal receipts (paragon fiskalny), invoices, KWIT WZ slips, fuel station documents, and card-payment confirmations (e.g. Polcard / Routex).
 Return ONLY valid JSON with keys:
-documentKind (string|null) — one of: "fiscal_receipt" (paragon fiskalny), "invoice", "polcard_payment_confirmation" (Polcard / POLCARD card payment confirmation slip), "payment_confirmation" (other card/terminal payment confirmation that is NOT a fiscal receipt), "unknown",
-documentNumber (string|null) — receipt/invoice NUMBER only (e.g. W001776, FV/12/2026). NEVER put a NIP here. For Polcard slips use auth/reference number if present,
-grossAmount (number|null) — total gross amount PLN after discounts if shown (DO ZAPŁATY / SUMA after Obniżka), else SUMA / RAZEM / KWOTA,
-distanceKm (number|null) — trip distance in kilometers if printed (Odległość / Dystans / km),
-vatRatePercent (number|null) — VAT rate percent (typically 8 or 23),
-buyerNip (string|null) — buyer (nabywca) NIP when printed. Accept dashed or compact form (701-053-39-02 or 7010533902); prefer digits-only in JSON. Look carefully near the BOTTOM for "NIP nabywcy". This is NOT the header NIP.
-sellerNip (string|null) — seller/issuer (sprzedawca) NIP; accept dashed or compact (945-218-91-52 or 9452189152); prefer digits-only. On taxi fiscal receipts this is the HEADER NIP near company name/address,
-occurredAt (ISO date or datetime string|null) — course/document date-time (Początek kursu / print time). Polish dates are DD-MM-YYYY,
+documentKind (string|null) — one of: "fiscal_receipt", "invoice", "wz_slip" (KWIT WZ / release note), "polcard_payment_confirmation", "payment_confirmation", "unknown",
+documentNumber (string|null) — receipt/invoice/WZ NUMBER only (e.g. W001776, WZ26161B02011540, FV/12/2026). NEVER put a NIP here. For card slips use auth/reference number if present,
+grossAmount (number|null) — total gross amount PLN (SUMA / RAZEM / KWOTA / DO ZAPŁATY),
+distanceKm (number|null) — trip distance in kilometers if printed,
+vatRatePercent (number|null) — VAT rate percent when printed as % (typically 8 or 23). If only VAT amount is shown, leave null,
+vatAmount (number|null) — total VAT amount PLN when printed (suma VAT / VAT), even if % is missing,
+buyerNip (string|null) — buyer (nabywca) NIP when printed (often "NIP nabywcy" or company block near card confirmation). Accept dashed/compact/PL prefix; prefer digits-only,
+sellerNip (string|null) — seller/issuer (sprzedawca) NIP from the HEADER company block. On fuel/WZ slips this is the station/issuer — NOT the fleet buyer NIP,
+registrationPlate (string|null) — vehicle plate when labeled Rejestracja / Nr rejestracyjny (e.g. KK3666G),
+occurredAt (ISO date or datetime string|null),
 confidence (0..1),
-rawExcerpt (short string of key lines — MUST include header NIP and "NIP nabywcy" lines when visible; for Polcard include the word POLCARD when printed).
+rawExcerpt (short string of key lines — include NIPs, Rejestracja, VAT lines when visible).
 
-Critical rules for Polish taxi fiscal receipts (paragon fiskalny) and invoices:
-- The company block at the TOP (name, address, NIP) is the SELLER/issuer. Put that NIP in sellerNip, NOT documentNumber and NOT buyerNip.
-- NIP may be printed as 945-218-91-52 OR 9452189152 — both are valid; return digits only (9452189152) when possible.
-- NIP 945-218-91-52 / 9452189152 is always the fleet issuer sellerNip on RS Moto receipts — never the document number, never buyerNip.
-- documentNumber is typically a short code in a corner (often top-right), e.g. W001776 — not the NIP.
-- buyerNip is often present on card/invoice-style taxi receipts as "NIP nabywcy: XXX-XXX-XX-XX" near the footer. Do NOT skip it. It is different from the header seller NIP.
-- Do not confuse NIP with documentNumber even if NIP is the most prominent number on the page.
-
-Polcard / card payment confirmation (NOT a fiscal receipt):
-- If the document says POLCARD, "Potwierdzenie płatności", terminal/card authorization slip — set documentKind to "polcard_payment_confirmation" (or "payment_confirmation" if brand is unclear).
-- Still extract amount and date when readable. Do NOT invent a fiscal receipt number.
+Critical rules:
+- Taxi fiscal receipts (paragon): TOP company NIP is sellerNip (often fleet 9452189152). buyerNip is "NIP nabywcy" near footer when present.
+- Expense / fuel / KWIT WZ / BP / Routex: TOP company is seller (station). Fleet company NIP (9452189152) under "Nazwa firmy" / buyer block is buyerNip — NEVER sellerNip.
+- documentNumber is never a NIP.
+- If VAT % is missing but VAT amount and gross are visible, still return vatAmount and grossAmount (leave vatRatePercent null).
+- WZ and card payment slips are valid cost documents — still extract amount, date, plate, NIPs.
 If a field is unreadable, use null.`
 
 const DEFAULT_MODELS: Record<ReceiptOcrProviderId, string> = {
@@ -209,6 +209,7 @@ async function runReceiptOcrWithProvider(params: {
   mimeType: string | null
   fileBuffer: Buffer
   fileName: string
+  sanitizeMode?: ReceiptOcrSanitizeMode
 }): Promise<{ fields: ReceiptOcrFields; model: string; provider: ReceiptOcrProviderId }> {
   const model = params.model?.trim() || resolveReceiptOcrModel(params.provider)
   const languageModel = await createReceiptOcrModel(params.provider, model)
@@ -241,12 +242,17 @@ async function runReceiptOcrWithProvider(params: {
   })
 
   const parsed = receiptOcrFieldsSchema.parse(extractJsonObject(result.text))
-  return { fields: sanitizeReceiptOcrFields(parsed), model, provider: params.provider }
+  return {
+    fields: sanitizeReceiptOcrFields(parsed, { mode: params.sanitizeMode ?? 'trip' }),
+    model,
+    provider: params.provider,
+  }
 }
 
 export type ExtractReceiptFieldsFromImageParams = {
   mimeType: string | null
   model?: string
+  sanitizeMode?: ReceiptOcrSanitizeMode
 } & (
   | { filePath: string; fileBuffer?: undefined; fileName?: undefined }
   | { fileBuffer: Buffer; fileName?: string; filePath?: undefined }
@@ -294,6 +300,7 @@ export async function extractReceiptFieldsFromImage(
         mimeType: params.mimeType,
         fileBuffer,
         fileName,
+        sanitizeMode: params.sanitizeMode,
       })
     } catch (error) {
       lastError = error
