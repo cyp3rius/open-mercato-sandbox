@@ -4,7 +4,7 @@ import * as React from 'react'
 import { Loader2 } from 'lucide-react'
 import { useLocale, useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { endedAtLocalFromDuration } from '../../lib/datetimeLocal'
+import { resolveAutoEndedAtLocal } from '../../lib/datetimeLocal'
 import { parseDurationTextToSeconds } from '../../lib/route/openRouteService'
 import { buildRouteDistanceStops } from '../../lib/route/routeDistance'
 
@@ -14,6 +14,11 @@ type TripRouteDistanceSyncProps = {
   values: Record<string, unknown>
   setFormValue?: (id: string, value: unknown) => void
   disabled?: boolean
+  /**
+   * When true (create form), start / route duration updates may rewrite `endedAtLocal`
+   * until the user edits the end time manually. Edit mode must keep this false.
+   */
+  autoAdjustEnd?: boolean
 }
 
 function resolveRouteLocale(locale: string): 'pl' | 'en' {
@@ -23,6 +28,11 @@ function resolveRouteLocale(locale: string): 'pl' | 'en' {
 function readString(values: Record<string, unknown>, key: string): string {
   const value = values[key]
   return typeof value === 'string' ? value : ''
+}
+
+function isEndedAtManual(values: Record<string, unknown>): boolean {
+  const raw = values.endedAtManual
+  return raw === true || raw === '1' || raw === 'true'
 }
 
 export function buildTripRouteFingerprint(values: Record<string, unknown>): string {
@@ -38,19 +48,25 @@ export function buildTripRouteFingerprint(values: Record<string, unknown>): stri
   })
 }
 
-function applyRouteDurationToEnd(
-  setFormValue: (id: string, value: unknown) => void,
-  startedAtLocal: string,
-  durationSeconds: number,
-) {
-  const endedAtLocal = endedAtLocalFromDuration(startedAtLocal, durationSeconds)
-  if (endedAtLocal) setFormValue('endedAtLocal', endedAtLocal)
+export function applyAutoEndedAtLocal(params: {
+  setFormValue: (id: string, value: unknown) => void
+  startedAtLocal: string
+  durationSeconds?: number | null
+  endedAtManual?: boolean
+  autoAdjustEnd?: boolean
+}): boolean {
+  if (!params.autoAdjustEnd || params.endedAtManual) return false
+  const endedAtLocal = resolveAutoEndedAtLocal(params.startedAtLocal, params.durationSeconds)
+  if (!endedAtLocal) return false
+  params.setFormValue('endedAtLocal', endedAtLocal)
+  return true
 }
 
 export function TripRouteDistanceSync({
   values,
   setFormValue,
   disabled = false,
+  autoAdjustEnd = false,
 }: TripRouteDistanceSyncProps) {
   const t = useT()
   const appLocale = useLocale()
@@ -63,6 +79,8 @@ export function TripRouteDistanceSync({
   const requestIdRef = React.useRef(0)
   const startedAtLocalRef = React.useRef('')
   const prevStartedAtLocalRef = React.useRef<string | null>(null)
+  const endedAtManualRef = React.useRef(false)
+  const autoAdjustEndRef = React.useRef(autoAdjustEnd)
 
   const fromAddress = readString(values, 'fromAddress').trim()
   const toAddress = readString(values, 'toAddress').trim()
@@ -75,8 +93,11 @@ export function TripRouteDistanceSync({
   const startedAtLocal = readString(values, 'startedAtLocal')
   const routeDurationSecondsRaw = readString(values, 'routeDurationSeconds')
   const routeSyncedFingerprint = readString(values, 'routeSyncedFingerprint')
+  const endedAtManual = isEndedAtManual(values)
 
   startedAtLocalRef.current = startedAtLocal
+  endedAtManualRef.current = endedAtManual
+  autoAdjustEndRef.current = autoAdjustEnd
 
   const routeFingerprint = React.useMemo(
     () =>
@@ -170,9 +191,22 @@ export function TripRouteDistanceSync({
           setFormValue('routeSyncedFingerprint', fingerprintForRequest)
           if (durationSeconds != null && durationSeconds > 0) {
             setFormValue('routeDurationSeconds', String(durationSeconds))
-            applyRouteDurationToEnd(setFormValue, startedAtLocalRef.current, durationSeconds)
+            applyAutoEndedAtLocal({
+              setFormValue,
+              startedAtLocal: startedAtLocalRef.current,
+              durationSeconds,
+              endedAtManual: endedAtManualRef.current,
+              autoAdjustEnd: autoAdjustEndRef.current,
+            })
           } else {
             setFormValue('routeDurationSeconds', '')
+            applyAutoEndedAtLocal({
+              setFormValue,
+              startedAtLocal: startedAtLocalRef.current,
+              durationSeconds: null,
+              endedAtManual: endedAtManualRef.current,
+              autoAdjustEnd: autoAdjustEndRef.current,
+            })
           }
           setError(null)
         } catch (err) {
@@ -210,7 +244,7 @@ export function TripRouteDistanceSync({
   ])
 
   React.useEffect(() => {
-    if (!setFormValue || disabled) return
+    if (!setFormValue || disabled || !autoAdjustEnd) return
     if (prevStartedAtLocalRef.current === null) {
       prevStartedAtLocalRef.current = startedAtLocal
       return
@@ -218,10 +252,17 @@ export function TripRouteDistanceSync({
     if (prevStartedAtLocalRef.current === startedAtLocal) return
     prevStartedAtLocalRef.current = startedAtLocal
 
-    const durationSeconds = Number(routeDurationSecondsRaw)
-    if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return
-    applyRouteDurationToEnd(setFormValue, startedAtLocal, durationSeconds)
-  }, [disabled, routeDurationSecondsRaw, setFormValue, startedAtLocal])
+    const parsedDuration = Number(routeDurationSecondsRaw)
+    const durationSeconds =
+      Number.isFinite(parsedDuration) && parsedDuration > 0 ? parsedDuration : null
+    applyAutoEndedAtLocal({
+      setFormValue,
+      startedAtLocal,
+      durationSeconds,
+      endedAtManual,
+      autoAdjustEnd,
+    })
+  }, [autoAdjustEnd, disabled, endedAtManual, routeDurationSecondsRaw, setFormValue, startedAtLocal])
 
   if (!loading && !error) return null
 

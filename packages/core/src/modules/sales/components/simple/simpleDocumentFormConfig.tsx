@@ -30,6 +30,14 @@ import {
   resolveReferringPartnerFromQuoteDoc,
 } from './referringPartnerPrefill'
 import { ReferringPartnerProgramField } from './ReferringPartnerProgramField'
+import {
+  OrderLineCasePlanEditor,
+  draftsFromCasePlan,
+  fetchProductCaseTemplates,
+  sanitizeCasePlanDrafts,
+  type OrderLineCasePlanDraft,
+} from '../documents/OrderLineCasePlanEditor'
+import type { CatalogProductCaseTemplate } from '@open-mercato/core/modules/catalog/data/types'
 
 export type SimpleDocumentLineDraft = {
   key: string
@@ -43,6 +51,7 @@ export type SimpleDocumentLineDraft = {
   unitPriceGross: string
   subscriptionStartsAt: string
   subscriptionEndsAt: string
+  casePlanDrafts: OrderLineCasePlanDraft[]
 }
 
 export type SimpleDocumentFormValues = {
@@ -76,6 +85,7 @@ export function emptySimpleDocumentLine(): SimpleDocumentLineDraft {
     unitPriceGross: '',
     subscriptionStartsAt: '',
     subscriptionEndsAt: '',
+    casePlanDrafts: [],
   }
 }
 
@@ -235,6 +245,12 @@ export function mapSalesLineApiItemToDraft(
     ),
     subscriptionEndsAt: isoToDateInput(
       readApiScalar(item, 'subscriptionEndsAt', 'subscription_ends_at'),
+    ),
+    casePlanDrafts: draftsFromCasePlan(
+      (item.casePlan ?? item.case_plan) as CatalogProductCaseTemplate[] | null | undefined,
+      isoToDateInput(
+        readApiScalar(item, 'subscriptionStartsAt', 'subscription_starts_at'),
+      ),
     ),
   }
 }
@@ -712,6 +728,7 @@ function SimpleDocumentLinesTable({
   currencyCode,
   i18nPrefix,
   t,
+  showCasePlan = false,
 }: {
   value: unknown
   setValue: (next: SimpleDocumentLineDraft[]) => void
@@ -719,6 +736,7 @@ function SimpleDocumentLinesTable({
   currencyCode: string
   i18nPrefix: string
   t: (key: string, fallback?: string) => string
+  showCasePlan?: boolean
 }) {
   const lines = Array.isArray(value) && value.length
     ? (value as SimpleDocumentLineDraft[])
@@ -792,6 +810,7 @@ function SimpleDocumentLinesTable({
                 i18nPrefix={i18nPrefix}
                 t={t}
                 canRemove={lines.length > 1}
+                showCasePlan={showCasePlan}
                 productMetaRef={productMetaRef}
                 onUpdate={(patch) => updateLine(line.key, patch)}
                 onRemove={() => setValue(lines.filter((entry) => entry.key !== line.key))}
@@ -832,6 +851,7 @@ function SimpleDocumentLineRow({
   i18nPrefix,
   t,
   canRemove,
+  showCasePlan,
   productMetaRef,
   onUpdate,
   onRemove,
@@ -842,12 +862,33 @@ function SimpleDocumentLineRow({
   i18nPrefix: string
   t: (key: string, fallback?: string) => string
   canRemove: boolean
+  showCasePlan: boolean
   productMetaRef: React.MutableRefObject<Map<string, { label: string; serviceLineCode: string | null }>>
   onUpdate: (patch: Partial<SimpleDocumentLineDraft>) => void
   onRemove: () => void
 }) {
   const amounts = lineAmounts(line)
   const subscription = isSubscriptionLine(line.serviceLineCode)
+  const productId = line.productId.trim()
+
+  React.useEffect(() => {
+    if (!showCasePlan || !subscription || !productId) return
+    // Existing lines load case_plan from the API; only preload product templates for new lines.
+    if (line.id) return
+    if (Array.isArray(line.casePlanDrafts) && line.casePlanDrafts.length > 0) return
+    let cancelled = false
+    void fetchProductCaseTemplates(productId).then((templates) => {
+      if (cancelled || !templates.length) return
+      onUpdate({
+        casePlanDrafts: draftsFromCasePlan(templates, line.subscriptionStartsAt),
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+    // Re-run when product/subscription changes or drafts were cleared on a new line.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCasePlan, subscription, productId, line.id, line.casePlanDrafts.length])
 
   return (
     <>
@@ -857,14 +898,30 @@ function SimpleDocumentLineRow({
             value={line.productId}
             onChange={(next) => {
               const meta = productMetaRef.current.get(next)
+              const nextIsSub = isSubscriptionLine(meta?.serviceLineCode)
               onUpdate({
                 productId: next,
                 productLabel: meta?.label ?? next,
                 serviceLineCode: meta?.serviceLineCode ?? null,
-                ...(isSubscriptionLine(meta?.serviceLineCode)
+                casePlanDrafts: [],
+                ...(nextIsSub
                   ? {}
-                  : { subscriptionStartsAt: '', subscriptionEndsAt: '' }),
+                  : {
+                      subscriptionStartsAt: '',
+                      subscriptionEndsAt: '',
+                    }),
               })
+              if (showCasePlan && nextIsSub && next.trim()) {
+                const selectedId = next.trim()
+                void fetchProductCaseTemplates(selectedId).then((templates) => {
+                  onUpdate({
+                    casePlanDrafts: draftsFromCasePlan(
+                      templates,
+                      line.subscriptionStartsAt,
+                    ),
+                  })
+                })
+              }
             }}
             options={mergeEntitySearchOption([], line.productId, line.productLabel || line.productId)}
             onRemoteSearch={async (q) => {
@@ -948,31 +1005,42 @@ function SimpleDocumentLineRow({
       {subscription ? (
         <tr className="bg-muted/20">
           <td colSpan={7} className="px-3 py-2">
-            <div className="grid gap-3 sm:grid-cols-2 max-w-xl">
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-muted-foreground">
-                  {t(`${i18nPrefix}.lines.subscriptionStartsAt`, 'Subscription start')}
-                </label>
-                <input
-                  type="date"
-                  className={CRUD_FORM_TEXT_INPUT_CLASS}
-                  value={line.subscriptionStartsAt}
-                  disabled={disabled}
-                  onChange={(event) => onUpdate({ subscriptionStartsAt: event.target.value })}
-                />
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 max-w-xl">
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-muted-foreground">
+                    {t(`${i18nPrefix}.lines.subscriptionStartsAt`, 'Subscription start')}
+                  </label>
+                  <input
+                    type="date"
+                    className={CRUD_FORM_TEXT_INPUT_CLASS}
+                    value={line.subscriptionStartsAt}
+                    disabled={disabled}
+                    onChange={(event) => onUpdate({ subscriptionStartsAt: event.target.value })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-muted-foreground">
+                    {t(`${i18nPrefix}.lines.subscriptionEndsAt`, 'Subscription end')}
+                  </label>
+                  <input
+                    type="date"
+                    className={CRUD_FORM_TEXT_INPUT_CLASS}
+                    value={line.subscriptionEndsAt}
+                    disabled={disabled}
+                    onChange={(event) => onUpdate({ subscriptionEndsAt: event.target.value })}
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-muted-foreground">
-                  {t(`${i18nPrefix}.lines.subscriptionEndsAt`, 'Subscription end')}
-                </label>
-                <input
-                  type="date"
-                  className={CRUD_FORM_TEXT_INPUT_CLASS}
-                  value={line.subscriptionEndsAt}
+              {showCasePlan ? (
+                <OrderLineCasePlanEditor
+                  value={line.casePlanDrafts}
+                  onChange={(next) => onUpdate({ casePlanDrafts: next })}
+                  subscriptionStartsAt={line.subscriptionStartsAt}
                   disabled={disabled}
-                  onChange={(event) => onUpdate({ subscriptionEndsAt: event.target.value })}
+                  i18nPrefix={i18nPrefix}
                 />
-              </div>
+              ) : null}
             </div>
           </td>
         </tr>
@@ -1172,6 +1240,7 @@ export function buildSimpleDocumentFormFields(args: {
           }
           i18nPrefix={i18nPrefix}
           t={t}
+          showCasePlan={kind === 'order'}
         />
       ),
     },

@@ -6,4 +6,9 @@ export const metadata = {
   id: 'catalog:sales-order-created-offerings',
 }
 
-export default processConfirmedSalesOrderOfferings
+export default async function handler(
+  payload: Parameters<typeof processConfirmedSalesOrderOfferings>[0],
+  ctx: Parameters<typeof processConfirmedSalesOrderOfferings>[1],
+): Promise<void> {
+  await processConfirmedSalesOrderOfferings(payload, ctx)
+}

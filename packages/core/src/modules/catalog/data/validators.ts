@@ -127,6 +127,8 @@ export const catalogProductCaseTemplateSchema = z.object({
     })
     .nullable()
     .optional(),
+  startsAt: z.string().trim().min(1).max(40).nullable().optional(),
+  sourceTemplateId: uuid().nullable().optional(),
 })
 const uomRoundingModeSchema = z.enum(['half_up', 'down', 'up'])
 const unitPriceReferenceUnitSchema = z.enum(REFERENCE_UNIT_CODES)

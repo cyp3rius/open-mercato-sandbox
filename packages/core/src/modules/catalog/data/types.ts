@@ -20,6 +20,9 @@ export type CatalogProductCaseTemplate = {
   recurrenceIntervalAmount?: number | null
   recurrenceIntervalUnit?: 'hours' | 'days' | 'weeks' | 'months' | null
   recurrenceCreateLeadTime?: { amount: number; unit: 'hours' | 'days' | 'weeks' | 'months' } | null
+  /** Order-line plan: first occurrence / one-shot create day (ISO). */
+  startsAt?: string | null
+  sourceTemplateId?: string | null
 }
 
 export const CATALOG_CONFIGURABLE_PRODUCT_TYPES = ['configurable', 'virtual', 'downloadable'] as const

@@ -12,6 +12,8 @@ import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { SalesOrder, SalesOrderLine } from '../../sales/data/entities'
 import { loadSalesSettings } from '../../sales/commands/settings'
 import { isSubscriptionActivationOrderStatus } from '../../sales/lib/subscriptionActivation'
+import type { CatalogProductCaseTemplate } from '../data/types'
+import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 
 type OrderPayload = {
   id?: string
@@ -23,6 +25,19 @@ type OrderPayload = {
 
 type ResolverContext = {
   resolve: <T = unknown>(name: string) => T
+}
+
+export type ProcessSalesOrderOfferingsOptions = {
+  /** Bypass order-status gate and subscription startsAt; spawn all case-plan items. */
+  force?: boolean
+  /** Prefer request-scoped command context (manual API). */
+  commandCtx?: CommandRuntimeContext
+}
+
+export type ProcessSalesOrderOfferingsResult = {
+  processedLines: number
+  activatedOfferings: number
+  spawnedCaseCount: number
 }
 
 async function loadActivationStatuses(
@@ -56,7 +71,15 @@ async function activateIfReady(
   em: EntityManager,
   commandCtx: CommandRuntimeContext,
   offering: { id: string; productId: string; startsAt?: Date | null },
-): Promise<void> {
+  options?: { force?: boolean },
+): Promise<{ activated: boolean; spawnedCaseCount: number }> {
+  if (options?.force) {
+    const result = await activateCustomerOfferingById(commandCtx, offering.id, { force: true })
+    return {
+      activated: true,
+      spawnedCaseCount: Object.keys(result.spawnedCaseIds ?? {}).length,
+    }
+  }
   const isSubscription = await isSubscriptionProduct(em, offering.productId)
   if (
     shouldActivateOfferingNow({
@@ -64,24 +87,43 @@ async function activateIfReady(
       startsAt: offering.startsAt,
     })
   ) {
-    await activateCustomerOfferingById(commandCtx, offering.id)
+    const result = await activateCustomerOfferingById(commandCtx, offering.id)
+    return {
+      activated: true,
+      spawnedCaseCount: Object.keys(result.spawnedCaseIds ?? {}).length,
+    }
   }
+  return { activated: false, spawnedCaseCount: 0 }
 }
 
 export async function processConfirmedSalesOrderOfferings(
   payload: OrderPayload,
   ctx: ResolverContext,
-): Promise<void> {
+  options?: ProcessSalesOrderOfferingsOptions,
+): Promise<ProcessSalesOrderOfferingsResult> {
+  const force = Boolean(options?.force)
+  const empty: ProcessSalesOrderOfferingsResult = {
+    processedLines: 0,
+    activatedOfferings: 0,
+    spawnedCaseCount: 0,
+  }
   const orderId = payload.id ?? payload.orderId
   const tenantId = payload.tenantId
   const organizationId = payload.organizationId
-  if (!orderId || !tenantId || !organizationId) return
+  if (!orderId || !tenantId || !organizationId) {
+    if (force) {
+      throw new CrudHttpError(400, { error: 'sales.orders.activateOfferings.missingScope' })
+    }
+    return empty
+  }
 
   const em = ctx.resolve<EntityManager>('em').fork()
-  const activationStatuses = await loadActivationStatuses(em, tenantId, organizationId)
-  if (!isSubscriptionActivationOrderStatus(payload.status, activationStatuses)) {
-    const orderProbe = await em.findOne(SalesOrder, { id: orderId, deletedAt: null })
-    if (!isSubscriptionActivationOrderStatus(orderProbe?.status, activationStatuses)) return
+  if (!force) {
+    const activationStatuses = await loadActivationStatuses(em, tenantId, organizationId)
+    if (!isSubscriptionActivationOrderStatus(payload.status, activationStatuses)) {
+      const orderProbe = await em.findOne(SalesOrder, { id: orderId, deletedAt: null })
+      if (!isSubscriptionActivationOrderStatus(orderProbe?.status, activationStatuses)) return empty
+    }
   }
 
   const order = await em.findOne(
@@ -89,9 +131,22 @@ export async function processConfirmedSalesOrderOfferings(
     { id: orderId, tenantId, organizationId, deletedAt: null },
     { populate: ['lines'] },
   )
-  if (!order || !isSubscriptionActivationOrderStatus(order.status, activationStatuses)) return
+  if (!order) {
+    if (force) throw new CrudHttpError(404, { error: 'sales.orders.activateOfferings.notFound' })
+    return empty
+  }
+  if (!force) {
+    const activationStatuses = await loadActivationStatuses(em, tenantId, organizationId)
+    if (!isSubscriptionActivationOrderStatus(order.status, activationStatuses)) return empty
+  }
+
   const customerEntityId = order.customerEntityId?.trim()
-  if (!customerEntityId) return
+  if (!customerEntityId) {
+    if (force) {
+      throw new CrudHttpError(400, { error: 'sales.orders.activateOfferings.customerRequired' })
+    }
+    return empty
+  }
 
   const customer = await findOneWithDecryption(
     em,
@@ -100,7 +155,12 @@ export async function processConfirmedSalesOrderOfferings(
     undefined,
     { tenantId, organizationId },
   )
-  if (!customer) return
+  if (!customer) {
+    if (force) {
+      throw new CrudHttpError(400, { error: 'sales.orders.activateOfferings.customerRequired' })
+    }
+    return empty
+  }
 
   const lines = await em.find(SalesOrderLine, {
     order: order.id,
@@ -109,7 +169,13 @@ export async function processConfirmedSalesOrderOfferings(
     deletedAt: null,
   })
 
-  const commandCtx = buildCommandCtx(ctx, tenantId, organizationId)
+  const commandCtx =
+    options?.commandCtx ?? buildCommandCtx(ctx, tenantId, organizationId)
+
+  let processedLines = 0
+  let activatedOfferings = 0
+  let spawnedCaseCount = 0
+  const lineErrors: string[] = []
 
   for (const line of lines) {
     const productId = line.productId?.trim()
@@ -129,6 +195,9 @@ export async function processConfirmedSalesOrderOfferings(
           '[catalog:sales-order-confirmed-offerings] Subscription line missing dates',
           { orderId, lineId: line.id },
         )
+        if (force) {
+          lineErrors.push(line.id)
+        }
         continue
       }
     }
@@ -143,8 +212,12 @@ export async function processConfirmedSalesOrderOfferings(
         salesOrderLineId: line.id,
         subscriptionStartsAt: line.subscriptionStartsAt ?? null,
         subscriptionEndsAt: line.subscriptionEndsAt ?? null,
+        casePlan: (line.casePlan ?? null) as CatalogProductCaseTemplate[] | null,
       })
-      await activateIfReady(em, commandCtx, offering)
+      processedLines += 1
+      const parentResult = await activateIfReady(em, commandCtx, offering, { force })
+      if (parentResult.activated) activatedOfferings += 1
+      spawnedCaseCount += parentResult.spawnedCaseCount
 
       const children = await expandBundleChildProducts(em, product)
       for (const child of children) {
@@ -161,12 +234,30 @@ export async function processConfirmedSalesOrderOfferings(
           salesOrderLineId: line.id,
           subscriptionStartsAt: line.subscriptionStartsAt ?? null,
           subscriptionEndsAt: line.subscriptionEndsAt ?? null,
+          casePlan: (child.caseTemplates ?? null) as CatalogProductCaseTemplate[] | null,
           parentOfferingId: offering.id,
         })
-        await activateIfReady(em, commandCtx, childOffering)
+        const childResult = await activateIfReady(em, commandCtx, childOffering, { force })
+        if (childResult.activated) activatedOfferings += 1
+        spawnedCaseCount += childResult.spawnedCaseCount
       }
     } catch (err) {
       console.error('[catalog:sales-order-confirmed-offerings] Failed for line', line.id, err)
+      if (force) {
+        if (err instanceof CrudHttpError) throw err
+        lineErrors.push(line.id)
+      }
     }
   }
+
+  if (force && processedLines === 0) {
+    throw new CrudHttpError(400, {
+      error:
+        lineErrors.length > 0
+          ? 'sales.orders.activateOfferings.subscriptionDatesRequired'
+          : 'sales.orders.activateOfferings.noLines',
+    })
+  }
+
+  return { processedLines, activatedOfferings, spawnedCaseCount }
 }

@@ -1,9 +1,9 @@
 /**
  * Which sales order status values trigger CatalogCustomerOffering upsert/activation
  * for subscription (and existing non-subscription) lines.
- * Empty / null settings ⇒ default `['confirmed']` (backward compatible).
+ * Empty / null settings ⇒ default `['fulfilled', 'sent']`.
  */
-export const DEFAULT_SUBSCRIPTION_ACTIVATION_ORDER_STATUSES = ['confirmed'] as const
+export const DEFAULT_SUBSCRIPTION_ACTIVATION_ORDER_STATUSES = ['fulfilled', 'sent'] as const
 
 export function resolveSubscriptionActivationOrderStatuses(
   raw: string[] | null | undefined,

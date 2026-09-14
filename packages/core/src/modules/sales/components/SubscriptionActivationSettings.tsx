@@ -37,7 +37,7 @@ export function SubscriptionActivationSettings() {
   const [loading, setLoading] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
   const [options, setOptions] = React.useState<OrderStatusOption[]>([])
-  const [statuses, setStatuses] = React.useState<string[]>(['confirmed'])
+  const [statuses, setStatuses] = React.useState<string[]>(['fulfilled', 'sent'])
 
   const translations = React.useMemo(
     () => ({

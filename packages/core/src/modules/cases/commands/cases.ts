@@ -56,7 +56,13 @@ async function assertRecurrenceManage(
   if (!changingRecurrence) return
   const rbac = ctx.container.resolve('rbacService') as RbacService
   const uid = ctx.auth?.sub
-  if (!uid) throw new CrudHttpError(401, { error: 'Unauthorized' })
+  // Trusted system callers (workers, catalog subscribers) have no user session and no HTTP request.
+  if (!uid) {
+    if (ctx.request) {
+      throw new CrudHttpError(401, { error: 'Unauthorized' })
+    }
+    return
+  }
   const orgId = ctx.selectedOrganizationId ?? ctx.auth?.orgId ?? null
   const ok = await rbac.userHasAllFeatures(uid, ['cases.recurrence.manage'], {
     tenantId: ctx.auth?.tenantId ?? null,

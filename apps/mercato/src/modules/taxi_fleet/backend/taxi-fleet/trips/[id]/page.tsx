@@ -29,7 +29,6 @@ import { Notice } from '@open-mercato/ui/primitives/Notice'
 import { isPlatformIngestedTrip } from '../../../../lib/platformSync/platformTripIngest'
 import {
   tripDetailActionsForStatus,
-  tripDetailAllowsDriverEdit,
   tripDetailLockMode,
   type TripDetailActionId,
 } from '../../../../lib/tripDetailWorkflow'
@@ -258,7 +257,6 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
             initialValues={initialValues}
             readOnly={formFullyReadOnly}
             lockStatus={canEditTrip && lockMode !== 'none' ? normalizedStatus : null}
-            allowDriverEdit={canEditTrip && tripDetailAllowsDriverEdit(normalizedStatus)}
             onDelete={canManageTrips && lockMode !== 'full' ? handleDelete : undefined}
             sidebarExtra={
               isPlatformIngestedTrip(row.metadata ?? null) ? (

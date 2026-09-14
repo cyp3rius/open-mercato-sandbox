@@ -12,6 +12,7 @@ import {
 import { DEFAULT_ORDER_NUMBER_FORMAT, DEFAULT_QUOTE_NUMBER_FORMAT, type SalesDocumentNumberKind } from '../lib/documentNumberTokens'
 import type { ShipmentItemSnapshot } from '../lib/shipments/types'
 import type { SalesLineUomSnapshot } from '../lib/types'
+import type { CatalogProductCaseTemplate } from '../../catalog/data/types'
 
 export type SalesDocumentKind = 'order' | 'quote' | 'invoice' | 'credit_memo'
 export type SalesLineKind = 'product' | 'service' | 'shipping' | 'discount' | 'adjustment'
@@ -606,6 +607,10 @@ export class SalesOrderLine {
 
   @Property({ name: 'subscription_ends_at', type: Date, nullable: true })
   subscriptionEndsAt?: Date | null
+
+  /** Configured case plan (product templates + operator overrides). */
+  @Property({ name: 'case_plan', type: 'jsonb', nullable: true })
+  casePlan?: CatalogProductCaseTemplate[] | null
 
   @Property({ name: 'catalog_snapshot', type: 'jsonb', nullable: true })
   catalogSnapshot?: Record<string, unknown> | null

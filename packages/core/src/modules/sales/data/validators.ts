@@ -5,6 +5,7 @@ import {
 } from '@open-mercato/core/modules/dictionaries/data/validators'
 import { getPaymentProvider, getShippingProvider } from '../lib/providers'
 import { REFERENCE_UNIT_CODES } from '@open-mercato/shared/lib/units/unitCodes'
+import { catalogProductCaseTemplateSchema } from '@open-mercato/core/modules/catalog/data/validators'
 
 const uuid = () => z.string().uuid()
 
@@ -354,6 +355,7 @@ const lineSharedSchema = z.object({
   productVariantId: uuid().optional(),
   subscriptionStartsAt: z.coerce.date().optional().nullable(),
   subscriptionEndsAt: z.coerce.date().optional().nullable(),
+  casePlan: z.array(catalogProductCaseTemplateSchema).max(50).optional().nullable(),
   name: z.string().trim().max(255).optional(),
   description: z.string().trim().max(4000).optional(),
   comment: z.string().trim().max(2000).optional(),

@@ -444,7 +444,7 @@ describe('sales components', () => {
     mockApiCall.mockResolvedValueOnce({
       ok: true,
       result: {
-        subscriptionActivationOrderStatuses: ['confirmed'],
+        subscriptionActivationOrderStatuses: ['fulfilled', 'sent'],
         orderStatuses: [
           { id: '11111111-1111-1111-1111-111111111111', value: 'confirmed', label: 'Confirmed' },
           { id: '22222222-2222-2222-2222-222222222222', value: 'fulfilled', label: 'Fulfilled' },

@@ -13,7 +13,8 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { createCrud, updateCrud } from '@open-mercato/ui/backend/utils/crud'
 import { createCrudFormError } from '@open-mercato/ui/backend/utils/serverErrors'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { ArrowRightLeft } from 'lucide-react'
+import { ArrowRightLeft, Play } from 'lucide-react'
+import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import {
   readCurrencyCodeFromSearchParams,
   readCustomerEntityIdFromSearchParams,
@@ -44,6 +45,7 @@ import {
   type SimpleDocumentFormValues,
   type SimpleDocumentLineDraft,
 } from './simpleDocumentFormConfig'
+import { sanitizeCasePlanDrafts } from '../documents/OrderLineCasePlanEditor'
 
 type SimpleDocumentEditorProps = {
   kind: SimpleDocumentKind
@@ -82,6 +84,7 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
   const t = useT()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const i18nPrefix = kind === 'order' ? 'sales.simpleOrders' : 'sales.simpleQuotes'
   const resource = kind === 'order' ? 'orders' : 'quotes'
   const linesResource = kind === 'order' ? 'order-lines' : 'quote-lines'
@@ -125,6 +128,19 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
   const [createReady, setCreateReady] = React.useState(mode !== 'create' || !hasCreatePrefill)
   const [prefillQuoteNumber, setPrefillQuoteNumber] = React.useState('')
   const [prefillDealTitle, setPrefillDealTitle] = React.useState('')
+  const [activatingOfferings, setActivatingOfferings] = React.useState(false)
+
+  const hasSubscriptionLine = React.useMemo(
+    () =>
+      kind === 'order' &&
+      (initialValues.lines ?? []).some(
+        (line) =>
+          isSubscriptionLine(line.serviceLineCode) ||
+          (Boolean(line.subscriptionStartsAt.trim()) &&
+            Boolean(line.subscriptionEndsAt.trim())),
+      ),
+    [initialValues.lines, kind],
+  )
 
   const loadCreatePrefillLabels = React.useCallback(async () => {
     if (mode !== 'create' || !hasPrefillCustomerOrOwner) return null
@@ -483,10 +499,23 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
               ),
             )
           }
+          if (kind === 'order') {
+            const blankTitle = (line.casePlanDrafts ?? []).some(
+              (draft) => !draft.title.trim(),
+            )
+            if (blankTitle) {
+              throw createCrudFormError(
+                t(
+                  `${i18nPrefix}.errors.casePlanTitleRequired`,
+                  'Each case in the case plan needs a title.',
+                ),
+              )
+            }
+          }
         }
       }
     },
-    [i18nPrefix, t],
+    [i18nPrefix, kind, t],
   )
 
   const buildLinePayload = React.useCallback(
@@ -514,10 +543,13 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
       if (isSubscriptionLine(line.serviceLineCode)) {
         payload.subscriptionStartsAt = datePickerToIsoStart(line.subscriptionStartsAt)
         payload.subscriptionEndsAt = datePickerToIsoEnd(line.subscriptionEndsAt)
+        if (kind === 'order') {
+          payload.casePlan = sanitizeCasePlanDrafts(line.casePlanDrafts ?? [])
+        }
       }
       return payload
     },
-    [parentFk],
+    [parentFk, kind],
   )
 
   const handleSubmit = React.useCallback(
@@ -773,6 +805,58 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
     router.push(buildSimpleOrderCreateFromOfferHref(documentId))
   }, [documentId, kind, router])
 
+  const handleActivateOfferings = React.useCallback(async () => {
+    if (!documentId || kind !== 'order') return
+    const confirmed = await confirm({
+      title: t(
+        `${i18nPrefix}.actions.activateOfferingsConfirm`,
+        'Activate subscription and create cases now?',
+      ),
+      text: t(
+        `${i18nPrefix}.actions.activateOfferingsConfirmDescription`,
+        'Creates or updates customer offerings for this order and spawns case-plan cases immediately (ignores start date and activation status).',
+      ),
+    })
+    if (!confirmed) return
+    setActivatingOfferings(true)
+    try {
+      const call = await apiCall<{
+        error?: string
+        activatedOfferings?: number
+        spawnedCaseCount?: number
+      }>('/api/sales/orders/activate-offerings', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ orderId: documentId }),
+      })
+      if (!call.ok) {
+        flash(
+          typeof call.result?.error === 'string'
+            ? call.result.error
+            : t(
+                `${i18nPrefix}.errors.activateOfferings`,
+                'Failed to activate subscription offerings and cases.',
+              ),
+          'error',
+        )
+        return
+      }
+      const activated = call.result?.activatedOfferings ?? 0
+      const spawned = call.result?.spawnedCaseCount ?? 0
+      flash(
+        t(
+          `${i18nPrefix}.success.activateOfferings`,
+          'Activated {activated} offering(s); {spawned} case(s) linked.',
+        )
+          .replace('{activated}', String(activated))
+          .replace('{spawned}', String(spawned)),
+        'success',
+      )
+    } finally {
+      setActivatingOfferings(false)
+    }
+  }, [confirm, documentId, i18nPrefix, kind, t])
+
   if ((mode === 'edit' && loading) || (mode === 'create' && (!createReady || loading))) {
     return (
       <Page>
@@ -808,6 +892,7 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
 
   return (
     <>
+      {ConfirmDialogElement}
       {mode === 'edit' ? (
         <ApplyBreadcrumb
           title={title}
@@ -843,6 +928,21 @@ export function SimpleDocumentEditor({ kind, mode, documentId }: SimpleDocumentE
                     {t(`${i18nPrefix}.actions.convertToOrder`, 'Convert to order')}
                   </Button>
                 )
+              ) : kind === 'order' && mode === 'edit' && hasSubscriptionLine ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={activatingOfferings}
+                  onClick={() => void handleActivateOfferings()}
+                >
+                  <Play className="mr-2 h-4 w-4" aria-hidden />
+                  {activatingOfferings
+                    ? t(`${i18nPrefix}.actions.activateOfferingsBusy`, 'Activating…')
+                    : t(
+                        `${i18nPrefix}.actions.activateOfferings`,
+                        'Activate subscription & cases',
+                      )}
+                </Button>
               ) : undefined
             }
           />

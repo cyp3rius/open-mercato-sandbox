@@ -1,6 +1,7 @@
 import type { EventBus } from '@open-mercato/events'
 import type { ReferenceUnitCode } from '@open-mercato/shared/lib/units/unitCodes'
 import type { SalesAdjustmentKind, SalesDocumentKind, SalesLineKind } from '../data/entities'
+import type { CatalogProductCaseTemplate } from '../../catalog/data/types'
 
 export type { SalesAdjustmentKind, SalesDocumentKind, SalesLineKind }
 
@@ -62,6 +63,7 @@ export type SalesLineSnapshot = {
   customFields?: Record<string, unknown> | null
   subscriptionStartsAt?: Date | null
   subscriptionEndsAt?: Date | null
+  casePlan?: CatalogProductCaseTemplate[] | null
 }
 
 export type SalesAdjustmentDraft = {

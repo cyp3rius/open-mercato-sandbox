@@ -1,9 +1,8 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
-import {
-  CATALOG_SUBSCRIPTION_SERVICE_LINE_CODE,
-  type CatalogProductCaseTemplate,
-} from '../data/types'
+import { CATALOG_SUBSCRIPTION_SERVICE_LINE_CODE } from '../data/types'
 import { CatalogProductServiceLineExtension } from '../data/entities'
+
+export { cloneCaseTemplatesSnapshot } from './casePlan'
 
 export const CATALOG_CUSTOMER_OFFERING_STATUSES = [
   'pending',
@@ -75,19 +74,4 @@ export function resolveCustomerOfferingIdFromMetadata(
   if (!metadata || typeof metadata !== 'object') return null
   const raw = metadata.customerOfferingId
   return typeof raw === 'string' && raw.trim().length ? raw.trim() : null
-}
-
-export function cloneCaseTemplatesSnapshot(
-  templates: CatalogProductCaseTemplate[] | null | undefined,
-): CatalogProductCaseTemplate[] {
-  if (!Array.isArray(templates)) return []
-  return templates.map((template) => ({
-    id: template.id,
-    title: template.title,
-    playbookId: template.playbookId ?? null,
-    recurrenceEnabled: Boolean(template.recurrenceEnabled),
-    recurrenceIntervalAmount: template.recurrenceIntervalAmount ?? null,
-    recurrenceIntervalUnit: template.recurrenceIntervalUnit ?? null,
-    recurrenceCreateLeadTime: template.recurrenceCreateLeadTime ?? null,
-  }))
 }

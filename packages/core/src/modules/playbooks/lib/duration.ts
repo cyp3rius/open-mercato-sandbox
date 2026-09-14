@@ -25,3 +25,22 @@ export function addDurationToDate(date: Date, duration: ProcedureDuration): Date
   }
   return result
 }
+
+export function subtractDurationFromDate(date: Date, duration: ProcedureDuration): Date {
+  const result = new Date(date)
+  switch (duration.unit) {
+    case 'hours':
+      result.setHours(result.getHours() - duration.amount)
+      break
+    case 'days':
+      result.setDate(result.getDate() - duration.amount)
+      break
+    case 'weeks':
+      result.setDate(result.getDate() - duration.amount * 7)
+      break
+    case 'months':
+      result.setMonth(result.getMonth() - duration.amount)
+      break
+  }
+  return result
+}

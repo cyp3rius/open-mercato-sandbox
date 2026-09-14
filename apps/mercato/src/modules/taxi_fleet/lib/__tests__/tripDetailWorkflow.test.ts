@@ -1,6 +1,8 @@
 import {
   isCompletedTripReceiptSupplementUpdate,
   isTripDetailFieldEditable,
+  isTripDriverChangeAllowed,
+  tripDetailAllowsDriverEdit,
   tripDetailLockMode,
 } from '../tripDetailWorkflow'
 
@@ -19,6 +21,69 @@ describe('tripDetailLockMode', () => {
 
   it('keeps cancelled trips locked even with allowEditCompleted', () => {
     expect(tripDetailLockMode('cancelled', { allowEditCompleted: true })).toBe('full')
+  })
+
+  it('allows only status edits on scheduled trips', () => {
+    expect(tripDetailLockMode('scheduled')).toBe('status_only')
+    expect(isTripDetailFieldEditable('scheduled', 'status')).toBe(true)
+    expect(isTripDetailFieldEditable('scheduled', 'teamMemberId')).toBe(false)
+  })
+})
+
+describe('tripDetailAllowsDriverEdit', () => {
+  it('allows driver edit when the status lock mode permits teamMemberId', () => {
+    expect(tripDetailAllowsDriverEdit('new')).toBe(true)
+    expect(tripDetailAllowsDriverEdit('approved')).toBe(true)
+    expect(tripDetailAllowsDriverEdit('paid')).toBe(true)
+    expect(tripDetailAllowsDriverEdit('scheduled')).toBe(false)
+    expect(tripDetailAllowsDriverEdit('completed')).toBe(false)
+  })
+})
+
+describe('isTripDriverChangeAllowed', () => {
+  const driverA = '11111111-1111-4111-8111-111111111111'
+  const driverB = '22222222-2222-4222-8222-222222222222'
+
+  it('allows resubmitting the same driver while status is locked', () => {
+    expect(
+      isTripDriverChangeAllowed({
+        currentStatus: 'scheduled',
+        currentTeamMemberId: driverA,
+        nextTeamMemberId: driverA,
+      }),
+    ).toBe(true)
+  })
+
+  it('blocks driver changes while staying on scheduled', () => {
+    expect(
+      isTripDriverChangeAllowed({
+        currentStatus: 'scheduled',
+        currentTeamMemberId: driverA,
+        nextTeamMemberId: driverB,
+      }),
+    ).toBe(false)
+  })
+
+  it('evaluates locks against the target status when status changes in the same update', () => {
+    expect(
+      isTripDriverChangeAllowed({
+        currentStatus: 'scheduled',
+        nextStatus: 'new',
+        currentTeamMemberId: driverA,
+        nextTeamMemberId: driverB,
+      }),
+    ).toBe(true)
+  })
+
+  it('still blocks driver changes when moving into a locking status', () => {
+    expect(
+      isTripDriverChangeAllowed({
+        currentStatus: 'new',
+        nextStatus: 'scheduled',
+        currentTeamMemberId: driverA,
+        nextTeamMemberId: driverB,
+      }),
+    ).toBe(false)
   })
 })
 

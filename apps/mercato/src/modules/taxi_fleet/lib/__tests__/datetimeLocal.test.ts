@@ -6,6 +6,7 @@ import {
   isTripStartMeetingMinAdvance,
   normalizeDateTimeLocalInput,
   parseDateTimeLocalValue,
+  resolveAutoEndedAtLocal,
   roundDateToFiveMinutes,
   toDateTimeLocalValue,
   TRIP_MIN_ADVANCE_HOURS,
@@ -82,5 +83,12 @@ describe('datetime-local helpers', () => {
     expect(ended).toBe('2026-07-18T11:00')
     expect(endedAtLocalFromDuration('2026-07-18T10:00', 0)).toBeNull()
     expect(endedAtLocalFromDuration('', 3600)).toBeNull()
+  })
+
+  it('resolveAutoEndedAtLocal uses route duration or falls back to 60 minutes', () => {
+    expect(resolveAutoEndedAtLocal('2026-07-18T10:00', 1800)).toBe('2026-07-18T10:30')
+    expect(resolveAutoEndedAtLocal('2026-07-18T10:00', null)).toBe('2026-07-18T11:00')
+    expect(resolveAutoEndedAtLocal('2026-07-18T10:00')).toBe('2026-07-18T11:00')
+    expect(resolveAutoEndedAtLocal('2026-07-18T10:00', 0)).toBe('2026-07-18T11:00')
   })
 })

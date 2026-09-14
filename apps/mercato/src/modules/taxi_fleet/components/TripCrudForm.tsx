@@ -22,6 +22,9 @@ import {
   type TripFormValues,
 } from './tripFormConfig'
 import { tripFormTabGroupId, type TripFormTabId } from './TripFormTabNav'
+import {
+  tripDetailLockMode,
+} from '../lib/tripDetailWorkflow'
 
 export type TripCrudFormLayout = 'page' | 'dialog'
 
@@ -35,7 +38,6 @@ export type TripCrudFormSharedOptions = {
   statusOptions?: Array<{ value: string; label: string }>
   readOnly?: boolean
   lockStatus?: string | null
-  allowDriverEdit?: boolean
 }
 
 type TripCrudFormBaseProps = TripCrudFormSharedOptions & {
@@ -84,13 +86,28 @@ export function TripCrudForm(props: TripCrudFormProps) {
     statusOptions,
     readOnly = false,
     lockStatus = null,
-    allowDriverEdit = false,
   } = props
 
   const activeTab = layout === 'dialog' ? (props.activeTab ?? 'route') : null
 
   // Freeze clock when the form instance mounts (or remounts via formKey).
   const minAdvanceReference = React.useMemo(() => new Date(), [formKey])
+
+  const [liveStatus, setLiveStatus] = React.useState(() =>
+    typeof initialValues.status === 'string' ? initialValues.status : '',
+  )
+  React.useEffect(() => {
+    setLiveStatus(typeof initialValues.status === 'string' ? initialValues.status : '')
+  }, [formKey, initialValues.status])
+
+  // In edit mode, field locks follow the status selected in the form so changing
+  // e.g. scheduled → new unlocks the driver and other fields before save.
+  const effectiveLockStatus = React.useMemo(() => {
+    if (readOnly) return lockStatus
+    if (mode !== 'edit') return lockStatus
+    if (!liveStatus.trim()) return lockStatus
+    return tripDetailLockMode(liveStatus) === 'none' ? null : liveStatus
+  }, [liveStatus, lockStatus, mode, readOnly])
 
   const fields = React.useMemo(
     () =>
@@ -104,8 +121,7 @@ export function TripCrudForm(props: TripCrudFormProps) {
         onAssignmentResolved,
         statusOptions,
         readOnly,
-        lockStatus,
-        allowDriverEdit,
+        lockStatus: effectiveLockStatus,
         minAdvanceReference,
         // CRM may schedule/add trips without the public booking lead-time rule.
         minAdvanceHours: 0,
@@ -113,12 +129,11 @@ export function TripCrudForm(props: TripCrudFormProps) {
           typeof initialValues.paymentType === 'string' ? initialValues.paymentType : null,
       }),
     [
-      allowDriverEdit,
+      effectiveLockStatus,
       driverLocked,
       driverProfiles,
       initialValues.paymentType,
       layout,
-      lockStatus,
       lockedTeamMemberId,
       minAdvanceReference,
       mode,
@@ -181,6 +196,9 @@ export function TripCrudForm(props: TripCrudFormProps) {
 
   const handleValuesChange = React.useCallback(
     (values: TripFormValues) => {
+      if (typeof values.status === 'string') {
+        setLiveStatus(values.status)
+      }
       const issues = listTripFormBlockingIssues(values, t, validationOptions)
       setBlockingIssues(issues)
       onSubmitReadyChange?.(issues.length === 0)

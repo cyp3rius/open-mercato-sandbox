@@ -77,10 +77,13 @@ Unique: `(sales_order_line_id)` where not deleted.
 
 ## Activation rules
 
-- Order `status === 'confirmed'` (normalized dictionary value).
+- Order status in configured activation list (default: `fulfilled`, `sent`).
 - Non-subscription: activate immediately (`startsAt = now`).
 - Subscription: `pending` until `startsAt <= now`; worker activates.
-- Fail closed without customer guardian: skip spawn for that line; leave offering pending/failed state documented in timeline/log.
+- Case spawn uses order-line `casePlan` when present, else product `caseTemplates`.
+- Case `ownerUserId`: order `ownerUserId`, else customer guardian; fail closed if neither.
+- First case create time: one-shot = plan `startsAt`; recurring = `startsAt − lead`; deferred via catalog subscription worker until due.
+- Fail closed without owner: skip spawn for that line; leave offering pending/failed state documented in timeline/log.
 
 ## Recurrence bound
 
@@ -109,6 +112,12 @@ Case metadata may include `customerOfferingId` + `recurrenceSeriesEndsAt`. Recur
 - Manual activate uses `force: true` (bypasses subscription `startsAt` gate). Guardian is still required.
 - No create-without-order flow.
 
+### Manual activation (sales order)
+
+- On simple order detail, when the order has at least one subscription line, header action **Activate subscription & cases** calls `POST /api/sales/orders/activate-offerings`.
+- Force path: upsert offerings from lines (incl. line `casePlan`), activate with `force: true`, spawn all case-plan items immediately (bypasses order activation status and `startsAt` / createAt).
+- Requires order owner or customer guardian (same fail-closed rule).
+
 ### Deactivation / refund reverse
 
 - Command `catalog.customer_offerings.deactivate`: set `status = cancelled`, disable recurrence on spawned cases, close each spawned case (`closedAt` + `statusValue = aborted`) at ORM level (system-safe, no cases ACL).
@@ -130,3 +139,5 @@ Case metadata may include `customerOfferingId` + `recurrenceSeriesEndsAt`. Recur
 |------|-------------|
 | 2026-07-18 | Initial spec for guardian UI, offering kinds, case templates, sales-order activation, subscription window. |
 | 2026-07-18 | Post-MVP: manual pending activate on customer card; deactivate on cancel/return with case close; bundle/grouped expansion. |
+| 2026-09-14 | Order-line `casePlan` (preload from product, editable startsAt/recurrence); default activation statuses `fulfilled`/`sent`; case owner prefers order assignee then customer guardian; system workers create cases at createAt (one-shot = startsAt; recurring = startsAt − lead). |
+| 2026-09-14 | Manual activate from simple order header (`POST /api/sales/orders/activate-offerings`, force upsert + spawn). |

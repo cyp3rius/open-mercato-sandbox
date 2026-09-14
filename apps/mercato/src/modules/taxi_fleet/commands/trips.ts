@@ -34,7 +34,11 @@ import { ensureOrganizationScope, ensureTenantScope, numericToString } from './s
 import { assertDriverTripShift } from '../lib/assertDriverTripShift'
 import { assertNoTripOverlap } from '../lib/assertNoTripOverlap'
 import { assertNoVehicleTripOverlap } from '../lib/assertNoVehicleTripOverlap'
-import { isTripDetailFieldEditable, tripDetailLockMode, isCompletedTripReceiptSupplementUpdate } from '../lib/tripDetailWorkflow'
+import {
+  isTripDriverChangeAllowed,
+  tripDetailLockMode,
+  isCompletedTripReceiptSupplementUpdate,
+} from '../lib/tripDetailWorkflow'
 import { tripHasReceiptAttachment } from '../lib/driverTripReceiptStatus'
 import {
   recalculateWeeklySettlementsForTrip,
@@ -268,9 +272,20 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
         ),
       })
     }
+    const actor = await resolveFleetBackendActor(ctx)
     if (
-      parsed.teamMemberId !== undefined &&
-      !isTripDetailFieldEditable(row.status, 'teamMemberId', { allowEditCompleted })
+      !isTripDriverChangeAllowed({
+        currentStatus: row.status,
+        nextStatus: parsed.status,
+        currentTeamMemberId: row.teamMemberId ?? null,
+        nextTeamMemberId:
+          parsed.teamMemberId === undefined
+            ? undefined
+            : actor?.role === 'driver'
+              ? actor.teamMemberId
+              : parsed.teamMemberId,
+        allowEditCompleted,
+      })
     ) {
       throw new CrudHttpError(400, {
         error: translate(
@@ -282,7 +297,6 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
     const previousTeamMemberId = row.teamMemberId ?? null
     const previousWeekStart = resolveTripWeekStart(row)
     const previousStatus = normalizeTripStatus(row.status)
-    const actor = await resolveFleetBackendActor(ctx)
     if (parsed.teamMemberId !== undefined) {
       const nextTeamMemberId = actor?.role === 'driver' ? actor.teamMemberId : parsed.teamMemberId
       if (nextTeamMemberId) {

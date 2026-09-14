@@ -68,6 +68,8 @@ export type TripFormValues = {
   quoteSnapshotJson: string
   routeDurationSeconds: string
   routeSyncedFingerprint: string
+  /** '1' when the user edited end time — blocks create-form auto end updates. */
+  endedAtManual: string
   receiptDocumentNumber: string
   receiptAttachmentId: string
 } & TripRequestDetails
@@ -80,7 +82,6 @@ export type TripFormOptions = {
   readOnly?: boolean
   /** When set, fields not editable for this trip status use CrudForm `readOnly`. */
   lockStatus?: string | null
-  allowDriverEdit?: boolean
   driverLocked?: boolean
   lockedTeamMemberId?: string | null
   onAssignmentResolved?: (assignmentId: string | null) => void
@@ -145,6 +146,7 @@ export function defaultTripFormValues(reference = new Date()): TripFormValues {
     quoteSnapshotJson: '',
     routeDurationSeconds: '',
     routeSyncedFingerprint: buildTripRouteFingerprint(request),
+    endedAtManual: '0',
     receiptDocumentNumber: '',
     receiptAttachmentId: '',
     ...request,
@@ -248,6 +250,7 @@ export function tripFormSchema(t: TranslateFn, options?: TripFormValidationOptio
       quoteSnapshotJson: z.string().optional(),
       routeDurationSeconds: z.string().optional(),
       routeSyncedFingerprint: z.string().optional(),
+      endedAtManual: z.string().optional(),
       receiptDocumentNumber: z.string().max(120).optional(),
       receiptAttachmentId: z.string().optional(),
       ...tripRequestSchemaShape(),
@@ -405,6 +408,7 @@ const INTERNAL_TRIP_FORM_FIELD_IDS = [
   'quoteSnapshotJson',
   'routeDurationSeconds',
   'routeSyncedFingerprint',
+  'endedAtManual',
   'vehicleCategory',
   'basePrice',
   'receiptAttachmentId',
@@ -471,6 +475,7 @@ export function buildTripFormGroups(
               values={values ?? {}}
               setFormValue={setValue}
               disabled={disabled || false}
+              autoAdjustEnd={options?.mode === 'create'}
             />
             <TripQuoteSync
               values={(values ?? {}) as TripFormValues}
@@ -537,7 +542,6 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
     resolveDriverName,
     readOnly = false,
     lockStatus = null,
-    allowDriverEdit = false,
     driverLocked = false,
     lockedTeamMemberId = null,
     onAssignmentResolved,
@@ -598,8 +602,7 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
             disabled ||
             fieldReadOnly ||
             fieldLocked('teamMemberId') ||
-            driverLocked ||
-            (mode === 'edit' && !allowDriverEdit)
+            driverLocked
           }
           driverOptions={driverOptions}
           lockedDisplayName={driverLocked ? lockedDisplayName : null}
@@ -661,11 +664,14 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
       label: t('taxi_fleet.trips.ended', 'Ended'),
       required: true,
       layout: 'half',
-      component: ({ id, value, setValue, disabled, readOnly: fieldReadOnly }) => (
+      component: ({ id, value, setValue, disabled, readOnly: fieldReadOnly, setFormValue }) => (
         <TripDateTimeLocalField
           id={id}
           value={typeof value === 'string' ? value : ''}
-          onChange={(next) => setValue(next)}
+          onChange={(next) => {
+            setValue(next)
+            setFormValue?.('endedAtManual', '1')
+          }}
           disabled={disabled}
           readOnly={fieldReadOnly || fieldLocked('endedAtLocal')}
         />
@@ -812,6 +818,7 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
         values={values ?? {}}
         setFormValue={setFormValue}
         disabled={disabled || fieldReadOnly || readOnly}
+        autoAdjustEnd={mode === 'create'}
       />
     ),
   })
@@ -922,6 +929,7 @@ export function mapTripRowToFormValues(row: {
     quoteSnapshotJson: quoteSnapshot ? JSON.stringify(quoteSnapshot) : '',
     routeDurationSeconds: '',
     routeSyncedFingerprint: '',
+    endedAtManual: '1',
     receiptDocumentNumber:
       typeof row.metadata?.receiptDocumentNumber === 'string'
         ? row.metadata.receiptDocumentNumber

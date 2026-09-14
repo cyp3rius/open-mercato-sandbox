@@ -134,6 +134,10 @@ const orderCrudEvents: CrudEventsConfig<SalesOrder> = {
     id: ctx.identifiers.id,
     organizationId: ctx.identifiers.organizationId,
     tenantId: ctx.identifiers.tenantId,
+    status:
+      ctx.entity && typeof (ctx.entity as SalesOrder).status === "string"
+        ? (ctx.entity as SalesOrder).status
+        : null,
   }),
 };
 
@@ -404,6 +408,7 @@ type OrderLineSnapshot = {
   customFields: Record<string, unknown> | null;
   subscriptionStartsAt: string | null;
   subscriptionEndsAt: string | null;
+  casePlan: Record<string, unknown>[] | null;
 };
 
 type OrderAdjustmentSnapshot = {
@@ -1471,6 +1476,7 @@ async function loadQuoteSnapshot(
       subscriptionEndsAt: line.subscriptionEndsAt
         ? line.subscriptionEndsAt.toISOString()
         : null,
+      casePlan: null,
     })),
     adjustments: adjustments.map((adj) => ({
       id: adj.id,
@@ -1769,6 +1775,7 @@ async function loadOrderSnapshot(
       subscriptionEndsAt: line.subscriptionEndsAt
         ? line.subscriptionEndsAt.toISOString()
         : null,
+      casePlan: Array.isArray(line.casePlan) ? cloneJson(line.casePlan) : null,
     })),
     adjustments: adjustments.map((adj) => ({
       id: adj.id,
@@ -2563,6 +2570,7 @@ function mapOrderLineEntityToSnapshot(line: SalesOrderLine): SalesLineSnapshot {
     customFieldSetId: line.customFieldSetId ?? null,
     subscriptionStartsAt: line.subscriptionStartsAt ?? null,
     subscriptionEndsAt: line.subscriptionEndsAt ?? null,
+    casePlan: Array.isArray(line.casePlan) ? cloneJson(line.casePlan) : null,
   };
 }
 
@@ -2596,6 +2604,7 @@ function mapQuoteLineEntityToSnapshot(line: SalesQuoteLine): SalesLineSnapshot {
     customFieldSetId: line.customFieldSetId ?? null,
     subscriptionStartsAt: line.subscriptionStartsAt ?? null,
     subscriptionEndsAt: line.subscriptionEndsAt ?? null,
+    casePlan: null,
   };
 }
 
@@ -2709,6 +2718,10 @@ function createLineSnapshotFromInput(
     subscriptionEndsAt:
       "subscriptionEndsAt" in line
         ? ((line as any).subscriptionEndsAt ?? null)
+        : null,
+    casePlan:
+      "casePlan" in line && Array.isArray((line as any).casePlan)
+        ? cloneJson((line as any).casePlan)
         : null,
   };
 }
@@ -2837,6 +2850,9 @@ function convertLineCalculationToEntityInput(
     customFieldSetId: sourceLine.customFieldSetId ?? null,
     subscriptionStartsAt: sourceLine.subscriptionStartsAt ?? null,
     subscriptionEndsAt: sourceLine.subscriptionEndsAt ?? null,
+    casePlan: Array.isArray((sourceLine as { casePlan?: unknown }).casePlan)
+      ? cloneJson((sourceLine as { casePlan: unknown }).casePlan)
+      : null,
     organizationId: document.organizationId,
     tenantId: document.tenantId,
   };
@@ -4179,6 +4195,7 @@ async function restoreOrderGraph(
       subscriptionEndsAt: line.subscriptionEndsAt
         ? new Date(line.subscriptionEndsAt)
         : null,
+      casePlan: Array.isArray(line.casePlan) ? cloneJson(line.casePlan) : null,
     });
     em.persist(lineEntity);
   });
@@ -5148,6 +5165,19 @@ const updateOrderCommand: CommandHandler<
         indexer: { entityType: E.sales.sales_note },
       });
     }
+    const dataEngine = ctx.container.resolve("dataEngine") as DataEngine;
+    await emitCrudSideEffects({
+      dataEngine,
+      action: "updated",
+      entity: order,
+      identifiers: {
+        id: order.id,
+        organizationId: order.organizationId,
+        tenantId: order.tenantId,
+      },
+      events: orderCrudEvents,
+      indexer: { entityType: E.sales.sales_order },
+    });
     const resourceKind =
       deriveResourceFromCommandId(updateOrderCommand.id) ?? "sales.order";
     await invalidateCrudCache(
@@ -5995,6 +6025,9 @@ const convertQuoteToOrderCommand: CommandHandler<
         subscriptionEndsAt: (line as any).subscriptionEndsAt
           ? new Date((line as any).subscriptionEndsAt)
           : null,
+        casePlan: Array.isArray((line as any).casePlan)
+          ? cloneJson((line as any).casePlan)
+          : null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -6420,6 +6453,10 @@ const orderLineUpsertCommand: CommandHandler<
         parsed.subscriptionEndsAt !== undefined
           ? parsed.subscriptionEndsAt
           : ((existingSnapshot as any)?.subscriptionEndsAt ?? null),
+      casePlan:
+        parsed.casePlan !== undefined
+          ? parsed.casePlan
+          : ((existingSnapshot as any)?.casePlan ?? null),
     };
     (updatedSnapshot as any).statusEntryId = statusEntryId;
     (updatedSnapshot as any).catalogSnapshot =
@@ -6447,6 +6484,7 @@ const orderLineUpsertCommand: CommandHandler<
       promotionSnapshot: (line as any).promotionSnapshot ?? null,
       subscriptionStartsAt: (line as any).subscriptionStartsAt ?? null,
       subscriptionEndsAt: (line as any).subscriptionEndsAt ?? null,
+      casePlan: (line as any).casePlan ?? null,
       organizationId: order.organizationId,
       tenantId: order.tenantId,
       orderId: order.id,
@@ -6500,6 +6538,21 @@ const orderLineUpsertCommand: CommandHandler<
       lineCount: calculation.lines.length,
     });
     await em.flush();
+    // Re-emit order.updated so catalog offerings/cases stay in sync when the
+    // order is already in an activation status and only lines (case plan) change.
+    const dataEngine = ctx.container.resolve("dataEngine") as DataEngine;
+    await emitCrudSideEffects({
+      dataEngine,
+      action: "updated",
+      entity: order,
+      identifiers: {
+        id: order.id,
+        organizationId: order.organizationId,
+        tenantId: order.tenantId,
+      },
+      events: orderCrudEvents,
+      indexer: { entityType: E.sales.sales_order },
+    });
     return { orderId: order.id, lineId };
   },
   captureAfter: async (_input, result, ctx) => {

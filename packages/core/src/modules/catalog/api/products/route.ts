@@ -345,6 +345,8 @@ type ProductListItem = Record<string, unknown> & {
   dimensions?: Record<string, unknown> | null;
   custom_fieldset_code?: string | null;
   option_schema_id?: string | null;
+  case_templates?: unknown;
+  caseTemplates?: unknown;
   offers?: Array<Record<string, unknown>>;
   channelIds?: string[];
   categories?: Array<Record<string, unknown>>;
@@ -566,6 +568,24 @@ async function decorateProductsAfterList(
       tagsByProduct.set(productId, bucket);
     }
 
+    // Query-engine field projection can omit jsonb columns; always hydrate case templates for edit/list detail.
+    const missingCaseTemplateIds = productIds.filter((id) => {
+      const item = items.find((row) => row.id === id);
+      if (!item) return false;
+      return !Array.isArray(item.case_templates) && !Array.isArray(item.caseTemplates);
+    });
+    const caseTemplatesByProductId = new Map<string, unknown>();
+    if (missingCaseTemplateIds.length) {
+      const productRows = await em.find(
+        CatalogProduct,
+        { id: { $in: missingCaseTemplateIds }, deletedAt: null },
+        { fields: ["id", "caseTemplates"] },
+      );
+      for (const row of productRows) {
+        caseTemplatesByProductId.set(row.id, row.caseTemplates ?? null);
+      }
+    }
+
     const variants = await findWithDecryption(
       em,
       CatalogProductVariant,
@@ -697,6 +717,13 @@ async function decorateProductsAfterList(
       item.categories = categories;
       item.categoryIds = categories.map((category) => category.id);
       item.tags = tagsByProduct.get(id) ?? [];
+      if (
+        !Array.isArray(item.case_templates) &&
+        !Array.isArray(item.caseTemplates) &&
+        caseTemplatesByProductId.has(id)
+      ) {
+        item.case_templates = caseTemplatesByProductId.get(id) ?? null;
+      }
       const priceCandidates = pricesByProduct.get(id) ?? [];
       const normalizedQuantityForPricing = (() => {
         if (!requestQuantityUnitKey) return pricingContext.quantity;
@@ -801,6 +828,7 @@ const crud = makeCrudRoute({
       F.metadata,
       "custom_fieldset_code",
       "option_schema_id",
+      F.case_templates,
       F.created_at,
       F.updated_at,
     ],
@@ -948,6 +976,7 @@ const productListItemSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   custom_fieldset_code: z.string().nullable().optional(),
   option_schema_id: z.string().uuid().nullable().optional(),
+  case_templates: z.array(z.record(z.string(), z.unknown())).nullable().optional(),
   created_at: z.string().nullable().optional(),
   updated_at: z.string().nullable().optional(),
   offers: z.array(z.record(z.string(), z.unknown())).optional(),

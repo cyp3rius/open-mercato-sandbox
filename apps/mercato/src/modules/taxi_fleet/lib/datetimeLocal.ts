@@ -55,6 +55,9 @@ export function defaultTripDateTimeLocalRange(
   }
 }
 
+/** Fallback trip length when route duration is unknown (create form auto end). */
+export const DEFAULT_TRIP_DURATION_SECONDS = 60 * 60
+
 /** Adds duration to start and rounds to 5 minutes; ensures end is strictly after start. */
 export function endedAtLocalFromDuration(startedAtLocal: string, durationSeconds: number): string | null {
   const started = parseDateTimeLocalValue(startedAtLocal)
@@ -64,6 +67,21 @@ export function endedAtLocalFromDuration(startedAtLocal: string, durationSeconds
     ended = new Date(started.getTime() + DATETIME_LOCAL_FIVE_MINUTE_STEP_SECONDS * 1000)
   }
   return toDateTimeLocalValue(ended)
+}
+
+/**
+ * End time from start + route duration, or {@link DEFAULT_TRIP_DURATION_SECONDS} when
+ * duration is missing/invalid.
+ */
+export function resolveAutoEndedAtLocal(
+  startedAtLocal: string,
+  durationSeconds?: number | null,
+): string | null {
+  const seconds =
+    typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0
+      ? durationSeconds
+      : DEFAULT_TRIP_DURATION_SECONDS
+  return endedAtLocalFromDuration(startedAtLocal, seconds)
 }
 
 export function parseDateTimeLocalValue(value: string): Date | null {

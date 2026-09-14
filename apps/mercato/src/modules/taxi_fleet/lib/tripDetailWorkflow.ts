@@ -86,8 +86,36 @@ export function isTripDetailFieldEditable(
   return PAID_EDITABLE_FIELD_IDS.has(fieldId)
 }
 
-export function tripDetailAllowsDriverEdit(status: string): boolean {
-  return tripDetailLockMode(status) === 'paid_partial'
+export function tripDetailAllowsDriverEdit(
+  status: string,
+  options?: TripDetailLockOptions,
+): boolean {
+  return isTripDetailFieldEditable(status, 'teamMemberId', options)
+}
+
+/**
+ * Whether an update may change the driver. Unchanged `teamMemberId` is always allowed
+ * (forms re-submit it). When status changes in the same request, locks are evaluated
+ * against the target status so e.g. scheduled → new unlocks the driver.
+ */
+export function isTripDriverChangeAllowed(params: {
+  currentStatus: string
+  nextStatus?: string | null
+  currentTeamMemberId: string | null
+  nextTeamMemberId: string | null | undefined
+  allowEditCompleted?: boolean
+}): boolean {
+  if (params.nextTeamMemberId === undefined) return true
+  const currentId = params.currentTeamMemberId ?? null
+  const nextId = params.nextTeamMemberId ?? null
+  if (currentId === nextId) return true
+  const statusForLock =
+    params.nextStatus != null && String(params.nextStatus).trim()
+      ? params.nextStatus
+      : params.currentStatus
+  return isTripDetailFieldEditable(statusForLock, 'teamMemberId', {
+    allowEditCompleted: params.allowEditCompleted,
+  })
 }
 
 export function isCompletedTripStatus(status: string): boolean {

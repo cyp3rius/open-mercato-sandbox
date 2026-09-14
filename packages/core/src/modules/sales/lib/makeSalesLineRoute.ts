@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { EntityManager } from '@mikro-orm/postgresql'
 import { makeCrudRoute, type CrudCtx } from '@open-mercato/shared/lib/crud/factory'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
@@ -72,6 +73,46 @@ function transformItem(item: Record<string, unknown> | null | undefined) {
     quantity_unit: quantityUnit,
     normalized_unit: normalizedUnit,
     ...cfEntries,
+  }
+}
+
+async function hydrateOrderLineCasePlans(
+  payload: { items?: Array<Record<string, unknown>> },
+  ctx: CrudCtx,
+  entity: EntityClass,
+): Promise<void> {
+  const items = Array.isArray(payload?.items) ? payload.items : []
+  if (!items.length) return
+  const missingIds = items
+    .map((item) => {
+      const id = typeof item.id === 'string' ? item.id : null
+      if (!id) return null
+      if (Array.isArray(item.case_plan) || Array.isArray(item.casePlan)) return null
+      return id
+    })
+    .filter((id): id is string => !!id)
+  if (!missingIds.length) return
+  try {
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const rows = await em.find(
+      entity as never,
+      { id: { $in: missingIds }, deletedAt: null } as never,
+      { fields: ['id', 'casePlan'] as never },
+    )
+    const byId = new Map<string, unknown>()
+    for (const row of rows as Array<{ id: string; casePlan?: unknown }>) {
+      byId.set(row.id, row.casePlan ?? null)
+    }
+    for (const item of items) {
+      const id = typeof item.id === 'string' ? item.id : null
+      if (!id || !byId.has(id)) continue
+      if (Array.isArray(item.case_plan) || Array.isArray(item.casePlan)) continue
+      const plan = byId.get(id) ?? null
+      item.case_plan = plan
+      item.casePlan = plan
+    }
+  } catch (error) {
+    console.error('[sales.order-lines] Failed to hydrate case_plan', error)
   }
 }
 
@@ -227,6 +268,10 @@ export function makeSalesLineRoute(config: SalesLineRouteConfig) {
         if (typeof subscriptionStartsAt === 'string') fields.push(subscriptionStartsAt)
         const subscriptionEndsAt = F['subscription_ends_at']
         if (typeof subscriptionEndsAt === 'string') fields.push(subscriptionEndsAt)
+        if (parentFkParam === 'orderId') {
+          const casePlan = F['case_plan']
+          fields.push(typeof casePlan === 'string' ? casePlan : 'case_plan')
+        }
         return fields
       })(),
       sortFieldMap: {
@@ -254,6 +299,18 @@ export function makeSalesLineRoute(config: SalesLineRouteConfig) {
       },
       transformItem,
     },
+    hooks:
+      parentFkParam === 'orderId'
+        ? {
+            afterList: async (payload, ctx) => {
+              await hydrateOrderLineCasePlans(
+                payload as { items?: Array<Record<string, unknown>> },
+                ctx,
+                entity,
+              )
+            },
+          }
+        : undefined,
     actions: {
       create: {
         commandId: `${commandPrefix}.upsert`,
@@ -341,6 +398,9 @@ export function makeSalesLineRoute(config: SalesLineRouteConfig) {
     promotion_snapshot: z.record(z.string(), z.unknown()).nullable().optional(),
     metadata: z.record(z.string(), z.unknown()).nullable().optional(),
     custom_field_set_id: z.string().uuid().nullable().optional(),
+    subscription_starts_at: z.string().nullable().optional(),
+    subscription_ends_at: z.string().nullable().optional(),
+    case_plan: z.array(z.record(z.string(), z.unknown())).nullable().optional(),
     created_at: z.string(),
     updated_at: z.string(),
   })

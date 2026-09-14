@@ -5,16 +5,22 @@ import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { z } from 'zod'
 import { CustomerEntity } from '../../customers/data/entities'
 import { ServiceCase } from '../../cases/data/entities'
+import { SalesOrder } from '../../sales/data/entities'
 import {
   CatalogCustomerOffering,
   CatalogProduct,
   CatalogProductRelation,
 } from '../data/entities'
 import {
-  cloneCaseTemplatesSnapshot,
   isSubscriptionProduct,
   shouldActivateOfferingNow,
 } from '../lib/customerOffering'
+import {
+  casePlanItemIsDue,
+  cloneCaseTemplatesSnapshot,
+  parseCasePlanStartsAt,
+  resolveCasePlanSnapshot,
+} from '../lib/casePlan'
 import type { CatalogProductCaseTemplate } from '../data/types'
 import { CATALOG_SUBPRODUCT_PRODUCT_TYPES } from '../data/types'
 
@@ -31,21 +37,64 @@ const deactivateSchema = z.object({
   organizationId: z.string().uuid().optional(),
 })
 
+async function resolveOfferingOwnerUserId(
+  em: EntityManager,
+  offering: CatalogCustomerOffering,
+): Promise<string> {
+  if (offering.salesOrderId) {
+    const order = await em.findOne(SalesOrder, {
+      id: offering.salesOrderId,
+      tenantId: offering.tenantId,
+      organizationId: offering.organizationId,
+      deletedAt: null,
+    })
+    const fromOrder = order?.ownerUserId?.trim() || ''
+    if (fromOrder) return fromOrder
+  }
+  const customer = await findOneWithDecryption(
+    em,
+    CustomerEntity,
+    { id: offering.customerEntityId, deletedAt: null },
+    undefined,
+    { tenantId: offering.tenantId, organizationId: offering.organizationId },
+  )
+  return customer?.ownerUserId?.trim() || ''
+}
+
 async function spawnCasesForOffering(
   ctx: CommandRuntimeContext,
   em: EntityManager,
   offering: CatalogCustomerOffering,
   ownerUserId: string,
+  options?: { force?: boolean; now?: Date },
 ): Promise<Record<string, string>> {
   const templates = cloneCaseTemplatesSnapshot(offering.caseTemplatesSnapshot)
   const spawned: Record<string, string> = { ...(offering.spawnedCaseIds ?? {}) }
+  const now = options?.now ?? new Date()
+  const force = Boolean(options?.force)
   const commandBus = ctx.container.resolve('commandBus') as {
     execute: (id: string, args: { input: unknown; ctx: CommandRuntimeContext }) => Promise<{ result?: { caseId?: string } }>
   }
+  // Case spawn is a trusted catalog side-effect (workers / order activation). Do not
+  // inherit the interactive request ACL — recurrence create is allowed for system callers.
+  const systemCtx = {
+    container: ctx.container,
+    auth: {
+      tenantId: offering.tenantId,
+      orgId: offering.organizationId,
+      sub: null,
+    },
+    organizationScope: null,
+    selectedOrganizationId: offering.organizationId,
+    organizationIds: [offering.organizationId],
+  } as unknown as CommandRuntimeContext
 
   for (const template of templates) {
     if (spawned[template.id]) continue
+    if (!force && !casePlanItemIsDue(template, now)) continue
+
     const recurrenceEnabled = Boolean(template.recurrenceEnabled)
+    const startsAt = parseCasePlanStartsAt(template.startsAt ?? null)
     const metadata: Record<string, unknown> = {
       customerOfferingId: offering.id,
       catalogCaseTemplateId: template.id,
@@ -61,6 +110,7 @@ async function spawnCasesForOffering(
       ownerUserId,
       playbookId: template.playbookId ?? null,
       statusValue: 'open',
+      dueAt: startsAt,
       metadata,
       recurrenceEnabled,
       recurrenceIntervalAmount: recurrenceEnabled ? template.recurrenceIntervalAmount ?? null : null,
@@ -69,7 +119,10 @@ async function spawnCasesForOffering(
       recurrenceSeriesId: null,
       recurrenceNextOccurrenceAt: null,
     }
-    const { result } = await commandBus.execute('cases.cases.create', { input, ctx })
+    const { result } = await commandBus.execute('cases.cases.create', {
+      input,
+      ctx: systemCtx,
+    })
     const caseId = typeof result?.caseId === 'string' ? result.caseId : ''
     if (!caseId) {
       throw new CrudHttpError(500, { error: 'catalog.customerOfferings.caseCreateFailed' })
@@ -119,18 +172,8 @@ export async function activateCustomerOfferingById(
   if (offering.status === 'cancelled' || offering.status === 'ended') {
     throw new CrudHttpError(400, { error: 'catalog.customerOfferings.notActivatable' })
   }
-  if (offering.status === 'active' && offering.spawnedCaseIds && Object.keys(offering.spawnedCaseIds).length) {
-    return { ok: true, offeringId: offering.id, spawnedCaseIds: offering.spawnedCaseIds }
-  }
 
-  const customer = await findOneWithDecryption(
-    em,
-    CustomerEntity,
-    { id: offering.customerEntityId, deletedAt: null },
-    undefined,
-    { tenantId: offering.tenantId, organizationId: offering.organizationId },
-  )
-  const ownerUserId = customer?.ownerUserId?.trim() || ''
+  const ownerUserId = await resolveOfferingOwnerUserId(em, offering)
   if (!ownerUserId) {
     throw new CrudHttpError(400, { error: 'catalog.customerOfferings.guardianRequired' })
   }
@@ -138,6 +181,19 @@ export async function activateCustomerOfferingById(
   const now = new Date()
   const force = Boolean(options?.force)
   const isSubscription = await isSubscriptionProduct(em, offering.productId)
+
+  // Already active: only spawn newly due plan items (system date watcher).
+  if (offering.status === 'active') {
+    const spawnedCaseIds = await spawnCasesForOffering(ctx, em, offering, ownerUserId, {
+      force,
+      now,
+    })
+    offering.spawnedCaseIds = spawnedCaseIds
+    offering.updatedAt = now
+    await em.flush()
+    return { ok: true, offeringId: offering.id, spawnedCaseIds }
+  }
+
   if (
     !force &&
     !shouldActivateOfferingNow({
@@ -149,7 +205,10 @@ export async function activateCustomerOfferingById(
     return { ok: true, offeringId: offering.id, spawnedCaseIds: offering.spawnedCaseIds ?? {} }
   }
 
-  const spawnedCaseIds = await spawnCasesForOffering(ctx, em, offering, ownerUserId)
+  const spawnedCaseIds = await spawnCasesForOffering(ctx, em, offering, ownerUserId, {
+    force,
+    now,
+  })
   offering.status = 'active'
   offering.activatedAt = now
   offering.spawnedCaseIds = spawnedCaseIds
@@ -267,6 +326,7 @@ export async function upsertCustomerOfferingFromOrderLine(
     salesOrderLineId: string
     subscriptionStartsAt?: Date | null
     subscriptionEndsAt?: Date | null
+    casePlan?: CatalogProductCaseTemplate[] | null
     parentOfferingId?: string | null
   },
 ): Promise<CatalogCustomerOffering> {
@@ -275,9 +335,11 @@ export async function upsertCustomerOfferingFromOrderLine(
     productId: input.product.id,
     deletedAt: null,
   })
-  const templates = cloneCaseTemplatesSnapshot(
-    (input.product.caseTemplates ?? null) as CatalogProductCaseTemplate[] | null,
-  )
+  const templates = resolveCasePlanSnapshot({
+    lineCasePlan: input.casePlan ?? null,
+    productCaseTemplates: (input.product.caseTemplates ?? null) as CatalogProductCaseTemplate[] | null,
+    defaultStartsAt: input.subscriptionStartsAt ?? null,
+  })
   const now = new Date()
   const isSubscription = await isSubscriptionProduct(em, input.product.id)
   const startsAt = isSubscription
