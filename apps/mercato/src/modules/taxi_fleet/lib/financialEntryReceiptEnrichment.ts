@@ -96,6 +96,13 @@ export type FinancialEntryReceiptOcrExtras = {
   isDocumentDuplicate: boolean
   ocrStatus: string | null
   warnings: ReturnType<typeof parseDriverExpenseWarnings>
+  attachmentUrl: string | null
+  ocrSellerNip: string | null
+  ocrBuyerNip: string | null
+  ocrVatRatePercent: string | null
+  ocrGrossAmount: string | null
+  ocrDocumentNumber: string | null
+  resolvedCompanyId: string | null
 }
 
 export function buildFinancialEntryReceiptOcrExtras(
@@ -106,11 +113,19 @@ export function buildFinancialEntryReceiptOcrExtras(
     warnings: parseDriverExpenseWarnings(extraction?.warningsJson),
     ocrStatus: extraction?.status ?? null,
   })
+  const attachmentId = serialized.receiptAttachmentId
   return {
-    receiptAttachmentId: serialized.receiptAttachmentId,
+    receiptAttachmentId: attachmentId,
     isDocumentDuplicate: serialized.isDocumentDuplicate,
     ocrStatus: serialized.ocrStatus,
     warnings: serialized.warnings,
+    attachmentUrl: attachmentId ? `/api/attachments/file/${attachmentId}` : null,
+    ocrSellerNip: extraction?.ocrSellerNip ?? null,
+    ocrBuyerNip: extraction?.ocrBuyerNip ?? null,
+    ocrVatRatePercent: extraction?.ocrVatRatePercent ?? null,
+    ocrGrossAmount: extraction?.ocrGrossAmount ?? null,
+    ocrDocumentNumber: extraction?.ocrDocumentNumber ?? null,
+    resolvedCompanyId: extraction?.resolvedCompanyId ?? entry.customerCompanyId ?? null,
   }
 }
 
@@ -122,4 +137,11 @@ export function mergeReceiptOcrOntoListItem(
   item.isDocumentDuplicate = extras.isDocumentDuplicate
   item.ocrStatus = extras.ocrStatus
   item.warnings = extras.warnings
+  item.attachmentUrl = extras.attachmentUrl
+  item.ocrSellerNip = extras.ocrSellerNip
+  item.ocrBuyerNip = extras.ocrBuyerNip
+  item.ocrVatRatePercent = extras.ocrVatRatePercent
+  item.ocrGrossAmount = extras.ocrGrossAmount
+  item.ocrDocumentNumber = extras.ocrDocumentNumber
+  item.resolvedCompanyId = extras.resolvedCompanyId
 }

@@ -108,3 +108,15 @@ Vendor JSON items are normalized by `lib/platformSync/adapters/mapVendorTrip.ts`
 - Drivers must have matching `uberDriverId` / `boltDriverId` / `freeDriverId` on the profile.
 - Run history lives in the import dialog (**History**), not on the trips list page.
 
+## Receipt OCR (trips + expenses)
+
+- Partition: `taxi_fleet_driver_receipts`; entity: `taxi_fleet_receipt_extractions`
+- Driver upload: `POST /api/taxi_fleet/driver/attachments` → pending extraction
+- CRM expense upload: `POST /api/taxi_fleet/financial-entries/receipt` → same pipeline
+- Link on create/update: `linkReceiptExtractionToFinancialEntry` (also in `financial_entries` commands)
+- Trip OCR panel: `GET|POST /api/taxi_fleet/trips/[id]/receipt-extraction`
+- Expense OCR panel: `GET|POST /api/taxi_fleet/financial-entries/[id]/receipt-extraction`
+- Company from NIP: **buyer** when extraction has `tripId`; **seller (issuer)** for expense uploads
+- Driver PWA cost create: no VAT picker — VAT comes from OCR; operator corrects VAT in CRM expense dialog
+- Spec: `.ai/specs/2026-08-20-taxi-fleet-receipt-ocr.md`
+

@@ -401,10 +401,17 @@ export function SettlementCostsToReconcilePanel({
                                     costType: row.costType ?? null,
                                     tripId: row.tripId ?? null,
                                     amount: row.amount,
+                                    vatRatePercent: row.vatRatePercent ?? null,
                                     currencyCode: row.currencyCode ?? 'PLN',
                                     documentNumber: row.documentNumber ?? null,
                                     occurredAt: row.occurredAt ?? null,
                                     notes: row.notes ?? null,
+                                    receiptAttachmentId: row.receiptAttachmentId ?? null,
+                                    attachmentUrl: row.receiptAttachmentId
+                                      ? `/api/attachments/file/${row.receiptAttachmentId}`
+                                      : null,
+                                    ocrStatus: row.ocrStatus ?? null,
+                                    warnings: row.warnings ?? [],
                                   })
                                 }
                               >

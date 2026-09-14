@@ -203,13 +203,21 @@ const rowSchema = z.object({
   customerPersonId: z.string().uuid().nullable().optional(),
   customerCompanyId: z.string().uuid().nullable().optional(),
   amount: z.string(),
+  vatRatePercent: z.string().nullable().optional(),
   currencyCode: z.string(),
   documentNumber: z.string().nullable().optional(),
   occurredAt: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   receiptAttachmentId: z.string().uuid().nullable().optional(),
+  attachmentUrl: z.string().nullable().optional(),
   isDocumentDuplicate: z.boolean().optional(),
   ocrStatus: z.string().nullable().optional(),
+  ocrSellerNip: z.string().nullable().optional(),
+  ocrBuyerNip: z.string().nullable().optional(),
+  ocrVatRatePercent: z.string().nullable().optional(),
+  ocrGrossAmount: z.string().nullable().optional(),
+  ocrDocumentNumber: z.string().nullable().optional(),
+  resolvedCompanyId: z.string().uuid().nullable().optional(),
   warnings: z
     .array(
       z.object({

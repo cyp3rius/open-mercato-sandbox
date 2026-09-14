@@ -29,7 +29,7 @@ export type ReceiptOcrWarningCode = (typeof RECEIPT_OCR_WARNING_CODES)[number]
 
 export type ReceiptOcrWarning = {
   code: ReceiptOcrWarningCode
-  field?: 'documentNumber' | 'amount' | 'distanceKm' | 'buyerNip' | 'vatRatePercent' | 'occurredAt'
+  field?: 'documentNumber' | 'amount' | 'distanceKm' | 'buyerNip' | 'sellerNip' | 'vatRatePercent' | 'occurredAt'
   message?: string
   driverValue?: string | null
   ocrValue?: string | null

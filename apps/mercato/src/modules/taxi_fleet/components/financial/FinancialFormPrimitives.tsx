@@ -97,10 +97,16 @@ type FinancialAttachmentFieldProps = {
   recordId: string
   onChange: (attachmentId: string | null) => void
   disabled?: boolean
+  /** When true, upload via taxi_fleet receipt endpoint (starts OCR). */
+  enableOcr?: boolean
+  attachmentUrl?: string | null
 }
 
 type AttachmentUploadResponse = {
-  item?: { id?: string; fileName?: string }
+  item?: { id?: string; fileName?: string; url?: string }
+  id?: string
+  fileName?: string
+  url?: string
   error?: string
 }
 
@@ -113,6 +119,8 @@ export function FinancialAttachmentField({
   recordId,
   onChange,
   disabled,
+  enableOcr = false,
+  attachmentUrl = null,
 }: FinancialAttachmentFieldProps) {
   const t = useT()
   const fileRef = React.useRef<HTMLInputElement | null>(null)
@@ -141,31 +149,37 @@ export function FinancialAttachmentField({
     }
   }, [attachmentId, recordId, t])
 
+  const previewUrl = attachmentUrl || (attachmentId ? `/api/attachments/file/${attachmentId}` : null)
+
   const handleUpload = React.useCallback(
     async (file: File) => {
       setUploading(true)
       try {
         const form = new FormData()
-        form.set('entityId', TAXI_FLEET_FINANCIAL_ENTRY_ENTITY_ID)
         form.set('recordId', recordId)
         form.set('file', file)
+        if (!enableOcr) {
+          form.set('entityId', TAXI_FLEET_FINANCIAL_ENTRY_ENTITY_ID)
+        }
         const call = await apiCall<AttachmentUploadResponse>(
-          '/api/attachments',
+          enableOcr ? '/api/taxi_fleet/financial-entries/receipt' : '/api/attachments',
           { method: 'POST', body: form },
           { fallback: null },
         )
         if (!call.ok) {
           throw new Error(call.result?.error ?? t('taxi_fleet.financial.attachmentError', 'Could not upload attachment.'))
         }
-        const newId = typeof call.result?.item?.id === 'string' ? call.result.item.id : ''
+        const newId =
+          (typeof call.result?.item?.id === 'string' ? call.result.item.id : '') ||
+          (typeof call.result?.id === 'string' ? call.result.id : '')
         if (!newId) throw new Error(t('taxi_fleet.financial.attachmentError', 'Could not upload attachment.'))
         onChange(newId)
-        setFileName(call.result?.item?.fileName ?? file.name)
+        setFileName(call.result?.item?.fileName ?? call.result?.fileName ?? file.name)
       } finally {
         setUploading(false)
       }
     },
-    [onChange, recordId, t],
+    [enableOcr, onChange, recordId, t],
   )
 
   return (
@@ -184,18 +198,27 @@ export function FinancialAttachmentField({
       {attachmentId && fileName ? (
         <div className="flex items-center justify-between gap-2 rounded border px-3 py-2 text-sm">
           <span className="truncate">{fileName}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={disabled || uploading}
-            onClick={() => {
-              onChange(null)
-              setFileName(null)
-            }}
-          >
-            <X className="size-4" aria-hidden />
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            {previewUrl ? (
+              <Button type="button" variant="ghost" size="sm" asChild>
+                <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+                  {t('taxi_fleet.receiptOcr.openDocument', 'Open')}
+                </a>
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={disabled || uploading}
+              onClick={() => {
+                onChange(null)
+                setFileName(null)
+              }}
+            >
+              <X className="size-4" aria-hidden />
+            </Button>
+          </div>
         </div>
       ) : (
         <Button

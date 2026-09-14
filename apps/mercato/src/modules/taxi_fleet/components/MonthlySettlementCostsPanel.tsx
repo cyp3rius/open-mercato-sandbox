@@ -4,14 +4,20 @@ import * as React from 'react'
 import Link from 'next/link'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { formatDateTime } from '@open-mercato/shared/lib/time'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { CRUD_FORM_SELECT_CLASS, CRUD_FORM_TEXT_INPUT_CLASS } from '@open-mercato/ui/backend/CrudForm'
 import { TAXI_FLEET_BASE } from '../backend/taxi-fleet/paths'
 import type { MonthlySettlementCostLine } from '../lib/monthlySettlementSnapshot'
 import { useTaxiFleetLabels } from './useTaxiFleetLabels'
 import { MonthlySettlementWeeklyLink } from './MonthlySettlementWeeklyLink'
+import { DriverFinancialEntryDialog, type FinancialEntryRow } from './DriverFinancialEntryDialog'
 
 type MonthlySettlementCostsPanelProps = {
   costs: MonthlySettlementCostLine[]
+  teamMemberId: string
+  readOnly?: boolean
+  onEntrySaved?: () => void
 }
 
 function formatMoney(value: number, currency = 'PLN'): string {
@@ -19,11 +25,18 @@ function formatMoney(value: number, currency = 'PLN'): string {
   return `${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`
 }
 
-export function MonthlySettlementCostsPanel({ costs }: MonthlySettlementCostsPanelProps) {
+export function MonthlySettlementCostsPanel({
+  costs,
+  teamMemberId,
+  readOnly = false,
+  onEntrySaved,
+}: MonthlySettlementCostsPanelProps) {
   const t = useT()
   const { resolveCostTypeLabel } = useTaxiFleetLabels()
   const [search, setSearch] = React.useState('')
   const [typeFilter, setTypeFilter] = React.useState('all')
+  const [editEntry, setEditEntry] = React.useState<FinancialEntryRow | null>(null)
+  const [openingId, setOpeningId] = React.useState<string | null>(null)
 
   const typeOptions = React.useMemo(() => {
     return [...new Set(costs.map((row) => row.costType).filter((value): value is string => Boolean(value)))].sort()
@@ -67,6 +80,42 @@ export function MonthlySettlementCostsPanel({ costs }: MonthlySettlementCostsPan
     [filteredCosts],
   )
 
+  const openCost = React.useCallback(
+    async (row: MonthlySettlementCostLine) => {
+      setOpeningId(row.id)
+      try {
+        const params = new URLSearchParams({
+          page: '1',
+          pageSize: '1',
+          ids: row.id,
+          kind: 'expense',
+        })
+        const call = await apiCall<{ items: FinancialEntryRow[] }>(
+          `/api/taxi_fleet/financial-entries?${params}`,
+        )
+        const item = Array.isArray(call.result?.items) ? call.result.items[0] : null
+        if (!item?.id) {
+          flash(t('taxi_fleet.financial.loadError', 'Could not load cost entry.'), 'error')
+          return
+        }
+        setEditEntry({
+          ...item,
+          kind: 'expense',
+          vatRatePercent: item.vatRatePercent ?? row.vatRatePercent,
+          receiptAttachmentId: item.receiptAttachmentId ?? row.receiptAttachmentId,
+          attachmentUrl:
+            item.attachmentUrl ??
+            (item.receiptAttachmentId || row.receiptAttachmentId
+              ? `/api/attachments/file/${item.receiptAttachmentId ?? row.receiptAttachmentId}`
+              : null),
+        })
+      } finally {
+        setOpeningId(null)
+      }
+    },
+    [t],
+  )
+
   return (
     <section className="space-y-3 rounded-lg border bg-card px-4 py-3">
       <div>
@@ -76,7 +125,7 @@ export function MonthlySettlementCostsPanel({ costs }: MonthlySettlementCostsPan
         <p className="mt-1 text-sm text-muted-foreground">
           {t(
             'taxi_fleet.monthlySettlements.costs.hint',
-            'Driver expenses included in this calendar month.',
+            'Driver expenses included in this calendar month. Click a row to open the cost with OCR details.',
           )}
         </p>
       </div>
@@ -152,7 +201,14 @@ export function MonthlySettlementCostsPanel({ costs }: MonthlySettlementCostsPan
                 </thead>
                 <tbody>
                   {filteredCosts.map((row) => (
-                    <tr key={row.id}>
+                    <tr
+                      key={row.id}
+                      className="cursor-pointer hover:bg-muted/40"
+                      onClick={() => {
+                        if (openingId) return
+                        void openCost(row)
+                      }}
+                    >
                       <td className="px-3 py-2 whitespace-nowrap">
                         {row.occurredAt ? formatDateTime(row.occurredAt) : '—'}
                       </td>
@@ -162,7 +218,7 @@ export function MonthlySettlementCostsPanel({ costs }: MonthlySettlementCostsPan
                           : t('taxi_fleet.settlements.costs.unknown', 'Unknown')}
                       </td>
                       <td className="px-3 py-2">{row.documentNumber || '—'}</td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2" onClick={(event) => event.stopPropagation()}>
                         {row.tripId ? (
                           <Link
                             href={`${TAXI_FLEET_BASE}/trips/${encodeURIComponent(row.tripId)}`}
@@ -180,7 +236,7 @@ export function MonthlySettlementCostsPanel({ costs }: MonthlySettlementCostsPan
                       <td className="px-3 py-2 text-right tabular-nums">
                         {formatMoney(row.netAmount, row.currencyCode)}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2" onClick={(event) => event.stopPropagation()}>
                         <MonthlySettlementWeeklyLink
                           weeklySettlementId={row.weeklySettlementId}
                           weekStart={row.weekStart}
@@ -204,6 +260,21 @@ export function MonthlySettlementCostsPanel({ costs }: MonthlySettlementCostsPan
           )}
         </>
       )}
+
+      <DriverFinancialEntryDialog
+        open={Boolean(editEntry)}
+        onOpenChange={(open) => {
+          if (!open) setEditEntry(null)
+        }}
+        teamMemberId={teamMemberId}
+        mode="expense"
+        entry={editEntry}
+        readOnly={readOnly}
+        onSaved={() => {
+          setEditEntry(null)
+          onEntrySaved?.()
+        }}
+      />
     </section>
   )
 }

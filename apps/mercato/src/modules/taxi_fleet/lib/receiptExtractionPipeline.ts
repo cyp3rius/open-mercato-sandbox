@@ -370,7 +370,32 @@ export async function processReceiptExtraction(
       })
     }
 
-    if (fields.buyerNip?.trim()) {
+    // Trip/income receipts use buyer NIP; expense uploads (no trip link) use seller (issuer).
+    const preferSellerCompany = !row.tripId
+    if (preferSellerCompany && fields.sellerNip?.trim()) {
+      const ensuredSeller = await ensureCrmCompanyFromBuyerNipEm(em, {
+        tenantId: row.tenantId,
+        organizationId: row.organizationId,
+        buyerNip: fields.sellerNip,
+      })
+      const normalizedSeller = normalizeReceiptOcrNip(fields.sellerNip)
+      if (ensuredSeller.companyEntityId) {
+        resolvedCompanyId = ensuredSeller.companyEntityId
+        console.info('[taxi_fleet.receipt_ocr] CRM company resolved by NIP', {
+          extractionId,
+          companyEntityId: ensuredSeller.companyEntityId,
+          reusedExisting: ensuredSeller.reusedExisting,
+          nip: normalizedSeller,
+          nipRole: 'seller',
+        })
+      } else if (ensuredSeller.warningCode) {
+        warnings.push({
+          code: ensuredSeller.warningCode,
+          field: 'sellerNip',
+          ocrValue: normalizedSeller ?? fields.sellerNip,
+        })
+      }
+    } else if (fields.buyerNip?.trim()) {
       const ensured = await ensureCrmCompanyFromBuyerNipEm(em, {
         tenantId: row.tenantId,
         organizationId: row.organizationId,
@@ -385,6 +410,7 @@ export async function processReceiptExtraction(
           companyEntityId: ensured.companyEntityId,
           reusedExisting: ensured.reusedExisting,
           nip: normalizedBuyerNip,
+          nipRole: 'buyer',
         })
       } else if (ensured.warningCode) {
         warnings.push({
@@ -393,6 +419,10 @@ export async function processReceiptExtraction(
           ocrValue: normalizedBuyerNip ?? fields.buyerNip,
         })
       }
+    }
+
+    if (fields.buyerNip?.trim() && !normalizedBuyerNip) {
+      normalizedBuyerNip = normalizeReceiptOcrNip(fields.buyerNip)
     }
 
     let tripRevenue: number | null = null
@@ -766,13 +796,13 @@ export async function applyReceiptExtractionToLinkedRecords(
           }
         } else if (
           entry.customerCompanyId !== row.resolvedCompanyId &&
-          row.ocrBuyerNip &&
+          (row.ocrSellerNip || row.ocrBuyerNip) &&
           !deduped.some((w) => w.code === 'customer_nip_conflict')
         ) {
           deduped.push({
             code: 'customer_nip_conflict',
-            field: 'buyerNip',
-            ocrValue: row.ocrBuyerNip,
+            field: row.ocrSellerNip ? 'sellerNip' : 'buyerNip',
+            ocrValue: row.ocrSellerNip || row.ocrBuyerNip,
           })
         }
       }
@@ -931,7 +961,7 @@ export async function overwriteReceiptExtraction(
   return refreshed
 }
 
-export type ReceiptOcrApplyField = 'distance' | 'amount' | 'documentNumber'
+export type ReceiptOcrApplyField = 'distance' | 'amount' | 'documentNumber' | 'vatRatePercent'
 
 /**
  * One-click apply of an OCR value onto the linked trip (and income sync),
@@ -941,7 +971,7 @@ export async function applyReceiptOcrFieldToTrip(
   em: EntityManager,
   params: {
     extractionId: string
-    field: ReceiptOcrApplyField
+    field: Exclude<ReceiptOcrApplyField, 'vatRatePercent'>
     tenantId: string
     organizationId: string
   },
@@ -1061,3 +1091,88 @@ export async function applyReceiptOcrFieldToTrip(
   if (!refreshed) throw new Error('Receipt extraction not found')
   return refreshed
 }
+
+/**
+ * One-click apply of an OCR value onto a linked expense financial entry.
+ */
+export async function applyReceiptOcrFieldToFinancialEntry(
+  em: EntityManager,
+  params: {
+    extractionId: string
+    field: 'amount' | 'documentNumber' | 'vatRatePercent'
+    tenantId: string
+    organizationId: string
+  },
+): Promise<TaxiFleetReceiptExtraction> {
+  const row = await em.findOne(TaxiFleetReceiptExtraction, {
+    id: params.extractionId,
+    tenantId: params.tenantId,
+    organizationId: params.organizationId,
+    deletedAt: null,
+  })
+  if (!row) throw new Error('Receipt extraction not found')
+  if (!row.financialEntryId) {
+    throw new Error('Receipt extraction is not linked to a financial entry')
+  }
+
+  const entry = await em.findOne(TaxiFleetFinancialEntry, {
+    id: row.financialEntryId,
+    deletedAt: null,
+  })
+  if (!entry) throw new Error('Financial entry not found')
+
+  const previousWarnings = Array.isArray(row.warningsJson)
+    ? (row.warningsJson as ReceiptOcrWarning[])
+    : []
+  let warnings = [...previousWarnings]
+  const now = new Date()
+
+  if (params.field === 'documentNumber') {
+    const documentNumber =
+      row.ocrDocumentNumber?.trim() || row.appliedDocumentNumber?.trim() || null
+    if (!documentNumber) throw new Error('OCR document number is not available')
+    await applyReceiptExtractionToLinkedRecords(em, row.id, {
+      forceDocumentNumber: documentNumber,
+    })
+    const refreshed = await em.findOne(TaxiFleetReceiptExtraction, { id: row.id })
+    if (!refreshed) throw new Error('Receipt extraction not found')
+    return refreshed
+  }
+
+  if (params.field === 'amount') {
+    const ocrAmount =
+      row.ocrGrossAmount != null && Number.isFinite(Number(row.ocrGrossAmount))
+        ? Number(row.ocrGrossAmount)
+        : null
+    if (ocrAmount == null || ocrAmount <= 0) throw new Error('OCR amount is not available')
+    entry.amount = ocrAmount.toFixed(2)
+    entry.updatedAt = now
+    warnings = warnings.filter(
+      (w) => !(w.code === 'field_conflict' && w.field === 'amount'),
+    )
+  } else {
+    const ocrVat =
+      row.ocrVatRatePercent != null ? normalizeExpenseVatRatePercent(row.ocrVatRatePercent) : null
+    if (ocrVat == null) throw new Error('OCR VAT rate is not available')
+    entry.vatRatePercent = String(ocrVat)
+    entry.updatedAt = now
+    warnings = warnings.filter(
+      (w) => !(w.code === 'field_conflict' && w.field === 'vatRatePercent'),
+    )
+  }
+
+  row.warningsJson = toWarningRecords(warnings)
+  row.status = resolveFinalStatus({
+    documentNumber: row.appliedDocumentNumber ?? row.ocrDocumentNumber ?? null,
+    mergeNeedsReview: false,
+    warnings,
+  })
+  row.updatedAt = now
+  await em.flush()
+  await recalculateWeeklySettlementsForFinancialEntry(em, entry)
+
+  const refreshed = await em.findOne(TaxiFleetReceiptExtraction, { id: row.id })
+  if (!refreshed) throw new Error('Receipt extraction not found')
+  return refreshed
+}
+

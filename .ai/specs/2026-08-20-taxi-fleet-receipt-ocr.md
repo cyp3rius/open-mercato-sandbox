@@ -11,7 +11,9 @@
 - Kierowca **zawsze** dołącza zdjęcie/PDF paragonu (dla kursów wymagających income receipt). Numer dokumentu i kwota są **opcjonalne** w PWA.
 - Serwer robi structured OCR → zapis w osobnej encji `taxi_fleet_receipt_extractions` → uzupełnia / weryfikuje `financial_entry`.
 - Puste pola → OCR wpisuje wynik. Jeśli kierowca podał wartość i OCR zwróci inną → status `needs_review` (operator).
-- NIP nabywcy: lookup MF (`wl-api.mf.gov.pl`) jak w CRM; przy trafieniu → ensure company w CRM i podpięcie do kursu/wpisu; przy błędzie/braku → ostrzeżenie operatora.
+- NIP: lookup MF (`wl-api.mf.gov.pl`) jak w CRM; **kursy/income → NIP nabywcy (buyer)**; **koszty → NIP wystawcy (seller)** → ensure company w CRM; przy błędzie/braku → ostrzeżenie operatora.
+- CRM: upload załącznika kosztu też odpala OCR (`POST /api/taxi_fleet/financial-entries/receipt` + link przy create/update).
+- Driver PWA kosztów: **bez wyboru VAT** — stawka tylko z OCR; korekty VAT w CRM (szeroki modal).
 - Brak finalnego `documentNumber` **blokuje** akceptację tygodniowego rozliczenia.
 - Na każdym kursie: podgląd załącznika + wynik OCR + możliwość overwrite przez operatora.
 
@@ -384,6 +386,12 @@ None for draft approval.
 **Fully compliant** for implementation in `apps/mercato` taxi_fleet module.
 
 ## Changelog
+
+### 2026-09-14
+- CRM cost upload starts OCR (`financial-entries/receipt` + `[id]/receipt-extraction`).
+- Expense company ensure uses **seller (issuer) NIP**; trip/income keeps buyer.
+- Driver PWA expense form: VAT picker removed (VAT from OCR only).
+- Wide CRM expense modal: VAT correction, net, OCR panel, issuer company, document preview; wired from profile / weekly / monthly cost lists.
 
 ### 2026-09-13
 - High-confidence auto-apply (≥ 0.850): OCR overwrites document number, amount, distance, and client conflicts and drops those warnings; Polcard / non-receipt stays manual (`needs_review`).

@@ -1,6 +1,7 @@
-"use client"
+'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeDetail } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { CRUD_FORM_TEXT_INPUT_CLASS } from '@open-mercato/ui/backend/CrudForm'
@@ -11,9 +12,17 @@ import { createCrud, updateCrud } from '@open-mercato/ui/backend/utils/crud'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { parseNumericValue } from '@open-mercato/shared/lib/numeric'
 import { TripCustomerField } from './TripCustomerField'
+import { ExpenseReceiptOcrPanel } from './ExpenseReceiptOcrPanel'
 import { useTaxiFleetLabels } from './useTaxiFleetLabels'
 import { isoToDateOnlyValue, parseDateOnlyValue } from '../lib/datetimeLocal'
 import { readTripCustomerEntityId } from '../lib/customerLink'
+import {
+  EXPENSE_VAT_RATES,
+  expenseGrossToNet,
+  normalizeExpenseVatRatePercent,
+  type ExpenseVatRatePercent,
+} from '../lib/expenseVat'
+import type { DriverExpenseWarning } from '../lib/driverExpenses'
 import {
   DateInputField,
   FinancialAttachmentField,
@@ -40,11 +49,21 @@ export type FinancialEntryRow = {
   customerPersonId?: string | null
   customerCompanyId?: string | null
   amount: string
+  vatRatePercent?: string | number | null
   currencyCode: string
   documentNumber?: string | null
   occurredAt?: string | null
   receiptAttachmentId?: string | null
+  attachmentUrl?: string | null
   notes?: string | null
+  ocrStatus?: string | null
+  warnings?: DriverExpenseWarning[]
+  ocrSellerNip?: string | null
+  ocrBuyerNip?: string | null
+  ocrVatRatePercent?: string | null
+  ocrGrossAmount?: string | null
+  ocrDocumentNumber?: string | null
+  resolvedCompanyId?: string | null
 }
 
 type DriverFinancialEntryDialogProps = {
@@ -54,6 +73,7 @@ type DriverFinancialEntryDialogProps = {
   mode: 'income' | 'expense'
   entry?: FinancialEntryRow | null
   onSaved: () => void
+  readOnly?: boolean
 }
 
 type TripListItem = {
@@ -132,6 +152,7 @@ export function DriverFinancialEntryDialog({
   mode,
   entry = null,
   onSaved,
+  readOnly = false,
 }: DriverFinancialEntryDialogProps) {
   const t = useT()
   const { organizationId, tenantId } = useOrganizationScopeDetail()
@@ -143,6 +164,7 @@ export function DriverFinancialEntryDialog({
   const isEdit = Boolean(entry?.id)
   const kind = entry?.kind ?? mode
   const isIncomeCreate = kind === 'income' && !isEdit
+  const isExpense = kind === 'expense'
 
   const [incomeStep, setIncomeStep] = React.useState<1 | 2>(1)
   const [incomeDocumentType, setIncomeDocumentType] = React.useState<'receipt' | 'invoice'>('receipt')
@@ -150,10 +172,13 @@ export function DriverFinancialEntryDialog({
   const [tripId, setTripId] = React.useState<string | null>(null)
   const [customerEntityId, setCustomerEntityId] = React.useState('')
   const [amount, setAmount] = React.useState('')
+  const [vatRatePercent, setVatRatePercent] = React.useState<ExpenseVatRatePercent>(23)
   const [documentNumber, setDocumentNumber] = React.useState('')
   const [occurredAtDate, setOccurredAtDate] = React.useState('')
   const [notes, setNotes] = React.useState('')
   const [receiptAttachmentId, setReceiptAttachmentId] = React.useState<string | null>(null)
+  const [attachmentUrl, setAttachmentUrl] = React.useState<string | null>(null)
+  const [issuerCompanyId, setIssuerCompanyId] = React.useState<string | null>(null)
   const [isSaving, setIsSaving] = React.useState(false)
   const [isPrefilling, setIsPrefilling] = React.useState(false)
 
@@ -171,11 +196,23 @@ export function DriverFinancialEntryDialog({
       }) ?? '',
     )
     setAmount(entry?.amount ?? '')
+    setVatRatePercent(normalizeExpenseVatRatePercent(entry?.vatRatePercent))
     setDocumentNumber(entry?.documentNumber ?? '')
     setOccurredAtDate(entry?.occurredAt ? isoToDateOnlyValue(entry.occurredAt) : today)
     setNotes(entry?.notes ?? '')
     setReceiptAttachmentId(entry?.receiptAttachmentId ?? null)
+    setAttachmentUrl(
+      entry?.attachmentUrl ??
+        (entry?.receiptAttachmentId ? `/api/attachments/file/${entry.receiptAttachmentId}` : null),
+    )
+    setIssuerCompanyId(entry?.resolvedCompanyId ?? entry?.customerCompanyId ?? null)
   }, [entry, isIncomeCreate, open])
+
+  const netAmount = React.useMemo(() => {
+    const parsed = parseNumericValue(amount)
+    if (parsed == null || parsed <= 0) return null
+    return expenseGrossToNet(parsed, vatRatePercent)
+  }, [amount, vatRatePercent])
 
   const handleCancel = React.useCallback(() => {
     onOpenChange(false)
@@ -212,6 +249,7 @@ export function DriverFinancialEntryDialog({
   }, [applyTripPrefill, documentNumber, t, tripId])
 
   const handleSave = React.useCallback(async () => {
+    if (readOnly) return
     if (!organizationId || !tenantId) return
     const occurredAt = parseDateOnlyValue(occurredAtDate)
     const parsedAmount = parseNumericValue(amount)
@@ -240,7 +278,10 @@ export function DriverFinancialEntryDialog({
         costType: kind === 'expense' ? costType : null,
         tripId: tripId ?? null,
         customerEntityId: kind === 'income' ? customerEntityId.trim() || undefined : undefined,
+        customerCompanyId:
+          kind === 'expense' && issuerCompanyId ? issuerCompanyId : undefined,
         amount: parsedAmount,
+        vatRatePercent: kind === 'expense' ? vatRatePercent : undefined,
         currencyCode: 'PLN',
         documentNumber: documentNumber.trim(),
         occurredAt: occurredAt.toISOString(),
@@ -275,23 +316,26 @@ export function DriverFinancialEntryDialog({
     entry?.id,
     incomeDocumentType,
     isEdit,
+    issuerCompanyId,
     kind,
     notes,
     occurredAtDate,
     onOpenChange,
     onSaved,
     organizationId,
+    readOnly,
     receiptAttachmentId,
     t,
     teamMemberId,
     tenantId,
     tripId,
+    vatRatePercent,
   ])
 
   const handleDialogKeyDown = useTaxiFleetDialogShortcuts({
     contentRef: dialogContentRef,
     onCancel: handleCancel,
-    canSubmit: !isSaving && !isPrefilling,
+    canSubmit: !readOnly && !isSaving && !isPrefilling,
   })
 
   const title =
@@ -311,7 +355,7 @@ export function DriverFinancialEntryDialog({
         options={[]}
         fetchOptions={(query) => fetchDriverTripOptions(teamMemberId, query)}
         placeholder={t('taxi_fleet.financial.linkedTripPlaceholder', 'Optional trip…')}
-        disabled={isSaving || isPrefilling}
+        disabled={readOnly || isSaving || isPrefilling}
       />
     </FieldBlock>
   )
@@ -329,7 +373,7 @@ export function DriverFinancialEntryDialog({
           value={documentNumber}
           onChange={(event) => setDocumentNumber(event.target.value)}
           placeholder={t('taxi_fleet.financial.documentNumberIncome', 'Receipt or invoice number')}
-          disabled={isSaving}
+          disabled={readOnly || isSaving}
           className={CRUD_FORM_TEXT_INPUT_CLASS}
         />
       </FieldBlock>
@@ -343,7 +387,7 @@ export function DriverFinancialEntryDialog({
           id="financial-document-type"
           value={incomeDocumentType}
           onChange={(value) => setIncomeDocumentType(value as 'receipt' | 'invoice')}
-          disabled={isSaving}
+          disabled={readOnly || isSaving}
         >
           {TAXI_FLEET_INCOME_DOCUMENT_TYPES.map((type) => (
             <option key={type} value={type}>
@@ -357,7 +401,7 @@ export function DriverFinancialEntryDialog({
           id="financial-issue-date"
           value={occurredAtDate}
           onChange={setOccurredAtDate}
-          disabled={isSaving}
+          disabled={readOnly || isSaving}
         />
       </FieldBlock>
       <FieldBlock label={t('taxi_fleet.financial.documentNumber', 'Document number')} required htmlFor="financial-document-number-full">
@@ -366,81 +410,146 @@ export function DriverFinancialEntryDialog({
           type="text"
           value={documentNumber}
           onChange={(event) => setDocumentNumber(event.target.value)}
-          disabled={isSaving}
+          disabled={readOnly || isSaving}
           className={CRUD_FORM_TEXT_INPUT_CLASS}
         />
       </FieldBlock>
       {renderLinkedTripField(false)}
       <FieldBlock label={t('taxi_fleet.trips.customer', 'Customer')} required={!tripId} htmlFor="financial-customer">
-        <TripCustomerField value={customerEntityId} onChange={setCustomerEntityId} disabled={isSaving} />
+        <TripCustomerField value={customerEntityId} onChange={setCustomerEntityId} disabled={readOnly || isSaving} />
       </FieldBlock>
       <FieldBlock label={t('taxi_fleet.financial.finalPrice', 'Final price')} required htmlFor="financial-amount">
-        <MoneyInputField id="financial-amount" value={amount} onChange={setAmount} disabled={isSaving} />
+        <MoneyInputField id="financial-amount" value={amount} onChange={setAmount} disabled={readOnly || isSaving} />
       </FieldBlock>
       <FieldBlock label={t('taxi_fleet.financial.attachment', 'Attachment')}>
         <FinancialAttachmentField
           attachmentId={receiptAttachmentId}
           recordId={attachmentRecordId}
           onChange={setReceiptAttachmentId}
-          disabled={isSaving}
+          disabled={readOnly || isSaving}
         />
       </FieldBlock>
       <FieldBlock label={t('taxi_fleet.trips.notes', 'Notes')} htmlFor="financial-notes">
-        <NotesInputField id="financial-notes" value={notes} onChange={setNotes} disabled={isSaving} />
+        <NotesInputField id="financial-notes" value={notes} onChange={setNotes} disabled={readOnly || isSaving} />
       </FieldBlock>
     </div>
   )
 
   const renderExpenseForm = () => (
-    <div className="space-y-4">
-      <FieldBlock label={t('taxi_fleet.financial.costType', 'Cost type')} required htmlFor="financial-cost-type">
-        <SelectInputField
-          id="financial-cost-type"
-          value={costType}
-          onChange={setCostType}
-          disabled={isSaving}
-        >
-          {TAXI_FLEET_COST_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {resolveCostTypeLabel(type)}
-            </option>
-          ))}
-        </SelectInputField>
-      </FieldBlock>
-      <FieldBlock label={t('taxi_fleet.financial.occurredAt', 'Date')} required htmlFor="financial-expense-date">
-        <DateInputField
-          id="financial-expense-date"
-          value={occurredAtDate}
-          onChange={setOccurredAtDate}
-          disabled={isSaving}
+    <div className="grid gap-4 lg:grid-cols-2">
+      <div className="space-y-4">
+        <FieldBlock label={t('taxi_fleet.financial.costType', 'Cost type')} required htmlFor="financial-cost-type">
+          <SelectInputField
+            id="financial-cost-type"
+            value={costType}
+            onChange={setCostType}
+            disabled={readOnly || isSaving}
+          >
+            {TAXI_FLEET_COST_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {resolveCostTypeLabel(type)}
+              </option>
+            ))}
+          </SelectInputField>
+        </FieldBlock>
+        <FieldBlock label={t('taxi_fleet.financial.occurredAt', 'Date')} required htmlFor="financial-expense-date">
+          <DateInputField
+            id="financial-expense-date"
+            value={occurredAtDate}
+            onChange={setOccurredAtDate}
+            disabled={readOnly || isSaving}
+          />
+        </FieldBlock>
+        <FieldBlock label={t('taxi_fleet.financial.documentNumber', 'Document number')} required htmlFor="financial-expense-number">
+          <input
+            id="financial-expense-number"
+            type="text"
+            value={documentNumber}
+            onChange={(event) => setDocumentNumber(event.target.value)}
+            placeholder={t('taxi_fleet.financial.documentNumberExpense', 'Receipt number')}
+            disabled={readOnly || isSaving}
+            className={CRUD_FORM_TEXT_INPUT_CLASS}
+          />
+        </FieldBlock>
+        <FieldBlock label={t('taxi_fleet.financial.amountGross', 'Gross amount')} required htmlFor="financial-expense-amount">
+          <MoneyInputField id="financial-expense-amount" value={amount} onChange={setAmount} disabled={readOnly || isSaving} />
+        </FieldBlock>
+        <FieldBlock label={t('taxi_fleet.financial.vatRate', 'VAT rate')} required htmlFor="financial-expense-vat">
+          <SelectInputField
+            id="financial-expense-vat"
+            value={String(vatRatePercent)}
+            onChange={(value) => setVatRatePercent(normalizeExpenseVatRatePercent(value))}
+            disabled={readOnly || isSaving}
+          >
+            {EXPENSE_VAT_RATES.map((rate) => (
+              <option key={rate} value={rate}>
+                {rate}%
+              </option>
+            ))}
+          </SelectInputField>
+        </FieldBlock>
+        <FieldBlock label={t('taxi_fleet.financial.amountNet', 'Net amount')} htmlFor="financial-expense-net">
+          <input
+            id="financial-expense-net"
+            type="text"
+            readOnly
+            value={netAmount != null ? netAmount.toFixed(2) : '—'}
+            className={`${CRUD_FORM_TEXT_INPUT_CLASS} bg-muted/40 tabular-nums`}
+          />
+        </FieldBlock>
+        <FieldBlock label={t('taxi_fleet.financial.issuerCompany', 'Issuer company')}>
+          {issuerCompanyId ? (
+            <Link
+              href={`/backend/customers/companies/${encodeURIComponent(issuerCompanyId)}`}
+              className="text-sm text-primary hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t('taxi_fleet.financial.openIssuerCompany', 'Open company in CRM')}
+            </Link>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {t(
+                'taxi_fleet.financial.issuerCompanyEmpty',
+                'Company will be linked from the issuer NIP after OCR.',
+              )}
+            </p>
+          )}
+        </FieldBlock>
+        {renderLinkedTripField(false)}
+        <FieldBlock label={t('taxi_fleet.financial.attachment', 'Attachment')}>
+          <FinancialAttachmentField
+            attachmentId={receiptAttachmentId}
+            recordId={attachmentRecordId}
+            onChange={(nextId) => {
+              setReceiptAttachmentId(nextId)
+              setAttachmentUrl(nextId ? `/api/attachments/file/${nextId}` : null)
+            }}
+            disabled={readOnly || isSaving}
+            enableOcr
+            attachmentUrl={attachmentUrl}
+          />
+        </FieldBlock>
+        <FieldBlock label={t('taxi_fleet.trips.notes', 'Notes')} htmlFor="financial-expense-notes">
+          <NotesInputField id="financial-expense-notes" value={notes} onChange={setNotes} disabled={readOnly || isSaving} />
+        </FieldBlock>
+      </div>
+      <div className="space-y-4">
+        <ExpenseReceiptOcrPanel
+          entryId={entry?.id ?? null}
+          canManage={!readOnly}
+          onApplied={(ocrItem) => {
+            if (ocrItem.entryAmount) setAmount(String(ocrItem.entryAmount))
+            if (ocrItem.entryVatRatePercent != null) {
+              setVatRatePercent(normalizeExpenseVatRatePercent(ocrItem.entryVatRatePercent))
+            }
+            if (ocrItem.entryDocumentNumber) setDocumentNumber(ocrItem.entryDocumentNumber)
+            if (ocrItem.entryCustomerCompanyId) setIssuerCompanyId(ocrItem.entryCustomerCompanyId)
+            else if (ocrItem.resolvedCompanyId) setIssuerCompanyId(ocrItem.resolvedCompanyId)
+            if (ocrItem.attachmentUrl) setAttachmentUrl(ocrItem.attachmentUrl)
+          }}
         />
-      </FieldBlock>
-      <FieldBlock label={t('taxi_fleet.financial.documentNumber', 'Document number')} required htmlFor="financial-expense-number">
-        <input
-          id="financial-expense-number"
-          type="text"
-          value={documentNumber}
-          onChange={(event) => setDocumentNumber(event.target.value)}
-          placeholder={t('taxi_fleet.financial.documentNumberExpense', 'Receipt number')}
-          disabled={isSaving}
-          className={CRUD_FORM_TEXT_INPUT_CLASS}
-        />
-      </FieldBlock>
-      <FieldBlock label={t('taxi_fleet.financial.amount', 'Amount')} required htmlFor="financial-expense-amount">
-        <MoneyInputField id="financial-expense-amount" value={amount} onChange={setAmount} disabled={isSaving} />
-      </FieldBlock>
-      {renderLinkedTripField(false)}
-      <FieldBlock label={t('taxi_fleet.financial.attachment', 'Attachment')}>
-        <FinancialAttachmentField
-          attachmentId={receiptAttachmentId}
-          recordId={attachmentRecordId}
-          onChange={setReceiptAttachmentId}
-          disabled={isSaving}
-        />
-      </FieldBlock>
-      <FieldBlock label={t('taxi_fleet.trips.notes', 'Notes')} htmlFor="financial-expense-notes">
-        <NotesInputField id="financial-expense-notes" value={notes} onChange={setNotes} disabled={isSaving} />
-      </FieldBlock>
+      </div>
     </div>
   )
 
@@ -457,7 +566,7 @@ export function DriverFinancialEntryDialog({
         <Button type="button" variant="outline" onClick={handleCancel} disabled={isSaving}>
           {t('common.cancel', 'Cancel')}
         </Button>
-        <Button type="submit" disabled={isSaving || isPrefilling}>
+        <Button type="submit" disabled={readOnly || isSaving || isPrefilling}>
           {t('taxi_fleet.financial.actions.next', 'Continue')}
         </Button>
       </>
@@ -472,9 +581,11 @@ export function DriverFinancialEntryDialog({
             {t('common.cancel', 'Cancel')}
           </Button>
         )}
-        <Button type="submit" disabled={isSaving}>
-          {t('taxi_fleet.financial.form.submitSave', 'Save (⌘/Ctrl + Enter)')}
-        </Button>
+        {!readOnly ? (
+          <Button type="submit" disabled={isSaving}>
+            {t('taxi_fleet.financial.form.submitSave', 'Save (⌘/Ctrl + Enter)')}
+          </Button>
+        ) : null}
       </>
     )
 
@@ -483,12 +594,14 @@ export function DriverFinancialEntryDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={title}
+      size={isExpense ? '2xl' : 'lg'}
       contentRef={dialogContentRef}
       onKeyDown={handleDialogKeyDown}
     >
       <TaxiFleetDialogForm
         onSubmit={(event) => {
           event.preventDefault()
+          if (readOnly) return
           if (kind === 'income' && isIncomeCreate && incomeStep === 1) {
             void handleIncomeStepContinue()
             return

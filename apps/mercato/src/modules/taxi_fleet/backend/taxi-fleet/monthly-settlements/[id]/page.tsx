@@ -350,7 +350,14 @@ export default function TaxiFleetMonthlySettlementDetailPage({ params }: { param
                   </div>
                 ) : null}
                 {tab === 'trips' ? <MonthlySettlementTripsPanel trips={tripLines} /> : null}
-                {tab === 'costs' ? <MonthlySettlementCostsPanel costs={costLines} /> : null}
+                {tab === 'costs' ? (
+                  <MonthlySettlementCostsPanel
+                    costs={costLines}
+                    teamMemberId={row.teamMemberId}
+                    readOnly={readOnly}
+                    onEntrySaved={() => void load()}
+                  />
+                ) : null}
                 {tab === 'documents' ? (
                   <MonthlySettlementDocumentsPanel monthStart={row.monthStart} canManage={canManageSettlements} />
                 ) : null}

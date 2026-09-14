@@ -9,7 +9,6 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { DriverCostTypePicker } from '../../../../components/driverApp/DriverCostTypePicker'
 import { DriverDateTimeField } from '../../../../components/driverApp/DriverDateTimeField'
-import { DriverVatRatePicker } from '../../../../components/driverApp/DriverVatRatePicker'
 import { DriverReceiptFields } from '../../../../components/driverApp/DriverReceiptFields'
 import { DriverShell } from '../../../../components/driverApp/DriverShell'
 import {
@@ -20,7 +19,6 @@ import {
   driverSectionTitleClass,
 } from '../../../../components/driverApp/driverUi'
 import { type TaxiFleetCostType } from '../../../../lib/costTypes'
-import { DEFAULT_EXPENSE_VAT_RATE_PERCENT, type ExpenseVatRatePercent } from '../../../../lib/expenseVat'
 import {
   appendPendingExpenseToCache,
   enqueueDriverMutation,
@@ -45,7 +43,6 @@ export default function DriverExpenseCreatePage() {
   const t = useT()
   const router = useRouter()
   const [costType, setCostType] = React.useState<CostType>('fuel')
-  const [vatRatePercent, setVatRatePercent] = React.useState<ExpenseVatRatePercent>(DEFAULT_EXPENSE_VAT_RATE_PERCENT)
   const [amount, setAmount] = React.useState('')
   const [occurredAtLocal, setOccurredAtLocal] = React.useState(() => toDateTimeLocalValue(new Date()))
   const [notes, setNotes] = React.useState('')
@@ -70,7 +67,6 @@ export default function DriverExpenseCreatePage() {
 
     const payload = {
       costType,
-      vatRatePercent,
       amount: parsedAmount,
       currencyCode: 'PLN',
       documentNumber: documentNumber.trim() || null,
@@ -89,7 +85,7 @@ export default function DriverExpenseCreatePage() {
           kind: 'expense',
           costType,
           amount: parsedAmount !== null ? parsedAmount.toFixed(2) : '0.00',
-          vatRatePercent: String(vatRatePercent),
+          vatRatePercent: null,
           currencyCode: 'PLN',
           documentNumber: documentNumber.trim() || null,
           occurredAt: occurredAt.toISOString(),
@@ -108,7 +104,6 @@ export default function DriverExpenseCreatePage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           costType,
-          vatRatePercent,
           amount: parsedAmount,
           currencyCode: 'PLN',
           documentNumber: documentNumber.trim() || null,
@@ -139,7 +134,7 @@ export default function DriverExpenseCreatePage() {
           <p className={driverSectionDescClass}>
             {t(
               'taxi_fleet.driverApp.expenses.hint',
-              'Fuel and other costs are included in the weekly settlement. Amount is gross; VAT defaults to 23%.',
+              'Fuel and other costs are included in the weekly settlement. Amount is gross; VAT rate is read from the receipt.',
             )}
           </p>
         </div>
@@ -175,7 +170,12 @@ export default function DriverExpenseCreatePage() {
 
         <DriverCostTypePicker value={costType} disabled={busy} onChange={setCostType} />
 
-        <DriverVatRatePicker value={vatRatePercent} disabled={busy} onChange={setVatRatePercent} />
+        <p className={`${driverSectionDescClass} -mt-2`}>
+          {t(
+            'taxi_fleet.driverApp.expenses.vatFromOcrHint',
+            'VAT rate will be read automatically from the receipt photo.',
+          )}
+        </p>
 
         <div>
           <label htmlFor="expenseAmount" className={driverLabelClass}>

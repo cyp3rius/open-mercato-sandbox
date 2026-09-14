@@ -16,12 +16,35 @@ import {
   assertFinancialEntryDriver,
   resolveFinancialEntryCustomer,
 } from '../lib/financialEntryCustomer'
+import { linkReceiptExtractionToFinancialEntry } from '../lib/receiptExtractionPipeline'
 import {
   recalculateWeeklySettlementsForFinancialEntry,
   resolveFinancialEntryWeekStart,
 } from '../lib/settlementWeekScope'
 import { ensureOrganizationScope, ensureTenantScope, numericToString } from './shared'
 import { syncFinancialEntryDocumentDuplicates } from '../lib/documentDuplicates'
+
+async function linkReceiptIfPresent(
+  em: EntityManager,
+  params: {
+    tenantId: string
+    organizationId: string
+    financialEntryId: string
+    receiptAttachmentId?: string | null
+    documentNumber?: string | null
+    amount?: number | null
+  },
+): Promise<void> {
+  if (!params.receiptAttachmentId) return
+  await linkReceiptExtractionToFinancialEntry(em, {
+    attachmentId: params.receiptAttachmentId,
+    tenantId: params.tenantId,
+    organizationId: params.organizationId,
+    financialEntryId: params.financialEntryId,
+    driverDocumentNumber: params.documentNumber ?? null,
+    driverAmount: params.amount ?? null,
+  })
+}
 
 const createFinancialEntryCommand: CommandHandler<FinancialEntryCreateInput, { entryId: string }> = {
   id: 'taxi_fleet.financial_entries.create',
@@ -75,6 +98,14 @@ const createFinancialEntryCommand: CommandHandler<FinancialEntryCreateInput, { e
     await em.persistAndFlush(record)
     await syncFinancialEntryDocumentDuplicates(em, record)
     await recalculateWeeklySettlementsForFinancialEntry(em, record)
+    await linkReceiptIfPresent(em, {
+      tenantId: record.tenantId,
+      organizationId: record.organizationId,
+      financialEntryId: record.id,
+      receiptAttachmentId: record.receiptAttachmentId,
+      documentNumber: record.documentNumber,
+      amount: Number(record.amount),
+    })
     const eventBus = ctx.container.resolve('eventBus') as { emitEvent: (event: string, data: unknown) => Promise<void> }
     await eventBus.emitEvent('taxi_fleet.financial_entry.created', {
       id: record.id,
@@ -124,7 +155,7 @@ const updateFinancialEntryCommand: CommandHandler<FinancialEntryUpdateInput, { e
     if (parsed.costType !== undefined && row.kind === 'expense') {
       row.costType = parsed.costType
     }
-    if (parsed.tripId !== undefined || parsed.customerEntityId !== undefined) {
+    if (parsed.tripId !== undefined || parsed.customerEntityId !== undefined || parsed.customerCompanyId !== undefined) {
       row.tripId = customer.tripId
       row.customerPersonId = customer.customerPersonId
       row.customerCompanyId = customer.customerCompanyId
@@ -142,6 +173,16 @@ const updateFinancialEntryCommand: CommandHandler<FinancialEntryUpdateInput, { e
     await em.flush()
     await syncFinancialEntryDocumentDuplicates(em, row)
     await recalculateWeeklySettlementsForFinancialEntry(em, row, previousWeekStart)
+    if (parsed.receiptAttachmentId !== undefined) {
+      await linkReceiptIfPresent(em, {
+        tenantId: row.tenantId,
+        organizationId: row.organizationId,
+        financialEntryId: row.id,
+        receiptAttachmentId: row.receiptAttachmentId,
+        documentNumber: row.documentNumber,
+        amount: Number(row.amount),
+      })
+    }
     return { entryId: row.id }
   },
 }

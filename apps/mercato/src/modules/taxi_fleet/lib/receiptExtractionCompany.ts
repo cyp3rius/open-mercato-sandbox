@@ -220,8 +220,13 @@ export async function maybeEnsureCompanyForExtraction(params: {
   ctx?: CommandRuntimeContext
   extraction: TaxiFleetReceiptExtraction
 }): Promise<void> {
-  if (!params.extraction.ocrBuyerNip) return
   if (params.extraction.resolvedCompanyId) return
+
+  const preferSeller = !params.extraction.tripId
+  const nip = preferSeller
+    ? params.extraction.ocrSellerNip || params.extraction.ocrBuyerNip
+    : params.extraction.ocrBuyerNip
+  if (!nip) return
 
   const ensured =
     params.commandBus && params.ctx
@@ -231,12 +236,12 @@ export async function maybeEnsureCompanyForExtraction(params: {
           ctx: params.ctx,
           tenantId: params.extraction.tenantId,
           organizationId: params.extraction.organizationId,
-          buyerNip: params.extraction.ocrBuyerNip,
+          buyerNip: nip,
         })
       : await ensureCrmCompanyFromBuyerNipEm(params.em, {
           tenantId: params.extraction.tenantId,
           organizationId: params.extraction.organizationId,
-          buyerNip: params.extraction.ocrBuyerNip,
+          buyerNip: nip,
         })
 
   if (ensured.companyEntityId) {
@@ -253,8 +258,8 @@ export async function maybeEnsureCompanyForExtraction(params: {
   if (!warnings.some((w) => w?.code === ensured.warningCode)) {
     warnings.push({
       code: ensured.warningCode,
-      field: 'buyerNip',
-      ocrValue: params.extraction.ocrBuyerNip,
+      field: preferSeller && params.extraction.ocrSellerNip ? 'sellerNip' : 'buyerNip',
+      ocrValue: nip,
     })
     params.extraction.warningsJson = warnings as unknown as Record<string, unknown>[]
     params.extraction.status = 'needs_review'

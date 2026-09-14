@@ -1,4 +1,5 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { StaffTeamMember } from '@open-mercato/core/modules/staff/data/entities'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { GoogleAuth } from 'google-auth-library'
@@ -79,12 +80,32 @@ function buildEventSummary(trip: TaxiFleetTrip): string {
   return `Taxi trip (${normalizeTripStatus(trip.status)})`
 }
 
-function buildEventDescription(trip: TaxiFleetTrip): string {
+async function resolveTripDriverDisplayName(
+  em: EntityManager,
+  trip: TaxiFleetTrip,
+): Promise<string | null> {
+  if (!trip.teamMemberId) return null
+  const member = await findOneWithDecryption(
+    em,
+    StaffTeamMember,
+    { id: trip.teamMemberId, deletedAt: null },
+    undefined,
+    { tenantId: trip.tenantId, organizationId: trip.organizationId },
+  )
+  const displayName = member?.displayName?.trim()
+  return displayName?.length ? displayName : null
+}
+
+function buildEventDescription(
+  trip: TaxiFleetTrip,
+  options?: { driverName?: string | null },
+): string {
   const request = tripRequestDetailsFromMetadata(trip.metadata ?? null)
   const lines: string[] = [
     `Status: ${normalizeTripStatus(trip.status)}`,
     `Type: ${trip.tripType}`,
   ]
+  if (options?.driverName?.trim()) lines.push(`Driver: ${options.driverName.trim()}`)
   if (request.contactName) lines.push(`Contact: ${request.contactName}`)
   if (request.companyName) lines.push(`Company: ${request.companyName}`)
   if (request.contactPhone) lines.push(`Phone: ${request.contactPhone}`)
@@ -141,9 +162,10 @@ export async function syncTripGoogleCalendarEvent(
     const times = buildEventTimes(trip, calendar.defaultDurationMinutes, calendar.timezone || 'Europe/Warsaw')
     if (!times) return
 
+    const driverName = await resolveTripDriverDisplayName(em, trip)
     const body = {
       summary: buildEventSummary(trip),
-      description: buildEventDescription(trip),
+      description: buildEventDescription(trip, { driverName }),
       start: times.start,
       end: times.end,
     }
