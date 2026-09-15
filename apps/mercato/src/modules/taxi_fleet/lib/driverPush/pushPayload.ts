@@ -4,6 +4,7 @@ export type DriverPushKind =
   | 'assignment_planned'
   | 'settlement_ready'
   | 'monthly_settlement_ready'
+  | 'week_end_reminder'
   | 'driver_broadcast'
 
 export type DriverPushPayload = {
@@ -11,7 +12,8 @@ export type DriverPushPayload = {
   tripId?: string
   communicationId?: string
   recipientId?: string
-  url: string
+  /** Deep link; omit or empty for informational pushes with no click action. */
+  url?: string
   title: string
   body: string
   tag: string
@@ -31,6 +33,8 @@ export function preferenceTypeForPushKind(kind: DriverPushKind): string {
       return 'taxi_fleet.settlement.ready'
     case 'monthly_settlement_ready':
       return 'taxi_fleet.monthly_settlement.ready'
+    case 'week_end_reminder':
+      return 'taxi_fleet.week_end.reminder'
     case 'driver_broadcast':
       return 'taxi_fleet.driver_broadcast'
   }

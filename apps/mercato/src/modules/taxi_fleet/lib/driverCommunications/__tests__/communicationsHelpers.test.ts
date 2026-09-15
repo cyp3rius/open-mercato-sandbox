@@ -20,6 +20,7 @@ describe('driver communications helpers', () => {
     expect(preferenceTypeForPushKind('monthly_settlement_ready')).toBe(
       'taxi_fleet.monthly_settlement.ready',
     )
+    expect(preferenceTypeForPushKind('week_end_reminder')).toBe('taxi_fleet.week_end.reminder')
   })
 
   test('create schema enforces title/body limits and at least one recipient', () => {

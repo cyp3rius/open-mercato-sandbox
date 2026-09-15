@@ -32,12 +32,13 @@ Extends driver PWA Web Push beyond trips: shifts, settlements, and operator broa
 |-------|------|-----------------|--------|
 | `taxi_fleet.trip.assigned` | `trip_assigned` | `taxi_fleet.trip.assigned` | yes |
 | Reminder cron | `trip_reminder` | `taxi_fleet.trip.reminder` | yes |
+| Sunday 10:00 cron | `week_end_reminder` | `taxi_fleet.week_end.reminder` | yes |
 | `taxi_fleet.assignment.created` (!adHoc) | `assignment_planned` | `taxi_fleet.assignment.planned` | no |
 | `taxi_fleet.settlement.approved` | `settlement_ready` | `taxi_fleet.settlement.ready` | no |
 | `taxi_fleet.monthly_settlement.approved` | `monthly_settlement_ready` | `taxi_fleet.monthly_settlement.ready` | no |
 | CRM send/schedule | `driver_broadcast` | `taxi_fleet.driver_broadcast` | no |
 
-Deep links: trips `/driver/trips/{id}`, assignments `/driver/assignments`, weekly `/driver/settlements/{id}`, monthly `/driver/monthly-settlements/{id}`, broadcast → `/driver` + ack.
+Deep links: trips `/driver/trips/{id}`, assignments `/driver/assignments`, weekly `/driver/settlements/{id}`, monthly `/driver/monthly-settlements/{id}`, broadcast → `/driver` + ack. `week_end_reminder` has **no** click action (dismiss only).
 
 ## CRM communications
 

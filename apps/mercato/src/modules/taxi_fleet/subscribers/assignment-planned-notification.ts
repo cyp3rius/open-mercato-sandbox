@@ -7,6 +7,7 @@ import {
   buildDriverAssignmentPushUrl,
   buildDriverPushTag,
 } from '../lib/driverPush/pushPayload'
+import { formatPushDateOnlyLabel } from '../lib/driverPush/pushCopyFormat'
 import { sendDriverPushIfAllowed } from '../lib/driverPush/sendIfAllowed'
 
 export const metadata = {
@@ -71,16 +72,22 @@ export default async function handle(payload: AssignmentCreatedPayload, ctx: Res
   })
 
   try {
-    const { translate } = await resolveTranslations()
+    const { translate, locale } = await resolveTranslations()
+    const dateLabel = formatPushDateOnlyLabel(assignmentDate, locale)
     const title = translate(
       'taxi_fleet.driverApp.push.assignmentPlannedTitle',
-      'New shift planned: {assignmentDate}',
-      { assignmentDate },
+      'New shift planned',
     )
-    const body = translate(
-      'taxi_fleet.driverApp.push.assignmentPlannedBody',
-      'A new work assignment was scheduled for you. Tap to open.',
-    )
+    const body = dateLabel
+      ? translate(
+          'taxi_fleet.driverApp.push.assignmentPlannedBody',
+          'A new work assignment was scheduled for you - {assignmentDate}',
+          { assignmentDate: dateLabel },
+        )
+      : translate(
+          'taxi_fleet.driverApp.push.assignmentPlannedBodyNoDate',
+          'A new work assignment was scheduled for you.',
+        )
     await sendDriverPushIfAllowed(em, {
       tenantId: payload.tenantId,
       organizationId: payload.organizationId,

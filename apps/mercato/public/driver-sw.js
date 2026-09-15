@@ -1,5 +1,5 @@
 /* Driver PWA service worker — scoped to /driver */
-const CACHE = 'taxi-fleet-driver-v6'
+const CACHE = 'taxi-fleet-driver-v7'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting())
@@ -58,7 +58,7 @@ self.addEventListener('push', (event) => {
   let payload = {
     title: 'RS Moto Taxi',
     body: '',
-    url: '/driver',
+    url: null,
     tag: 'taxi_fleet:push',
     tripId: null,
     communicationId: null,
@@ -74,7 +74,7 @@ self.addEventListener('push', (event) => {
         url:
           typeof data.url === 'string' && data.url.startsWith('/driver')
             ? data.url
-            : payload.url,
+            : null,
         tag: typeof data.tag === 'string' && data.tag ? data.tag : payload.tag,
         tripId: typeof data.tripId === 'string' ? data.tripId : null,
         communicationId: typeof data.communicationId === 'string' ? data.communicationId : null,
@@ -108,6 +108,9 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const data = event.notification.data || {}
   const kind = typeof data.kind === 'string' ? data.kind : null
+  // Informational week-end reminder: dismiss only, no navigation.
+  if (kind === 'week_end_reminder') return
+
   const isBroadcast = kind === 'driver_broadcast'
   const targetPath = isBroadcast
     ? '/driver'

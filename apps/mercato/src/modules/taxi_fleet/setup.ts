@@ -5,6 +5,7 @@ import { syncTaxiVehicleCustomFieldScope } from './lib/vehicleResourceTypes'
 import { ensureTaxiFleetDriverReceiptsPartition } from './lib/receiptPartition'
 import { registerPlatformSyncSchedule } from './lib/platformSync/registerPlatformSyncSchedule'
 import { registerDriverPushReminderSchedule } from './lib/driverPush/registerDriverPushReminderSchedule'
+import { registerDriverWeekEndReminderSchedule } from './lib/driverPush/registerDriverWeekEndReminderSchedule'
 import { registerDriverCommunicationsSchedule } from './lib/driverCommunications/registerSchedule'
 
 const DRIVER_ROLE_NAME = 'driver'
@@ -39,6 +40,10 @@ export const setup: ModuleSetupConfig = {
       organizationId: ctx.organizationId,
     })
     await registerDriverPushReminderSchedule(ctx.container, {
+      tenantId: ctx.tenantId,
+      organizationId: ctx.organizationId,
+    })
+    await registerDriverWeekEndReminderSchedule(ctx.container, {
       tenantId: ctx.tenantId,
       organizationId: ctx.organizationId,
     })

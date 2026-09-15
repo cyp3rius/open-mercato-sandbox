@@ -6,6 +6,7 @@ import {
   buildDriverTripPushUrl,
   type DriverPushKind,
 } from './pushPayload'
+import { formatPushDateTimeLabel } from './pushCopyFormat'
 import { sendDriverPushIfAllowed } from './sendIfAllowed'
 
 const REMINDER_LEAD_MS = 60 * 60 * 1000
@@ -21,47 +22,39 @@ export function reminderWindowFor(now: Date = new Date()): { from: Date; to: Dat
 
 async function buildPushCopy(
   kind: DriverPushKind,
-  requestLabel: string,
+  whenLabel: string,
 ): Promise<{ title: string; body: string }> {
-  const { translate } = await resolveTranslations()
+  const { translate, locale } = await resolveTranslations()
   if (kind === 'trip_reminder') {
     return {
-      title: translate(
-        'taxi_fleet.driverApp.push.reminderTitle',
-        'Trip in 1 hour: {requestId}',
-        { requestId: requestLabel },
-      ),
+      title: translate('taxi_fleet.driverApp.push.reminderTitle', 'Trip in 1 hour'),
       body: translate(
         'taxi_fleet.driverApp.push.reminderBody',
-        'Your scheduled trip {requestId} starts in about one hour.',
-        { requestId: requestLabel },
+        'Your scheduled trip starts in about one hour.',
+      ),
+    }
+  }
+  if (whenLabel) {
+    return {
+      title: translate('taxi_fleet.driverApp.push.assignedTitle', 'New scheduled trip'),
+      body: translate(
+        'taxi_fleet.driverApp.push.assignedBody',
+        'A new trip was assigned to you - {when}. Check the details.',
+        { when: whenLabel },
       ),
     }
   }
   return {
-    title: translate(
-      'taxi_fleet.driverApp.push.assignedTitle',
-      'New scheduled trip: {requestId}',
-      { requestId: requestLabel },
-    ),
+    title: translate('taxi_fleet.driverApp.push.assignedTitle', 'New scheduled trip'),
     body: translate(
-      'taxi_fleet.driverApp.push.assignedBody',
-      'A new trip was assigned to you. Tap to open details.',
-      { requestId: requestLabel },
+      'taxi_fleet.driverApp.push.assignedBodyNoWhen',
+      'A new trip was assigned to you. Check the details.',
     ),
   }
 }
 
-function requestLabelFromTrip(trip: TaxiFleetTrip): string {
-  const metadata = trip.metadata
-  const tripRequest =
-    metadata && typeof metadata === 'object' && metadata !== null && 'tripRequest' in metadata
-      ? (metadata as { tripRequest?: { requestId?: unknown } }).tripRequest
-      : undefined
-  if (tripRequest && typeof tripRequest.requestId === 'string' && tripRequest.requestId.trim()) {
-    return tripRequest.requestId.trim()
-  }
-  return trip.id
+function whenLabelFromTrip(trip: TaxiFleetTrip, locale: string): string {
+  return formatPushDateTimeLabel(trip.startedAt, locale)
 }
 
 export async function sendDriverTripAssignedPush(
@@ -71,11 +64,26 @@ export async function sendDriverTripAssignedPush(
     tenantId: string
     organizationId: string
     teamMemberId: string
-    requestId?: string | null
+    startedAt?: Date | string | null
   },
 ): Promise<void> {
-  const requestLabel = params.requestId?.trim() || params.tripId
-  const copy = await buildPushCopy('trip_assigned', requestLabel)
+  const { locale } = await resolveTranslations()
+  let startedAt = params.startedAt ?? null
+  if (startedAt == null) {
+    const trip = await em.findOne(
+      TaxiFleetTrip,
+      {
+        id: params.tripId,
+        tenantId: params.tenantId,
+        organizationId: params.organizationId,
+        deletedAt: null,
+      },
+      { fields: ['id', 'startedAt'] },
+    )
+    startedAt = trip?.startedAt ?? null
+  }
+  const whenLabel = formatPushDateTimeLabel(startedAt, locale)
+  const copy = await buildPushCopy('trip_assigned', whenLabel)
   await sendDriverPushIfAllowed(em, {
     tenantId: params.tenantId,
     organizationId: params.organizationId,
@@ -111,8 +119,7 @@ export async function processDriverTripRemindersForOrg(
   let sent = 0
   for (const trip of trips) {
     if (!trip.teamMemberId || !trip.startedAt) continue
-    const requestLabel = requestLabelFromTrip(trip)
-    const copy = await buildPushCopy('trip_reminder', requestLabel)
+    const copy = await buildPushCopy('trip_reminder', whenLabelFromTrip(trip, 'pl'))
     const delivered = await sendDriverPushIfAllowed(em, {
       tenantId: trip.tenantId,
       organizationId: trip.organizationId,

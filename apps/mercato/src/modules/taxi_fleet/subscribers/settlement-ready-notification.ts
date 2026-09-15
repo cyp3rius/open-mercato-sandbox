@@ -9,6 +9,7 @@ import {
   buildDriverPushTag,
   buildDriverSettlementPushUrl,
 } from '../lib/driverPush/pushPayload'
+import { formatPushWeekRangeLabel } from '../lib/driverPush/pushCopyFormat'
 import { sendDriverPushIfAllowed } from '../lib/driverPush/sendIfAllowed'
 
 export const metadata = {
@@ -54,15 +55,16 @@ export default async function handle(payload: SettlementApprovedPayload, ctx: Re
   })
 
   try {
-    const { translate } = await resolveTranslations()
+    const { translate, locale } = await resolveTranslations()
+    const weekRange = formatPushWeekRangeLabel(weekStart, locale)
     const title = translate(
       'taxi_fleet.driverApp.push.settlementReadyTitle',
-      'Weekly settlement ready: {weekStart}',
-      { weekStart },
+      'Weekly settlement ready',
     )
     const body = translate(
       'taxi_fleet.driverApp.push.settlementReadyBody',
-      'Your weekly settlement was approved. Tap to review.',
+      'A new weekly settlement is available for {weekRange}',
+      { weekRange },
     )
     await sendDriverPushIfAllowed(em, {
       tenantId: payload.tenantId,

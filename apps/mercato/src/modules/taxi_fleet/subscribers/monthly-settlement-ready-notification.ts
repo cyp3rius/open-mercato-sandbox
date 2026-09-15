@@ -9,6 +9,7 @@ import {
   buildDriverMonthlySettlementPushUrl,
   buildDriverPushTag,
 } from '../lib/driverPush/pushPayload'
+import { formatPushMonthLabel } from '../lib/driverPush/pushCopyFormat'
 import { sendDriverPushIfAllowed } from '../lib/driverPush/sendIfAllowed'
 
 export const metadata = {
@@ -54,15 +55,16 @@ export default async function handle(payload: MonthlySettlementApprovedPayload, 
   })
 
   try {
-    const { translate } = await resolveTranslations()
+    const { translate, locale } = await resolveTranslations()
+    const monthLabel = formatPushMonthLabel(monthStart, locale)
     const title = translate(
       'taxi_fleet.driverApp.push.monthlySettlementReadyTitle',
-      'Monthly settlement ready: {monthStart}',
-      { monthStart },
+      'Monthly settlement ready',
     )
     const body = translate(
       'taxi_fleet.driverApp.push.monthlySettlementReadyBody',
-      'Your monthly settlement was approved. Tap to review.',
+      'A new monthly settlement is available for {monthLabel}',
+      { monthLabel },
     )
     await sendDriverPushIfAllowed(em, {
       tenantId: payload.tenantId,

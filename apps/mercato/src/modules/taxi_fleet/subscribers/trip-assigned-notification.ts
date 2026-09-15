@@ -60,7 +60,6 @@ export default async function handle(payload: TripAssignedPayload, ctx: Resolver
       tenantId: payload.tenantId,
       organizationId: payload.organizationId,
       teamMemberId: payload.teamMemberId,
-      requestId: payload.requestId,
     })
   } catch (error) {
     console.error('[taxi_fleet:trip-assigned-notification] web push failed', error)

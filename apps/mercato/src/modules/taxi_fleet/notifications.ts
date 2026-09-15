@@ -80,6 +80,23 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     expiresAfterHours: 24,
   },
   {
+    type: 'taxi_fleet.week_end.reminder',
+    module: 'taxi_fleet',
+    titleKey: 'taxi_fleet.notifications.week_end_reminder.title',
+    bodyKey: 'taxi_fleet.notifications.week_end_reminder.body',
+    icon: 'calendar',
+    severity: 'info',
+    userPreference: {
+      labelKey: 'taxi_fleet.notifications.preferences.week_end_reminder',
+      scopeFeature: 'taxi_fleet.driver',
+      audience: 'individual',
+      defaultEnabled: false,
+      pushChannel: { locked: true, defaultEnabled: true },
+    },
+    actions: [],
+    expiresAfterHours: 24,
+  },
+  {
     type: 'taxi_fleet.assignment.planned',
     module: 'taxi_fleet',
     titleKey: 'taxi_fleet.notifications.assignment_planned.title',
