@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { z } from "zod";
 import { Plus, Trash2 } from "lucide-react";
 import { useT } from "@open-mercato/shared/lib/i18n/context";
 import { Button } from "@open-mercato/ui/primitives/button";
@@ -10,13 +9,7 @@ import {
   CRUD_FORM_SELECT_CLASS,
   CRUD_FORM_TEXT_INPUT_CLASS,
 } from "@open-mercato/ui/backend/CrudForm";
-import { EntitySearchCombobox } from "@open-mercato/ui/backend/inputs/EntitySearchCombobox";
-import { mergeEntitySearchOption } from "@open-mercato/core/modules/procurement/lib/procurementEntitySearch";
-import {
-  remoteSearchPlaybooksForCase,
-  resolvePlaybookTitleVersion,
-} from "@open-mercato/core/modules/cases/lib/caseRelationsSearch";
-import { formatProcedurePlaybookLabel } from "@open-mercato/core/modules/cases/lib/formatProcedurePlaybookLabel";
+import { PlaybookSearchField } from "@open-mercato/core/modules/cases/components/PlaybookSearchField";
 import {
   createProductCaseTemplateDraft,
   type ProductCaseTemplateDraft,
@@ -36,67 +29,6 @@ type ProductCaseTemplatesEditorProps = {
   errors?: Record<string, string>;
   disabled?: boolean;
 };
-
-type PlaybookPickerProps = {
-  value: string | null;
-  onChange: (next: string | null) => void;
-  disabled?: boolean;
-};
-
-function PlaybookPicker({ value, onChange, disabled }: PlaybookPickerProps) {
-  const t = useT();
-  const playbookId = typeof value === "string" ? value : "";
-  const [playbookLabel, setPlaybookLabel] = React.useState("");
-
-  React.useEffect(() => {
-    let cancelled = false;
-    if (
-      !playbookId.trim().length ||
-      !z.string().uuid().safeParse(playbookId.trim()).success
-    ) {
-      setPlaybookLabel("");
-      return;
-    }
-    void resolvePlaybookTitleVersion(playbookId.trim()).then((row) => {
-      if (!cancelled) {
-        setPlaybookLabel(
-          row ? formatProcedurePlaybookLabel(row.title, row.version, t) : "",
-        );
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [playbookId, t]);
-
-  const resolvedMergeLabel = playbookLabel.trim().length
-    ? playbookLabel
-    : playbookId;
-
-  return (
-    <EntitySearchCombobox
-      value={playbookId}
-      onChange={(next) => onChange(next.trim().length ? next.trim() : null)}
-      options={mergeEntitySearchOption([], playbookId, resolvedMergeLabel)}
-      onRemoteSearch={async (query) => {
-        const rows = await remoteSearchPlaybooksForCase(query, (title, version) =>
-          formatProcedurePlaybookLabel(title, version ?? null, t),
-        );
-        return mergeEntitySearchOption(rows, playbookId, resolvedMergeLabel);
-      }}
-      placeholder={t(
-        "catalog.products.caseTemplates.playbookSearch",
-        "Search procedures…",
-      )}
-      disabled={disabled}
-      createInNewTabHref="/backend/playbooks/create"
-      createInNewTabAriaLabel={t(
-        "catalog.products.caseTemplates.openNewPlaybookTab",
-        "Open new procedure in a new tab",
-      )}
-    />
-  );
-}
 
 export function ProductCaseTemplatesEditor({
   value,
@@ -206,12 +138,20 @@ export function ProductCaseTemplatesEditor({
                   <label className="block text-sm font-medium">
                     {t("catalog.products.caseTemplates.playbook", "Procedure")}
                   </label>
-                  <PlaybookPicker
+                  <PlaybookSearchField
                     value={template.playbookId}
                     onChange={(next) =>
                       updateTemplate(template.id, { playbookId: next })
                     }
                     disabled={disabled}
+                    placeholder={t(
+                      "catalog.products.caseTemplates.playbookSearch",
+                      "Search procedures…",
+                    )}
+                    createInNewTabAriaLabel={t(
+                      "catalog.products.caseTemplates.openNewPlaybookTab",
+                      "Open new procedure in a new tab",
+                    )}
                   />
                 </div>
               </div>

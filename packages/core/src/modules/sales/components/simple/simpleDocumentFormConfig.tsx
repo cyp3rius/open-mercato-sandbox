@@ -742,9 +742,16 @@ function SimpleDocumentLinesTable({
     ? (value as SimpleDocumentLineDraft[])
     : [emptySimpleDocumentLine()]
   const productMetaRef = React.useRef<Map<string, { label: string; serviceLineCode: string | null }>>(new Map())
+  const linesRef = React.useRef(lines)
+  linesRef.current = lines
 
   const updateLine = (key: string, patch: Partial<SimpleDocumentLineDraft>) => {
-    setValue(lines.map((line) => (line.key === key ? { ...line, ...patch } : line)))
+    // Prefer latest lines from the ref so async patches (e.g. case-plan preload)
+    // do not overwrite a fresher product selection from a stale closure.
+    const current = linesRef.current
+    const next = current.map((line) => (line.key === key ? { ...line, ...patch } : line))
+    linesRef.current = next
+    setValue(next)
   }
 
   const totals = React.useMemo(() => {
@@ -813,7 +820,11 @@ function SimpleDocumentLinesTable({
                 showCasePlan={showCasePlan}
                 productMetaRef={productMetaRef}
                 onUpdate={(patch) => updateLine(line.key, patch)}
-                onRemove={() => setValue(lines.filter((entry) => entry.key !== line.key))}
+                onRemove={() => {
+                  const next = linesRef.current.filter((entry) => entry.key !== line.key)
+                  linesRef.current = next.length ? next : [emptySimpleDocumentLine()]
+                  setValue(linesRef.current)
+                }}
               />
             ))}
           </tbody>
@@ -911,17 +922,6 @@ function SimpleDocumentLineRow({
                       subscriptionEndsAt: '',
                     }),
               })
-              if (showCasePlan && nextIsSub && next.trim()) {
-                const selectedId = next.trim()
-                void fetchProductCaseTemplates(selectedId).then((templates) => {
-                  onUpdate({
-                    casePlanDrafts: draftsFromCasePlan(
-                      templates,
-                      line.subscriptionStartsAt,
-                    ),
-                  })
-                })
-              }
             }}
             options={mergeEntitySearchOption([], line.productId, line.productLabel || line.productId)}
             onRemoteSearch={async (q) => {

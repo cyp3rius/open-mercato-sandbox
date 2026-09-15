@@ -1758,6 +1758,7 @@
   "ui.forms.listbox.noMatches": "No matches",
   "ui.forms.listbox.searchPlaceholder": "Search...",
   "ui.forms.entitySearch.addInNewTab": "Add in a new tab",
+  "ui.forms.entitySearch.clear": "Clear selection",
   "ui.forms.entitySearch.empty": "No results.",
   "ui.forms.entitySearch.searchPlaceholder": "Search…",
   "ui.forms.loading": "Loading data…",

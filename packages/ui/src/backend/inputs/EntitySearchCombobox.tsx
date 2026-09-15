@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { Command } from 'cmdk'
-import { Check, ChevronDown, Plus } from 'lucide-react'
+import { Check, ChevronDown, Plus, X } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { cn } from '@open-mercato/shared/lib/utils'
 import { DictionaryAppearancePreview } from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
@@ -47,6 +47,11 @@ export type EntitySearchComboboxProps = {
   /** Shown on the trigger when `value` is set but the label is not yet in `options` (e.g. async title). */
   selectedDisplayOverride?: string
   resolveDisplayLabel?: (value: string) => string
+  /**
+   * When true (default), show a clear (X) control while a value is selected.
+   * Pass false for fields that must always keep a selection.
+   */
+  clearable?: boolean
   className?: string
 }
 
@@ -95,6 +100,7 @@ export function EntitySearchCombobox({
   createInNewTabChoices,
   selectedDisplayOverride,
   resolveDisplayLabel,
+  clearable = true,
   className,
 }: EntitySearchComboboxProps) {
   const t = useT()
@@ -112,6 +118,7 @@ export function EntitySearchCombobox({
   const addLabel =
     createInNewTabAriaLabel ?? t('ui.forms.entitySearch.addInNewTab', 'Add in a new tab')
   const chooseCreateLabel = t('ui.forms.entitySearch.chooseCreateType', 'Choose what to create')
+  const clearLabel = t('ui.forms.entitySearch.clear', 'Clear selection')
 
   const createChoices = React.useMemo(
     () => normalizeCreateChoices(createInNewTabChoices, createInNewTabHref),
@@ -165,6 +172,7 @@ export function EntitySearchCombobox({
   }, [])
 
   const showAdd = createChoices.length > 0 && !disabled
+  const showClear = clearable && Boolean(value) && !disabled
 
   const openCreateHref = React.useCallback((href: string) => {
     const next = href.trim()
@@ -177,108 +185,144 @@ export function EntitySearchCombobox({
     if (only) openCreateHref(only.href)
   }, [createChoices, openCreateHref])
 
+  const clearSelection = React.useCallback(() => {
+    onChange('')
+    setOpen(false)
+  }, [onChange])
+
   return (
     <div className={cn('flex min-w-0 items-center gap-1.5', className)}>
-      <Popover open={open} onOpenChange={handleOpenChange}>
-        <PopoverTrigger asChild>
-          <Button
+      <div
+        className={cn(
+          'flex h-9 min-w-0 flex-1 items-center rounded border border-input bg-transparent',
+          disabled && 'opacity-50',
+        )}
+      >
+        <Popover open={open} onOpenChange={handleOpenChange}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={disabled}
+              aria-expanded={open}
+              className={cn(
+                'h-full min-w-0 flex-1 justify-between rounded-none border-0 bg-transparent px-2 text-sm font-normal shadow-none hover:bg-muted/30 dark:hover:bg-muted/30',
+                !value && 'text-muted-foreground',
+              )}
+              data-crud-focus-target=""
+            >
+              <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                {value ? (
+                  <DictionaryAppearancePreview
+                    color={selectedOption?.color}
+                    icon={selectedOption?.icon}
+                    label={triggerLabel}
+                    className="min-w-0 flex-1"
+                    labelClassName="truncate"
+                  />
+                ) : (
+                  <span className="truncate">{placeholder ?? ''}</span>
+                )}
+              </span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[min(100vw-2rem,var(--radix-popover-trigger-width,24rem))] p-0" align="start">
+            <Command
+              shouldFilter={!isRemote}
+              className="flex min-h-0 max-h-[min(18rem,calc(100vh-6rem))] flex-col overflow-hidden rounded-md bg-popover text-popover-foreground"
+            >
+              <div className="shrink-0 border-b px-0">
+                <Command.Input
+                  placeholder={defaultSearchPh}
+                  value={query}
+                  onValueChange={setQuery}
+                  className="flex h-9 w-full border-0 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
+                />
+              </div>
+              <Command.List
+                className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1"
+                onWheel={(e) => e.stopPropagation()}
+                onTouchMove={(e) => e.stopPropagation()}
+              >
+                <Command.Empty
+                  className={cn(
+                    'px-3 py-2 text-center text-xs text-muted-foreground',
+                    remoteLoading && 'hidden',
+                  )}
+                >
+                  {defaultEmpty}
+                </Command.Empty>
+                <Command.Group>
+                  {remoteLoading ? (
+                    <Command.Item
+                      value="__entity_search_remote_loading__"
+                      disabled
+                      className="cursor-default px-3 py-2 text-xs text-muted-foreground opacity-100 aria-selected:bg-transparent data-disabled:opacity-100"
+                    >
+                      {t('common.loading', 'Loading…')}
+                    </Command.Item>
+                  ) : (
+                    rows.map((opt, index) => (
+                      <Command.Item
+                        key={opt.value ? opt.value : `empty-${index}`}
+                        value={`${opt.label} ${opt.value}`}
+                        onSelect={() => {
+                          onChange(opt.value)
+                          setOpen(false)
+                        }}
+                        className="flex cursor-pointer flex-col gap-0.5 rounded-sm px-2 py-1.5 text-sm aria-selected:bg-accent"
+                      >
+                        <div className="flex w-full min-w-0 flex-col gap-0.5">
+                          <div className="flex w-full min-w-0 items-center gap-2">
+                            <Check
+                              className={cn('size-4 shrink-0', value === opt.value ? 'opacity-100' : 'opacity-0')}
+                            />
+                            <DictionaryAppearancePreview
+                              color={opt.color}
+                              icon={opt.icon}
+                              label={opt.label}
+                              className="min-w-0 flex-1"
+                              labelClassName="truncate font-medium"
+                            />
+                          </div>
+                          {opt.description ? (
+                            <span className="pl-6 text-xs text-muted-foreground">{opt.description}</span>
+                          ) : null}
+                        </div>
+                      </Command.Item>
+                    ))
+                  )}
+                </Command.Group>
+              </Command.List>
+            </Command>
+          </PopoverContent>
+        </Popover>
+        {showClear ? (
+          <IconButton
             type="button"
             variant="ghost"
-            disabled={disabled}
-            aria-expanded={open}
-            className={cn(
-              'h-9 min-w-0 flex-1 justify-between rounded border border-input bg-transparent px-2 text-sm font-normal shadow-none hover:bg-muted/30 dark:hover:bg-muted/30',
-              !value && 'text-muted-foreground',
-            )}
-            data-crud-focus-target=""
+            size="xs"
+            className="size-7 shrink-0"
+            aria-label={clearLabel}
+            title={clearLabel}
+            onClick={clearSelection}
           >
-            <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
-              {value ? (
-                <DictionaryAppearancePreview
-                  color={selectedOption?.color}
-                  icon={selectedOption?.icon}
-                  label={triggerLabel}
-                  className="min-w-0 flex-1"
-                  labelClassName="truncate"
-                />
-              ) : (
-                <span className="truncate">{placeholder ?? ''}</span>
-              )}
-            </span>
-            <ChevronDown className="ml-1 size-4 shrink-0 opacity-60" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[min(100vw-2rem,var(--radix-popover-trigger-width,24rem))] p-0" align="start">
-          <Command
-            shouldFilter={!isRemote}
-            className="flex min-h-0 max-h-[min(18rem,calc(100vh-6rem))] flex-col overflow-hidden rounded-md bg-popover text-popover-foreground"
-          >
-            <div className="shrink-0 border-b px-0">
-              <Command.Input
-                placeholder={defaultSearchPh}
-                value={query}
-                onValueChange={setQuery}
-                className="flex h-9 w-full border-0 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
-              />
-            </div>
-            <Command.List
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1"
-              onWheel={(e) => e.stopPropagation()}
-              onTouchMove={(e) => e.stopPropagation()}
-            >
-              <Command.Empty
-                className={cn(
-                  'px-3 py-2 text-center text-xs text-muted-foreground',
-                  remoteLoading && 'hidden',
-                )}
-              >
-                {defaultEmpty}
-              </Command.Empty>
-              <Command.Group>
-                {remoteLoading ? (
-                  <Command.Item
-                    value="__entity_search_remote_loading__"
-                    disabled
-                    className="cursor-default px-3 py-2 text-xs text-muted-foreground opacity-100 aria-selected:bg-transparent data-disabled:opacity-100"
-                  >
-                    {t('common.loading', 'Loading…')}
-                  </Command.Item>
-                ) : (
-                  rows.map((opt, index) => (
-                    <Command.Item
-                      key={opt.value ? opt.value : `empty-${index}`}
-                      value={`${opt.label} ${opt.value}`}
-                      onSelect={() => {
-                        onChange(opt.value)
-                        setOpen(false)
-                      }}
-                      className="flex cursor-pointer flex-col gap-0.5 rounded-sm px-2 py-1.5 text-sm aria-selected:bg-accent"
-                    >
-                      <div className="flex w-full min-w-0 flex-col gap-0.5">
-                        <div className="flex w-full min-w-0 items-center gap-2">
-                          <Check
-                            className={cn('size-4 shrink-0', value === opt.value ? 'opacity-100' : 'opacity-0')}
-                          />
-                          <DictionaryAppearancePreview
-                            color={opt.color}
-                            icon={opt.icon}
-                            label={opt.label}
-                            className="min-w-0 flex-1"
-                            labelClassName="truncate font-medium"
-                          />
-                        </div>
-                        {opt.description ? (
-                          <span className="pl-6 text-xs text-muted-foreground">{opt.description}</span>
-                        ) : null}
-                      </div>
-                    </Command.Item>
-                  ))
-                )}
-              </Command.Group>
-            </Command.List>
-          </Command>
-        </PopoverContent>
-      </Popover>
+            <X className="size-3.5 opacity-70" />
+          </IconButton>
+        ) : null}
+        <IconButton
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="mr-1 size-7 shrink-0"
+          tabIndex={-1}
+          aria-hidden
+          disabled={disabled}
+          onClick={() => handleOpenChange(!open)}
+        >
+          <ChevronDown className="size-4 opacity-60" />
+        </IconButton>
+      </div>
       {showAdd ? (
         needsCreateChooser ? (
           <Popover open={createChooserOpen} onOpenChange={setCreateChooserOpen}>

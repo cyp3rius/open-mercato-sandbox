@@ -10,6 +10,7 @@ import {
   CRUD_FORM_TEXT_INPUT_CLASS,
 } from '@open-mercato/ui/backend/CrudForm'
 import type { CatalogProductCaseTemplate } from '@open-mercato/core/modules/catalog/data/types'
+import { PlaybookSearchField } from '@open-mercato/core/modules/cases/components/PlaybookSearchField'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 
 const RECURRENCE_UNITS = ['hours', 'days', 'weeks', 'months'] as const
@@ -231,18 +232,38 @@ export function OrderLineCasePlanEditor({
           className="rounded-md border border-border/60 p-3 space-y-3 bg-background"
         >
           <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 space-y-1">
-              <Label>
-                {t(`${i18nPrefix}.lines.casePlan.caseTitle`, 'Case title')}
-              </Label>
-              <input
-                className={CRUD_FORM_TEXT_INPUT_CLASS}
-                value={row.title}
-                disabled={disabled}
-                onChange={(event) =>
-                  updateRow(index, { title: event.target.value })
-                }
-              />
+            <div className="grid flex-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label>
+                  {t(`${i18nPrefix}.lines.casePlan.caseTitle`, 'Case title')}
+                </Label>
+                <input
+                  className={CRUD_FORM_TEXT_INPUT_CLASS}
+                  value={row.title}
+                  disabled={disabled}
+                  onChange={(event) =>
+                    updateRow(index, { title: event.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>
+                  {t(`${i18nPrefix}.lines.casePlan.playbook`, 'Procedure')}
+                </Label>
+                <PlaybookSearchField
+                  value={row.playbookId}
+                  onChange={(next) => updateRow(index, { playbookId: next })}
+                  disabled={disabled}
+                  placeholder={t(
+                    `${i18nPrefix}.lines.casePlan.playbookSearch`,
+                    'Search procedures…',
+                  )}
+                  createInNewTabAriaLabel={t(
+                    `${i18nPrefix}.lines.casePlan.openNewPlaybookTab`,
+                    'Open new procedure in a new tab',
+                  )}
+                />
+              </div>
             </div>
             <Button
               type="button"
