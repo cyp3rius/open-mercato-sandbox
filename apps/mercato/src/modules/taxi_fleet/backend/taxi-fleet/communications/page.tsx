@@ -67,6 +67,7 @@ export default function TaxiFleetCommunicationsPage() {
           { value: 'draft', label: t('taxi_fleet.communications.status.draft', 'Draft') },
           { value: 'scheduled', label: t('taxi_fleet.communications.status.scheduled', 'Scheduled') },
           { value: 'sending', label: t('taxi_fleet.communications.status.sending', 'Sending') },
+          { value: 'partial', label: t('taxi_fleet.communications.status.partial', 'Partial') },
           { value: 'sent', label: t('taxi_fleet.communications.status.sent', 'Sent') },
           { value: 'cancelled', label: t('taxi_fleet.communications.status.cancelled', 'Cancelled') },
         ],

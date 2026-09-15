@@ -9,6 +9,7 @@ import { loadTaxiFleetOrganizationSettings } from '../taxiFleetOrganizationSetti
 import { normalizeTripStatus } from '../tripStatuses'
 import { tripRequestDetailsFromMetadata } from '../tripRequestForm'
 import { scheduleAfterResponse } from '../scheduleAfterResponse'
+import { buildEventDescription } from './tripGoogleCalendarDescription'
 
 const GOOGLE_CALENDAR_EVENT_META_KEY = 'googleCalendarEventId'
 const CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar']
@@ -85,33 +86,16 @@ async function resolveTripDriverDisplayName(
   trip: TaxiFleetTrip,
 ): Promise<string | null> {
   if (!trip.teamMemberId) return null
+  // Match by tenant only — staff org can differ from the trip's organization.
   const member = await findOneWithDecryption(
     em,
     StaffTeamMember,
-    { id: trip.teamMemberId, deletedAt: null },
+    { id: trip.teamMemberId, tenantId: trip.tenantId, deletedAt: null },
     undefined,
     { tenantId: trip.tenantId, organizationId: trip.organizationId },
   )
   const displayName = member?.displayName?.trim()
   return displayName?.length ? displayName : null
-}
-
-function buildEventDescription(
-  trip: TaxiFleetTrip,
-  options?: { driverName?: string | null },
-): string {
-  const request = tripRequestDetailsFromMetadata(trip.metadata ?? null)
-  const lines: string[] = [
-    `Status: ${normalizeTripStatus(trip.status)}`,
-    `Type: ${trip.tripType}`,
-  ]
-  if (options?.driverName?.trim()) lines.push(`Driver: ${options.driverName.trim()}`)
-  if (request.contactName) lines.push(`Contact: ${request.contactName}`)
-  if (request.companyName) lines.push(`Company: ${request.companyName}`)
-  if (request.contactPhone) lines.push(`Phone: ${request.contactPhone}`)
-  if (trip.notes?.trim()) lines.push(`Notes: ${trip.notes.trim()}`)
-  lines.push(`Trip ID: ${trip.id}`)
-  return lines.join('\n')
 }
 
 export async function syncTripGoogleCalendarEvent(

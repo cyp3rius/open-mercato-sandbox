@@ -69,20 +69,29 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
   const [formKey, setFormKey] = React.useState(0)
   const [pendingAction, setPendingAction] = React.useState<TripDetailActionId | null>(null)
 
-  const load = React.useCallback(async () => {
+  const load = React.useCallback(async (opts?: { soft?: boolean }) => {
     if (!tripId) return
-    setLoading(true)
-    setError(null)
-    const call = await apiCall<{ items: TripRow[] }>(`/api/taxi_fleet/trips?ids=${encodeURIComponent(tripId)}`)
-    const item = call.result?.items?.[0] ?? null
-    if (!item) {
-      setError(t('taxi_fleet.trips.detail.notFound', 'Trip not found.'))
-      setRow(null)
-      setLoading(false)
-      return
+    if (!opts?.soft) {
+      setLoading(true)
+      setError(null)
     }
-    setRow(item)
-    setLoading(false)
+    try {
+      const call = await apiCall<{ items: TripRow[] }>(
+        `/api/taxi_fleet/trips?ids=${encodeURIComponent(tripId)}`,
+      )
+      const item = call.result?.items?.[0] ?? null
+      if (!item) {
+        setError(t('taxi_fleet.trips.detail.notFound', 'Trip not found.'))
+        setRow(null)
+        return
+      }
+      setRow(item)
+      setError(null)
+    } catch {
+      setError(t('taxi_fleet.trips.detail.loadFailed', 'Could not load trip.'))
+    } finally {
+      if (!opts?.soft) setLoading(false)
+    }
   }, [tripId, t])
 
   React.useEffect(() => {
@@ -150,14 +159,26 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
           'Internal trip authorized.',
         ),
       }
-      const call = await apiCall(pathByAction[action], { method: 'POST' })
-      setPendingAction(null)
-      if (call.ok) {
-        flash(successByAction[action], 'success')
-        void load()
-        setFormKey((value) => value + 1)
-      } else {
-        flash(t('taxi_fleet.errors.generic', 'Operation failed.'), 'error')
+      try {
+        const call = await apiCall<{ error?: string }>(pathByAction[action], { method: 'POST' })
+        if (call.ok) {
+          flash(successByAction[action], 'success')
+          await load({ soft: true })
+          setFormKey((value) => value + 1)
+        } else {
+          const message =
+            typeof call.result?.error === 'string' && call.result.error.trim()
+              ? call.result.error
+              : t('taxi_fleet.errors.generic', 'Operation failed.')
+          flash(message, 'error')
+        }
+      } catch (err) {
+        const message =
+          (err as { body?: { error?: string }; message?: string } | null)?.body?.error ||
+          (err as { message?: string } | null)?.message
+        flash(message || t('taxi_fleet.errors.generic', 'Operation failed.'), 'error')
+      } finally {
+        setPendingAction(null)
       }
     },
     [confirm, load, t, tripId],
@@ -289,10 +310,19 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
                 <TripReceiptOcrPanel
                   tripId={row.id}
                   canManage={canManageTrips}
-                  canReplaceReceipt={canManageTrips && lockMode !== 'full'}
+                  canReplaceReceipt={
+                    canManageTrips &&
+                    (canEditCompletedTrips ||
+                      normalizedStatus === 'completed' ||
+                      normalizedStatus === 'pending_authorization' ||
+                      normalizedStatus === 'paid' ||
+                      normalizedStatus === 'in_progress')
+                  }
                   onApplied={() => {
-                    setFormKey((value) => value + 1)
-                    void load()
+                    void (async () => {
+                      await load({ soft: true })
+                      setFormKey((value) => value + 1)
+                    })()
                   }}
                 />
               )

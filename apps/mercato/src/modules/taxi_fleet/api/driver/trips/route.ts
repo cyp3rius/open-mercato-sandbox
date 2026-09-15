@@ -559,8 +559,11 @@ export async function PUT(req: Request) {
     const isFinishing =
       (action === 'live_update' || action === 'complete') &&
       (nextStatus === 'completed' || nextStatus === 'pending_authorization')
+    // Full live/past finish payloads must include a receipt when required.
+    // Minimal `complete` (endedAt + status only) may finish first; receipt can be added after.
     if (
       isFinishing &&
+      action === 'live_update' &&
       tripTypeRequiresReceipt(nextTripType as TaxiFleetTripType) &&
       !receiptOnly &&
       !receiptAttachmentId &&

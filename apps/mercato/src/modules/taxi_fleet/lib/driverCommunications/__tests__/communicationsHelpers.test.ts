@@ -4,7 +4,11 @@ import {
   driverCommunicationCreateSchema,
 } from '../../../data/validators'
 import { preferenceTypeForPushKind } from '../../driverPush/pushPayload'
-import { urgencyForCommunicationKind } from '../deliver'
+import {
+  isRecipientDueForRetry,
+  resolveCommunicationStatusFromRecipients,
+  urgencyForCommunicationKind,
+} from '../deliver'
 
 describe('driver communications helpers', () => {
   test('urgency: info=normal, service/direct=high', () => {
@@ -54,6 +58,70 @@ describe('driver communications helpers', () => {
         teamMemberIds: [],
       }),
     ).toThrow()
+  })
+
+  test('resolveCommunicationStatusFromRecipients marks partial when any open', () => {
+    expect(
+      resolveCommunicationStatusFromRecipients([
+        { deliveryStatus: 'sent' },
+        { deliveryStatus: 'skipped' },
+      ]),
+    ).toBe('sent')
+    expect(
+      resolveCommunicationStatusFromRecipients([
+        { deliveryStatus: 'sent' },
+        { deliveryStatus: 'failed' },
+      ]),
+    ).toBe('partial')
+    expect(resolveCommunicationStatusFromRecipients([{ deliveryStatus: 'pending' }])).toBe(
+      'partial',
+    )
+  })
+
+  test('isRecipientDueForRetry respects backoff and max attempts', () => {
+    const now = new Date('2026-09-15T12:00:00.000Z')
+    expect(
+      isRecipientDueForRetry(
+        { deliveryStatus: 'failed', attemptCount: 1, lastAttemptAt: null },
+        now,
+      ),
+    ).toBe(true)
+    expect(
+      isRecipientDueForRetry(
+        {
+          deliveryStatus: 'failed',
+          attemptCount: 1,
+          lastAttemptAt: new Date('2026-09-15T11:59:30.000Z'),
+        },
+        now,
+      ),
+    ).toBe(false)
+    expect(
+      isRecipientDueForRetry(
+        {
+          deliveryStatus: 'failed',
+          attemptCount: 1,
+          lastAttemptAt: new Date('2026-09-15T11:58:00.000Z'),
+        },
+        now,
+      ),
+    ).toBe(true)
+    expect(
+      isRecipientDueForRetry(
+        {
+          deliveryStatus: 'failed',
+          attemptCount: 24,
+          lastAttemptAt: new Date('2026-09-01T00:00:00.000Z'),
+        },
+        now,
+      ),
+    ).toBe(false)
+    expect(
+      isRecipientDueForRetry(
+        { deliveryStatus: 'sent', attemptCount: 1, lastAttemptAt: null },
+        now,
+      ),
+    ).toBe(false)
   })
 
   test('adHoc assignment created payloads should be skipped by subscriber guard', () => {

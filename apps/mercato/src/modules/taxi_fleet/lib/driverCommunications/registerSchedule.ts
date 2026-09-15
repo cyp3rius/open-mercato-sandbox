@@ -36,7 +36,7 @@ export async function registerDriverCommunicationsSchedule(
   await scheduler.register({
     id: `taxi_fleet:${TAXI_FLEET_DRIVER_COMMUNICATIONS_QUEUE}:${scope.tenantId}:${scope.organizationId}`,
     name: 'Taxi fleet driver communications',
-    description: 'Every minute: send scheduled driver broadcast communications.',
+    description: 'Every minute: send due scheduled driver broadcasts and retry failed deliveries.',
     scopeType: 'organization',
     organizationId: scope.organizationId,
     tenantId: scope.tenantId,

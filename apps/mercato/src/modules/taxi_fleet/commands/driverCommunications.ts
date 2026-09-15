@@ -341,6 +341,16 @@ const retryRecipientCommand: CommandHandler<DriverCommunicationRetryRecipientInp
       })
     }
     await deliverCommunicationRecipient(em, communication, recipient)
+    const recipients = await em.find(TaxiFleetDriverCommunicationRecipient, {
+      communicationId: communication.id,
+    })
+    const hasOpen = recipients.some(
+      (row) => row.deliveryStatus === 'failed' || row.deliveryStatus === 'pending',
+    )
+    communication.status = hasOpen ? 'partial' : 'sent'
+    if (!communication.sentAt) communication.sentAt = new Date()
+    communication.updatedAt = new Date()
+    em.persist(communication)
     await em.flush()
     return { ok: true }
   },

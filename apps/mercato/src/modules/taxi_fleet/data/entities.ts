@@ -964,7 +964,7 @@ export class TaxiFleetDriverCommunication {
   body!: string
 
   @Property({ type: 'text', default: 'draft' })
-  status: 'draft' | 'scheduled' | 'sending' | 'sent' | 'cancelled' = 'draft'
+  status: 'draft' | 'scheduled' | 'sending' | 'sent' | 'partial' | 'cancelled' = 'draft'
 
   @Property({ name: 'scheduled_at', type: Date, nullable: true })
   scheduledAt?: Date | null

@@ -20,7 +20,6 @@ import {
 import { TAXI_FLEET_DRIVER_RECEIPTS_PARTITION } from '@/modules/taxi_fleet/lib/receiptPartition'
 import { TAXI_FLEET_FINANCIAL_ENTRY_ENTITY_ID } from '@/modules/taxi_fleet/lib/financialEntryEntity'
 import {
-  isCompletedTripStatus,
   tripDetailLockMode,
 } from '@/modules/taxi_fleet/lib/tripDetailWorkflow'
 import { normalizeTripStatus } from '@/modules/taxi_fleet/lib/tripStatuses'
@@ -82,20 +81,27 @@ export async function POST(req: Request, routeCtx: { params?: { id?: string } })
     if (!trip) throw new CrudHttpError(404, { error: 'Not found' })
 
     const allowEditCompleted = await actorMayEditCompletedTrip(context)
+    const normalized = normalizeTripStatus(trip.status)
     const lockMode = tripDetailLockMode(trip.status, { allowEditCompleted })
-    if (lockMode === 'full') {
+    const allowReceiptOnStatus =
+      normalized === 'completed' ||
+      normalized === 'pending_authorization' ||
+      normalized === 'paid' ||
+      normalized === 'in_progress'
+    if (!allowReceiptOnStatus) {
+      throw new CrudHttpError(409, {
+        error: translate(
+          'taxi_fleet.trips.errors.receiptRequiresCompleted',
+          'Attach a receipt only after the trip is in progress or completed.',
+        ),
+      })
+    }
+    // Completed trips are form-locked, but CRM may still attach/replace a receipt.
+    if (lockMode === 'full' && normalized !== 'completed' && normalized !== 'pending_authorization') {
       throw new CrudHttpError(409, {
         error: translate(
           'taxi_fleet.trips.errors.locked',
           'This trip is completed or cancelled and cannot be edited.',
-        ),
-      })
-    }
-    if (isCompletedTripStatus(trip.status) && !allowEditCompleted) {
-      throw new CrudHttpError(403, {
-        error: translate(
-          'taxi_fleet.trips.errors.editCompletedRequired',
-          'Editing a completed trip requires the edit-completed permission.',
         ),
       })
     }

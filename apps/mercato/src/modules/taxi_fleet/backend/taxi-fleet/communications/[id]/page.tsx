@@ -1,7 +1,7 @@
-"use client"
+'use client'
 
 import * as React from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -33,11 +33,14 @@ type Recipient = {
   attemptCount: number
 }
 
-export default function DriverCommunicationDetailPage() {
+export default function DriverCommunicationDetailPage({
+  params,
+}: {
+  params?: { id?: string }
+}) {
   const t = useT()
   const router = useRouter()
-  const params = useParams<{ id: string }>()
-  const id = params?.id
+  const id = params?.id ?? ''
   const scopeVersion = useOrganizationScopeVersion()
   const { resolveName } = useFleetDriverDirectory()
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
@@ -49,28 +52,40 @@ export default function DriverCommunicationDetailPage() {
   const [busy, setBusy] = React.useState(false)
 
   const load = React.useCallback(async () => {
-    if (!id) return
-    setIsLoading(true)
-    setError(null)
-    const [listCall, recipientsCall] = await Promise.all([
-      apiCall<{ items?: Communication[] }>(
-        `/api/taxi_fleet/driver-communications?ids=${encodeURIComponent(id)}&page=1&pageSize=1`,
-      ),
-      apiCall<{ items?: Recipient[] }>(
-        `/api/taxi_fleet/driver-communications/${encodeURIComponent(id)}/recipients`,
-      ),
-    ])
-    const item = Array.isArray(listCall.result?.items) ? listCall.result.items[0] : null
-    if (!item) {
+    if (!id) {
       setError(t('taxi_fleet.communications.detail.notFound', 'Communication not found.'))
       setRow(null)
       setRecipients([])
       setIsLoading(false)
       return
     }
-    setRow(item)
-    setRecipients(Array.isArray(recipientsCall.result?.items) ? recipientsCall.result.items : [])
-    setIsLoading(false)
+    setIsLoading(true)
+    setError(null)
+    try {
+      const [listCall, recipientsCall] = await Promise.all([
+        apiCall<{ items?: Communication[] }>(
+          `/api/taxi_fleet/driver-communications?ids=${encodeURIComponent(id)}&page=1&pageSize=1`,
+        ),
+        apiCall<{ items?: Recipient[] }>(
+          `/api/taxi_fleet/driver-communications/${encodeURIComponent(id)}/recipients`,
+        ),
+      ])
+      const item = Array.isArray(listCall.result?.items) ? listCall.result.items[0] : null
+      if (!item) {
+        setError(t('taxi_fleet.communications.detail.notFound', 'Communication not found.'))
+        setRow(null)
+        setRecipients([])
+        return
+      }
+      setRow(item)
+      setRecipients(Array.isArray(recipientsCall.result?.items) ? recipientsCall.result.items : [])
+    } catch {
+      setError(t('taxi_fleet.communications.detail.loadFailed', 'Could not load communication.'))
+      setRow(null)
+      setRecipients([])
+    } finally {
+      setIsLoading(false)
+    }
   }, [id, t])
 
   React.useEffect(() => {
@@ -125,7 +140,7 @@ export default function DriverCommunicationDetailPage() {
     )
   }
 
-  const canSend = row.status === 'draft' || row.status === 'scheduled'
+  const canSend = row.status === 'draft' || row.status === 'scheduled' || row.status === 'partial'
   const canCancel = row.status === 'draft' || row.status === 'scheduled'
 
   return (
@@ -158,12 +173,16 @@ export default function DriverCommunicationDetailPage() {
                 onClick={() =>
                   void runAction(
                     `/api/taxi_fleet/driver-communications/${encodeURIComponent(row.id)}/send`,
-                    'taxi_fleet.communications.detail.sendSuccess',
-                    'Message sent.',
+                    row.status === 'partial'
+                      ? 'taxi_fleet.communications.detail.retryAllSuccess'
+                      : 'taxi_fleet.communications.detail.sendSuccess',
+                    row.status === 'partial' ? 'Retry queued for failed recipients.' : 'Message sent.',
                   )
                 }
               >
-                {t('taxi_fleet.communications.detail.sendNow', 'Send now')}
+                {row.status === 'partial'
+                  ? t('taxi_fleet.communications.detail.retryAll', 'Retry failed')
+                  : t('taxi_fleet.communications.detail.sendNow', 'Send now')}
               </Button>
             ) : null}
             {canCancel ? (
@@ -235,6 +254,11 @@ export default function DriverCommunicationDetailPage() {
                         `taxi_fleet.communications.delivery.${recipient.deliveryStatus}`,
                         recipient.deliveryStatus,
                       )}
+                      {recipient.attemptCount > 0
+                        ? ` · ${t('taxi_fleet.communications.detail.attempts', '{count} attempts', {
+                            count: recipient.attemptCount,
+                          })}`
+                        : ''}
                       {recipient.readAt
                         ? ` · ${t('taxi_fleet.communications.detail.readAt', 'Read')} ${new Date(recipient.readAt).toLocaleString()}`
                         : ''}

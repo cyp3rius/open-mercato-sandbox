@@ -569,6 +569,9 @@ const completeTripCommand: CommandHandler<{ id: string }, { tripId: string }> = 
       tripType: row.tripType,
       requestedStatus: 'completed',
     })
+    const now = new Date()
+    if (!row.startedAt) row.startedAt = now
+    if (!row.endedAt) row.endedAt = now
     await applyTripStatusChange(ctx, row, nextStatus)
     await em.flush()
     await recalculateWeeklySettlementsForTrip(em, row)

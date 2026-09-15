@@ -53,7 +53,7 @@ export async function sendDriverWebPush(
         },
         body,
         {
-          TTL: 60 * 60,
+          TTL: 60 * 60 * 24,
           urgency: params.payload.urgency === 'normal' ? 'normal' : 'high',
           topic,
         },
