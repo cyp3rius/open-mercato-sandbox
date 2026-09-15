@@ -10,6 +10,11 @@ export const features = [
   { id: 'taxi_fleet.trips.inject', title: 'Inject trips from external channels', module: 'taxi_fleet' },
   { id: 'taxi_fleet.manage_settlements', title: 'Manage weekly settlements', module: 'taxi_fleet' },
   { id: 'taxi_fleet.manage_platform_sync', title: 'Sync platform trips (Bolt/Uber/Free)', module: 'taxi_fleet' },
+  {
+    id: 'taxi_fleet.manage_driver_communications',
+    title: 'Manage driver communications (broadcasts)',
+    module: 'taxi_fleet',
+  },
   { id: 'taxi_fleet.settings.manage', title: 'Manage taxi fleet module settings', module: 'taxi_fleet' },
   { id: 'taxi_fleet.driver', title: 'Driver mobile app API', module: 'taxi_fleet' },
   {

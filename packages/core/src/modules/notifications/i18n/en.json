@@ -84,6 +84,7 @@
   "notifications.preferences.audience.global": "Global",
   "notifications.preferences.audience.individual": "Individual",
   "notifications.preferences.lockedByRole": "Required by role",
+  "notifications.preferences.channel.push": "Push",
   "notifications.preferences.save": "Save preferences",
   "notifications.preferences.saving": "Saving...",
   "notifications.preferences.success": "Notification preferences saved.",

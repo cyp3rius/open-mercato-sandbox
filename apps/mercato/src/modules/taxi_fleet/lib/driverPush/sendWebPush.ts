@@ -51,7 +51,7 @@ export async function sendDriverWebPush(
         body,
         {
           TTL: 60 * 60,
-          urgency: 'high',
+          urgency: params.payload.urgency === 'normal' ? 'normal' : 'high',
           topic: params.payload.tag.slice(0, 32),
         },
       )

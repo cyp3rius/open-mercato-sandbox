@@ -913,3 +913,58 @@ export type VehicleMonthlySettlementGenerateInput = z.infer<typeof vehicleMonthl
 export type VehicleMonthlySettlementUpdateInput = z.infer<typeof vehicleMonthlySettlementUpdateSchema>
 export type VehicleMonthlySettlementDeleteInput = z.infer<typeof vehicleMonthlySettlementDeleteSchema>
 export type VehicleMonthlySettlementSyncBpInput = z.infer<typeof vehicleMonthlySettlementSyncBpSchema>
+
+export const driverCommunicationKindSchema = z.enum(['info', 'service', 'direct'])
+export const driverCommunicationStatusSchema = z.enum([
+  'draft',
+  'scheduled',
+  'sending',
+  'sent',
+  'cancelled',
+])
+
+export const DRIVER_COMMUNICATION_TITLE_MAX = 80
+export const DRIVER_COMMUNICATION_BODY_MAX = 180
+
+export const driverCommunicationCreateSchema = z.object({
+  tenantId: uuid,
+  organizationId: uuid,
+  kind: driverCommunicationKindSchema.default('info'),
+  title: z.string().trim().min(1).max(DRIVER_COMMUNICATION_TITLE_MAX),
+  body: z.string().trim().min(1).max(DRIVER_COMMUNICATION_BODY_MAX),
+  teamMemberIds: z.array(uuid).min(1).max(200),
+  sendNow: z.boolean().optional(),
+  scheduledAt: z.string().datetime({ offset: true }).optional().nullable(),
+})
+
+export const driverCommunicationUpdateSchema = z.object({
+  id: uuid,
+  kind: driverCommunicationKindSchema.optional(),
+  title: z.string().trim().min(1).max(DRIVER_COMMUNICATION_TITLE_MAX).optional(),
+  body: z.string().trim().min(1).max(DRIVER_COMMUNICATION_BODY_MAX).optional(),
+  teamMemberIds: z.array(uuid).min(1).max(200).optional(),
+})
+
+export const driverCommunicationDeleteSchema = z.object({ id: uuid })
+export const driverCommunicationSendSchema = z.object({ id: uuid })
+export const driverCommunicationScheduleSchema = z.object({
+  id: uuid,
+  scheduledAt: z.string().datetime({ offset: true }),
+})
+export const driverCommunicationCancelSchema = z.object({ id: uuid })
+export const driverCommunicationRetryRecipientSchema = z.object({
+  communicationId: uuid,
+  recipientId: uuid,
+})
+export const driverCommunicationAckSchema = z.object({
+  recipientId: uuid,
+})
+
+export type DriverCommunicationCreateInput = z.infer<typeof driverCommunicationCreateSchema>
+export type DriverCommunicationUpdateInput = z.infer<typeof driverCommunicationUpdateSchema>
+export type DriverCommunicationDeleteInput = z.infer<typeof driverCommunicationDeleteSchema>
+export type DriverCommunicationSendInput = z.infer<typeof driverCommunicationSendSchema>
+export type DriverCommunicationScheduleInput = z.infer<typeof driverCommunicationScheduleSchema>
+export type DriverCommunicationCancelInput = z.infer<typeof driverCommunicationCancelSchema>
+export type DriverCommunicationRetryRecipientInput = z.infer<typeof driverCommunicationRetryRecipientSchema>
+export type DriverCommunicationAckInput = z.infer<typeof driverCommunicationAckSchema>

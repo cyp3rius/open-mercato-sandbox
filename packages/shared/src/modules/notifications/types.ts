@@ -57,6 +57,13 @@ export type NotificationRendererProps = {
 
 export type NotificationPreferenceAudience = 'global' | 'individual'
 
+export type NotificationPushChannelPreference = {
+  /** Default when user has no stored push preference. Defaults to true. */
+  defaultEnabled?: boolean
+  /** When true, push cannot be disabled in UI and always delivers. */
+  locked?: boolean
+}
+
 export type NotificationUserPreferenceDefinition = {
   labelKey: string
   scopeFeature: string
@@ -68,6 +75,8 @@ export type NotificationUserPreferenceDefinition = {
    * Modules that declare both `global` and `individual` preferences render subsections.
    */
   audience?: NotificationPreferenceAudience
+  /** When set, this type participates in driver/OS Web Push preference UI. */
+  pushChannel?: NotificationPushChannelPreference
 }
 
 export type NotificationTypeDefinition = {

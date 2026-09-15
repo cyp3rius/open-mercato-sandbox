@@ -94,6 +94,9 @@ const createAssignmentCommand: CommandHandler<AssignmentCreateInput, { assignmen
       id: record.id,
       tenantId: record.tenantId,
       organizationId: record.organizationId,
+      teamMemberId: record.teamMemberId,
+      assignmentDate: record.assignmentDate,
+      adHoc: false,
     })
     return { assignmentId: record.id }
   },

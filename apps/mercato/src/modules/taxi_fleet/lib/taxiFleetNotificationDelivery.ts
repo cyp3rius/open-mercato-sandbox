@@ -144,7 +144,7 @@ export function buildTripLink(tripId: string): string {
 }
 
 export function buildSettlementLink(settlementId: string): string {
-  return `/backend/taxi-fleet/settlements/${encodeURIComponent(settlementId)}`
+  return `/driver/settlements/${encodeURIComponent(settlementId)}`
 }
 
 export function buildMonthlySettlementDriverLink(settlementId: string): string {

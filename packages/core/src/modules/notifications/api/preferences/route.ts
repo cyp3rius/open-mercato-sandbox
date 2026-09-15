@@ -8,6 +8,7 @@ import { saveNotificationPreferencesSchema } from '../../data/preferenceValidato
 import {
   buildNotificationPreferenceGroups,
   getRoleGrantedFeaturesForUser,
+  getStoredPreferenceChannelMap,
   getStoredPreferenceMap,
   saveNotificationPreferences,
 } from '../../lib/notificationPreferenceService'
@@ -43,17 +44,24 @@ export async function GET(req: Request) {
   const rbac = ctx.container.resolve('rbacService') as RbacService
   const knex = getKnex(em)
 
-  const [acl, roleFeatures, storedPreferences, modules] = await Promise.all([
+  const [acl, roleFeatures, storedPreferences, channelMap, modules] = await Promise.all([
     rbac.loadAcl(userId, { tenantId, organizationId: ctx.selectedOrganizationId ?? null }),
     getRoleGrantedFeaturesForUser(knex, userId, tenantId),
     getStoredPreferenceMap(em, userId, tenantId),
+    getStoredPreferenceChannelMap(em, userId, tenantId),
     loadFeatureCatalog(),
   ])
+
+  const storedPushPreferences = new Map<string, boolean | null>()
+  for (const [type, channels] of channelMap) {
+    storedPushPreferences.set(type, channels.pushEnabled)
+  }
 
   const groups = buildNotificationPreferenceGroups({
     userFeatures: acl.features,
     roleFeatures,
     storedPreferences,
+    storedPushPreferences,
     modules,
   })
 
@@ -86,6 +94,7 @@ export async function PUT(req: Request) {
     userFeatures: acl.features,
     roleFeatures,
     preferences: input.preferences,
+    pushPreferences: input.pushPreferences,
   })
 
   return NextResponse.json({ ok: true })

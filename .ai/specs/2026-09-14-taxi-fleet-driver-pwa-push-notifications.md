@@ -155,6 +155,7 @@ Generate: `npx web-push generate-vapid-keys`
 | Date | Summary |
 |------|---------|
 | 2026-09-14 | Initial implementation: Web Push subscriptions, SW handlers, assign + T−1h reminder pipeline, driver UX. |
+| 2026-09-15 | Extended in `.ai/specs/2026-09-15-taxi-fleet-driver-push-communications.md`: push preferences, assignment/settlement pushes, CRM broadcasts. |
 
 ## Manual smoke checklist
 

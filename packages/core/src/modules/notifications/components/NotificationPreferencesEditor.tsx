@@ -16,6 +16,9 @@ type PreferenceTypeState = {
   enabled: boolean
   locked: boolean
   audience?: PreferenceAudience
+  hasPushChannel?: boolean
+  pushEnabled?: boolean
+  pushLocked?: boolean
 }
 
 type PreferenceModuleGroup = {
@@ -61,30 +64,59 @@ function splitTypesByAudience(types: PreferenceTypeState[]): {
 function PreferenceTypeRow(props: {
   entry: PreferenceTypeState
   checked: boolean
+  pushChecked: boolean
   onToggle: (enabled: boolean) => void
+  onTogglePush: (enabled: boolean) => void
   lockedLabel: string
+  pushLabel: string
   translate: (key: string, fallback: string) => string
 }) {
-  const { entry, checked, onToggle, lockedLabel, translate } = props
+  const { entry, checked, pushChecked, onToggle, onTogglePush, lockedLabel, pushLabel, translate } = props
   return (
-    <div className="flex items-start gap-2">
-      <input
-        id={`notification-type-${entry.type}`}
-        type="checkbox"
-        className="mt-0.5 h-4 w-4"
-        checked={checked}
-        disabled={entry.locked}
-        onChange={(event) => onToggle(event.target.checked)}
-      />
-      <label
-        htmlFor={`notification-type-${entry.type}`}
-        className={`text-sm ${entry.locked ? 'text-muted-foreground' : ''}`}
-      >
-        {translate(entry.labelKey, entry.type)}
-        {entry.locked ? (
-          <span className="ml-2 text-xs text-muted-foreground">{lockedLabel}</span>
-        ) : null}
-      </label>
+    <div className="space-y-1.5">
+      <div className="flex items-start gap-2">
+        <input
+          id={`notification-type-${entry.type}`}
+          type="checkbox"
+          className="mt-0.5 h-4 w-4"
+          checked={checked}
+          disabled={entry.locked}
+          onChange={(event) => onToggle(event.target.checked)}
+        />
+        <label
+          htmlFor={`notification-type-${entry.type}`}
+          className={`text-sm ${entry.locked ? 'text-muted-foreground' : ''}`}
+        >
+          {translate(entry.labelKey, entry.type)}
+          {entry.locked ? (
+            <span className="ml-2 text-xs text-muted-foreground">{lockedLabel}</span>
+          ) : null}
+        </label>
+      </div>
+      {entry.hasPushChannel ? (
+        <div className="ml-6 flex items-start gap-2">
+          <input
+            id={`notification-type-push-${entry.type}`}
+            type="checkbox"
+            className="mt-0.5 h-4 w-4"
+            checked={pushChecked}
+            disabled={Boolean(entry.pushLocked)}
+            onChange={(event) => onTogglePush(event.target.checked)}
+          />
+          <label
+            htmlFor={`notification-type-push-${entry.type}`}
+            className={`text-sm ${entry.pushLocked ? 'text-muted-foreground' : ''}`}
+          >
+            <span className="mr-1.5 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+              {pushLabel}
+            </span>
+            {translate(entry.labelKey, entry.type)}
+            {entry.pushLocked ? (
+              <span className="ml-2 text-xs text-muted-foreground">{lockedLabel}</span>
+            ) : null}
+          </label>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -93,8 +125,11 @@ function PreferenceAudienceSection(props: {
   title: string
   types: PreferenceTypeState[]
   preferences: Record<string, boolean>
+  pushPreferences: Record<string, boolean>
   onToggle: (type: string, enabled: boolean) => void
+  onTogglePush: (type: string, enabled: boolean) => void
   lockedLabel: string
+  pushLabel: string
   translate: (key: string, fallback: string) => string
 }) {
   if (props.types.length === 0) return null
@@ -107,8 +142,11 @@ function PreferenceAudienceSection(props: {
             key={entry.type}
             entry={entry}
             checked={props.preferences[entry.type] !== false}
+            pushChecked={props.pushPreferences[entry.type] !== false}
             onToggle={(enabled) => props.onToggle(entry.type, enabled)}
+            onTogglePush={(enabled) => props.onTogglePush(entry.type, enabled)}
             lockedLabel={props.lockedLabel}
+            pushLabel={props.pushLabel}
             translate={props.translate}
           />
         ))}
@@ -124,6 +162,7 @@ export function NotificationPreferencesEditor() {
   const [error, setError] = React.useState<string | null>(null)
   const [groups, setGroups] = React.useState<PreferenceModuleGroup[]>([])
   const [preferences, setPreferences] = React.useState<Record<string, boolean>>({})
+  const [pushPreferences, setPushPreferences] = React.useState<Record<string, boolean>>({})
 
   const loadPreferences = React.useCallback(async () => {
     setLoading(true)
@@ -133,14 +172,19 @@ export function NotificationPreferencesEditor() {
       if (!ok || !result) throw new Error('load_failed')
 
       const nextPreferences: Record<string, boolean> = {}
+      const nextPush: Record<string, boolean> = {}
       for (const group of result.groups) {
         for (const entry of group.types) {
           nextPreferences[entry.type] = entry.enabled
+          if (entry.hasPushChannel) {
+            nextPush[entry.type] = entry.pushEnabled !== false
+          }
         }
       }
 
       setGroups(result.groups)
       setPreferences(nextPreferences)
+      setPushPreferences(nextPush)
     } catch (loadError) {
       console.error('Failed to load notification preferences', loadError)
       setError(t('notifications.preferences.errors.load', 'Failed to load notification preferences.'))
@@ -155,6 +199,10 @@ export function NotificationPreferencesEditor() {
 
   const setTypeEnabled = React.useCallback((type: string, enabled: boolean) => {
     setPreferences((current) => ({ ...current, [type]: enabled }))
+  }, [])
+
+  const setTypePushEnabled = React.useCallback((type: string, enabled: boolean) => {
+    setPushPreferences((current) => ({ ...current, [type]: enabled }))
   }, [])
 
   const setModuleEnabled = React.useCallback((group: PreferenceModuleGroup, enabled: boolean) => {
@@ -176,7 +224,7 @@ export function NotificationPreferencesEditor() {
         {
           method: 'PUT',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ preferences }),
+          body: JSON.stringify({ preferences, pushPreferences }),
         },
         { errorMessage: t('notifications.preferences.errors.save', 'Failed to save notification preferences.') },
       )
@@ -187,7 +235,7 @@ export function NotificationPreferencesEditor() {
     } finally {
       setSaving(false)
     }
-  }, [loadPreferences, preferences, t])
+  }, [loadPreferences, preferences, pushPreferences, t])
 
   if (loading) {
     return <LoadingMessage label={t('notifications.preferences.loading', 'Loading notification preferences...')} />
@@ -206,6 +254,7 @@ export function NotificationPreferencesEditor() {
   }
 
   const lockedLabel = t('notifications.preferences.lockedByRole', 'Required by role')
+  const pushLabel = t('notifications.preferences.channel.push', 'Push')
 
   return (
     <div className="space-y-6">
@@ -248,16 +297,22 @@ export function NotificationPreferencesEditor() {
                     title={t('notifications.preferences.audience.global', 'Global')}
                     types={audienceSplit.global}
                     preferences={preferences}
+                    pushPreferences={pushPreferences}
                     onToggle={setTypeEnabled}
+                    onTogglePush={setTypePushEnabled}
                     lockedLabel={lockedLabel}
+                    pushLabel={pushLabel}
                     translate={t}
                   />
                   <PreferenceAudienceSection
                     title={t('notifications.preferences.audience.individual', 'Individual')}
                     types={audienceSplit.individual}
                     preferences={preferences}
+                    pushPreferences={pushPreferences}
                     onToggle={setTypeEnabled}
+                    onTogglePush={setTypePushEnabled}
                     lockedLabel={lockedLabel}
+                    pushLabel={pushLabel}
                     translate={t}
                   />
                   {audienceSplit.unscoped.length > 0 ? (
@@ -267,8 +322,11 @@ export function NotificationPreferencesEditor() {
                           key={entry.type}
                           entry={entry}
                           checked={preferences[entry.type] !== false}
+                          pushChecked={pushPreferences[entry.type] !== false}
                           onToggle={(enabled) => setTypeEnabled(entry.type, enabled)}
+                          onTogglePush={(enabled) => setTypePushEnabled(entry.type, enabled)}
                           lockedLabel={lockedLabel}
+                          pushLabel={pushLabel}
                           translate={t}
                         />
                       ))}
@@ -282,8 +340,11 @@ export function NotificationPreferencesEditor() {
                       key={entry.type}
                       entry={entry}
                       checked={preferences[entry.type] !== false}
+                      pushChecked={pushPreferences[entry.type] !== false}
                       onToggle={(enabled) => setTypeEnabled(entry.type, enabled)}
+                      onTogglePush={(enabled) => setTypePushEnabled(entry.type, enabled)}
                       lockedLabel={lockedLabel}
+                      pushLabel={pushLabel}
                       translate={t}
                     />
                   ))}

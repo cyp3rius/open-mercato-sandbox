@@ -1,8 +1,12 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { TaxiFleetTrip } from '../../data/entities'
-import { buildDriverPushTag, buildDriverTripPushUrl, type DriverPushKind } from './pushPayload'
-import { sendDriverWebPush } from './sendWebPush'
+import {
+  buildDriverPushTag,
+  buildDriverTripPushUrl,
+  type DriverPushKind,
+} from './pushPayload'
+import { sendDriverPushIfAllowed } from './sendIfAllowed'
 
 const REMINDER_LEAD_MS = 60 * 60 * 1000
 const REMINDER_WINDOW_MS = 5 * 60 * 1000
@@ -72,17 +76,18 @@ export async function sendDriverTripAssignedPush(
 ): Promise<void> {
   const requestLabel = params.requestId?.trim() || params.tripId
   const copy = await buildPushCopy('trip_assigned', requestLabel)
-  await sendDriverWebPush(em, {
+  await sendDriverPushIfAllowed(em, {
     tenantId: params.tenantId,
     organizationId: params.organizationId,
     teamMemberId: params.teamMemberId,
+    kind: 'trip_assigned',
     payload: {
-      kind: 'trip_assigned',
       tripId: params.tripId,
       url: buildDriverTripPushUrl(params.tripId),
       title: copy.title,
       body: copy.body,
       tag: buildDriverPushTag('trip_assigned', params.tripId),
+      urgency: 'high',
     },
   })
 }
@@ -108,30 +113,29 @@ export async function processDriverTripRemindersForOrg(
     if (!trip.teamMemberId || !trip.startedAt) continue
     const requestLabel = requestLabelFromTrip(trip)
     const copy = await buildPushCopy('trip_reminder', requestLabel)
-    const result = await sendDriverWebPush(em, {
+    const delivered = await sendDriverPushIfAllowed(em, {
       tenantId: trip.tenantId,
       organizationId: trip.organizationId,
       teamMemberId: trip.teamMemberId,
+      kind: 'trip_reminder',
       payload: {
-        kind: 'trip_reminder',
         tripId: trip.id,
         url: buildDriverTripPushUrl(trip.id),
         title: copy.title,
         body: copy.body,
         tag: buildDriverPushTag('trip_reminder', trip.id),
+        urgency: 'high',
       },
     })
-    // Stamp even when there are no subscriptions so we do not retry every 5 minutes.
     trip.driverReminderPushSentAt = now
     trip.updatedAt = now
     em.persist(trip)
-    if (result.delivered > 0 || result.attempted === 0) sent += 1
+    if (delivered) sent += 1
   }
   if (trips.length) await em.flush()
   return { scanned: trips.length, sent }
 }
 
-/** Clear reminder stamp when the planned start time changes so a new T−1h can fire. */
 export function clearDriverReminderPushIfStartedAtChanged(
   trip: TaxiFleetTrip,
   previousStartedAt: Date | null | undefined,

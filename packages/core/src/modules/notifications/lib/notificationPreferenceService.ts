@@ -69,6 +69,25 @@ export async function getStoredPreferenceMap(
   return new Map(rows.map((row) => [row.notificationType, row.enabled]))
 }
 
+export type StoredPreferenceChannels = {
+  enabled: boolean
+  pushEnabled: boolean | null
+}
+
+export async function getStoredPreferenceChannelMap(
+  em: EntityManager,
+  userId: string,
+  tenantId: string,
+): Promise<Map<string, StoredPreferenceChannels>> {
+  const rows = await em.find(UserNotificationPreference, { userId, tenantId })
+  return new Map(
+    rows.map((row) => [
+      row.notificationType,
+      { enabled: row.enabled, pushEnabled: row.pushEnabled ?? null },
+    ]),
+  )
+}
+
 export function resolveEffectivePreferenceEnabled(options: {
   notificationType: string
   storedPreferences: Map<string, boolean>
@@ -97,6 +116,36 @@ export function resolveEffectivePreferenceEnabled(options: {
   }
 }
 
+export function resolveEffectivePushPreference(options: {
+  notificationType: string
+  storedPushPreferences: Map<string, boolean | null>
+}): { enabled: boolean; locked: boolean; hasPushChannel: boolean } {
+  const preference = resolveNotificationPreferenceDefinition(options.notificationType)
+  const pushChannel = preference?.pushChannel
+  if (!pushChannel) {
+    return { enabled: false, locked: false, hasPushChannel: false }
+  }
+  if (pushChannel.locked) {
+    return { enabled: true, locked: true, hasPushChannel: true }
+  }
+  if (options.storedPushPreferences.has(options.notificationType)) {
+    const stored = options.storedPushPreferences.get(options.notificationType)
+    if (stored === null || stored === undefined) {
+      return {
+        enabled: pushChannel.defaultEnabled ?? true,
+        locked: false,
+        hasPushChannel: true,
+      }
+    }
+    return { enabled: stored === true, locked: false, hasPushChannel: true }
+  }
+  return {
+    enabled: pushChannel.defaultEnabled ?? true,
+    locked: false,
+    hasPushChannel: true,
+  }
+}
+
 export async function shouldDeliverNotification(
   em: EntityManager,
   userId: string,
@@ -116,6 +165,26 @@ export async function shouldDeliverNotification(
     notificationType,
     storedPreferences,
     roleFeatures,
+  }).enabled
+}
+
+/** Gate for OS/Web Push. Types without pushChannel never deliver push. Locked channel always delivers. */
+export async function shouldDeliverPush(
+  em: EntityManager,
+  userId: string,
+  tenantId: string,
+  notificationType: string,
+): Promise<boolean> {
+  const preference = resolveNotificationPreferenceDefinition(notificationType)
+  if (!preference?.pushChannel) return false
+  if (preference.pushChannel.locked) return true
+
+  const channelMap = await getStoredPreferenceChannelMap(em, userId, tenantId)
+  const stored = channelMap.get(notificationType)?.pushEnabled ?? null
+  const storedPush = new Map<string, boolean | null>([[notificationType, stored]])
+  return resolveEffectivePushPreference({
+    notificationType,
+    storedPushPreferences: storedPush,
   }).enabled
 }
 
@@ -186,6 +255,9 @@ export type NotificationPreferenceModuleGroup = {
     enabled: boolean
     locked: boolean
     audience?: 'global' | 'individual'
+    hasPushChannel: boolean
+    pushEnabled: boolean
+    pushLocked: boolean
   }>
 }
 
@@ -193,10 +265,12 @@ export function buildNotificationPreferenceGroups(options: {
   userFeatures: string[]
   roleFeatures: string[]
   storedPreferences: Map<string, boolean>
+  storedPushPreferences?: Map<string, boolean | null>
   modules: Array<{ id: string; title: string }>
 }): NotificationPreferenceModuleGroup[] {
   const moduleTitleById = new Map(options.modules.map((module) => [module.id, module.title]))
   const groups = new Map<string, NotificationPreferenceModuleGroup>()
+  const storedPush = options.storedPushPreferences ?? new Map<string, boolean | null>()
 
   for (const entry of listConfigurableNotificationTypes()) {
     if (!userHasScopeForPreference(options.userFeatures, entry.preference, entry.module)) {
@@ -207,6 +281,10 @@ export function buildNotificationPreferenceGroups(options: {
       notificationType: entry.type,
       storedPreferences: options.storedPreferences,
       roleFeatures: options.roleFeatures,
+    })
+    const pushState = resolveEffectivePushPreference({
+      notificationType: entry.type,
+      storedPushPreferences: storedPush,
     })
 
     if (!groups.has(entry.module)) {
@@ -223,6 +301,9 @@ export function buildNotificationPreferenceGroups(options: {
       enabled: state.enabled,
       locked: state.locked,
       audience: entry.preference.audience,
+      hasPushChannel: pushState.hasPushChannel,
+      pushEnabled: pushState.enabled,
+      pushLocked: pushState.locked,
     })
   }
 
@@ -243,23 +324,42 @@ export async function saveNotificationPreferences(
     userFeatures: string[]
     roleFeatures: string[]
     preferences: Record<string, boolean>
+    pushPreferences?: Record<string, boolean>
   },
 ): Promise<void> {
   const allowedTypes = new Set<string>()
+  const pushAllowedTypes = new Set<string>()
   for (const entry of listConfigurableNotificationTypes()) {
     if (!userHasScopeForPreference(options.userFeatures, entry.preference, entry.module)) {
       continue
     }
     allowedTypes.add(entry.type)
+    if (entry.preference.pushChannel && !entry.preference.pushChannel.locked) {
+      pushAllowedTypes.add(entry.type)
+    }
   }
 
   await em.transactional(async (tx) => {
-    for (const [notificationType, enabled] of Object.entries(options.preferences)) {
+    const touchedTypes = new Set([
+      ...Object.keys(options.preferences),
+      ...Object.keys(options.pushPreferences ?? {}),
+    ])
+
+    for (const notificationType of touchedTypes) {
       if (!allowedTypes.has(notificationType)) continue
 
       const preference = resolveNotificationPreferenceDefinition(notificationType)
       if (!preference) continue
-      if (isPreferenceLockedByRole(options.roleFeatures, preference)) continue
+
+      const inAppLocked = isPreferenceLockedByRole(options.roleFeatures, preference)
+      const hasInAppUpdate =
+        Object.prototype.hasOwnProperty.call(options.preferences, notificationType) && !inAppLocked
+      const hasPushUpdate =
+        options.pushPreferences != null &&
+        Object.prototype.hasOwnProperty.call(options.pushPreferences, notificationType) &&
+        pushAllowedTypes.has(notificationType)
+
+      if (!hasInAppUpdate && !hasPushUpdate) continue
 
       let row = await tx.findOne(UserNotificationPreference, {
         userId: options.userId,
@@ -272,13 +372,16 @@ export async function saveNotificationPreferences(
           userId: options.userId,
           tenantId: options.tenantId,
           notificationType,
-          enabled,
+          enabled: hasInAppUpdate ? options.preferences[notificationType]! : (preference.defaultEnabled ?? true),
+          pushEnabled: hasPushUpdate ? options.pushPreferences![notificationType]! : null,
         })
         tx.persist(row)
         continue
       }
 
-      row.enabled = enabled
+      if (hasInAppUpdate) row.enabled = options.preferences[notificationType]!
+      if (hasPushUpdate) row.pushEnabled = options.pushPreferences![notificationType]!
+      row.updatedAt = new Date()
     }
     await tx.flush()
   })

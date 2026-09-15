@@ -1,9 +1,15 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import {
   buildMonthlySettlementDriverLink,
   notifyTaxiFleetPersonal,
 } from '../lib/taxiFleetNotificationDelivery'
 import { resolveTeamMemberUserId } from '../lib/resolveTeamMemberUserId'
+import {
+  buildDriverMonthlySettlementPushUrl,
+  buildDriverPushTag,
+} from '../lib/driverPush/pushPayload'
+import { sendDriverPushIfAllowed } from '../lib/driverPush/sendIfAllowed'
 
 export const metadata = {
   event: 'taxi_fleet.monthly_settlement.approved',
@@ -46,4 +52,32 @@ export default async function handle(payload: MonthlySettlementApprovedPayload, 
     linkHref: buildMonthlySettlementDriverLink(payload.id),
     logLabel: 'taxi_fleet:monthly-settlement-ready-notification',
   })
+
+  try {
+    const { translate } = await resolveTranslations()
+    const title = translate(
+      'taxi_fleet.driverApp.push.monthlySettlementReadyTitle',
+      'Monthly settlement ready: {monthStart}',
+      { monthStart },
+    )
+    const body = translate(
+      'taxi_fleet.driverApp.push.monthlySettlementReadyBody',
+      'Your monthly settlement was approved. Tap to review.',
+    )
+    await sendDriverPushIfAllowed(em, {
+      tenantId: payload.tenantId,
+      organizationId: payload.organizationId,
+      teamMemberId: payload.teamMemberId,
+      kind: 'monthly_settlement_ready',
+      payload: {
+        url: buildDriverMonthlySettlementPushUrl(payload.id),
+        title,
+        body,
+        tag: buildDriverPushTag('monthly_settlement_ready', payload.id),
+        urgency: 'normal',
+      },
+    })
+  } catch (error) {
+    console.error('[taxi_fleet:monthly-settlement-ready-notification] web push failed', error)
+  }
 }

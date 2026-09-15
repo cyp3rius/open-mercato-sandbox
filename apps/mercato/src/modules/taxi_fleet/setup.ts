@@ -5,6 +5,7 @@ import { syncTaxiVehicleCustomFieldScope } from './lib/vehicleResourceTypes'
 import { ensureTaxiFleetDriverReceiptsPartition } from './lib/receiptPartition'
 import { registerPlatformSyncSchedule } from './lib/platformSync/registerPlatformSyncSchedule'
 import { registerDriverPushReminderSchedule } from './lib/driverPush/registerDriverPushReminderSchedule'
+import { registerDriverCommunicationsSchedule } from './lib/driverCommunications/registerSchedule'
 
 const DRIVER_ROLE_NAME = 'driver'
 
@@ -41,6 +42,10 @@ export const setup: ModuleSetupConfig = {
       tenantId: ctx.tenantId,
       organizationId: ctx.organizationId,
     })
+    await registerDriverCommunicationsSchedule(ctx.container, {
+      tenantId: ctx.tenantId,
+      organizationId: ctx.organizationId,
+    })
   },
 
   defaultRoleFeatures: {
@@ -53,6 +58,7 @@ export const setup: ModuleSetupConfig = {
       'taxi_fleet.trips.inject',
       'taxi_fleet.manage_settlements',
       'taxi_fleet.manage_platform_sync',
+      'taxi_fleet.manage_driver_communications',
       'taxi_fleet.settings.manage',
       'taxi_fleet.trip.order.notify',
       'taxi_fleet.trip.paid.notify',

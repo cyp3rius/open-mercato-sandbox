@@ -1,5 +1,5 @@
 /* Driver PWA service worker — scoped to /driver */
-const CACHE = 'taxi-fleet-driver-v4'
+const CACHE = 'taxi-fleet-driver-v5'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting())
@@ -58,9 +58,11 @@ self.addEventListener('push', (event) => {
   let payload = {
     title: 'RS Moto Taxi',
     body: '',
-    url: '/driver/trips',
+    url: '/driver',
     tag: 'taxi_fleet:push',
     tripId: null,
+    communicationId: null,
+    recipientId: null,
     kind: null,
   }
   try {
@@ -75,6 +77,8 @@ self.addEventListener('push', (event) => {
             : payload.url,
         tag: typeof data.tag === 'string' && data.tag ? data.tag : payload.tag,
         tripId: typeof data.tripId === 'string' ? data.tripId : null,
+        communicationId: typeof data.communicationId === 'string' ? data.communicationId : null,
+        recipientId: typeof data.recipientId === 'string' ? data.recipientId : null,
         kind: typeof data.kind === 'string' ? data.kind : null,
       }
     }
@@ -92,6 +96,8 @@ self.addEventListener('push', (event) => {
       data: {
         url: payload.url,
         tripId: payload.tripId,
+        communicationId: payload.communicationId,
+        recipientId: payload.recipientId,
         kind: payload.kind,
       },
     }),
@@ -101,19 +107,35 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const data = event.notification.data || {}
-  const targetPath =
-    typeof data.url === 'string' && data.url.startsWith('/driver')
+  const kind = typeof data.kind === 'string' ? data.kind : null
+  const isBroadcast = kind === 'driver_broadcast'
+  const targetPath = isBroadcast
+    ? '/driver'
+    : typeof data.url === 'string' && data.url.startsWith('/driver')
       ? data.url
-      : '/driver/trips'
+      : '/driver'
   const targetUrl = new URL(targetPath, self.location.origin).href
 
   event.waitUntil(
     (async () => {
+      if (isBroadcast && typeof data.recipientId === 'string' && data.recipientId) {
+        try {
+          await fetch('/api/taxi_fleet/driver/communications/ack', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ recipientId: data.recipientId }),
+          })
+        } catch {
+          // Ack is best-effort; still open the app.
+        }
+      }
+
       const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
       for (const client of allClients) {
         if ('focus' in client && client.url.startsWith(self.location.origin + '/driver')) {
           await client.focus()
-          if ('navigate' in client && typeof client.navigate === 'function') {
+          if (!isBroadcast && 'navigate' in client && typeof client.navigate === 'function') {
             try {
               await client.navigate(targetUrl)
             } catch {

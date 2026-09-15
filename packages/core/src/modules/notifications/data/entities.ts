@@ -118,6 +118,10 @@ export class UserNotificationPreference {
   @Property({ name: 'enabled', type: 'boolean', default: true })
   enabled: boolean = true
 
+  /** null = use type pushChannel.defaultEnabled */
+  @Property({ name: 'push_enabled', type: 'boolean', nullable: true })
+  pushEnabled?: boolean | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 

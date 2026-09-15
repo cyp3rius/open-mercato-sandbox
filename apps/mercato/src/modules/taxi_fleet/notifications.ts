@@ -18,14 +18,6 @@ const tripViewAction = {
   icon: 'external-link',
 }
 
-const settlementViewAction = {
-  id: 'view',
-  labelKey: 'common.view',
-  variant: 'outline' as const,
-  href: '/backend/taxi-fleet/settlements/{sourceEntityId}',
-  icon: 'external-link',
-}
-
 const monthlySettlementDriverViewAction = {
   id: 'view',
   labelKey: 'common.view',
@@ -62,10 +54,71 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     userPreference: {
       labelKey: 'taxi_fleet.notifications.preferences.trip_assigned',
       scopeFeature: 'taxi_fleet.view',
+      audience: 'individual',
+      pushChannel: { locked: true, defaultEnabled: true },
     },
     actions: [tripViewAction],
     linkHref: '/backend/taxi-fleet/trips/{sourceEntityId}',
     expiresAfterHours: 168,
+  },
+  {
+    type: 'taxi_fleet.trip.reminder',
+    module: 'taxi_fleet',
+    titleKey: 'taxi_fleet.notifications.trip_reminder.title',
+    bodyKey: 'taxi_fleet.notifications.trip_reminder.body',
+    icon: 'clock',
+    severity: 'info',
+    userPreference: {
+      labelKey: 'taxi_fleet.notifications.preferences.trip_reminder',
+      scopeFeature: 'taxi_fleet.driver',
+      audience: 'individual',
+      defaultEnabled: false,
+      pushChannel: { locked: true, defaultEnabled: true },
+    },
+    actions: [],
+    linkHref: '/driver/trips/{sourceEntityId}',
+    expiresAfterHours: 24,
+  },
+  {
+    type: 'taxi_fleet.assignment.planned',
+    module: 'taxi_fleet',
+    titleKey: 'taxi_fleet.notifications.assignment_planned.title',
+    bodyKey: 'taxi_fleet.notifications.assignment_planned.body',
+    icon: 'calendar',
+    severity: 'info',
+    userPreference: {
+      labelKey: 'taxi_fleet.notifications.preferences.assignment_planned',
+      scopeFeature: 'taxi_fleet.driver',
+      audience: 'individual',
+      pushChannel: { defaultEnabled: true },
+    },
+    actions: [
+      {
+        id: 'view',
+        labelKey: 'common.view',
+        variant: 'outline' as const,
+        href: '/driver/assignments',
+        icon: 'external-link',
+      },
+    ],
+    linkHref: '/driver/assignments',
+    expiresAfterHours: 168,
+  },
+  {
+    type: 'taxi_fleet.driver_broadcast',
+    module: 'taxi_fleet',
+    titleKey: 'taxi_fleet.notifications.driver_broadcast.title',
+    bodyKey: 'taxi_fleet.notifications.driver_broadcast.body',
+    icon: 'megaphone',
+    severity: 'info',
+    userPreference: {
+      labelKey: 'taxi_fleet.notifications.preferences.driver_broadcast',
+      scopeFeature: 'taxi_fleet.driver',
+      audience: 'individual',
+      pushChannel: { defaultEnabled: true },
+    },
+    actions: [],
+    expiresAfterHours: 336,
   },
   {
     type: 'taxi_fleet.trip.paid',
@@ -178,9 +231,19 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     userPreference: {
       labelKey: 'taxi_fleet.notifications.preferences.settlement_ready',
       scopeFeature: 'taxi_fleet.view',
+      audience: 'individual',
+      pushChannel: { defaultEnabled: true },
     },
-    actions: [settlementViewAction],
-    linkHref: '/backend/taxi-fleet/settlements/{sourceEntityId}',
+    actions: [
+      {
+        id: 'view',
+        labelKey: 'common.view',
+        variant: 'outline' as const,
+        href: '/driver/settlements/{sourceEntityId}',
+        icon: 'external-link',
+      },
+    ],
+    linkHref: '/driver/settlements/{sourceEntityId}',
     expiresAfterHours: 168,
   },
   {
@@ -193,6 +256,8 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     userPreference: {
       labelKey: 'taxi_fleet.notifications.preferences.monthly_settlement_ready',
       scopeFeature: 'taxi_fleet.view',
+      audience: 'individual',
+      pushChannel: { defaultEnabled: true },
     },
     actions: [monthlySettlementDriverViewAction],
     linkHref: '/driver/monthly-settlements/{sourceEntityId}',

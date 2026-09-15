@@ -940,3 +940,92 @@ export class TaxiFleetPlatformSyncRun {
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
 }
+
+@Entity({ tableName: 'taxi_fleet_driver_communications' })
+@Index({ name: 'taxi_fleet_driver_comms_scope_idx', properties: ['tenantId', 'organizationId'] })
+@Index({ name: 'taxi_fleet_driver_comms_status_idx', properties: ['status', 'scheduledAt'] })
+export class TaxiFleetDriverCommunication {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ type: 'text' })
+  kind: 'info' | 'service' | 'direct' = 'info'
+
+  @Property({ type: 'text' })
+  title!: string
+
+  @Property({ type: 'text' })
+  body!: string
+
+  @Property({ type: 'text', default: 'draft' })
+  status: 'draft' | 'scheduled' | 'sending' | 'sent' | 'cancelled' = 'draft'
+
+  @Property({ name: 'scheduled_at', type: Date, nullable: true })
+  scheduledAt?: Date | null
+
+  @Property({ name: 'sent_at', type: Date, nullable: true })
+  sentAt?: Date | null
+
+  @Property({ name: 'created_by_user_id', type: 'uuid' })
+  createdByUserId!: string
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
+@Entity({ tableName: 'taxi_fleet_driver_communication_recipients' })
+@Index({ name: 'taxi_fleet_driver_comm_recipients_comm_idx', properties: ['communicationId'] })
+@Index({ name: 'taxi_fleet_driver_comm_recipients_member_idx', properties: ['teamMemberId', 'tenantId'] })
+@Unique({ properties: ['communicationId', 'teamMemberId'] })
+export class TaxiFleetDriverCommunicationRecipient {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'communication_id', type: 'uuid' })
+  communicationId!: string
+
+  @Property({ name: 'team_member_id', type: 'uuid' })
+  teamMemberId!: string
+
+  @Property({ name: 'user_id', type: 'uuid' })
+  userId!: string
+
+  @Property({ name: 'delivery_status', type: 'text', default: 'pending' })
+  deliveryStatus: 'pending' | 'sent' | 'failed' | 'skipped' = 'pending'
+
+  @Property({ name: 'read_at', type: Date, nullable: true })
+  readAt?: Date | null
+
+  @Property({ name: 'last_error', type: 'text', nullable: true })
+  lastError?: string | null
+
+  @Property({ name: 'attempt_count', type: 'int', default: 0 })
+  attemptCount: number = 0
+
+  @Property({ name: 'last_attempt_at', type: Date, nullable: true })
+  lastAttemptAt?: Date | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
