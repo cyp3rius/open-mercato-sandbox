@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { parseNumericValue } from '@open-mercato/shared/lib/numeric'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { withFlash } from '@open-mercato/ui/backend/utils/flash'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
@@ -112,6 +113,7 @@ async function loadAssignmentsAround(startedAt: Date, endedAt: Date): Promise<As
   const params = new URLSearchParams({
     dateFrom: toDateParam(from),
     dateTo: toDateParam(to),
+    paginate: '0',
   })
   const { result } = await apiCall<{ items: AssignmentListItem[] }>(
     `/api/taxi_fleet/driver/assignments?${params}`,
@@ -426,27 +428,27 @@ export default function DriverTripCreatePage() {
           notes: commercial.notes,
           pending: true,
         })
-        flash(
-          commercial.tripType === 'internal'
-            ? t(
-                'taxi_fleet.driverApp.trips.internalSavedPendingOffline',
-                'Trip saved offline. It will sync when you are online and wait for authorization.',
-              )
-            : t(
-                'taxi_fleet.driverApp.trips.pastSavedOffline',
-                'Trip saved offline. It will sync when you are online.',
-              ),
-          'success',
+        window.location.assign(
+          withFlash(
+            '/driver/trips',
+            commercial.tripType === 'internal'
+              ? t(
+                  'taxi_fleet.driverApp.trips.internalSavedPendingOffline',
+                  'Trip saved offline. It will sync when you are online and wait for authorization.',
+                )
+              : t(
+                  'taxi_fleet.driverApp.trips.pastSavedOffline',
+                  'Trip saved offline. It will sync when you are online.',
+                ),
+          ),
         )
-        window.location.assign('/driver/trips')
         return
       }
       await apiCallOrThrow<{ id?: string }>('/api/taxi_fleet/driver/trips', {
         method: 'POST',
         body: JSON.stringify({ ...payload, clientMutationId }),
       })
-      flash(successMessage, 'success')
-      window.location.assign('/driver/trips')
+      window.location.assign(withFlash('/driver/trips', successMessage))
     } catch (err) {
       const message =
         (err as { body?: { error?: string }; message?: string } | null)?.body?.error ||
@@ -552,23 +554,27 @@ export default function DriverTripCreatePage() {
           notes: commercial.notes,
           pending: true,
         })
-        flash(
-          t('taxi_fleet.driverApp.trips.scheduleSavedOffline', 'Trip scheduled offline. It will sync when you are online.'),
-          'success',
+        window.location.assign(
+          withFlash(
+            '/driver/trips',
+            t(
+              'taxi_fleet.driverApp.trips.scheduleSavedOffline',
+              'Trip scheduled offline. It will sync when you are online.',
+            ),
+          ),
         )
-        window.location.assign('/driver/trips')
         return
       }
       const { result } = await apiCallOrThrow<{ id?: string }>('/api/taxi_fleet/driver/trips', {
         method: 'POST',
         body: JSON.stringify({ ...payload, clientMutationId }),
       })
-      flash(t('taxi_fleet.driverApp.trips.scheduleSaved', 'Trip scheduled.'), 'success')
+      const scheduledMessage = t('taxi_fleet.driverApp.trips.scheduleSaved', 'Trip scheduled.')
       if (result?.id) {
-        window.location.assign(`/driver/trips/${result.id}`)
+        window.location.assign(withFlash(`/driver/trips/${result.id}`, scheduledMessage))
         return
       }
-      window.location.assign('/driver/trips')
+      window.location.assign(withFlash('/driver/trips', scheduledMessage))
     } catch (err) {
       const message =
         (err as { body?: { error?: string }; message?: string } | null)?.body?.error ||

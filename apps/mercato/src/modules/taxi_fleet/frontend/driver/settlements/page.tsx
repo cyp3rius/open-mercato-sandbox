@@ -7,21 +7,23 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { formatMoneyDisplay } from '@open-mercato/shared/lib/numeric'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { Button } from '@open-mercato/ui/primitives/button'
 import { DriverShell } from '../../../components/driverApp/DriverShell'
 import { useRegisterDriverPullToRefresh } from '../../../components/driverApp/DriverPullToRefresh'
+import {
+  DRIVER_LIST_PAGE_SIZE,
+  useDriverPagedList,
+} from '../../../components/driverApp/useDriverPagedList'
 import {
   driverBadgeNeutralClass,
   driverListRowClass,
   driverMutedTextClass,
-  driverSecondaryActionClass,
 } from '../../../components/driverApp/driverUi'
 import { formatWeekRange } from '../../../lib/weekUtils'
 import type {
   DriverMonthlySettlementListItem,
   DriverSettlementListItem,
 } from '../../../lib/driverSettlements'
-
-const PAGE_SIZE = 10
 
 type TabId = 'monthly' | 'weekly'
 
@@ -57,108 +59,84 @@ function statusLabel(t: (key: string, fallback?: string) => string, status: stri
 export default function DriverSettlementsPage() {
   const t = useT()
   const [tab, setTab] = React.useState<TabId>('monthly')
-  const [weeklyItems, setWeeklyItems] = React.useState<DriverSettlementListItem[]>([])
-  const [monthlyItems, setMonthlyItems] = React.useState<DriverMonthlySettlementListItem[]>([])
-  const [page, setPage] = React.useState(1)
-  const [total, setTotal] = React.useState(0)
-  const [loaded, setLoaded] = React.useState(false)
 
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const safePage = Math.min(page, pageCount)
-
-  const load = React.useCallback(
-    async (nextTab: TabId, nextPage: number) => {
+  const fetchPage = React.useCallback(
+    async (page: number, pageSize: number) => {
       const params = new URLSearchParams({
-        page: String(nextPage),
-        pageSize: String(PAGE_SIZE),
+        page: String(page),
+        pageSize: String(pageSize),
       })
-      if (nextTab === 'monthly') {
-        const call = await apiCall<MonthlyResponse>(`/api/taxi_fleet/driver/monthly-settlements?${params}`)
+      if (tab === 'monthly') {
+        const call = await apiCall<MonthlyResponse>(
+          `/api/taxi_fleet/driver/monthly-settlements?${params}`,
+        )
         if (!call.ok) {
           if (call.status === 401 || call.status === 403) {
             window.location.href = '/driver/login'
-            return
+            throw new Error('unauthorized')
           }
           throw new Error('load_failed')
         }
-        setMonthlyItems(Array.isArray(call.result?.items) ? call.result.items : [])
-        setTotal(call.result?.total ?? 0)
-        setPage(call.result?.page ?? nextPage)
-        return
+        return {
+          items: (Array.isArray(call.result?.items) ? call.result.items : []) as (
+            | DriverMonthlySettlementListItem
+            | DriverSettlementListItem
+          )[],
+          page: call.result?.page ?? page,
+          pageSize: call.result?.pageSize ?? pageSize,
+          total: call.result?.total ?? 0,
+        }
       }
       const call = await apiCall<WeeklyResponse>(`/api/taxi_fleet/driver/settlements?${params}`)
       if (!call.ok) {
         if (call.status === 401 || call.status === 403) {
           window.location.href = '/driver/login'
-          return
+          throw new Error('unauthorized')
         }
         throw new Error('load_failed')
       }
-      setWeeklyItems(Array.isArray(call.result?.items) ? call.result.items : [])
-      setTotal(call.result?.total ?? 0)
-      setPage(call.result?.page ?? nextPage)
+      return {
+        items: (Array.isArray(call.result?.items) ? call.result.items : []) as (
+          | DriverMonthlySettlementListItem
+          | DriverSettlementListItem
+        )[],
+        page: call.result?.page ?? page,
+        pageSize: call.result?.pageSize ?? pageSize,
+        total: call.result?.total ?? 0,
+      }
     },
-    [],
+    [tab],
   )
 
-  React.useEffect(() => {
-    let active = true
-    void (async () => {
-      try {
-        await load(tab, 1)
-      } catch {
-        if (!active) return
-        flash(t('taxi_fleet.driverApp.settlements.loadFailed', 'Could not load settlements.'), 'error')
-      } finally {
-        if (active) setLoaded(true)
-      }
-    })()
-    return () => {
-      active = false
-    }
-  }, [load, t, tab])
-
-  useRegisterDriverPullToRefresh(async () => {
-    try {
-      await load(tab, safePage)
-    } catch {
-      // shell refresh still ran
-    }
+  const {
+    items,
+    page,
+    pageCount,
+    total,
+    loading,
+    error,
+    goToPage,
+    reload,
+    canGoPrev,
+    canGoNext,
+  } = useDriverPagedList<DriverMonthlySettlementListItem | DriverSettlementListItem>({
+    queryKey: `settlements:${tab}`,
+    fetchPage,
+    pageSize: DRIVER_LIST_PAGE_SIZE,
   })
 
-  const switchTab = React.useCallback(
-    async (nextTab: TabId) => {
-      if (nextTab === tab) return
-      setLoaded(false)
-      setTab(nextTab)
-      setPage(1)
-      try {
-        await load(nextTab, 1)
-      } catch {
-        flash(t('taxi_fleet.driverApp.settlements.loadFailed', 'Could not load settlements.'), 'error')
-      } finally {
-        setLoaded(true)
-      }
-    },
-    [load, t, tab],
-  )
+  React.useEffect(() => {
+    if (error) {
+      flash(t('taxi_fleet.driverApp.settlements.loadFailed', 'Could not load settlements.'), 'error')
+    }
+  }, [error, t])
 
-  const goToPage = React.useCallback(
-    async (nextPage: number) => {
-      setLoaded(false)
-      try {
-        await load(tab, nextPage)
-      } catch {
-        flash(t('taxi_fleet.driverApp.settlements.loadFailed', 'Could not load settlements.'), 'error')
-      } finally {
-        setLoaded(true)
-      }
-    },
-    [load, t, tab],
-  )
+  useRegisterDriverPullToRefresh(async () => {
+    await reload().catch(() => undefined)
+  })
 
-  const canGoPrev = safePage > 1
-  const canGoNext = safePage < pageCount
+  const monthlyItems = tab === 'monthly' ? (items as DriverMonthlySettlementListItem[]) : []
+  const weeklyItems = tab === 'weekly' ? (items as DriverSettlementListItem[]) : []
 
   return (
     <DriverShell title={t('taxi_fleet.driverApp.settlements.title', 'Settlements')}>
@@ -169,7 +147,7 @@ export default function DriverSettlementsPage() {
             className={`flex-1 rounded-md px-3 py-2 text-sm font-medium ${
               tab === 'monthly' ? 'bg-white text-[#071437] shadow-sm' : 'text-[#78829D]'
             }`}
-            onClick={() => void switchTab('monthly')}
+            onClick={() => setTab('monthly')}
           >
             {t('taxi_fleet.driverApp.settlements.tabs.monthly', 'Monthly (payout)')}
           </button>
@@ -178,14 +156,16 @@ export default function DriverSettlementsPage() {
             className={`flex-1 rounded-md px-3 py-2 text-sm font-medium ${
               tab === 'weekly' ? 'bg-white text-[#071437] shadow-sm' : 'text-[#78829D]'
             }`}
-            onClick={() => void switchTab('weekly')}
+            onClick={() => setTab('weekly')}
           >
             {t('taxi_fleet.driverApp.settlements.tabs.weekly', 'Weekly (control)')}
           </button>
         </div>
 
-        {!loaded ? (
-          <p className={driverMutedTextClass}>{t('taxi_fleet.driverApp.settlements.loading', 'Loading…')}</p>
+        {loading && items.length === 0 ? (
+          <p className={driverMutedTextClass}>
+            {t('taxi_fleet.driverApp.settlements.loading', 'Loading…')}
+          </p>
         ) : tab === 'monthly' ? (
           monthlyItems.length === 0 ? (
             <p className={driverMutedTextClass}>
@@ -254,29 +234,41 @@ export default function DriverSettlementsPage() {
           </ul>
         )}
 
-        {loaded && total > PAGE_SIZE ? (
-          <div className="flex items-center justify-between gap-2 pt-2">
-            <button
+        {pageCount > 1 ? (
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <Button
               type="button"
-              className={driverSecondaryActionClass}
-              disabled={!canGoPrev}
-              onClick={() => void goToPage(safePage - 1)}
+              variant="ghost"
+              disabled={!canGoPrev || loading}
+              className="h-10 gap-1 px-2 text-[#78829D] hover:!bg-[#F1F1F4]/50 hover:!text-[#4B5675] disabled:opacity-40"
+              onClick={() => goToPage(page - 1)}
+              aria-label={t('taxi_fleet.driverApp.settlements.pagePrev', 'Previous')}
             >
               <ChevronLeft className="size-4" aria-hidden />
-              {t('common.prev', 'Previous')}
-            </button>
-            <span className={`text-sm ${driverMutedTextClass}`}>
-              {safePage}/{pageCount}
-            </span>
-            <button
+              {t('taxi_fleet.driverApp.settlements.pagePrev', 'Previous')}
+            </Button>
+
+            <div className={`text-xs tabular-nums ${driverMutedTextClass}`}>
+              {t('taxi_fleet.driverApp.pagination.pageOf', 'Page {page} of {totalPages}', {
+                page,
+                totalPages: pageCount,
+              })}
+              {total > 0
+                ? ` · ${t('taxi_fleet.driverApp.pagination.total', '{total} total', { total })}`
+                : null}
+            </div>
+
+            <Button
               type="button"
-              className={driverSecondaryActionClass}
-              disabled={!canGoNext}
-              onClick={() => void goToPage(safePage + 1)}
+              variant="ghost"
+              disabled={!canGoNext || loading}
+              className="h-10 gap-1 px-2 text-[#78829D] hover:!bg-[#F1F1F4]/50 hover:!text-[#4B5675] disabled:opacity-40"
+              onClick={() => goToPage(page + 1)}
+              aria-label={t('taxi_fleet.driverApp.settlements.pageNext', 'Next')}
             >
-              {t('common.next', 'Next')}
+              {t('taxi_fleet.driverApp.settlements.pageNext', 'Next')}
               <ChevronRight className="size-4" aria-hidden />
-            </button>
+            </Button>
           </div>
         ) : null}
       </div>

@@ -25,7 +25,6 @@ import {
   driverSectionTitleClass,
 } from '../../../../components/driverApp/driverUi'
 import {
-  cacheDriverJson,
   enqueueDriverMutation,
   readCachedDriverJson,
 } from '../../../../lib/driverOffline/outbox'
@@ -171,9 +170,10 @@ function DriverTripDetailContent({
       return
     }
     try {
-      const { result } = await apiCall<{ items: TripRow[] }>('/api/taxi_fleet/driver/trips')
+      const { result } = await apiCall<{ items: TripRow[] }>(
+        `/api/taxi_fleet/driver/trips?id=${encodeURIComponent(tripId)}`,
+      )
       const items = result?.items ?? []
-      await cacheDriverJson('driver/trips', items)
       const found = findTrip(items, tripId)
       setTrip(found)
       if (!found) {

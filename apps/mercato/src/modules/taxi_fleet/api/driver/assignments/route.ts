@@ -6,10 +6,11 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
-import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
+import { findAndCountWithDecryption, findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetDailyAssignment } from '@/modules/taxi_fleet/data/entities'
 import { resolveDriverContext } from '@/modules/taxi_fleet/lib/driverContext'
 import { resolveDriverResourceLabelInfos } from '@/modules/taxi_fleet/lib/resolveDriverResourceLabel'
+import { parseDriverListPagination } from '@/modules/taxi_fleet/lib/driverListPagination'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['taxi_fleet.driver'] },
@@ -38,6 +39,8 @@ export async function GET(req: Request) {
     const url = new URL(req.url)
     const dateFrom = url.searchParams.get('dateFrom') ?? undefined
     const dateTo = url.searchParams.get('dateTo') ?? undefined
+    const paginate = url.searchParams.get('paginate') !== '0'
+    const { page, pageSize } = parseDriverListPagination(url)
     const filters: Record<string, unknown> = {
       teamMemberId: driver.teamMemberId,
       deletedAt: null,
@@ -49,17 +52,36 @@ export async function GET(req: Request) {
       filters.assignmentDate = range
     }
     const em = context.container.resolve('em') as EntityManager
-    const items = await findWithDecryption(
-      em,
-      TaxiFleetDailyAssignment,
-      filters,
-      undefined,
-      { tenantId: driver.teamMember.tenantId, organizationId: driver.teamMember.organizationId },
-    )
+    const scope = {
+      tenantId: driver.teamMember.tenantId,
+      organizationId: driver.teamMember.organizationId,
+    }
+
+    let items: TaxiFleetDailyAssignment[]
+    let total: number
+    if (paginate) {
+      const result = await findAndCountWithDecryption(
+        em,
+        TaxiFleetDailyAssignment,
+        filters,
+        {
+          orderBy: { assignmentDate: 'DESC' },
+          limit: pageSize,
+          offset: (page - 1) * pageSize,
+        },
+        scope,
+      )
+      items = result[0]
+      total = result[1]
+    } else {
+      items = await findWithDecryption(em, TaxiFleetDailyAssignment, filters, undefined, scope)
+      total = items.length
+    }
+
     const labels = await resolveDriverResourceLabelInfos(
       em,
       items.map((row) => row.resourceId),
-      { tenantId: driver.teamMember.tenantId, organizationId: driver.teamMember.organizationId },
+      scope,
     )
     return NextResponse.json({
       items: items.map((row) => {
@@ -79,6 +101,9 @@ export async function GET(req: Request) {
           gpsDistanceKm: row.gpsDistanceKm ?? null,
         }
       }),
+      page: paginate ? page : 1,
+      pageSize: paginate ? pageSize : total || pageSize,
+      total,
     })
   } catch (err) {
     if (err instanceof CrudHttpError) return NextResponse.json(err.body, { status: err.status })

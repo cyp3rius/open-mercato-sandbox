@@ -25,6 +25,10 @@ import {
 } from '../../../components/driverApp/driverUi'
 import { flushDriverLocationTracking } from '../../../components/driverApp/useDriverTracking'
 import { useRegisterDriverPullToRefresh } from '../../../components/driverApp/DriverPullToRefresh'
+import {
+  DRIVER_LIST_PAGE_SIZE,
+  useDriverPagedList,
+} from '../../../components/driverApp/useDriverPagedList'
 import { enqueueDriverMutation } from '../../../lib/driverOffline/outbox'
 import { formatVehicleResourceLabel, stripPlateFromVehicleName } from '../../../lib/vehicleResourceLabel'
 
@@ -50,20 +54,6 @@ type MeResponse = {
 
 type AssignmentFilter = 'all' | 'week'
 
-const PAGE_SIZE = 10
-
-function parseAssignmentDate(value: string): Date | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim())
-  if (!match) {
-    const fallback = new Date(value)
-    return Number.isNaN(fallback.getTime()) ? null : fallback
-  }
-  const year = Number(match[1])
-  const month = Number(match[2]) - 1
-  const day = Number(match[3])
-  return new Date(year, month, day)
-}
-
 function startOfLocalWeek(date = new Date()): Date {
   const day = new Date(date.getFullYear(), date.getMonth(), date.getDate())
   const weekday = day.getDay()
@@ -75,29 +65,6 @@ function startOfLocalWeek(date = new Date()): Date {
 function endOfLocalWeek(date = new Date()): Date {
   const start = startOfLocalWeek(date)
   return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6, 23, 59, 59, 999)
-}
-
-function isAssignmentInCurrentWeek(row: AssignmentRow, day = new Date()): boolean {
-  const assignmentDay = parseAssignmentDate(row.assignmentDate)
-  if (!assignmentDay) return false
-  const start = startOfLocalWeek(day).getTime()
-  const end = endOfLocalWeek(day).getTime()
-  const time = assignmentDay.getTime()
-  return time >= start && time <= end
-}
-
-function assignmentSortTime(row: AssignmentRow): number {
-  const startRaw = row.plannedShiftStart ?? row.shiftStart
-  if (startRaw) {
-    const shift = new Date(startRaw).getTime()
-    if (!Number.isNaN(shift)) return shift
-  }
-  const day = parseAssignmentDate(row.assignmentDate)
-  return day ? day.getTime() : 0
-}
-
-function sortAssignmentsNewestFirst(items: AssignmentRow[]): AssignmentRow[] {
-  return [...items].sort((left, right) => assignmentSortTime(right) - assignmentSortTime(left))
 }
 
 function formatClock(value: string | null | undefined): string {
@@ -259,63 +226,98 @@ function TodayShiftStartCard({
 
 export default function DriverAssignmentsPage() {
   const t = useT()
-  const [items, setItems] = React.useState<AssignmentRow[]>([])
   const [me, setMe] = React.useState<MeResponse | null>(null)
   const [filter, setFilter] = React.useState<AssignmentFilter>('week')
-  const [page, setPage] = React.useState(0)
   const [busyId, setBusyId] = React.useState<string | null>(null)
-
-  const reload = React.useCallback(async () => {
-    const [assignmentsCall, meCall] = await Promise.all([
-      apiCall<{ items: AssignmentRow[] }>('/api/taxi_fleet/driver/assignments'),
-      apiCall<MeResponse>('/api/taxi_fleet/driver/me'),
-    ])
-    setItems(sortAssignmentsNewestFirst(assignmentsCall.result?.items ?? []))
-    setMe(meCall.result ?? null)
-  }, [])
-
-  useRegisterDriverPullToRefresh(async () => {
-    await reload().catch(() => undefined)
-  })
 
   React.useEffect(() => {
     let active = true
-    ;(async () => {
-      try {
-        const [assignmentsCall, meCall] = await Promise.all([
-          apiCall<{ items: AssignmentRow[] }>('/api/taxi_fleet/driver/assignments'),
-          apiCall<MeResponse>('/api/taxi_fleet/driver/me'),
-        ])
+    void apiCall<MeResponse>('/api/taxi_fleet/driver/me')
+      .then(({ result }) => {
         if (!active) return
-        setItems(sortAssignmentsNewestFirst(assignmentsCall.result?.items ?? []))
-        setMe(meCall.result ?? null)
-      } catch {
-        flash(t('taxi_fleet.driverApp.assignments.loadFailed', 'Could not load assignments.'), 'error')
-      }
-    })()
+        setMe(result ?? null)
+      })
+      .catch(() => undefined)
     return () => {
       active = false
     }
-  }, [t])
+  }, [])
 
-  const filteredItems = React.useMemo(() => {
-    const scoped = filter === 'week' ? items.filter((row) => isAssignmentInCurrentWeek(row)) : items
-    return sortAssignmentsNewestFirst(scoped)
-  }, [filter, items])
+  const weekRange = React.useMemo(() => {
+    const start = startOfLocalWeek()
+    const end = endOfLocalWeek()
+    const toParam = (date: Date) => {
+      const y = date.getFullYear()
+      const m = String(date.getMonth() + 1).padStart(2, '0')
+      const d = String(date.getDate()).padStart(2, '0')
+      return `${y}-${m}-${d}`
+    }
+    return { dateFrom: toParam(start), dateTo: toParam(end) }
+  }, [])
 
-  const pageCount = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE))
-  const safePage = Math.min(page, pageCount - 1)
-  const pageItems = filteredItems.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE)
-  const canGoPrev = safePage > 0
-  const canGoNext = safePage < pageCount - 1 && filteredItems.length > 0
+  const listQueryKey = `assignments:${filter}`
+
+  const fetchPage = React.useCallback(
+    async (page: number, pageSize: number) => {
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
+      })
+      if (filter === 'week') {
+        params.set('dateFrom', weekRange.dateFrom)
+        params.set('dateTo', weekRange.dateTo)
+      }
+      const { result, ok } = await apiCall<{
+        items: AssignmentRow[]
+        page: number
+        pageSize: number
+        total: number
+      }>(`/api/taxi_fleet/driver/assignments?${params}`)
+      if (!ok || !result) throw new Error('load_failed')
+      return {
+        items: result.items ?? [],
+        page: result.page ?? page,
+        pageSize: result.pageSize ?? pageSize,
+        total: result.total ?? 0,
+      }
+    },
+    [filter, weekRange.dateFrom, weekRange.dateTo],
+  )
+
+  const {
+    items,
+    page,
+    pageCount,
+    total,
+    loading,
+    error,
+    goToPage,
+    reload,
+    canGoPrev,
+    canGoNext,
+  } = useDriverPagedList<AssignmentRow>({
+    queryKey: listQueryKey,
+    fetchPage,
+    pageSize: DRIVER_LIST_PAGE_SIZE,
+  })
 
   React.useEffect(() => {
-    if (page !== safePage) setPage(safePage)
-  }, [page, safePage])
+    if (error) {
+      flash(t('taxi_fleet.driverApp.assignments.loadFailed', 'Could not load assignments.'), 'error')
+    }
+  }, [error, t])
+
+  useRegisterDriverPullToRefresh(async () => {
+    await Promise.all([
+      reload().catch(() => undefined),
+      apiCall<MeResponse>('/api/taxi_fleet/driver/me')
+        .then(({ result }) => setMe(result ?? null))
+        .catch(() => undefined),
+    ])
+  })
 
   function selectFilter(next: AssignmentFilter) {
     setFilter(next)
-    setPage(0)
   }
 
   async function endShift(row: AssignmentRow) {
@@ -328,17 +330,7 @@ export default function DriverAssignmentsPage() {
           type: 'assignment.shift',
           payload: { assignmentId: row.id, action: 'end' },
         })
-        setItems((current) =>
-          current.map((item) =>
-            item.id !== row.id
-              ? item
-              : {
-                  ...item,
-                  shiftEnd: new Date().toISOString(),
-                  status: 'completed',
-                },
-          ),
-        )
+        await reload()
         flash(t('taxi_fleet.driverApp.assignments.shiftEnded', 'Shift ended.'), 'success')
         return
       }
@@ -445,7 +437,11 @@ export default function DriverAssignmentsPage() {
           </Button>
         </div>
 
-        {filteredItems.length === 0 ? (
+        {loading && items.length === 0 ? (
+          <div className={`px-1 py-8 text-center ${driverMutedTextClass}`}>
+            {t('taxi_fleet.driverApp.assignments.loading', 'Loading assignments…')}
+          </div>
+        ) : items.length === 0 ? (
           <div className={`px-1 py-8 text-center ${driverMutedTextClass}`}>
             {filter === 'week'
               ? t('taxi_fleet.driverApp.assignments.emptyWeek', 'No assignments this week.')
@@ -453,7 +449,7 @@ export default function DriverAssignmentsPage() {
           </div>
         ) : (
           <>
-            {pageItems.map((row) => {
+            {items.map((row) => {
               const canEnd = row.status !== 'cancelled' && Boolean(row.shiftStart) && !row.shiftEnd
               const onShift = Boolean(row.shiftStart) && !row.shiftEnd
               const busy = busyId === row.id
@@ -506,32 +502,31 @@ export default function DriverAssignmentsPage() {
                 <Button
                   type="button"
                   variant="ghost"
-                  disabled={!canGoPrev}
+                  disabled={!canGoPrev || loading}
                   className="h-10 gap-1 px-2 text-[#78829D] hover:!bg-[#F1F1F4]/50 hover:!text-[#4B5675] disabled:opacity-40"
-                  onClick={() => setPage((current) => Math.max(0, current - 1))}
+                  onClick={() => goToPage(page - 1)}
                   aria-label={t('taxi_fleet.driverApp.assignments.pagePrev', 'Previous')}
                 >
                   <ChevronLeft className="size-4" aria-hidden />
                   {t('taxi_fleet.driverApp.assignments.pagePrev', 'Previous')}
                 </Button>
 
-                <div className="flex items-center gap-1.5" aria-hidden>
-                  {Array.from({ length: pageCount }, (_, index) => (
-                    <span
-                      key={`dot-${index}`}
-                      className={`size-1.5 rounded-full ${
-                        index === safePage ? 'bg-[#1B84FF]' : 'bg-[#DBDFE9]'
-                      }`}
-                    />
-                  ))}
+                <div className={`text-xs tabular-nums ${driverMutedTextClass}`}>
+                  {t('taxi_fleet.driverApp.pagination.pageOf', 'Page {page} of {totalPages}', {
+                    page,
+                    totalPages: pageCount,
+                  })}
+                  {total > 0
+                    ? ` · ${t('taxi_fleet.driverApp.pagination.total', '{total} total', { total })}`
+                    : null}
                 </div>
 
                 <Button
                   type="button"
                   variant="ghost"
-                  disabled={!canGoNext}
+                  disabled={!canGoNext || loading}
                   className="h-10 gap-1 px-2 text-[#78829D] hover:!bg-[#F1F1F4]/50 hover:!text-[#4B5675] disabled:opacity-40"
-                  onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}
+                  onClick={() => goToPage(page + 1)}
                   aria-label={t('taxi_fleet.driverApp.assignments.pageNext', 'Next')}
                 >
                   {t('taxi_fleet.driverApp.assignments.pageNext', 'Next')}

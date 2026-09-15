@@ -14,6 +14,10 @@ import {
   tripListHasProcessingReceipt,
 } from '../../../components/driverApp/DriverTripReceiptStatusBadge'
 import {
+  DRIVER_LIST_PAGE_SIZE,
+  useDriverPagedList,
+} from '../../../components/driverApp/useDriverPagedList'
+import {
   driverBadgeInfoClass,
   driverBadgeNeutralClass,
   driverListRowClass,
@@ -23,7 +27,6 @@ import {
 } from '../../../components/driverApp/driverUi'
 import { DriverWritable } from '../../../components/driverApp/DriverWritable'
 import type { DriverTripReceiptWarning } from '../../../lib/driverTripReceiptStatus'
-import { cacheDriverJson, readCachedDriverJson } from '../../../lib/driverOffline/outbox'
 import { tripRequestDetailsFromMetadata } from '../../../lib/tripRequestForm'
 import { isDriverTripElectronicallyPrepaid } from '../../../lib/driverTripPayment'
 import { isDriverOnOpenShift } from '../../../lib/driverTripShiftWindow'
@@ -46,9 +49,14 @@ type TripRow = {
   warnings?: DriverTripReceiptWarning[]
 }
 
-type TripFilter = 'all' | 'today'
+type TripListResponse = {
+  items: TripRow[]
+  page: number
+  pageSize: number
+  total: number
+}
 
-const PAGE_SIZE = 10
+type TripFilter = 'all' | 'today'
 
 function formatTripMoment(value: string | null | undefined): string | null {
   if (!value) return null
@@ -80,22 +88,6 @@ function formatRoute(fromAddress: string, toAddress: string): string | null {
   return null
 }
 
-function normalizeCachedTrips(cached: TripRow[] | { items?: TripRow[] } | null): TripRow[] {
-  if (!cached) return []
-  if (Array.isArray(cached)) return cached
-  return Array.isArray(cached.items) ? cached.items : []
-}
-
-function tripStartTime(trip: TripRow): number {
-  if (!trip.startedAt) return 0
-  const time = new Date(trip.startedAt).getTime()
-  return Number.isNaN(time) ? 0 : time
-}
-
-function sortTripsByStartedAtDesc(items: TripRow[]): TripRow[] {
-  return [...items].sort((left, right) => tripStartTime(right) - tripStartTime(left))
-}
-
 function startOfLocalDay(date = new Date()): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
@@ -104,21 +96,12 @@ function endOfLocalDay(date = new Date()): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999)
 }
 
-function isTripStartingToday(trip: TripRow, day = new Date()): boolean {
-  if (!trip.startedAt) return false
-  const time = new Date(trip.startedAt).getTime()
-  if (Number.isNaN(time)) return false
-  return time >= startOfLocalDay(day).getTime() && time <= endOfLocalDay(day).getTime()
-}
-
 export default function DriverTripsPage() {
   const t = useT()
   const { resolveTripStatusLabel } = useTaxiFleetLabels()
-  const [items, setItems] = React.useState<TripRow[]>([])
   const [onOpenShift, setOnOpenShift] = React.useState(false)
   const [shiftReady, setShiftReady] = React.useState(false)
   const [filter, setFilter] = React.useState<TripFilter>('today')
-  const [page, setPage] = React.useState(0)
 
   React.useEffect(() => {
     let active = true
@@ -130,17 +113,11 @@ export default function DriverTripsPage() {
         const open = isDriverOnOpenShift(result.todayAssignment)
         setOnOpenShift(open)
         setFilter(open ? 'today' : 'all')
-        setPage(0)
       })
-      .catch(async () => {
+      .catch(() => {
         if (!active) return
-        const cached = await readCachedDriverJson<{
-          todayAssignment?: { shiftStart: string | null; shiftEnd: string | null } | null
-        }>('driver/me')
-        const open = isDriverOnOpenShift(cached?.todayAssignment ?? null)
-        setOnOpenShift(open)
-        setFilter(open ? 'today' : 'all')
-        setPage(0)
+        setOnOpenShift(false)
+        setFilter('all')
       })
       .finally(() => {
         if (active) setShiftReady(true)
@@ -150,82 +127,82 @@ export default function DriverTripsPage() {
     }
   }, [])
 
-  React.useEffect(() => {
-    let active = true
-    ;(async () => {
-      try {
-        const { result } = await apiCall<{ items: TripRow[] }>('/api/taxi_fleet/driver/trips')
-        if (!active) return
-        const next = sortTripsByStartedAtDesc(result?.items ?? [])
-        setItems(next)
-        await cacheDriverJson('driver/trips', next)
-      } catch {
-        const cached = await readCachedDriverJson<TripRow[] | { items?: TripRow[] }>('driver/trips')
-        const next = sortTripsByStartedAtDesc(normalizeCachedTrips(cached))
-        if (next.length) {
-          setItems(next)
-          flash(t('taxi_fleet.driverApp.usingCache', 'Showing cached data (offline).'), 'warning')
-          return
-        }
-        flash(t('taxi_fleet.driverApp.trips.loadFailed', 'Could not load trips.'), 'error')
-      }
-    })()
-    return () => {
-      active = false
-    }
-  }, [t])
+  const effectiveFilter: TripFilter = onOpenShift ? filter : 'all'
+  const listQueryKey = `trips:${effectiveFilter}`
 
-  const reloadTrips = React.useCallback(async () => {
-    const { result } = await apiCall<{ items: TripRow[] }>('/api/taxi_fleet/driver/trips')
-    const next = sortTripsByStartedAtDesc(result?.items ?? [])
-    setItems(next)
-    await cacheDriverJson('driver/trips', next)
-  }, [])
+  const fetchPage = React.useCallback(
+    async (page: number, pageSize: number) => {
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
+      })
+      if (effectiveFilter === 'today') {
+        params.set('startedFrom', startOfLocalDay().toISOString())
+        params.set('startedTo', endOfLocalDay().toISOString())
+      }
+      const { result, ok } = await apiCall<TripListResponse>(
+        `/api/taxi_fleet/driver/trips?${params}`,
+      )
+      if (!ok || !result) throw new Error('load_failed')
+      return {
+        items: result.items ?? [],
+        page: result.page ?? page,
+        pageSize: result.pageSize ?? pageSize,
+        total: result.total ?? 0,
+      }
+    },
+    [effectiveFilter],
+  )
+
+  const {
+    items,
+    page,
+    pageCount,
+    total,
+    loading,
+    error,
+    goToPage,
+    reload,
+    canGoPrev,
+    canGoNext,
+  } = useDriverPagedList<TripRow>({
+    queryKey: listQueryKey,
+    fetchPage,
+    pageSize: DRIVER_LIST_PAGE_SIZE,
+    enabled: shiftReady,
+  })
+
+  React.useEffect(() => {
+    if (error) {
+      flash(t('taxi_fleet.driverApp.trips.loadFailed', 'Could not load trips.'), 'error')
+    }
+  }, [error, t])
 
   useRegisterDriverPullToRefresh(async () => {
-    await reloadTrips().catch(() => undefined)
+    await reload().catch(() => undefined)
   })
 
   React.useEffect(() => {
     if (!tripListHasProcessingReceipt(items)) return
     const timer = window.setInterval(() => {
-      void reloadTrips().catch(() => undefined)
+      void reload().catch(() => undefined)
     }, 3000)
     return () => window.clearInterval(timer)
-  }, [items, reloadTrips])
-
-  const effectiveFilter: TripFilter = onOpenShift ? filter : 'all'
-
-  const filteredItems = React.useMemo(() => {
-    const scoped =
-      effectiveFilter === 'today' ? items.filter((trip) => isTripStartingToday(trip)) : items
-    return sortTripsByStartedAtDesc(scoped)
-  }, [effectiveFilter, items])
-
-  const pageCount = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE))
-  const safePage = Math.min(page, pageCount - 1)
-  const pageItems = filteredItems.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE)
-  const canGoPrev = safePage > 0
-  const canGoNext = safePage < pageCount - 1 && filteredItems.length > 0
-
-  React.useEffect(() => {
-    if (page !== safePage) setPage(safePage)
-  }, [page, safePage])
+  }, [items, reload])
 
   function selectFilter(next: TripFilter) {
     if (!onOpenShift) return
     setFilter(next)
-    setPage(0)
   }
 
   return (
     <DriverTripGate showShiftPrompt={false} title={t('taxi_fleet.driverApp.trips.title', 'My trips')}>
       <div className="space-y-3">
         <DriverWritable>
-        <Link href="/driver/trips/new" className={`${driverPrimaryActionClass} gap-2`}>
-          <Plus className="size-4" aria-hidden />
-          {t('taxi_fleet.driverApp.trips.new', 'New trip')}
-        </Link>
+          <Link href="/driver/trips/new" className={`${driverPrimaryActionClass} gap-2`}>
+            <Plus className="size-4" aria-hidden />
+            {t('taxi_fleet.driverApp.trips.new', 'New trip')}
+          </Link>
         </DriverWritable>
 
         {shiftReady && onOpenShift ? (
@@ -255,7 +232,11 @@ export default function DriverTripsPage() {
           </div>
         ) : null}
 
-        {filteredItems.length === 0 ? (
+        {loading && items.length === 0 ? (
+          <div className={`px-1 py-8 text-center ${driverMutedTextClass}`}>
+            {t('taxi_fleet.driverApp.trips.loading', 'Loading trips…')}
+          </div>
+        ) : items.length === 0 ? (
           <div className={`px-1 py-8 text-center ${driverMutedTextClass}`}>
             {effectiveFilter === 'today'
               ? t('taxi_fleet.driverApp.trips.emptyToday', 'No trips today.')
@@ -263,7 +244,7 @@ export default function DriverTripsPage() {
           </div>
         ) : (
           <>
-            {pageItems.map((trip) => {
+            {items.map((trip) => {
               const request = tripRequestDetailsFromMetadata(trip.metadata ?? null)
               const timeRange = formatTimeRange(trip.startedAt, trip.endedAt)
               const route = formatRoute(request.fromAddress, request.toAddress)
@@ -319,32 +300,31 @@ export default function DriverTripsPage() {
                 <Button
                   type="button"
                   variant="ghost"
-                  disabled={!canGoPrev}
+                  disabled={!canGoPrev || loading}
                   className="h-10 gap-1 px-2 text-[#78829D] hover:!bg-[#F1F1F4]/50 hover:!text-[#4B5675] disabled:opacity-40"
-                  onClick={() => setPage((current) => Math.max(0, current - 1))}
+                  onClick={() => goToPage(page - 1)}
                   aria-label={t('taxi_fleet.driverApp.trips.pagePrev', 'Previous')}
                 >
                   <ChevronLeft className="size-4" aria-hidden />
                   {t('taxi_fleet.driverApp.trips.pagePrev', 'Previous')}
                 </Button>
 
-                <div className="flex items-center gap-1.5" aria-hidden>
-                  {Array.from({ length: pageCount }, (_, index) => (
-                    <span
-                      key={`dot-${index}`}
-                      className={`size-1.5 rounded-full ${
-                        index === safePage ? 'bg-[#1B84FF]' : 'bg-[#DBDFE9]'
-                      }`}
-                    />
-                  ))}
+                <div className={`text-xs tabular-nums ${driverMutedTextClass}`}>
+                  {t('taxi_fleet.driverApp.pagination.pageOf', 'Page {page} of {totalPages}', {
+                    page,
+                    totalPages: pageCount,
+                  })}
+                  {total > 0
+                    ? ` · ${t('taxi_fleet.driverApp.pagination.total', '{total} total', { total })}`
+                    : null}
                 </div>
 
                 <Button
                   type="button"
                   variant="ghost"
-                  disabled={!canGoNext}
+                  disabled={!canGoNext || loading}
                   className="h-10 gap-1 px-2 text-[#78829D] hover:!bg-[#F1F1F4]/50 hover:!text-[#4B5675] disabled:opacity-40"
-                  onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}
+                  onClick={() => goToPage(page + 1)}
                   aria-label={t('taxi_fleet.driverApp.trips.pageNext', 'Next')}
                 >
                   {t('taxi_fleet.driverApp.trips.pageNext', 'Next')}

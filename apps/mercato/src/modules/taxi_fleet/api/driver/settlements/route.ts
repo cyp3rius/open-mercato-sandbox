@@ -15,7 +15,7 @@ export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['taxi_fleet.driver'] },
 }
 
-const DEFAULT_PAGE_SIZE = 10
+const DEFAULT_PAGE_SIZE = 30
 const MAX_PAGE_SIZE = 50
 
 async function buildContext(req: Request): Promise<CommandRuntimeContext> {

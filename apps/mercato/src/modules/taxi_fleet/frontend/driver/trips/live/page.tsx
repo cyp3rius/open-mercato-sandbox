@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useLocale, useT } from '@open-mercato/shared/lib/i18n/context'
 import { parseNumericValue } from '@open-mercato/shared/lib/numeric'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { withFlash } from '@open-mercato/ui/backend/utils/flash'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Notice } from '@open-mercato/ui/primitives/Notice'
@@ -362,19 +363,20 @@ function DriverLiveTripPageInner() {
           pending: true,
         })
         await clearLiveTripDraft(draft.id)
-        flash(
-          commercial.tripType === 'internal'
-            ? t(
-                'taxi_fleet.driverApp.trips.internalSavedPendingOffline',
-                'Trip saved offline. It will sync when you are online and wait for authorization.',
-              )
-            : t(
-                'taxi_fleet.driverApp.trips.pastSavedOffline',
-                'Trip saved offline. It will sync when you are online.',
-              ),
-          'success',
+        window.location.assign(
+          withFlash(
+            '/driver/trips',
+            commercial.tripType === 'internal'
+              ? t(
+                  'taxi_fleet.driverApp.trips.internalSavedPendingOffline',
+                  'Trip saved offline. It will sync when you are online and wait for authorization.',
+                )
+              : t(
+                  'taxi_fleet.driverApp.trips.pastSavedOffline',
+                  'Trip saved offline. It will sync when you are online.',
+                ),
+          ),
         )
-        window.location.assign('/driver/trips')
         return
       }
       await apiCallOrThrow<{ id?: string }>('/api/taxi_fleet/driver/trips', {
@@ -382,8 +384,7 @@ function DriverLiveTripPageInner() {
         body: JSON.stringify({ ...payload, clientMutationId: draft.clientMutationId }),
       })
       await clearLiveTripDraft(draft.id)
-      flash(successMessage, 'success')
-      window.location.assign('/driver/trips')
+      window.location.assign(withFlash('/driver/trips', successMessage))
     } catch (err) {
       const message =
         (err as { body?: { error?: string }; message?: string } | null)?.body?.error ||

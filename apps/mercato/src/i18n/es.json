@@ -667,7 +667,7 @@
   "ui.dataTable.export.format.markdown": "Markdown",
   "ui.dataTable.export.label": "Exportar",
   "ui.dataTable.fieldset.label": "Columns",
-  "ui.dataTable.loading": "Loading table…",
+  "ui.dataTable.loading": "Cargando datos…",
   "ui.dataTable.pagination.cache.ariaLabel": "Caché {status}",
   "ui.dataTable.pagination.cache.srOnly": "Caché {status}",
   "ui.dataTable.pagination.cache.title": "Caché {status}",

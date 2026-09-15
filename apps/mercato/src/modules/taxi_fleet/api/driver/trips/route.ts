@@ -8,7 +8,7 @@ import type { CommandBus, CommandRuntimeContext } from '@open-mercato/shared/lib
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { parseScopedCommandInput } from '@open-mercato/shared/lib/api/scoped'
-import { findOneWithDecryption, findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
+import { findOneWithDecryption, findWithDecryption, findAndCountWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetReceiptExtraction, TaxiFleetTrip } from '@/modules/taxi_fleet/data/entities'
 import { tripCreateSchema, tripUpdateSchema } from '@/modules/taxi_fleet/data/validators'
 import { resolveDriverContext, resolveDriverContextForMutation } from '@/modules/taxi_fleet/lib/driverContext'
@@ -38,6 +38,7 @@ import {
 } from '@/modules/taxi_fleet/lib/driverTripCommercialFields'
 import type { TaxiFleetTripType } from '@/modules/taxi_fleet/components/useTaxiFleetLabels'
 import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
+import { parseDriverListPagination } from '@/modules/taxi_fleet/lib/driverListPagination'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['taxi_fleet.driver'] },
@@ -230,17 +231,58 @@ export async function GET(req: Request) {
     const { translate } = await resolveTranslations()
     const driver = await resolveDriverContext(context, translate, { requireExternalApp: true })
     const em = context.container.resolve('em') as EntityManager
-    const rows = await findWithDecryption(
-      em,
-      TaxiFleetTrip,
-      {
-        teamMemberId: driver.teamMemberId,
-        deletedAt: null,
-        status: { $in: [...DRIVER_VISIBLE_TRIP_STATUSES] },
-      },
-      { orderBy: { startedAt: 'DESC' } },
-      { tenantId: driver.teamMember.tenantId, organizationId: driver.teamMember.organizationId },
-    )
+    const url = new URL(req.url)
+    const { page, pageSize } = parseDriverListPagination(url)
+    const tripId = url.searchParams.get('id')?.trim() || null
+    const startedFromRaw = url.searchParams.get('startedFrom')
+    const startedToRaw = url.searchParams.get('startedTo')
+    const startedFrom = startedFromRaw ? new Date(startedFromRaw) : null
+    const startedTo = startedToRaw ? new Date(startedToRaw) : null
+
+    const baseFilters: Record<string, unknown> = {
+      teamMemberId: driver.teamMemberId,
+      deletedAt: null,
+      status: { $in: [...DRIVER_VISIBLE_TRIP_STATUSES] },
+    }
+    if (tripId) {
+      baseFilters.id = tripId
+    } else if (
+      (startedFrom && !Number.isNaN(startedFrom.getTime())) ||
+      (startedTo && !Number.isNaN(startedTo.getTime()))
+    ) {
+      const range: Record<string, Date> = {}
+      if (startedFrom && !Number.isNaN(startedFrom.getTime())) range.$gte = startedFrom
+      if (startedTo && !Number.isNaN(startedTo.getTime())) range.$lte = startedTo
+      baseFilters.startedAt = range
+    }
+
+    const scope = {
+      tenantId: driver.teamMember.tenantId,
+      organizationId: driver.teamMember.organizationId,
+    }
+
+    let rows: TaxiFleetTrip[]
+    let total: number
+    if (tripId) {
+      const row = await findOneWithDecryption(em, TaxiFleetTrip, baseFilters, undefined, scope)
+      rows = row ? [row] : []
+      total = rows.length
+    } else {
+      const result = await findAndCountWithDecryption(
+        em,
+        TaxiFleetTrip,
+        baseFilters,
+        {
+          orderBy: { startedAt: 'DESC' },
+          limit: pageSize,
+          offset: (page - 1) * pageSize,
+        },
+        scope,
+      )
+      rows = result[0]
+      total = result[1]
+    }
+
     const extractionByTripId = await resolveTripExtractionMap(
       em,
       rows,
@@ -264,7 +306,12 @@ export async function GET(req: Request) {
         metadata: enrichedMetadataByTripId.get(trip.id) ?? trip.metadata ?? null,
       })
     })
-    return NextResponse.json({ items })
+    return NextResponse.json({
+      items,
+      page: tripId ? 1 : page,
+      pageSize: tripId ? items.length || 1 : pageSize,
+      total,
+    })
   } catch (err) {
     if (err instanceof CrudHttpError) return NextResponse.json(err.body, { status: err.status })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
