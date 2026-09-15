@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
-import { BadgeCheck, CalendarClock, Check, CreditCard, X } from 'lucide-react'
+import { BadgeCheck, CalendarClock, Check, CreditCard, ShieldCheck, X } from 'lucide-react'
 import { ApplyBreadcrumb } from '@open-mercato/ui/backend/AppShell'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -60,7 +60,7 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
   const tripId = params?.id ?? ''
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const { profiles, resolveName } = useFleetDriverDirectory()
-  const { canManageTrips, canEditCompletedTrips } = useTaxiFleetPermissions()
+  const { canManageTrips, canEditCompletedTrips, canAuthorizeInternalTrips } = useTaxiFleetPermissions()
   const { isDriverOnly, lockedTeamMemberId } = useFleetBackendSession()
   const { statusOptions } = useTripStatusDictionary()
   const [row, setRow] = React.useState<TripRow | null>(null)
@@ -137,6 +137,7 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
         schedule: `/api/taxi_fleet/trips/${tripId}/schedule`,
         mark_paid: `/api/taxi_fleet/trips/${tripId}/mark-paid`,
         complete: `/api/taxi_fleet/trips/${tripId}/complete`,
+        authorize_internal: `/api/taxi_fleet/trips/${tripId}/authorize-internal`,
       }
       const successByAction: Record<TripDetailActionId, string> = {
         approve: t('taxi_fleet.trips.approved', 'Trip approved.'),
@@ -144,6 +145,10 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
         schedule: t('taxi_fleet.trips.scheduled', 'Trip marked for fulfillment.'),
         mark_paid: t('taxi_fleet.trips.markedPaid', 'Trip marked as paid.'),
         complete: t('taxi_fleet.trips.completedFlash', 'Trip marked as completed.'),
+        authorize_internal: t(
+          'taxi_fleet.trips.authorizedInternalFlash',
+          'Internal trip authorized.',
+        ),
       }
       const call = await apiCall(pathByAction[action], { method: 'POST' })
       setPendingAction(null)
@@ -186,7 +191,18 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
     allowEditCompleted: canEditCompletedTrips,
   })
   const formFullyReadOnly = !canEditTrip || lockMode === 'full'
-  const availableActions = canManageTrips ? tripDetailActionsForStatus(normalizedStatus) : []
+  const availableActions = (() => {
+    if (
+      row.tripType === 'internal' &&
+      normalizedStatus === 'pending_authorization'
+    ) {
+      return canAuthorizeInternalTrips
+        ? (['authorize_internal'] as TripDetailActionId[])
+        : []
+    }
+    if (!canManageTrips) return []
+    return tripDetailActionsForStatus(normalizedStatus)
+  })()
   const actionBusy = pendingAction !== null
 
   const actionButtons: Record<
@@ -212,6 +228,10 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
     complete: {
       icon: <BadgeCheck className="size-4 shrink-0" aria-hidden />,
       label: t('taxi_fleet.trips.actions.complete', 'Completed'),
+    },
+    authorize_internal: {
+      icon: <ShieldCheck className="size-4 shrink-0" aria-hidden />,
+      label: t('taxi_fleet.trips.actions.authorizeInternal', 'Authorize'),
     },
   }
 

@@ -152,6 +152,15 @@ export function defaultTripStatusDictionary(): TaxiFleetTripStatusDefinition[] {
       onEnterActions: ['notify_assigned'],
     },
     {
+      code: 'pending_authorization',
+      label: 'Do autoryzacji',
+      icon: 'lucide:shield-check',
+      color: '#f59e0b',
+      sortOrder: 45,
+      isTerminal: false,
+      onEnterActions: [],
+    },
+    {
       code: 'completed',
       label: 'Zrealizowany',
       icon: 'lucide:badge-check',
@@ -232,6 +241,10 @@ export function mergeTripStatusDictionary(raw: unknown): TaxiFleetTripStatusDefi
     const normalized = normalizeTripStatusDefinition(entry)
     if (!normalized.code.length) continue
     byCode.set(normalized.code, normalized)
+  }
+  // Ensure newly introduced default statuses exist for orgs with a custom dictionary.
+  for (const entry of defaults) {
+    if (!byCode.has(entry.code)) byCode.set(entry.code, entry)
   }
   const merged = [...byCode.values()].sort((left, right) => left.sortOrder - right.sortOrder)
   return merged.length ? merged : defaults

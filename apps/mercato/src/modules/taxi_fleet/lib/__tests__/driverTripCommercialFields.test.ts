@@ -1,7 +1,9 @@
 import {
   DRIVER_COMMERCIAL_TRIP_TYPES,
   resolveDriverCommercialFieldVisibility,
+  resolveDriverTripFinishStatus,
   tripTypeRequiresCustomer,
+  tripTypeRequiresReceipt,
 } from '../driverTripCommercialFields'
 
 describe('driverTripCommercialFields', () => {
@@ -16,13 +18,21 @@ describe('driverTripCommercialFields', () => {
     ])
   })
 
-  it('hides platform/customer/payment for private, internal, empty', () => {
-    for (const tripType of ['private', 'internal', 'empty'] as const) {
+  it('hides payment for private, internal, empty; receipt only for non-internal', () => {
+    expect(resolveDriverCommercialFieldVisibility('internal')).toEqual({
+      showPlatform: false,
+      showCustomer: false,
+      customerRequired: false,
+      showPayment: false,
+      showReceipt: false,
+    })
+    for (const tripType of ['private', 'empty'] as const) {
       expect(resolveDriverCommercialFieldVisibility(tripType)).toEqual({
         showPlatform: false,
         showCustomer: false,
         customerRequired: false,
         showPayment: false,
+        showReceipt: true,
       })
     }
   })
@@ -31,6 +41,18 @@ describe('driverTripCommercialFields', () => {
     expect(tripTypeRequiresCustomer('client')).toBe(true)
     expect(tripTypeRequiresCustomer('other')).toBe(true)
     expect(tripTypeRequiresCustomer('street_hail')).toBe(false)
+  })
+
+  it('does not require receipt for internal trips', () => {
+    expect(tripTypeRequiresReceipt('internal')).toBe(false)
+    expect(tripTypeRequiresReceipt('client')).toBe(true)
+    expect(tripTypeRequiresReceipt('private')).toBe(true)
+  })
+
+  it('maps internal finish to pending_authorization', () => {
+    expect(resolveDriverTripFinishStatus('internal', 'completed')).toBe('pending_authorization')
+    expect(resolveDriverTripFinishStatus('client', 'completed')).toBe('completed')
+    expect(resolveDriverTripFinishStatus('internal', 'scheduled')).toBe('scheduled')
   })
 
   it('never shows platform picker for driver commercial types', () => {
@@ -45,6 +67,7 @@ describe('driverTripCommercialFields', () => {
       showCustomer: true,
       customerRequired: false,
       showPayment: true,
+      showReceipt: true,
     })
   })
 
@@ -54,12 +77,14 @@ describe('driverTripCommercialFields', () => {
       showCustomer: true,
       customerRequired: true,
       showPayment: true,
+      showReceipt: true,
     })
     expect(resolveDriverCommercialFieldVisibility('other')).toEqual({
       showPlatform: false,
       showCustomer: true,
       customerRequired: true,
       showPayment: true,
+      showReceipt: true,
     })
   })
 })

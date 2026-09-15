@@ -34,6 +34,7 @@ import { readQuoteSnapshotFromMetadata } from '../../../../lib/pricing/tripFormQ
 import { isDriverTripElectronicallyPrepaid } from '../../../../lib/driverTripPayment'
 import { findDriverTripOverlap } from '../../../../lib/driverTripOverlapClient'
 import { useTaxiFleetLabels } from '../../../../components/useTaxiFleetLabels'
+import { isDriverTripFinishedStatus, resolveDriverFacingTripStatus } from '../../../../lib/driverVisibleTripStatuses'
 import { DriverReceiptPreview } from '../../../../components/driverApp/DriverReceiptPreview'
 import { DriverReceiptFields } from '../../../../components/driverApp/DriverReceiptFields'
 import {
@@ -382,8 +383,16 @@ function DriverTripDetailContent({
 
   const isScheduled = trip?.status === 'scheduled'
   const isInProgress = trip?.status === 'in_progress'
-  const isCompleted = trip?.status === 'completed'
+  const isFinished = Boolean(trip && isDriverTripFinishedStatus(trip.status))
   const isPlatformTrip = Boolean(trip && isPlatformIngestedTrip(trip.metadata ?? null))
+  const canSupplementReceipt =
+    Boolean(
+      trip &&
+        trip.status === 'completed' &&
+        trip.tripType !== 'internal' &&
+        !tripHasReceiptAttachment(trip),
+    ) && !isPlatformTrip
+  const facingStatus = trip ? resolveDriverFacingTripStatus(trip.status) : ''
   const isPrepaid = trip ? isDriverTripElectronicallyPrepaid(trip) : false
   const resolvedReceiptAttachmentId = trip ? resolveTripReceiptAttachmentId(trip) : null
   const receiptStatusItem = {
@@ -410,8 +419,6 @@ function DriverTripDetailContent({
     }
     return []
   })()
-  const canSupplementReceipt =
-    Boolean(trip && isCompleted && !tripHasReceiptAttachment(trip)) && !isPlatformTrip
   const request = trip
     ? tripRequestDetailsFromMetadata(trip.metadata ?? null, {
         distanceKm: trip.distanceKm != null ? String(trip.distanceKm) : null,
@@ -527,14 +534,19 @@ function DriverTripDetailContent({
                             'taxi_fleet.driverApp.trips.inProgressHint',
                             'Trip is running. Finish when the passenger gets off — only end time will change.',
                           )
-                        : t('taxi_fleet.driverApp.trips.detailHint', 'Overview of this reported trip.')}
+                        : isFinished
+                          ? t(
+                              'taxi_fleet.driverApp.trips.finishedHint',
+                              'This trip is finished and cannot be edited.',
+                            )
+                          : t('taxi_fleet.driverApp.trips.detailHint', 'Overview of this reported trip.')}
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                   <span
                     className={`${isScheduled || isInProgress ? driverBadgeWarningClass : driverBadgeNeutralClass}`}
                   >
-                    {resolveTripStatusLabel(trip.status)}
+                    {resolveTripStatusLabel(facingStatus || trip.status)}
                   </span>
                   <DriverTripReceiptStatusBadge
                     item={receiptStatusItem}

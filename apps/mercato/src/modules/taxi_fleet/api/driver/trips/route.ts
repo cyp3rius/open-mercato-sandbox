@@ -32,6 +32,11 @@ import { TAXI_FLEET_FINANCIAL_ENTRY_ENTITY_ID } from '@/modules/taxi_fleet/lib/f
 import { TAXI_FLEET_DRIVER_RECEIPTS_PARTITION } from '@/modules/taxi_fleet/lib/receiptPartition'
 import { applyReceiptExtractionToLinkedRecords } from '@/modules/taxi_fleet/lib/receiptExtractionPipeline'
 import { DRIVER_VISIBLE_TRIP_STATUSES } from '@/modules/taxi_fleet/lib/driverVisibleTripStatuses'
+import {
+  resolveDriverTripFinishStatus,
+  tripTypeRequiresReceipt,
+} from '@/modules/taxi_fleet/lib/driverTripCommercialFields'
+import type { TaxiFleetTripType } from '@/modules/taxi_fleet/components/useTaxiFleetLabels'
 import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 
 export const metadata = {
@@ -345,6 +350,17 @@ export async function POST(req: Request) {
       receiptAttachmentId,
     })
 
+    const requestedStatusRaw =
+      typeof (body as { status?: unknown }).status === 'string'
+        ? String((body as { status: string }).status)
+        : 'completed'
+    const tripTypeRaw =
+      typeof (body as { tripType?: unknown }).tripType === 'string'
+        ? String((body as { tripType: string }).tripType)
+        : 'client'
+    const requestedStatus = resolveDriverTripFinishStatus(tripTypeRaw, requestedStatusRaw)
+    const isScheduledCreate = requestedStatus === 'scheduled'
+    const needsReceipt = tripTypeRequiresReceipt(tripTypeRaw as TaxiFleetTripType)
     if (receiptOnly && !receiptAttachmentId) {
       throw new CrudHttpError(400, {
         error: translate(
@@ -353,13 +369,7 @@ export async function POST(req: Request) {
         ),
       })
     }
-
-    const requestedStatus =
-      typeof (body as { status?: unknown }).status === 'string'
-        ? String((body as { status: string }).status)
-        : 'completed'
-    const isScheduledCreate = requestedStatus === 'scheduled'
-    if (!receiptOnly && !isScheduledCreate && !receiptAttachmentId) {
+    if (needsReceipt && !receiptOnly && !isScheduledCreate && !receiptAttachmentId) {
       throw new CrudHttpError(400, {
         error: translate(
           'taxi_fleet.driverApp.receipt.photoRequired',
@@ -390,6 +400,7 @@ export async function POST(req: Request) {
       tripCreateSchema,
       {
         ...normalizedBody,
+        status: requestedStatus,
         metadata,
         teamMemberId: driver.teamMemberId,
         tenantId: driver.teamMember.tenantId,
@@ -489,7 +500,33 @@ export async function PUT(req: Request) {
       })
     }
 
-    const { action, input } = resolveDriverTripUpdateInput(existing.status, body)
+    const { action, input } = resolveDriverTripUpdateInput(existing.status, body, existing.tripType)
+    const nextTripType =
+      typeof body.tripType === 'string' ? body.tripType : existing.tripType
+    const nextStatus =
+      typeof input.status === 'string'
+        ? input.status
+        : typeof body.status === 'string'
+          ? resolveDriverTripFinishStatus(nextTripType, body.status)
+          : existing.status
+    const isFinishing =
+      (action === 'live_update' || action === 'complete') &&
+      (nextStatus === 'completed' || nextStatus === 'pending_authorization')
+    if (
+      isFinishing &&
+      tripTypeRequiresReceipt(nextTripType as TaxiFleetTripType) &&
+      !receiptOnly &&
+      !receiptAttachmentId &&
+      !tripHasReceiptAttachment(existing)
+    ) {
+      throw new CrudHttpError(400, {
+        error: translate(
+          'taxi_fleet.driverApp.receipt.photoRequired',
+          'Receipt photo is required for this trip.',
+        ),
+      })
+    }
+
     const normalizedInput = receiptOnly
       ? {
           ...input,

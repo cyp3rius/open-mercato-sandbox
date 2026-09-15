@@ -15,6 +15,7 @@ import {
 } from '../lib/calendarScheduleItems'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useTaxiFleetLabels } from './useTaxiFleetLabels'
+import { useTripStatusDictionary } from './useTripStatusDictionary'
 import type { TripCreateSeed } from './TripCreateDialog'
 import { TripScheduleEventCard, AssignmentScheduleEventCard } from './TripScheduleEventCard'
 import { TripCalendarDetailsPanel } from './TripCalendarDetailsPanel'
@@ -67,6 +68,7 @@ export function AssignmentCalendar({
 }: AssignmentCalendarProps) {
   const t = useT()
   const { resolveTripTypeLabel } = useTaxiFleetLabels()
+  const { findDefinition } = useTripStatusDictionary()
   const ensureDriverNames = useEnsureFleetDriverNames()
   const [selectedTripItem, setSelectedTripItem] = React.useState<ScheduleItem | null>(null)
   const [panelOpen, setPanelOpen] = React.useState(false)
@@ -188,15 +190,18 @@ export function AssignmentCalendar({
     [onCreateTrip],
   )
 
-  const renderEvent = React.useCallback((item: ScheduleItem) => {
-    if (item.metadata?.recordType === 'trip') {
-      return <TripScheduleEventCard item={item} />
-    }
-    if (item.metadata?.recordType === 'assignment') {
-      return <AssignmentScheduleEventCard item={item} />
-    }
-    return <span className="truncate text-xs font-medium">{item.title}</span>
-  }, [])
+  const renderEvent = React.useCallback(
+    (item: ScheduleItem) => {
+      if (item.metadata?.recordType === 'trip') {
+        return <TripScheduleEventCard item={item} findDefinition={findDefinition} />
+      }
+      if (item.metadata?.recordType === 'assignment') {
+        return <AssignmentScheduleEventCard item={item} />
+      }
+      return <span className="truncate text-xs font-medium">{item.title}</span>
+    },
+    [findDefinition],
+  )
 
   const driverLegendEntries = React.useMemo(
     () =>

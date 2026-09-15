@@ -106,6 +106,9 @@ export async function runTripStatusEnterActions(
   for (const action of definition?.onEnterActions ?? []) {
     await runStatusEnterAction(ctx, row, action, options)
   }
+  if (normalized === 'pending_authorization') {
+    await emitTripEvent(ctx, 'taxi_fleet.trip.pending_authorization', buildTripEventPayload(row))
+  }
 }
 
 export async function applyTripStatusChange(
@@ -138,6 +141,9 @@ export async function applyTripStatusChange(
 
   for (const action of actions) {
     await runStatusEnterAction(ctx, row, action, options)
+  }
+  if (normalizedNext === 'pending_authorization') {
+    await emitTripEvent(ctx, 'taxi_fleet.trip.pending_authorization', buildTripEventPayload(row))
   }
 
   return { previousStatus, nextStatus: normalizedNext, changed }

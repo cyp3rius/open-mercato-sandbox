@@ -1,6 +1,13 @@
 import { normalizeTripStatus } from './tripStatuses'
+import { resolveDriverTripFinishStatus } from './driverTripCommercialFields'
 
-export type TripDetailActionId = 'approve' | 'reject' | 'schedule' | 'mark_paid' | 'complete'
+export type TripDetailActionId =
+  | 'approve'
+  | 'reject'
+  | 'schedule'
+  | 'mark_paid'
+  | 'complete'
+  | 'authorize_internal'
 
 export type TripDetailLockMode = 'none' | 'full' | 'status_only' | 'paid_partial'
 
@@ -36,8 +43,19 @@ const RECEIPT_SUPPLEMENT_DISALLOWED_UPDATE_KEYS = [
   'notes',
 ] as const
 
-export function tripDetailActionsForStatus(status: string): TripDetailActionId[] {
-  switch (normalizeTripStatus(status)) {
+export function tripDetailActionsForStatus(
+  status: string,
+  options?: { tripType?: string | null; canAuthorizeInternal?: boolean },
+): TripDetailActionId[] {
+  const normalized = normalizeTripStatus(status)
+  if (
+    options?.tripType === 'internal' &&
+    normalized === 'pending_authorization' &&
+    options.canAuthorizeInternal
+  ) {
+    return ['authorize_internal']
+  }
+  switch (normalized) {
     case 'new':
       return ['approve', 'reject']
     case 'approved':
@@ -65,6 +83,8 @@ export function tripDetailLockMode(
       return 'full'
     case 'completed':
       return options?.allowEditCompleted ? 'none' : 'full'
+    case 'pending_authorization':
+      return 'none'
     case 'scheduled':
       return 'status_only'
     case 'paid':
@@ -122,6 +142,13 @@ export function isCompletedTripStatus(status: string): boolean {
   return normalizeTripStatus(status) === 'completed'
 }
 
+export function coerceTripStatusForPersistence(params: {
+  tripType: string
+  requestedStatus: string
+}): string {
+  return resolveDriverTripFinishStatus(params.tripType, normalizeTripStatus(params.requestedStatus))
+}
+
 /**
  * Narrow exception to the completed-trip lock: attach a receipt when the trip
  * has none yet. Used by the driver app “Add receipt” flow after completion.
@@ -131,7 +158,8 @@ export function isCompletedTripReceiptSupplementUpdate(
   existingHasReceipt: boolean,
   update: Record<string, unknown>,
 ): boolean {
-  if (normalizeTripStatus(currentStatus) !== 'completed') return false
+  const normalized = normalizeTripStatus(currentStatus)
+  if (normalized !== 'completed') return false
   if (existingHasReceipt) return false
 
   const metadata = update.metadata

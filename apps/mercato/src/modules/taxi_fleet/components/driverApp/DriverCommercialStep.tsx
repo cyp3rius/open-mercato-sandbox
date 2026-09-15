@@ -21,6 +21,7 @@ import type { TripFormPaymentOption } from '../../lib/tripRequestForm'
 import {
   resolveDriverCommercialFieldVisibility,
   tripTypeRequiresCustomer,
+  tripTypeRequiresReceipt,
 } from '../../lib/driverTripCommercialFields'
 import { DriverQuoteSync, type DriverQuoteRouteInput } from './DriverQuoteSync'
 
@@ -161,45 +162,47 @@ export function DriverCommercialStep({
         ) : null}
       </div>
 
-      <div className="border-t border-[#F1F1F4] pt-4">
-        <div className={driverSectionTitleClass}>
-          {t('taxi_fleet.driverApp.receipt.title', 'Receipt')}
+      {fields.showReceipt ? (
+        <div className="border-t border-[#F1F1F4] pt-4">
+          <div className={driverSectionTitleClass}>
+            {t('taxi_fleet.driverApp.receipt.title', 'Receipt')}
+          </div>
+          <p className={`${driverSectionDescClass} mb-4`}>
+            {t(
+              'taxi_fleet.driverApp.receipt.sectionHintRequired',
+              'Add a receipt photo. Document number is filled automatically.',
+            )}
+          </p>
+          <DriverReceiptFields
+            documentNumber={value.receiptDocumentNumber}
+            attachmentId={value.receiptAttachmentId}
+            attachmentName={value.receiptAttachmentName}
+            draftRecordId={receiptDraftRecordId}
+            required
+            disabled={disabled}
+            onDocumentNumberChange={(receiptDocumentNumber) =>
+              onChange({ ...value, receiptDocumentNumber })
+            }
+            onAttachmentChange={(next) =>
+              onChange({
+                ...value,
+                receiptAttachmentId: next.id,
+                receiptAttachmentName: next.fileName,
+                receiptBlobId: next.id ? null : null,
+              })
+            }
+            onOfflineFile={onReceiptFileOffline}
+            onOfflineStored={(next) =>
+              onChange({
+                ...value,
+                receiptBlobId: next.blobId,
+                receiptAttachmentId: null,
+                receiptAttachmentName: next.fileName,
+              })
+            }
+          />
         </div>
-        <p className={`${driverSectionDescClass} mb-4`}>
-          {t(
-            'taxi_fleet.driverApp.receipt.sectionHintRequired',
-            'Add a receipt photo. Document number is filled automatically.',
-          )}
-        </p>
-        <DriverReceiptFields
-          documentNumber={value.receiptDocumentNumber}
-          attachmentId={value.receiptAttachmentId}
-          attachmentName={value.receiptAttachmentName}
-          draftRecordId={receiptDraftRecordId}
-          required
-          disabled={disabled}
-          onDocumentNumberChange={(receiptDocumentNumber) =>
-            onChange({ ...value, receiptDocumentNumber })
-          }
-          onAttachmentChange={(next) =>
-            onChange({
-              ...value,
-              receiptAttachmentId: next.id,
-              receiptAttachmentName: next.fileName,
-              receiptBlobId: next.id ? null : null,
-            })
-          }
-          onOfflineFile={onReceiptFileOffline}
-          onOfflineStored={(next) =>
-            onChange({
-              ...value,
-              receiptBlobId: next.blobId,
-              receiptAttachmentId: null,
-              receiptAttachmentName: next.fileName,
-            })
-          }
-        />
-      </div>
+      ) : null}
 
       <div>
         <label htmlFor="notes" className={driverLabelClass}>
@@ -233,7 +236,8 @@ export function validateCommercialStep(
   if (revenue === null || revenue < 0) {
     return t('taxi_fleet.driverApp.trips.revenueInvalid', 'Enter a valid revenue amount.')
   }
-  const requireReceiptPhoto = options?.requireReceiptPhoto !== false
+  const requireReceiptPhoto =
+    options?.requireReceiptPhoto !== false && tripTypeRequiresReceipt(value.tripType)
   if (requireReceiptPhoto && !value.receiptAttachmentId && !value.receiptBlobId) {
     return t(
       'taxi_fleet.driverApp.receipt.photoRequired',

@@ -175,6 +175,20 @@ describe('resolveDriverTripUpdateInput', () => {
       status: 'completed',
     })
   })
+
+  it('maps internal in-progress finish to pending_authorization', () => {
+    const resolved = resolveDriverTripUpdateInput(
+      'in_progress',
+      {
+        id: '94f1f812-4fc7-4f5a-a30d-314d95a73681',
+        endedAt: '2026-08-11T11:00:00.000Z',
+        status: 'completed',
+      },
+      'internal',
+    )
+    expect(resolved.action).toBe('complete')
+    expect(resolved.input.status).toBe('pending_authorization')
+  })
 })
 
 describe('isDriverTripElectronicallyPrepaid', () => {

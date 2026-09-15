@@ -54,6 +54,7 @@ describe('settlementRevenue', () => {
   it('filters revenue-eligible statuses', () => {
     expect(tripCountsForSettlementRevenue('completed')).toBe(true)
     expect(tripCountsForSettlementRevenue('paid')).toBe(true)
+    expect(tripCountsForSettlementRevenue('pending_authorization')).toBe(false)
     expect(tripCountsForSettlementRevenue('cancelled')).toBe(false)
     expect(emptySettlementRevenueBreakdown().other).toBe(0)
   })

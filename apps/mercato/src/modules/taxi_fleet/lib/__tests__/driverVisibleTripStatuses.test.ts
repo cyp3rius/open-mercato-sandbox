@@ -1,10 +1,15 @@
-import { isDriverVisibleTripStatus } from '../driverVisibleTripStatuses'
+import {
+  isDriverTripFinishedStatus,
+  isDriverVisibleTripStatus,
+  resolveDriverFacingTripStatus,
+} from '../driverVisibleTripStatuses'
 import { defaultTripStatusCode } from '../tripStatuses'
 
 describe('isDriverVisibleTripStatus', () => {
-  it('allows scheduled, in_progress and completed', () => {
+  it('allows scheduled, in_progress, pending_authorization and completed', () => {
     expect(isDriverVisibleTripStatus('scheduled')).toBe(true)
     expect(isDriverVisibleTripStatus('in_progress')).toBe(true)
+    expect(isDriverVisibleTripStatus('pending_authorization')).toBe(true)
     expect(isDriverVisibleTripStatus('completed')).toBe(true)
   })
 
@@ -13,6 +18,22 @@ describe('isDriverVisibleTripStatus', () => {
     expect(isDriverVisibleTripStatus('approved')).toBe(false)
     expect(isDriverVisibleTripStatus('paid')).toBe(false)
     expect(isDriverVisibleTripStatus('cancelled')).toBe(false)
+  })
+})
+
+describe('resolveDriverFacingTripStatus', () => {
+  it('maps pending_authorization to completed for driver UI', () => {
+    expect(resolveDriverFacingTripStatus('pending_authorization')).toBe('completed')
+    expect(resolveDriverFacingTripStatus('completed')).toBe('completed')
+    expect(resolveDriverFacingTripStatus('scheduled')).toBe('scheduled')
+  })
+})
+
+describe('isDriverTripFinishedStatus', () => {
+  it('treats pending_authorization as finished', () => {
+    expect(isDriverTripFinishedStatus('pending_authorization')).toBe(true)
+    expect(isDriverTripFinishedStatus('completed')).toBe(true)
+    expect(isDriverTripFinishedStatus('in_progress')).toBe(false)
   })
 })
 

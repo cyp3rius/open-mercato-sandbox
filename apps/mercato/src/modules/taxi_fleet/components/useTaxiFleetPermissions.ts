@@ -6,6 +6,7 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 type PermissionState = {
   canManageTrips: boolean
   canEditCompletedTrips: boolean
+  canAuthorizeInternalTrips: boolean
   canManageSettlements: boolean
   canManageAssignments: boolean
   canManagePlatformSync: boolean
@@ -18,6 +19,7 @@ export function useTaxiFleetPermissions(): PermissionState {
   const [state, setState] = React.useState<PermissionState>({
     canManageTrips: false,
     canEditCompletedTrips: false,
+    canAuthorizeInternalTrips: false,
     canManageSettlements: false,
     canManageAssignments: false,
     canManagePlatformSync: false,
@@ -36,6 +38,7 @@ export function useTaxiFleetPermissions(): PermissionState {
           features: [
             'taxi_fleet.manage_trips',
             'taxi_fleet.trips.edit_completed',
+            'taxi_fleet.trips.authorize_internal',
             'taxi_fleet.manage_settlements',
             'taxi_fleet.manage_assignments',
             'taxi_fleet.manage_platform_sync',
@@ -51,6 +54,8 @@ export function useTaxiFleetPermissions(): PermissionState {
         canManageTrips: allGranted || granted.includes('taxi_fleet.manage_trips'),
         canEditCompletedTrips:
           allGranted || granted.includes('taxi_fleet.trips.edit_completed'),
+        canAuthorizeInternalTrips:
+          allGranted || granted.includes('taxi_fleet.trips.authorize_internal'),
         canManageSettlements: allGranted || granted.includes('taxi_fleet.manage_settlements'),
         canManageAssignments: allGranted || granted.includes('taxi_fleet.manage_assignments'),
         canManagePlatformSync: allGranted || granted.includes('taxi_fleet.manage_platform_sync'),

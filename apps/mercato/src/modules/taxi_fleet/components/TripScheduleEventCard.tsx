@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import type { ScheduleItem } from '@open-mercato/ui/backend/schedule'
 import { renderDictionarySourceIcon } from '@open-mercato/core/modules/dictionaries/components/dictionaryAppearance'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { useTripStatusDictionary } from './useTripStatusDictionary'
+import type { TaxiFleetTripStatusDefinition } from '../lib/tripStatuses'
 
 const UUID_LIKE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -60,9 +60,14 @@ function TripStatusChip({
   )
 }
 
-export function TripScheduleEventCard({ item }: { item: ScheduleItem }) {
+export function TripScheduleEventCard({
+  item,
+  findDefinition,
+}: {
+  item: ScheduleItem
+  findDefinition: (code: string) => TaxiFleetTripStatusDefinition | undefined
+}) {
   const t = useT()
-  const { findDefinition } = useTripStatusDictionary()
   const metadata = item.metadata ?? {}
   const driverName = readDisplayLabel(metadata.driverName)
   const vehicleLabel = readDisplayLabel(metadata.vehicleLabel)

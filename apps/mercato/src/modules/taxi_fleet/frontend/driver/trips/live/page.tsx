@@ -5,7 +5,7 @@ import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useLocale, useT } from '@open-mercato/shared/lib/i18n/context'
 import { parseNumericValue } from '@open-mercato/shared/lib/numeric'
-import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Notice } from '@open-mercato/ui/primitives/Notice'
@@ -35,6 +35,7 @@ import {
   fromDateTimeLocalValue,
   toDateTimeLocalValue,
 } from '../../../../lib/driverOffline/buildTripPayload'
+import { resolveDriverTripFinishStatus } from '../../../../lib/driverTripCommercialFields'
 import {
   clearLiveTripDraft,
   getLiveTripDraft,
@@ -318,6 +319,7 @@ function DriverLiveTripPageInner() {
     setBusy(true)
     try {
       const distance = parseNumericValue(route.distanceKm)
+      const finishStatus = resolveDriverTripFinishStatus(commercial.tripType, 'completed')
       const payload = buildDriverTripPayload({
         route: {
           from: route.from,
@@ -335,6 +337,13 @@ function DriverLiveTripPageInner() {
         serverTripId: draft.serverTripId,
       })
       const mutationType = draft.serverTripId ? 'trip.update' : 'trip.create'
+      const successMessage =
+        commercial.tripType === 'internal'
+          ? t(
+              'taxi_fleet.driverApp.trips.internalSavedPending',
+              'Trip saved. Waiting for authorization.',
+            )
+          : t('taxi_fleet.driverApp.trips.pastSaved', 'Trip saved.')
       if (!navigator.onLine) {
         await enqueueDriverMutation({
           type: mutationType,
@@ -344,7 +353,7 @@ function DriverLiveTripPageInner() {
         await appendPendingTripToCache({
           id: draft.serverTripId || draft.clientMutationId,
           tripType: commercial.tripType,
-          status: 'completed',
+          status: finishStatus,
           startedAt: payload.startedAt,
           endedAt: payload.endedAt,
           distanceKm: payload.distanceKm,
@@ -353,15 +362,28 @@ function DriverLiveTripPageInner() {
           pending: true,
         })
         await clearLiveTripDraft(draft.id)
-        router.replace('/driver/trips')
+        flash(
+          commercial.tripType === 'internal'
+            ? t(
+                'taxi_fleet.driverApp.trips.internalSavedPendingOffline',
+                'Trip saved offline. It will sync when you are online and wait for authorization.',
+              )
+            : t(
+                'taxi_fleet.driverApp.trips.pastSavedOffline',
+                'Trip saved offline. It will sync when you are online.',
+              ),
+          'success',
+        )
+        window.location.assign('/driver/trips')
         return
       }
-      await apiCall('/api/taxi_fleet/driver/trips', {
+      await apiCallOrThrow<{ id?: string }>('/api/taxi_fleet/driver/trips', {
         method: mutationType === 'trip.update' ? 'PUT' : 'POST',
         body: JSON.stringify({ ...payload, clientMutationId: draft.clientMutationId }),
       })
       await clearLiveTripDraft(draft.id)
-      router.replace('/driver/trips')
+      flash(successMessage, 'success')
+      window.location.assign('/driver/trips')
     } catch (err) {
       const message =
         (err as { body?: { error?: string }; message?: string } | null)?.body?.error ||

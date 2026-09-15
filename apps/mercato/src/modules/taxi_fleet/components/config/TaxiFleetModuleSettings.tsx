@@ -19,6 +19,7 @@ import {
   type SettlementIndicatorRangeSettings,
   type TaxiFleetSettingsResponse,
 } from '../../lib/taxiFleetSettings'
+import { invalidateTaxiFleetSettingsCache } from '../useTaxiFleetSettings'
 import { ResourceTypeSearchField } from '../ResourceTypeSearchField'
 import { PercentInputField } from '@open-mercato/ui/backend/inputs/PercentInputField'
 import { TripStatusSettingsSection } from './TripStatusSettingsSection'
@@ -220,6 +221,7 @@ export function TaxiFleetModuleSettings() {
         { errorMessage: t('taxi_fleet.config.error.save', 'Failed to save taxi fleet settings.') },
       )
       setSettings(normalizeTaxiFleetSettingsResponse(saved))
+      invalidateTaxiFleetSettingsCache()
       flash(t('taxi_fleet.config.success.save', 'Settings saved.'), 'success')
     } catch (err) {
       console.error('taxi fleet settings save', err)

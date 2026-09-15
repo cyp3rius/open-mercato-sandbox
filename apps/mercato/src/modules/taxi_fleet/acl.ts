@@ -3,6 +3,11 @@ export const features = [
   { id: 'taxi_fleet.manage_assignments', title: 'Manage daily assignments', module: 'taxi_fleet' },
   { id: 'taxi_fleet.manage_trips', title: 'Manage and approve trips', module: 'taxi_fleet' },
   {
+    id: 'taxi_fleet.trips.authorize_internal',
+    title: 'Authorize internal trips for settlement',
+    module: 'taxi_fleet',
+  },
+  {
     id: 'taxi_fleet.trips.edit_completed',
     title: 'Edit completed trips (including receipt reupload and OCR)',
     module: 'taxi_fleet',

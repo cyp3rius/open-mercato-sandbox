@@ -7,6 +7,7 @@ import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetTrip } from '../data/entities'
 import {
   tripApproveSchema,
+  tripAuthorizeInternalSchema,
   tripCancelSchema,
   tripCompleteSchema,
   tripCreateSchema,
@@ -36,6 +37,7 @@ import { assertNoTripOverlap } from '../lib/assertNoTripOverlap'
 import { assertNoVehicleTripOverlap } from '../lib/assertNoVehicleTripOverlap'
 import { clearDriverReminderPushIfStartedAtChanged } from '../lib/driverPush/reminders'
 import {
+  coerceTripStatusForPersistence,
   isTripDriverChangeAllowed,
   tripDetailLockMode,
   isCompletedTripReceiptSupplementUpdate,
@@ -50,6 +52,13 @@ import { scheduleTripGoogleCalendarSync } from '../lib/googleCalendar/tripGoogle
 async function actorMayEditCompletedTrip(
   ctx: Parameters<CommandHandler<TripUpdateInput, { tripId: string }>['execute']>[1],
 ): Promise<boolean> {
+  return actorHasFeature(ctx, 'taxi_fleet.trips.edit_completed')
+}
+
+async function actorHasFeature(
+  ctx: Parameters<CommandHandler<TripUpdateInput, { tripId: string }>['execute']>[1],
+  feature: string,
+): Promise<boolean> {
   const userId = ctx.auth?.sub
   if (!userId) return false
   try {
@@ -62,7 +71,7 @@ async function actorMayEditCompletedTrip(
     }
     return await rbac.userHasAllFeatures(
       userId,
-      ['taxi_fleet.trips.edit_completed'],
+      [feature],
       { tenantId: ctx.auth?.tenantId ?? null, organizationId: ctx.auth?.orgId ?? null },
     )
   } catch {
@@ -157,7 +166,10 @@ const createTripCommand: CommandHandler<TripCreateInput, { tripId: string }> = {
       },
       { required: parsed.tripType === 'client' },
     )
-    const initialStatus = normalizeTripStatus(parsed.status ?? 'new')
+    const initialStatus = coerceTripStatusForPersistence({
+      tripType: parsed.tripType,
+      requestedStatus: parsed.status ?? 'new',
+    })
     const now = new Date()
 
     let resourceId = parsed.resourceId
@@ -348,7 +360,12 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
     if (parsed.notes !== undefined) row.notes = parsed.notes
     if (parsed.metadata !== undefined) row.metadata = parsed.metadata
     if (parsed.status !== undefined) {
-      await applyTripStatusChange(ctx, row, parsed.status)
+      const nextTripType = parsed.tripType ?? row.tripType
+      const coerced = coerceTripStatusForPersistence({
+        tripType: nextTripType,
+        requestedStatus: parsed.status,
+      })
+      await applyTripStatusChange(ctx, row, coerced)
     }
 
     const nextStatus = normalizeTripStatus(row.status)
@@ -548,6 +565,65 @@ const completeTripCommand: CommandHandler<{ id: string }, { tripId: string }> = 
     if (!row) throw new CrudHttpError(404, { error: 'Not found' })
     ensureTenantScope(ctx, row.tenantId)
     ensureOrganizationScope(ctx, row.organizationId)
+    const nextStatus = coerceTripStatusForPersistence({
+      tripType: row.tripType,
+      requestedStatus: 'completed',
+    })
+    await applyTripStatusChange(ctx, row, nextStatus)
+    await em.flush()
+    await recalculateWeeklySettlementsForTrip(em, row)
+    scheduleTripGoogleCalendarSync(row.id)
+    return { tripId: row.id }
+  },
+}
+
+const authorizeInternalTripCommand: CommandHandler<{ id: string }, { tripId: string }> = {
+  id: 'taxi_fleet.trips.authorize_internal',
+  async execute(input, ctx) {
+    const parsed = tripAuthorizeInternalSchema.parse(input)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const { translate } = await resolveTranslations()
+    const row = await findOneWithDecryption(em, TaxiFleetTrip, { id: parsed.id, deletedAt: null })
+    if (!row) throw new CrudHttpError(404, { error: 'Not found' })
+    ensureTenantScope(ctx, row.tenantId)
+    ensureOrganizationScope(ctx, row.organizationId)
+
+    const allowed = await actorHasFeature(ctx, 'taxi_fleet.trips.authorize_internal')
+    if (!allowed) {
+      throw new CrudHttpError(403, {
+        error: translate(
+          'taxi_fleet.trips.errors.authorizeInternalForbidden',
+          'You are not allowed to authorize internal trips.',
+        ),
+      })
+    }
+    if (row.tripType !== 'internal') {
+      throw new CrudHttpError(400, {
+        error: translate(
+          'taxi_fleet.trips.errors.authorizeInternalType',
+          'Only internal trips can be authorized this way.',
+        ),
+      })
+    }
+    if (normalizeTripStatus(row.status) !== 'pending_authorization') {
+      throw new CrudHttpError(409, {
+        error: translate(
+          'taxi_fleet.trips.errors.authorizeInternalStatus',
+          'Trip is not waiting for authorization.',
+        ),
+      })
+    }
+
+    const now = new Date()
+    const existingMeta =
+      row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+        ? { ...(row.metadata as Record<string, unknown>) }
+        : {}
+    row.metadata = {
+      ...existingMeta,
+      internalAuthorizedAt: now.toISOString(),
+      internalAuthorizedByUserId: ctx.auth?.sub ?? null,
+    }
     await applyTripStatusChange(ctx, row, 'completed')
     await em.flush()
     await recalculateWeeklySettlementsForTrip(em, row)
@@ -565,3 +641,4 @@ registerCommand(cancelTripCommand)
 registerCommand(markTripPaidCommand)
 registerCommand(scheduleTripCommand)
 registerCommand(completeTripCommand)
+registerCommand(authorizeInternalTripCommand)

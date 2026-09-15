@@ -5,7 +5,7 @@ import { CalendarClock, Check, ChevronLeft, ChevronRight, History, Play } from '
 import { useRouter } from 'next/navigation'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { parseNumericValue } from '@open-mercato/shared/lib/numeric'
-import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
@@ -42,6 +42,7 @@ import {
   upsertLiveTripDraft,
 } from '../../../../lib/driverOffline/tripDrafts'
 import { createEmptyPlace, formatCoordAddress } from '../../../../lib/driverOffline/tripTypes'
+import { resolveDriverTripFinishStatus } from '../../../../lib/driverTripCommercialFields'
 import {
   canDriverCreateLiveTrip,
   findDriverShiftForTripWindow,
@@ -378,6 +379,7 @@ export default function DriverTripCreatePage() {
       if (shift.match.resourceLabel) setResourceLabel(shift.match.resourceLabel)
       setResourceId(shift.match.resourceId)
       setAssignmentId(shift.match.assignmentId)
+      const finishStatus = resolveDriverTripFinishStatus(commercial.tripType, 'completed')
       const payload = buildDriverTripPayload({
         route: {
           from: route.from,
@@ -404,12 +406,19 @@ export default function DriverTripCreatePage() {
         return
       }
       const clientMutationId = newClientId()
+      const successMessage =
+        commercial.tripType === 'internal'
+          ? t(
+              'taxi_fleet.driverApp.trips.internalSavedPending',
+              'Trip saved. Waiting for authorization.',
+            )
+          : t('taxi_fleet.driverApp.trips.pastSaved', 'Trip saved.')
       if (!navigator.onLine) {
         await enqueueDriverMutation({ type: 'trip.create', payload, clientMutationId })
         await appendPendingTripToCache({
           id: clientMutationId,
           tripType: commercial.tripType,
-          status: 'completed',
+          status: finishStatus,
           startedAt: payload.startedAt,
           endedAt: payload.endedAt,
           distanceKm: payload.distanceKm,
@@ -417,14 +426,27 @@ export default function DriverTripCreatePage() {
           notes: commercial.notes,
           pending: true,
         })
-        router.replace('/driver/trips')
+        flash(
+          commercial.tripType === 'internal'
+            ? t(
+                'taxi_fleet.driverApp.trips.internalSavedPendingOffline',
+                'Trip saved offline. It will sync when you are online and wait for authorization.',
+              )
+            : t(
+                'taxi_fleet.driverApp.trips.pastSavedOffline',
+                'Trip saved offline. It will sync when you are online.',
+              ),
+          'success',
+        )
+        window.location.assign('/driver/trips')
         return
       }
-      await apiCall('/api/taxi_fleet/driver/trips', {
+      await apiCallOrThrow<{ id?: string }>('/api/taxi_fleet/driver/trips', {
         method: 'POST',
         body: JSON.stringify({ ...payload, clientMutationId }),
       })
-      router.replace('/driver/trips')
+      flash(successMessage, 'success')
+      window.location.assign('/driver/trips')
     } catch (err) {
       const message =
         (err as { body?: { error?: string }; message?: string } | null)?.body?.error ||
@@ -534,19 +556,19 @@ export default function DriverTripCreatePage() {
           t('taxi_fleet.driverApp.trips.scheduleSavedOffline', 'Trip scheduled offline. It will sync when you are online.'),
           'success',
         )
-        router.replace('/driver/trips')
+        window.location.assign('/driver/trips')
         return
       }
-      const { result } = await apiCall<{ id?: string }>('/api/taxi_fleet/driver/trips', {
+      const { result } = await apiCallOrThrow<{ id?: string }>('/api/taxi_fleet/driver/trips', {
         method: 'POST',
         body: JSON.stringify({ ...payload, clientMutationId }),
       })
       flash(t('taxi_fleet.driverApp.trips.scheduleSaved', 'Trip scheduled.'), 'success')
       if (result?.id) {
-        router.replace(`/driver/trips/${result.id}`)
+        window.location.assign(`/driver/trips/${result.id}`)
         return
       }
-      router.replace('/driver/trips')
+      window.location.assign('/driver/trips')
     } catch (err) {
       const message =
         (err as { body?: { error?: string }; message?: string } | null)?.body?.error ||

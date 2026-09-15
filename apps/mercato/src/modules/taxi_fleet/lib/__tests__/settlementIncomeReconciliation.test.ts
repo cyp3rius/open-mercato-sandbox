@@ -17,6 +17,10 @@ describe('settlementIncomeReconciliation', () => {
     it('requires receipt for own taxi trips without platform', () => {
       expect(tripRequiresIncomeReceipt({ platform: null })).toBe(true)
     })
+
+    it('skips internal trips even without platform', () => {
+      expect(tripRequiresIncomeReceipt({ platform: null, tripType: 'internal' })).toBe(false)
+    })
   })
 
   describe('tripMissingPlatformForRevenue', () => {

@@ -51,6 +51,7 @@ function tripHasIncomeReceiptEvidence(params: {
 export function tripMissingIncomeReceipt(params: {
   tripId: string
   platform: TaxiFleetTripPlatform | null
+  tripType?: string | null
   revenueAmount: number
   status: string
   incomeTripIds: ReadonlySet<string>
@@ -58,7 +59,7 @@ export function tripMissingIncomeReceipt(params: {
 }): boolean {
   if (!tripCountsForSettlementRevenue(params.status)) return false
   if (params.revenueAmount <= 0) return false
-  if (!tripRequiresIncomeReceipt({ platform: params.platform })) return false
+  if (!tripRequiresIncomeReceipt({ platform: params.platform, tripType: params.tripType })) return false
   return !tripHasIncomeReceiptEvidence(params)
 }
 
@@ -116,6 +117,7 @@ export function enrichSettlementTripSnapshot(params: {
     missingIncomeReceipt: tripMissingIncomeReceipt({
       tripId: params.trip.id,
       platform,
+      tripType: params.trip.tripType,
       revenueAmount,
       status: params.trip.status,
       incomeTripIds: params.incomeTripIds,

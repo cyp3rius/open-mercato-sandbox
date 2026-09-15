@@ -298,6 +298,21 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     expiresAfterHours: 168,
   },
   {
+    type: 'taxi_fleet.trip.pending_authorization',
+    module: 'taxi_fleet',
+    titleKey: 'taxi_fleet.notifications.trip_pending_authorization.title',
+    bodyKey: 'taxi_fleet.notifications.trip_pending_authorization.body',
+    icon: 'shield-check',
+    severity: 'warning',
+    userPreference: {
+      labelKey: 'taxi_fleet.notifications.preferences.trip_pending_authorization',
+      scopeFeature: 'taxi_fleet.trips.authorize_internal',
+    },
+    actions: [tripViewAction],
+    linkHref: '/backend/taxi-fleet/trips/{sourceEntityId}',
+    expiresAfterHours: 168,
+  },
+  {
     type: 'taxi_fleet.settlement.submitted',
     module: 'taxi_fleet',
     titleKey: 'taxi_fleet.notifications.settlement_submitted.title',

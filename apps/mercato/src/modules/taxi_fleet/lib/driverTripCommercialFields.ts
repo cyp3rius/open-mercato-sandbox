@@ -17,6 +17,7 @@ export type DriverCommercialFieldVisibility = {
   showCustomer: boolean
   customerRequired: boolean
   showPayment: boolean
+  showReceipt: boolean
 }
 
 /** Which commercial fields apply for a trip type in the driver finish form. */
@@ -25,14 +26,22 @@ export function resolveDriverCommercialFieldVisibility(
 ): DriverCommercialFieldVisibility {
   // Platform trip type + platform brand are CRM / sync only — never editable in the driver app.
   switch (tripType) {
-    case 'private':
     case 'internal':
+      return {
+        showPlatform: false,
+        showCustomer: false,
+        customerRequired: false,
+        showPayment: false,
+        showReceipt: false,
+      }
+    case 'private':
     case 'empty':
       return {
         showPlatform: false,
         showCustomer: false,
         customerRequired: false,
         showPayment: false,
+        showReceipt: true,
       }
     case 'street_hail':
       return {
@@ -40,6 +49,7 @@ export function resolveDriverCommercialFieldVisibility(
         showCustomer: true,
         customerRequired: false,
         showPayment: true,
+        showReceipt: true,
       }
     case 'client':
     case 'other':
@@ -48,6 +58,7 @@ export function resolveDriverCommercialFieldVisibility(
         showCustomer: true,
         customerRequired: true,
         showPayment: true,
+        showReceipt: true,
       }
     default:
       // event / platform / unknown — customer optional; platform still CRM-only
@@ -56,10 +67,25 @@ export function resolveDriverCommercialFieldVisibility(
         showCustomer: true,
         customerRequired: false,
         showPayment: true,
+        showReceipt: true,
       }
   }
 }
 
 export function tripTypeRequiresCustomer(tripType: TaxiFleetTripType): boolean {
   return resolveDriverCommercialFieldVisibility(tripType).customerRequired
+}
+
+export function tripTypeRequiresReceipt(tripType: TaxiFleetTripType): boolean {
+  return resolveDriverCommercialFieldVisibility(tripType).showReceipt
+}
+
+/** Internal trips finish as pending authorization until CRM authorizes them. */
+export function resolveDriverTripFinishStatus(
+  tripType: string | null | undefined,
+  requestedStatus: string,
+): string {
+  const status = String(requestedStatus ?? '').trim() || 'completed'
+  if (tripType === 'internal' && status === 'completed') return 'pending_authorization'
+  return status
 }

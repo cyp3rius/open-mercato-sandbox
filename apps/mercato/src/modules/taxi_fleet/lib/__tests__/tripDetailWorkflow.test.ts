@@ -23,6 +23,11 @@ describe('tripDetailLockMode', () => {
     expect(tripDetailLockMode('cancelled', { allowEditCompleted: true })).toBe('full')
   })
 
+  it('allows editing trips waiting for internal authorization', () => {
+    expect(tripDetailLockMode('pending_authorization')).toBe('none')
+    expect(isTripDetailFieldEditable('pending_authorization', 'revenueAmount')).toBe(true)
+  })
+
   it('allows only status edits on scheduled trips', () => {
     expect(tripDetailLockMode('scheduled')).toBe('status_only')
     expect(isTripDetailFieldEditable('scheduled', 'status')).toBe(true)

@@ -1,4 +1,5 @@
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
+import { resolveDriverTripFinishStatus } from './driverTripCommercialFields'
 
 const DRIVER_UPDATE_IGNORED_KEYS = new Set(['id', 'clientMutationId'])
 
@@ -27,11 +28,12 @@ function presentKeys(body: Record<string, unknown>): string[] {
  * - `scheduled`: only price/distance, or start (overwrite startedAt → in_progress)
  * - `in_progress`: complete with endedAt only, or full live-trip finish payload
  * - `completed`: supplement receipt when none is attached yet
- * - other statuses: no writes
+ * - `pending_authorization` / other statuses: no writes
  */
 export function resolveDriverTripUpdateInput(
   currentStatus: string,
   body: Record<string, unknown>,
+  tripType?: string | null,
 ): { action: DriverTripExecutionAction; input: Record<string, unknown> } {
   const status = String(currentStatus ?? '').trim()
   const keys = presentKeys(body)
@@ -68,10 +70,11 @@ export function resolveDriverTripUpdateInput(
   }
 
   if (status === 'in_progress') {
+    const finishStatus = resolveDriverTripFinishStatus(tripType, 'completed')
     const isComplete =
       keys.includes('endedAt') &&
       keys.includes('status') &&
-      body.status === 'completed' &&
+      (body.status === 'completed' || body.status === 'pending_authorization') &&
       keys.every((key) => key === 'endedAt' || key === 'status')
     if (isComplete) {
       return {
@@ -79,13 +82,20 @@ export function resolveDriverTripUpdateInput(
         input: {
           id,
           endedAt: body.endedAt,
-          status: 'completed',
+          status: finishStatus,
         },
       }
     }
+    const nextBody = { ...body }
+    if (typeof nextBody.status === 'string') {
+      nextBody.status = resolveDriverTripFinishStatus(
+        typeof nextBody.tripType === 'string' ? nextBody.tripType : tripType,
+        nextBody.status,
+      )
+    }
     return {
       action: 'live_update',
-      input: body,
+      input: nextBody,
     }
   }
 

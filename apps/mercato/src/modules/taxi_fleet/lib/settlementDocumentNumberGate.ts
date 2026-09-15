@@ -47,7 +47,10 @@ export async function assertWeeklySettlementDocumentNumbersComplete(
     const revenueAmount = Number(trip.revenueAmount ?? 0)
     if (!(revenueAmount > 0)) return false
     if (!tripCountsForSettlementRevenue(trip.status)) return false
-    return tripRequiresIncomeReceipt({ platform: normalizeTripPlatform(trip.platform) })
+    return tripRequiresIncomeReceipt({
+      platform: normalizeTripPlatform(trip.platform),
+      tripType: trip.tripType,
+    })
   })
   const requiredTripIds = requiredTrips.map((trip) => trip.id)
 

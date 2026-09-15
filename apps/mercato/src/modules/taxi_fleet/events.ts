@@ -8,6 +8,7 @@ const events = [
   { id: 'taxi_fleet.trip.assigned', label: 'Trip assigned to driver', entity: 'trip', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.trip.paid', label: 'Trip paid by customer', entity: 'trip', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.trip.submitted', label: 'Trip submitted by driver', entity: 'trip', category: 'lifecycle', persistent: true },
+  { id: 'taxi_fleet.trip.pending_authorization', label: 'Internal trip awaiting authorization', entity: 'trip', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.trip.approved', label: 'Trip approved', entity: 'trip', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.trip.cancelled', label: 'Trip cancelled', entity: 'trip', category: 'lifecycle', persistent: true },
   { id: 'taxi_fleet.financial_entry.created', label: 'Financial entry created', entity: 'financial_entry', category: 'crud', persistent: true },

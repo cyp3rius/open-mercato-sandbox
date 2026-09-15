@@ -29,6 +29,7 @@ import { isDriverTripElectronicallyPrepaid } from '../../../lib/driverTripPaymen
 import { isDriverOnOpenShift } from '../../../lib/driverTripShiftWindow'
 import { useTaxiFleetLabels } from '../../../components/useTaxiFleetLabels'
 import { readPlatformTripIngestLabel } from '../../../components/PlatformTripIngestBadge'
+import { resolveDriverFacingTripStatus } from '../../../lib/driverVisibleTripStatuses'
 
 type TripRow = {
   id: string
@@ -289,7 +290,7 @@ export default function DriverTripsPage() {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="text-sm font-semibold text-[#071437]">
-                          {resolveTripStatusLabel(trip.status)}
+                          {resolveTripStatusLabel(resolveDriverFacingTripStatus(trip.status))}
                         </div>
                         {ingestLabel ? (
                           <span className={`${driverBadgeNeutralClass} text-xs`}>{ingestLabel}</span>

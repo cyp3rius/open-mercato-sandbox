@@ -418,6 +418,7 @@ export const tripDeleteSchema = z.object({ id: uuid })
 export const tripApproveSchema = z.object({ id: uuid })
 export const tripRejectSchema = z.object({ id: uuid, notes: z.string().max(5000).optional().nullable() })
 export const tripScheduleSchema = z.object({ id: uuid })
+export const tripAuthorizeInternalSchema = z.object({ id: uuid })
 export const tripCompleteSchema = z.object({ id: uuid })
 export const tripCancelSchema = z.object({
   id: uuid,
