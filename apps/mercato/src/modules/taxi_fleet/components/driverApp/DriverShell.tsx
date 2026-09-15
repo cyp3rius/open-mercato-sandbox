@@ -18,6 +18,7 @@ import { useDriverForcedLightTheme } from './useDriverForcedLightTheme'
 import { clearDriverLocalData } from '../../lib/driverOffline/clearDriverLocalData'
 import { flushDriverOutbox, getPendingOutboxCount } from '../../lib/driverOffline/outbox'
 import { clearLiveTripDraft, getActiveLiveTripDraft } from '../../lib/driverOffline/tripDrafts'
+import { installDriverPwaHead } from '../../lib/driverPwaHead'
 import { useDriverTracking } from './useDriverTracking'
 import { DriverPullToRefresh, DriverPullToRefreshProvider } from './DriverPullToRefresh'
 import { DriverAppModeProvider } from './useDriverAppMode'
@@ -80,9 +81,9 @@ function ensureDriverViewportMeta() {
     ['apple-mobile-web-app-capable', 'yes'],
     // Light status bar + white theme for iOS standalone PWA.
     ['apple-mobile-web-app-status-bar-style', 'default'],
-    ['apple-mobile-web-app-title', 'RS Moto Taxi'],
+    ['apple-mobile-web-app-title', 'RS Moto Taxi - Kierowca'],
     ['format-detection', 'telephone=no'],
-    ['theme-color', '#ffffff'],
+    ['theme-color', '#FFEB3D'],
   ]
   for (const [name, content] of pairs) {
     const id = `driver-meta-${name}`
@@ -100,24 +101,7 @@ function ensureDriverViewportMeta() {
   document.documentElement.style.backgroundColor = '#ffffff'
   document.body.style.backgroundColor = '#ffffff'
 
-  const manifestId = 'driver-web-manifest'
-  if (!document.getElementById(manifestId)) {
-    const link = document.createElement('link')
-    link.id = manifestId
-    link.rel = 'manifest'
-    link.href = '/driver/manifest.webmanifest'
-    document.head.appendChild(link)
-  }
-
-  const touchIconId = 'driver-apple-touch-icon'
-  let touchIcon = document.getElementById(touchIconId) as HTMLLinkElement | null
-  if (!touchIcon) {
-    touchIcon = document.createElement('link')
-    touchIcon.id = touchIconId
-    touchIcon.rel = 'apple-touch-icon'
-    document.head.appendChild(touchIcon)
-  }
-  touchIcon.href = '/driver/apple-touch-icon.png'
+  installDriverPwaHead()
 }
 
 export function DriverShell({ children, title, shiftActive, assignmentId }: Props) {

@@ -7,6 +7,7 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { DriverBrandMark } from '../../../components/driverApp/DriverBrandMark'
 import { useDriverDefaultLocale } from '../../../components/driverApp/useDriverDefaultLocale'
 import { useDriverForcedLightTheme } from '../../../components/driverApp/useDriverForcedLightTheme'
+import { installDriverPwaHead } from '../../../lib/driverPwaHead'
 import {
   driverCardClass,
   driverFieldClass,
@@ -68,30 +69,14 @@ export default function DriverLoginPage() {
       }
       meta.content = content
     }
-    ensureMeta('theme-color', '#ffffff')
+    ensureMeta('theme-color', '#FFEB3D')
     ensureMeta('apple-mobile-web-app-capable', 'yes')
     ensureMeta('apple-mobile-web-app-status-bar-style', 'default')
-    ensureMeta('apple-mobile-web-app-title', 'RS Moto Taxi')
+    ensureMeta('apple-mobile-web-app-title', 'RS Moto Taxi - Kierowca')
     document.documentElement.style.backgroundColor = '#ffffff'
     document.body.style.backgroundColor = '#ffffff'
 
-    const id = 'driver-web-manifest'
-    if (!document.getElementById(id)) {
-      const link = document.createElement('link')
-      link.id = id
-      link.rel = 'manifest'
-      link.href = '/driver/manifest.webmanifest'
-      document.head.appendChild(link)
-    }
-    const touchIconId = 'driver-apple-touch-icon'
-    let touchIcon = document.getElementById(touchIconId) as HTMLLinkElement | null
-    if (!touchIcon) {
-      touchIcon = document.createElement('link')
-      touchIcon.id = touchIconId
-      touchIcon.rel = 'apple-touch-icon'
-      document.head.appendChild(touchIcon)
-    }
-    touchIcon.href = '/driver/apple-touch-icon.png'
+    installDriverPwaHead()
 
     if ('serviceWorker' in navigator) {
       void navigator.serviceWorker.register('/driver-sw.js', { scope: '/driver' }).catch(() => undefined)

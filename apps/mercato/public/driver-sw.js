@@ -1,5 +1,5 @@
 /* Driver PWA service worker — scoped to /driver */
-const CACHE = 'taxi-fleet-driver-v5'
+const CACHE = 'taxi-fleet-driver-v6'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting())
@@ -91,8 +91,8 @@ self.addEventListener('push', (event) => {
       body: payload.body,
       tag: payload.tag,
       renotify: true,
-      icon: '/driver/icon-192.png',
-      badge: '/driver/icon-192.png',
+      icon: '/driver/icon-192.png?v=20260915',
+      badge: '/driver/icon-192.png?v=20260915',
       data: {
         url: payload.url,
         tripId: payload.tripId,
