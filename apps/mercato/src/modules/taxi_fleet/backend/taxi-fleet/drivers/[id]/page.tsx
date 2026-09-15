@@ -20,6 +20,7 @@ import { DriverTripsTab } from '../../../../components/driver/DriverTripsTab'
 import { DriverAllocationsTab } from '../../../../components/driver/DriverAllocationsTab'
 import { DriverSettlementsTab } from '../../../../components/driver/DriverSettlementsTab'
 import { mapDriverProfileRowToUpdateFormValues } from '../../../../components/driverProfileFormConfig'
+import { DriverSendCommunicationDialog } from '../../../../components/DriverSendCommunicationDialog'
 import { resolveDriverDefaultResourceIds } from '../../../../lib/driverDefaultResources'
 import { startDriverAppImpersonation } from '../../../../lib/startDriverAppImpersonation'
 
@@ -44,12 +45,13 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
   const profileId = params?.id ?? ''
   const { ConfirmDialogElement } = useConfirmDialog()
   const { profiles, resolveName, reload: reloadDirectory } = useFleetDriverDirectory()
-  const { canManageTrips, canManageSettlements, canManageAssignments, canImpersonateDriver } =
+  const { canManageTrips, canManageSettlements, canManageAssignments, canImpersonateDriver, canManageDriverCommunications } =
     useTaxiFleetPermissions()
   const [row, setRow] = React.useState<DriverRow | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [tab, setTab] = React.useState<DriverDetailTabId>('trips')
+  const [sendMessageOpen, setSendMessageOpen] = React.useState(false)
 
   const load = React.useCallback(async () => {
     if (!profileId) return
@@ -103,6 +105,34 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
     [t],
   )
 
+  const menuActions = React.useMemo(() => {
+    if (!row) return undefined
+    const items: Array<{ id: string; label: string; onSelect: () => void }> = []
+    if (canManageDriverCommunications) {
+      items.push({
+        id: 'send-message',
+        label: t('taxi_fleet.drivers.detail.actions.sendMessage', 'Send message'),
+        onSelect: () => setSendMessageOpen(true),
+      })
+    }
+    if (canImpersonateDriver) {
+      items.push({
+        id: 'preview-app',
+        label: t('taxi_fleet.drivers.detail.actions.previewApp', 'Preview driver app'),
+        onSelect: () => {
+          void startDriverAppImpersonation({
+            teamMemberId: row.teamMemberId,
+            errorMessage: t(
+              'taxi_fleet.driverApp.impersonation.startError',
+              'Could not start driver app preview.',
+            ),
+          })
+        },
+      })
+    }
+    return items.length ? items : undefined
+  }, [canImpersonateDriver, canManageDriverCommunications, row, t])
+
   if (loading) {
     return (
       <Page>
@@ -148,28 +178,7 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
             backLabel={t('taxi_fleet.drivers.detail.backToList', 'Back to drivers')}
             entityTypeLabel={t('taxi_fleet.drivers.detail.title', 'Driver profile')}
             title={displayName}
-            menuActions={
-              canImpersonateDriver && row
-                ? [
-                    {
-                      id: 'preview-app',
-                      label: t(
-                        'taxi_fleet.drivers.detail.actions.previewApp',
-                        'Preview driver app',
-                      ),
-                      onSelect: () => {
-                        void startDriverAppImpersonation({
-                          teamMemberId: row.teamMemberId,
-                          errorMessage: t(
-                            'taxi_fleet.driverApp.impersonation.startError',
-                            'Could not start driver app preview.',
-                          ),
-                        })
-                      },
-                    },
-                  ]
-                : undefined
-            }
+            menuActions={menuActions}
           />
           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[7fr_3fr] lg:items-start">
             <div className="min-w-0">
@@ -226,6 +235,13 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
             </div>
           </div>
         </PageBody>
+        <DriverSendCommunicationDialog
+          open={sendMessageOpen}
+          onOpenChange={setSendMessageOpen}
+          teamMemberId={row.teamMemberId}
+          driverDisplayName={displayName}
+          externalAppEnabled={row.externalAppEnabled}
+        />
         {ConfirmDialogElement}
       </Page>
     </>

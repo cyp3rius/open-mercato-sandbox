@@ -49,6 +49,7 @@ import type { CaseProcedureBlockJson } from '../../../lib/procedureBlockJson'
 import { CaseInterruptCloseDialog, type CaseInterruptOutcome } from '../../../components/CaseInterruptCloseDialog'
 import { CaseProcedureStepExecutor } from '../../../components/CaseProcedureStepExecutor'
 import { CaseStatusBadge } from '../../../components/CaseStatusBadge'
+import { CaseTimelineSystemBody } from '../../../components/CaseTimelineSystemBody'
 
 type InvokeProcedureOptionHead = {
   slug: string
@@ -1121,114 +1122,18 @@ export default function CaseDetailPage({ params }: { params?: { id?: string } })
                         <div className="mt-2 whitespace-pre-wrap text-sm">
                           {(() => {
                             const raw = ev.body?.trim() ?? ''
-                            if (
-                              ev.eventType === 'system' &&
-                              raw === 'cases.timeline.system.procedure_task_scheduled' &&
-                              ev.sourceRef &&
-                              typeof ev.sourceRef === 'object'
-                            ) {
-                              const ref = ev.sourceRef as Record<string, unknown>
-                              const scheduledTitle =
-                                typeof ref.title === 'string' ? ref.title.trim() : ''
-                              const head = t(raw, 'A task was scheduled for this procedure step.')
-                              return (
-                                <>
-                                  <div>{head}</div>
-                                  {scheduledTitle.length ? (
-                                    <div className="text-muted-foreground mt-2 text-sm font-medium">
-                                      {scheduledTitle}
-                                    </div>
-                                  ) : null}
-                                </>
-                              )
-                            }
-                            if (
-                              ev.eventType === 'system' &&
-                              raw === 'cases.timeline.system.invoke_procedure_launched' &&
-                              ev.sourceRef &&
-                              typeof ev.sourceRef === 'object'
-                            ) {
-                              const ref = ev.sourceRef as Record<string, unknown>
-                              const slug = typeof ref.slug === 'string' ? ref.slug : ''
-                              const title = typeof ref.title === 'string' ? ref.title.trim() : ''
-                              const ver =
-                                typeof ref.version === 'number' && Number.isFinite(ref.version)
-                                  ? Math.trunc(ref.version)
-                                  : null
-                              const head = t(
-                                raw,
-                                'Linked procedure launched; active procedure replaced with latest version.',
-                              )
-                              const detail =
-                                title.length && ver !== null
-                                  ? `${title} (${slug}) · v${ver}`
-                                  : title.length
-                                    ? `${title} (${slug})`
-                                    : slug.length
-                                      ? slug
-                                      : '—'
-                              return (
-                                <>
-                                  <div>{head}</div>
-                                  <div className="text-muted-foreground mt-2 whitespace-pre-wrap font-mono text-xs">
-                                    {detail}
-                                  </div>
-                                </>
-                              )
-                            }
-                            if (
-                              ev.eventType === 'system' &&
-                              raw === 'cases.timeline.system.invoke_procedure_step' &&
-                              ev.sourceRef &&
-                              typeof ev.sourceRef === 'object'
-                            ) {
-                              const refResolved = (ev.sourceRef as { resolved?: unknown }).resolved
-                              const resolved = Array.isArray(refResolved) ? refResolved : []
-                              const head = t(
-                                raw,
-                                'Procedure step: linked procedures resolved at latest active versions.',
-                              )
-                              const lines = resolved
-                                .map((entry) => {
-                                  if (!entry || typeof entry !== 'object') return null
-                                  const rec = entry as Record<string, unknown>
-                                  const slug = typeof rec.slug === 'string' ? rec.slug : ''
-                                  const title = typeof rec.title === 'string' ? rec.title.trim() : ''
-                                  const ver =
-                                    typeof rec.version === 'number' && Number.isFinite(rec.version)
-                                      ? Math.trunc(rec.version)
-                                      : null
-                                  const playbookId = typeof rec.playbookId === 'string' ? rec.playbookId : null
-                                  if (!slug.length && !playbookId) return null
-                                  const missing = !playbookId?.length
-                                  const label =
-                                    title.length && ver !== null
-                                      ? `${title} (${slug}) · v${ver}`
-                                      : title.length
-                                        ? `${title} (${slug})`
-                                        : slug
-                                  return missing
-                                    ? `${label} — ${t('cases.timeline.invokeProcedureMissing', 'no active version')}`
-                                    : label
-                                })
-                                .filter((line): line is string => typeof line === 'string' && line.length > 0)
-                              return (
-                                <>
-                                  <div>{head}</div>
-                                  {lines.length ? (
-                                    <ul className="text-muted-foreground mt-2 list-inside list-disc space-y-1">
-                                      {lines.map((line, lineIdx) => (
-                                        <li key={lineIdx} className="font-mono text-xs">
-                                          {line}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  ) : null}
-                                </>
-                              )
-                            }
                             if (ev.eventType === 'system' && raw.startsWith('cases.timeline.')) {
-                              return t(raw, raw)
+                              return (
+                                <CaseTimelineSystemBody
+                                  bodyKey={raw}
+                                  sourceRef={
+                                    ev.sourceRef && typeof ev.sourceRef === 'object'
+                                      ? (ev.sourceRef as Record<string, unknown>)
+                                      : null
+                                  }
+                                  t={t}
+                                />
+                              )
                             }
                             return ev.body
                           })()}

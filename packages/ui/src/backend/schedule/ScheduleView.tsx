@@ -61,12 +61,24 @@ function normalizeRange(
   view: ScheduleViewMode,
   agendaLength: number,
   dateLocale: DateFnsLocale,
+  options?: { viewExplicit?: boolean },
 ): ScheduleRange | null {
   if (!nextRange) return null
   if (Array.isArray(nextRange)) {
     if (nextRange.length === 0) return null
     if (view === 'agenda') {
       return { start: nextRange[0], end: nextRange[nextRange.length - 1] }
+    }
+    // Month grids include leading days from the previous month (e.g. Aug 30 for
+    // September). Using [0] would shift the visible month / day incorrectly.
+    if (nextRange.length > 7) {
+      // After month→day drilldown, RBC navigate still emits the month grid with
+      // no view argument while props.view is stale — ignore that callback.
+      // Range was already set by onNavigate for the clicked date.
+      if (!options?.viewExplicit) return null
+      if (view !== 'month') return null
+      const mid = nextRange[Math.floor(nextRange.length / 2)]
+      return mid ? deriveRange(mid, 'month', agendaLength, dateLocale) : null
     }
     return deriveRange(nextRange[0], view, agendaLength, dateLocale)
   }
@@ -219,24 +231,31 @@ export function ScheduleView({
     [dateLocale],
   )
 
-  const handleNavigate = React.useCallback((date: Date, nextView?: View) => {
-    const resolvedView = (nextView ?? currentView) as ScheduleViewMode
+  const handleNavigate = React.useCallback((date: Date, _rbcView?: View, action?: string) => {
+    // RBC passes its *current* view as the 2nd arg (often still "month" during
+    // drilldown). Prefer our controlled view; DATE from month means day drilldown.
+    const resolvedView: ScheduleViewMode =
+      action === 'DATE' && view === 'month' ? 'day' : view
     onRangeChange(deriveRange(date, resolvedView, agendaLength, dateLocale))
-  }, [agendaLength, currentView, dateLocale, onRangeChange])
+  }, [agendaLength, dateLocale, onRangeChange, view])
 
   const handleRangeChange = React.useCallback((nextRange: Date[] | { start: Date; end: Date }, nextView?: View) => {
-    const resolvedView = (nextView ?? currentView) as ScheduleViewMode
-    const normalized = normalizeRange(nextRange, resolvedView, agendaLength, dateLocale)
+    const viewExplicit = typeof nextView === 'string'
+    const resolvedView = (nextView ?? view) as ScheduleViewMode
+    const normalized = normalizeRange(nextRange, resolvedView, agendaLength, dateLocale, {
+      viewExplicit,
+    })
     if (normalized) onRangeChange(normalized)
-  }, [agendaLength, currentView, dateLocale, onRangeChange])
+  }, [agendaLength, dateLocale, onRangeChange, view])
 
   const handleViewChange = React.useCallback((nextView: View) => {
     const resolved = nextView as ScheduleViewMode
     if (resolved !== view) {
+      // Only flip the view here. Range comes from onNavigate (clicked date) or
+      // the toolbar — resetting to `new Date()` breaks month day drilldown.
       onViewChange(resolved)
-      onRangeChange(deriveRange(new Date(), resolved, agendaLength, dateLocale))
     }
-  }, [agendaLength, dateLocale, onRangeChange, onViewChange, view])
+  }, [onViewChange, view])
 
   const rootClassName = [
     'schedule-view',

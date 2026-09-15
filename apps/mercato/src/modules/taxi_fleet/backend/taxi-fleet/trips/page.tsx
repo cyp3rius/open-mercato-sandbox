@@ -20,7 +20,7 @@ import { parseNumericValue } from '@open-mercato/shared/lib/numeric'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { TAXI_FLEET_BASE } from '../paths'
 import { useFleetDriverDirectory } from '../../../components/useFleetDriverDirectory'
-import { useTaxiFleetLabels, TAXI_FLEET_TRIP_TYPES } from '../../../components/useTaxiFleetLabels'
+import { useTaxiFleetLabels, TAXI_FLEET_TRIP_TYPES, TAXI_FLEET_PLANNING_DEFAULT_TRIP_TYPES } from '../../../components/useTaxiFleetLabels'
 import { useTaxiFleetPermissions } from '../../../components/useTaxiFleetPermissions'
 import { useFleetBackendSession } from '../../../components/useFleetBackendSession'
 import { useTaxiFleetSettings } from '../../../components/useTaxiFleetSettings'
@@ -45,6 +45,12 @@ import { TRIP_PAYMENT_TYPE_FILTER_OPTIONS } from '../../../lib/tripRequestForm'
 import type { DriverTripReceiptWarning } from '../../../lib/driverTripReceiptStatus'
 
 const PAGE_SIZE = 20
+
+function createDefaultTripListFilters(): FilterValues {
+  return {
+    tripTypes: [...TAXI_FLEET_PLANNING_DEFAULT_TRIP_TYPES],
+  }
+}
 
 function formatTripRevenue(
   amount: string | number | null | undefined,
@@ -113,10 +119,18 @@ export default function TaxiFleetTripsPage() {
   const [vehicleFilterOptions, setVehicleFilterOptions] = React.useState<Array<{ value: string; label: string }>>([])
   const [customerFilterOptions, setCustomerFilterOptions] = React.useState<Array<{ value: string; label: string }>>([])
 
-  const [filterValues, setFilterValues] = React.useState<FilterValues>({})
+  const [filterValues, setFilterValues] = React.useState<FilterValues>(() => createDefaultTripListFilters())
 
   const [isLoading, setIsLoading] = React.useState(true)
   const [reloadToken, setReloadToken] = React.useState(0)
+
+  const selectedTripTypes = React.useMemo(() => {
+    const raw = filterValues.tripTypes
+    if (!Array.isArray(raw)) return [...TAXI_FLEET_PLANNING_DEFAULT_TRIP_TYPES]
+    return raw
+      .map((value) => (typeof value === 'string' ? value.trim() : ''))
+      .filter((value): value is string => value.length > 0)
+  }, [filterValues.tripTypes])
 
   const selectedResourceId =
     typeof filterValues.resourceId === 'string' && filterValues.resourceId.length > 0
@@ -199,9 +213,10 @@ export default function TaxiFleetTripsPage() {
         options: statusOptions,
       },
       {
-        id: 'tripType',
+        id: 'tripTypes',
         label: t('taxi_fleet.trips.type', 'Type'),
         type: 'select',
+        multiple: true,
         options: TAXI_FLEET_TRIP_TYPES.map((type) => ({
           value: type,
           label: t(`taxi_fleet.trips.types.${type}`, type),
@@ -314,8 +329,9 @@ export default function TaxiFleetTripsPage() {
     }
     const status = filterValues.status
     if (typeof status === 'string' && status.trim()) params.set('status', status.trim())
-    const tripType = filterValues.tripType
-    if (typeof tripType === 'string' && tripType.trim()) params.set('tripType', tripType.trim())
+    if (selectedTripTypes.length > 0) {
+      params.set('tripType', selectedTripTypes.join(','))
+    }
     const platform = filterValues.platform
     if (typeof platform === 'string' && platform.trim()) params.set('platform', platform.trim())
     const customerEntityId = filterValues.customerEntityId
@@ -341,14 +357,22 @@ export default function TaxiFleetTripsPage() {
     filterValues.startedAt,
     filterValues.status,
     filterValues.teamMemberId,
-    filterValues.tripType,
     page,
+    selectedTripTypes,
     unscheduledOnly,
   ])
 
   React.useEffect(() => {
     let cancelled = false
     async function load() {
+      if (selectedTripTypes.length === 0) {
+        setRows([])
+        setTotalPages(1)
+        setTotal(0)
+        setRevenueSummary(null)
+        setIsLoading(false)
+        return
+      }
       setIsLoading(true)
       const call = await apiCall<ListResponse>(`/api/taxi_fleet/trips?${queryParams}`)
       if (cancelled) return
@@ -362,7 +386,7 @@ export default function TaxiFleetTripsPage() {
     return () => {
       cancelled = true
     }
-  }, [queryParams, reloadToken, scopeVersion])
+  }, [queryParams, reloadToken, scopeVersion, selectedTripTypes.length])
 
   const revenueSummaryRow = React.useMemo(() => {
     if (!revenueSummary) return null
@@ -609,7 +633,7 @@ export default function TaxiFleetTripsPage() {
             setPage(1)
           }}
           onFiltersClear={() => {
-            setFilterValues({})
+            setFilterValues(createDefaultTripListFilters())
             setPage(1)
           }}
           rowActions={(row) => (

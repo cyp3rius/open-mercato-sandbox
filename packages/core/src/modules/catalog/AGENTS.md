@@ -9,7 +9,7 @@ Use the catalog module for products, categories, pricing, variants, and offers.
 3. **MUST register custom pricing resolvers** with explicit priority (`registerCatalogPricingResolver(resolver, { priority })`)
 4. **MUST declare widget injections** in `widgets/injection/` and map via `injection-table.ts`
 5. **MUST follow the standard event pattern** in `events.ts` for all CRUD and lifecycle events
-
+6. **Product case templates** store a specific playbook version UUID. On `playbooks.playbook.version_published`, catalog auto-rewrites live `caseTemplates[].playbookId` to the new head for that slug (`subscribers/playbook-version-published-sync-case-templates.ts`). Order-line plans, offering snapshots, and spawned cases are **not** rewritten.
 ## When You Need Pricing Logic
 
 1. Resolve `catalogPricingService` from DI
@@ -56,7 +56,7 @@ The default pipeline emits `catalog.pricing.resolve.before|after` events.
 | `lib/` | When modifying the pricing engine or business logic |
 | `seed/` | When updating example products for `seedExamples` |
 | `services/` | When adding/modifying domain services |
-| `subscribers/` | When adding event subscribers (indexing, cache invalidation) |
+| `subscribers/` | When adding event subscribers (indexing, cache invalidation, playbook-version case-template sync) |
 | `widgets/injection/` | When injecting widgets into other modules (e.g., product selectors in sales) |
 
 ## Events

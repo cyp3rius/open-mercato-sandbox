@@ -24,6 +24,7 @@ import {
 } from '../lib/caseProcedureEngine'
 import { syncCaseServiceProcedureTaskWorkItemCreate } from '../lib/caseProcedureTaskUserTaskSync'
 import { htmlToPlainText } from '../lib/htmlToPlainText'
+import { buildProcedureTimelineRef } from '../lib/procedureTimelineRef'
 import {
   CASES_PROCEDURE_NOTIFY_CUSTOMER_MESSAGE_TYPE,
   CASES_PROCEDURE_NOTIFY_OWNER_MESSAGE_TYPE,
@@ -477,7 +478,17 @@ const startPlaybookCommand: CommandHandler<z.infer<typeof casePlaybookStartSchem
         caseRow.updatedAt = new Date()
         await em.flush()
       }
-      await appendSystemTimeline(em, caseRow, 'cases.timeline.system.playbook_started', uid)
+      await appendSystemTimeline(
+        em,
+        caseRow,
+        'cases.timeline.system.playbook_started',
+        uid,
+        buildProcedureTimelineRef({
+          eventKind: 'playbook_started',
+          playbook: pb,
+          step: first ? findWithPath(def, first)?.block ?? null : null,
+        }),
+      )
     }
     await em.flush()
     return { ok: true as const }
@@ -514,7 +525,17 @@ const nextPlaybookStepCommand: CommandHandler<
       const completion = await finishOrResumeProcedure(em, caseRow, run, parsed.tenantId, parsed.organizationId)
       caseRow.metadata = writeCasePlaybookRun(meta, completion.run)
       caseRow.updatedAt = new Date()
-      await appendSystemTimeline(em, caseRow, 'cases.timeline.system.playbook_finished', uid)
+      await appendSystemTimeline(
+        em,
+        caseRow,
+        'cases.timeline.system.playbook_finished',
+        uid,
+        buildProcedureTimelineRef({
+          eventKind: 'playbook_finished',
+          playbook: pb,
+          step: block,
+        }),
+      )
       await em.flush()
       if (!completion.caseClosed) return { ok: true as const }
       const noteRaw = typeof parsed.closingNote === 'string' ? parsed.closingNote.trim() : ''
@@ -539,7 +560,18 @@ const nextPlaybookStepCommand: CommandHandler<
       caseRow.metadata = writeCasePlaybookRun(meta, nextRun)
       caseRow.updatedAt = new Date()
       await em.flush()
-      await appendSystemTimeline(em, caseRow, 'cases.timeline.system.step_goto', uid)
+      await appendSystemTimeline(
+        em,
+        caseRow,
+        'cases.timeline.system.step_goto',
+        uid,
+        buildProcedureTimelineRef({
+          eventKind: 'step_goto',
+          playbook: pb,
+          step: block,
+          targetStep: tgt.block,
+        }),
+      )
       await em.flush()
       return { ok: true as const }
     }
@@ -609,9 +641,31 @@ const nextPlaybookStepCommand: CommandHandler<
     caseRow.updatedAt = new Date()
     await em.flush()
     if (nextId) {
-      await appendSystemTimeline(em, caseRow, 'cases.timeline.system.step_next', uid)
+      const nextLoc = findWithPath(def, nextId)
+      await appendSystemTimeline(
+        em,
+        caseRow,
+        'cases.timeline.system.step_next',
+        uid,
+        buildProcedureTimelineRef({
+          eventKind: 'step_next',
+          playbook: pb,
+          step: block,
+          nextStep: nextLoc?.block ?? null,
+        }),
+      )
     } else {
-      await appendSystemTimeline(em, caseRow, 'cases.timeline.system.playbook_finished', uid)
+      await appendSystemTimeline(
+        em,
+        caseRow,
+        'cases.timeline.system.playbook_finished',
+        uid,
+        buildProcedureTimelineRef({
+          eventKind: 'playbook_finished',
+          playbook: pb,
+          step: block,
+        }),
+      )
     }
     await em.flush()
     if (!nextId && completion?.caseClosed) {
@@ -692,6 +746,13 @@ const answerConditionCommand: CommandHandler<
         ? 'cases.timeline.system.condition_answered_yes'
         : 'cases.timeline.system.condition_answered_no',
       uid.length ? uid : null,
+      buildProcedureTimelineRef({
+        eventKind: parsed.branch === 'yes' ? 'condition_answered_yes' : 'condition_answered_no',
+        playbook: pb,
+        step: cond,
+        nextStep: nextId ? findWithPath(def, nextId)?.block ?? null : null,
+        extras: { branch: parsed.branch },
+      }),
     )
     if (!nextId) {
       await appendSystemTimeline(
@@ -699,6 +760,11 @@ const answerConditionCommand: CommandHandler<
         caseRow,
         'cases.timeline.system.playbook_finished',
         uid.length ? uid : null,
+        buildProcedureTimelineRef({
+          eventKind: 'playbook_finished',
+          playbook: pb,
+          step: cond,
+        }),
       )
     }
     await em.flush()
@@ -849,9 +915,36 @@ const sendNotifyPlaybookStepCommand: CommandHandler<
     caseRow.metadata = writeCasePlaybookRun(meta, completion?.run ?? nextRun)
     caseRow.updatedAt = new Date()
     await em.flush()
-    await appendSystemTimeline(em, caseRow, 'cases.timeline.system.notify_sent', uid)
+    await appendSystemTimeline(
+      em,
+      caseRow,
+      'cases.timeline.system.notify_sent',
+      uid,
+      buildProcedureTimelineRef({
+        eventKind: 'notify_sent',
+        playbook: pb,
+        step: block,
+        nextStep: nextId ? findWithPath(def, nextId)?.block ?? null : null,
+        extras: {
+          subject,
+          bodyPreview: bodyPlain.slice(0, 500),
+          notifyChannel: channel.length ? channel : null,
+          notifyTarget: target,
+        },
+      }),
+    )
     if (!nextId) {
-      await appendSystemTimeline(em, caseRow, 'cases.timeline.system.playbook_finished', uid)
+      await appendSystemTimeline(
+        em,
+        caseRow,
+        'cases.timeline.system.playbook_finished',
+        uid,
+        buildProcedureTimelineRef({
+          eventKind: 'playbook_finished',
+          playbook: pb,
+          step: block,
+        }),
+      )
     }
     await em.flush()
     if (!nextId && completion?.caseClosed) {
@@ -936,11 +1029,23 @@ const scheduleProcedureTaskCommand: CommandHandler<
     caseRow.metadata = writeCasePlaybookRun(meta, nextRun)
     caseRow.updatedAt = new Date()
     await em.flush()
-    await appendSystemTimeline(em, caseRow, 'cases.timeline.system.procedure_task_scheduled', uid, {
-      kind: 'procedure_task_scheduled',
-      taskId: task.id,
-      title: parsed.title.trim(),
-    })
+    await appendSystemTimeline(
+      em,
+      caseRow,
+      'cases.timeline.system.procedure_task_scheduled',
+      uid,
+      buildProcedureTimelineRef({
+        eventKind: 'procedure_task_scheduled',
+        playbook: pb,
+        step: actionBlock,
+        extras: {
+          taskId: task.id,
+          title: parsed.title.trim(),
+          ...(bodyRaw.length ? { taskBody: bodyRaw.slice(0, 500) } : {}),
+          ...(dueAt ? { dueAt: dueAt.toISOString() } : {}),
+        },
+      }),
+    )
     await em.flush()
     return { ok: true as const, taskId: task.id }
   },
@@ -993,11 +1098,14 @@ const assignProcedureOwnerCommand: CommandHandler<
         ? 'cases.timeline.system.procedure_owner_taken'
         : 'cases.timeline.system.procedure_owner_assigned',
       uid,
-      {
-        kind: existingOwner.length ? 'procedure_owner_taken' : 'procedure_owner_assigned',
-        ownerUserId,
-        ...(existingOwner.length ? { previousOwnerUserId: existingOwner } : {}),
-      },
+      buildProcedureTimelineRef({
+        eventKind: existingOwner.length ? 'procedure_owner_taken' : 'procedure_owner_assigned',
+        playbook: await ensurePlaybook(em, run.playbookId, parsed.tenantId, parsed.organizationId),
+        extras: {
+          ownerUserId,
+          ...(existingOwner.length ? { previousOwnerUserId: existingOwner } : {}),
+        },
+      }),
     )
     await em.flush()
     return { ok: true as const }
@@ -1121,16 +1229,31 @@ const launchInvokeProcedureCommand: CommandHandler<
     caseRow.updatedAt = new Date()
     await em.flush()
     const uid = typeof ctx.auth?.sub === 'string' ? ctx.auth.sub.trim() : null
-    await appendSystemTimeline(em, caseRow, 'cases.timeline.system.invoke_procedure_launched', uid, {
-      kind: 'invoke_procedure_launched',
-      slug: want,
-      playbookId: newPb.id,
-      title: typeof newPb.title === 'string' ? newPb.title : null,
-      version:
-        typeof newPb.version === 'number' && Number.isFinite(newPb.version) ? Math.trunc(newPb.version) : null,
-      previousPlaybookId: previousPb.id,
-      procedureOwnerUserId,
-    })
+    await appendSystemTimeline(
+      em,
+      caseRow,
+      'cases.timeline.system.invoke_procedure_launched',
+      uid,
+      buildProcedureTimelineRef({
+        eventKind: 'invoke_procedure_launched',
+        playbook: newPb,
+        step: invokeBlock,
+        nextStep: first ? findWithPath(newDef, first)?.block ?? null : null,
+        extras: {
+          slug: want,
+          playbookId: newPb.id,
+          title: typeof newPb.title === 'string' ? newPb.title : null,
+          version:
+            typeof newPb.version === 'number' && Number.isFinite(newPb.version)
+              ? Math.trunc(newPb.version)
+              : null,
+          previousPlaybookId: previousPb.id,
+          previousPlaybookTitle: typeof previousPb.title === 'string' ? previousPb.title : null,
+          previousPlaybookSlug: typeof previousPb.slug === 'string' ? previousPb.slug : null,
+          procedureOwnerUserId,
+        },
+      }),
+    )
     await em.flush()
     const eventBus = ctx.container.resolve('eventBus') as {
       emitEvent: (e: string, p: unknown, o?: unknown) => Promise<void>
@@ -1218,14 +1341,35 @@ const selectEntityPlaybookStepCommand: CommandHandler<
       events: caseCrudEvents,
       indexer: caseProcedureIndexer,
     })
-    await appendSystemTimeline(em, caseRow, 'cases.timeline.system.entity_selected', uid, {
-      kind: 'procedure_entity_selected',
-      entityKind: block.entityKind,
-      entityId,
-      label: labelRaw.length ? labelRaw : null,
-    })
+    await appendSystemTimeline(
+      em,
+      caseRow,
+      'cases.timeline.system.entity_selected',
+      uid,
+      buildProcedureTimelineRef({
+        eventKind: 'procedure_entity_selected',
+        playbook: pb,
+        step: block,
+        nextStep: nextId ? findWithPath(def, nextId)?.block ?? null : null,
+        extras: {
+          entityKind: block.entityKind,
+          entityId,
+          label: labelRaw.length ? labelRaw : null,
+        },
+      }),
+    )
     if (!nextId) {
-      await appendSystemTimeline(em, caseRow, 'cases.timeline.system.playbook_finished', uid)
+      await appendSystemTimeline(
+        em,
+        caseRow,
+        'cases.timeline.system.playbook_finished',
+        uid,
+        buildProcedureTimelineRef({
+          eventKind: 'playbook_finished',
+          playbook: pb,
+          step: block,
+        }),
+      )
     }
     await em.flush()
     if (!nextId && completion?.caseClosed) {

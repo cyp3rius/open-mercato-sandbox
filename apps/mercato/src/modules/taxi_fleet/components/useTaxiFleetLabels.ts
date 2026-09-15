@@ -15,7 +15,7 @@ export const TAXI_FLEET_TRIP_TYPES = [
 ] as const
 export type TaxiFleetTripType = (typeof TAXI_FLEET_TRIP_TYPES)[number]
 
-/** Default trip-type filter for course planning: all types except platform imports. */
+/** Default trip-type filter for fleet planning, trip list, and driver courses: all types except platform. */
 export const TAXI_FLEET_PLANNING_DEFAULT_TRIP_TYPES = TAXI_FLEET_TRIP_TYPES.filter(
   (type) => type !== 'platform',
 )

@@ -10,6 +10,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { formatDateTime } from '@open-mercato/shared/lib/time'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
+import { FilterBar, type FilterDef, type FilterValues } from '@open-mercato/ui/backend/FilterBar'
 import { RowActions } from '@open-mercato/ui/backend/RowActions'
 import { ScheduleCalendarListPanel } from '@open-mercato/ui/backend/schedule'
 import type { SchedulePresentationMode, ScheduleRange, ScheduleViewMode } from '@open-mercato/ui/backend/schedule'
@@ -27,7 +28,11 @@ import {
 import { createDefaultAllocationWeekRange } from '../AllocationCalendar'
 import { TripCreateDialog, type TripCreateSeed } from '../TripCreateDialog'
 import type { FleetDriverProfile } from '../useFleetDriverDirectory'
-import { useTaxiFleetLabels } from '../useTaxiFleetLabels'
+import {
+  TAXI_FLEET_PLANNING_DEFAULT_TRIP_TYPES,
+  TAXI_FLEET_TRIP_TYPES,
+  useTaxiFleetLabels,
+} from '../useTaxiFleetLabels'
 import { useResourceLabels } from '../useResourceLabels'
 import { useTripStatusDictionary } from '../useTripStatusDictionary'
 import { TripCustomerPreview } from '../TripCustomerPreview'
@@ -42,6 +47,12 @@ type DriverTripsTabProps = {
   resolveDriverName: (teamMemberId: string) => string
   resolveResourceLabel: (resourceId: string) => string
   canManageTrips: boolean
+}
+
+function createDefaultDriverTripFilters(): FilterValues {
+  return {
+    tripTypes: [...TAXI_FLEET_PLANNING_DEFAULT_TRIP_TYPES],
+  }
 }
 
 export function DriverTripsTab({
@@ -61,11 +72,20 @@ export function DriverTripsTab({
   const [presentation, setPresentation] = React.useState<SchedulePresentationMode>('calendar')
   const [view, setView] = React.useState<ScheduleViewMode>('week')
   const [range, setRange] = React.useState<ScheduleRange>(() => createDefaultAllocationWeekRange())
+  const [filterValues, setFilterValues] = React.useState<FilterValues>(() => createDefaultDriverTripFilters())
   const [trips, setTrips] = React.useState<CalendarTrip[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [reloadToken, setReloadToken] = React.useState(0)
   const [tripDialogOpen, setTripDialogOpen] = React.useState(false)
   const [tripSeed, setTripSeed] = React.useState<TripCreateSeed | null>(null)
+
+  const selectedTripTypes = React.useMemo(() => {
+    const raw = filterValues.tripTypes
+    if (!Array.isArray(raw)) return [...TAXI_FLEET_PLANNING_DEFAULT_TRIP_TYPES]
+    return raw
+      .map((value) => (typeof value === 'string' ? value.trim() : ''))
+      .filter((value): value is string => value.length > 0)
+  }, [filterValues.tripTypes])
 
   const resourceIds = React.useMemo(
     () => [...new Set(trips.map((trip) => trip.resourceId).filter((id): id is string => Boolean(id)))],
@@ -73,10 +93,31 @@ export function DriverTripsTab({
   )
   const { resolveColor: resolveResourceColor, colors: resourceColors } = useResourceLabels(resourceIds)
 
+  const filters = React.useMemo<FilterDef[]>(
+    () => [
+      {
+        id: 'tripTypes',
+        label: t('taxi_fleet.assignments.filterTripType', 'Trip type'),
+        type: 'select',
+        multiple: true,
+        options: TAXI_FLEET_TRIP_TYPES.map((type) => ({
+          value: type,
+          label: resolveTripTypeLabel(type),
+        })),
+      },
+    ],
+    [resolveTripTypeLabel, t],
+  )
+
   React.useEffect(() => {
     let cancelled = false
     async function load() {
       setIsLoading(true)
+      if (selectedTripTypes.length === 0) {
+        setTrips([])
+        setIsLoading(false)
+        return
+      }
       const dateFrom = format(range.start, 'yyyy-MM-dd')
       const dateTo = format(endOfDay(range.end), "yyyy-MM-dd'T'HH:mm:ss")
       const tripParams = new URLSearchParams({
@@ -85,6 +126,7 @@ export function DriverTripsTab({
         dateFrom,
         dateTo,
         teamMemberId,
+        tripType: selectedTripTypes.join(','),
       })
       const tripCall = await apiCall<TripsResponse>(`/api/taxi_fleet/trips?${tripParams}`)
       if (cancelled) return
@@ -96,7 +138,7 @@ export function DriverTripsTab({
     return () => {
       cancelled = true
     }
-  }, [range.end, range.start, reloadToken, scopeVersion, teamMemberId])
+  }, [range.end, range.start, reloadToken, scopeVersion, selectedTripTypes, teamMemberId])
 
   const openCreateTrip = React.useCallback((seed: TripCreateSeed = {}) => {
     setTripSeed({ ...seed, teamMemberId })
@@ -168,74 +210,82 @@ export function DriverTripsTab({
 
   return (
     <>
-      <ScheduleCalendarListPanel
-        mode={presentation}
-        onModeChange={setPresentation}
-        listLabel={t('taxi_fleet.drivers.tabs.trips.listView', 'List view')}
-        calendarLabel={t('taxi_fleet.drivers.tabs.trips.calendarView', 'Calendar view')}
-        headerActions={
-          canManageTrips ? (
-            <Button type="button" size="sm" className="inline-flex items-center gap-2" onClick={() => openCreateTrip({})}>
-              <Plus className="size-4 shrink-0" aria-hidden />
-              {t('taxi_fleet.trips.actions.new', 'New trip')}
-            </Button>
-          ) : null
-        }
-        calendarContent={(
-          <AssignmentCalendar
-            assignments={[]}
-            trips={trips}
-            tripsOnly
-            omitDriverInTitle
-            selectedTeamMemberId={teamMemberId}
-            resolveDriverName={resolveDriverName}
-            resolveResourceLabel={resolveResourceLabel}
-            resolveResourceColor={resolveResourceColor}
-            resourceColors={resourceColors}
-            view={view}
-            range={range}
-            onRangeChange={setRange}
-            onViewChange={setView}
-            onCreateTrip={openCreateTrip}
-          />
-        )}
-        listContent={(
-          <DataTable<CalendarTrip>
-            embedded
-            data={trips}
-            columns={columns}
-            isLoading={isLoading}
-            emptyState={t('taxi_fleet.drivers.tabs.trips.empty', 'No trips for this driver in the selected period.')}
-            onRowClick={(row) => router.push(detailHref(row.id))}
-            rowActions={(row) => (
-              <RowActions
-                items={[
-                  {
-                    id: 'view',
-                    label: t('taxi_fleet.trips.list.actions.viewDetails', 'View details'),
-                    onSelect: () => router.push(detailHref(row.id)),
-                  },
-                  {
-                    id: 'open-tab',
-                    label: t('taxi_fleet.trips.list.actions.openInNewTab', 'Open in new tab'),
-                    onSelect: () => window.open(detailHref(row.id), '_blank', 'noopener,noreferrer'),
-                  },
-                  ...(canManageTrips
-                    ? [
-                        {
-                          id: 'delete',
-                          label: t('taxi_fleet.trips.list.actions.delete', 'Delete'),
-                          destructive: true as const,
-                          onSelect: () => void handleDelete(row),
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-            )}
-          />
-        )}
-      />
+      <div className="space-y-4">
+        <FilterBar
+          filters={filters}
+          values={filterValues}
+          onApply={setFilterValues}
+          onClear={() => setFilterValues(createDefaultDriverTripFilters())}
+        />
+        <ScheduleCalendarListPanel
+          mode={presentation}
+          onModeChange={setPresentation}
+          listLabel={t('taxi_fleet.drivers.tabs.trips.listView', 'List view')}
+          calendarLabel={t('taxi_fleet.drivers.tabs.trips.calendarView', 'Calendar view')}
+          headerActions={
+            canManageTrips ? (
+              <Button type="button" size="sm" className="inline-flex items-center gap-2" onClick={() => openCreateTrip({})}>
+                <Plus className="size-4 shrink-0" aria-hidden />
+                {t('taxi_fleet.trips.actions.new', 'New trip')}
+              </Button>
+            ) : null
+          }
+          calendarContent={(
+            <AssignmentCalendar
+              assignments={[]}
+              trips={trips}
+              tripsOnly
+              omitDriverInTitle
+              selectedTeamMemberId={teamMemberId}
+              resolveDriverName={resolveDriverName}
+              resolveResourceLabel={resolveResourceLabel}
+              resolveResourceColor={resolveResourceColor}
+              resourceColors={resourceColors}
+              view={view}
+              range={range}
+              onRangeChange={setRange}
+              onViewChange={setView}
+              onCreateTrip={openCreateTrip}
+            />
+          )}
+          listContent={(
+            <DataTable<CalendarTrip>
+              embedded
+              data={trips}
+              columns={columns}
+              isLoading={isLoading}
+              emptyState={t('taxi_fleet.drivers.tabs.trips.empty', 'No trips for this driver in the selected period.')}
+              onRowClick={(row) => router.push(detailHref(row.id))}
+              rowActions={(row) => (
+                <RowActions
+                  items={[
+                    {
+                      id: 'view',
+                      label: t('taxi_fleet.trips.list.actions.viewDetails', 'View details'),
+                      onSelect: () => router.push(detailHref(row.id)),
+                    },
+                    {
+                      id: 'open-tab',
+                      label: t('taxi_fleet.trips.list.actions.openInNewTab', 'Open in new tab'),
+                      onSelect: () => window.open(detailHref(row.id), '_blank', 'noopener,noreferrer'),
+                    },
+                    ...(canManageTrips
+                      ? [
+                          {
+                            id: 'delete',
+                            label: t('taxi_fleet.trips.list.actions.delete', 'Delete'),
+                            destructive: true as const,
+                            onSelect: () => void handleDelete(row),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              )}
+            />
+          )}
+        />
+      </div>
       <TripCreateDialog
         open={tripDialogOpen}
         onOpenChange={setTripDialogOpen}
