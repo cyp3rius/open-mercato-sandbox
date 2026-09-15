@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
-  <!-- Taxi yellow home-screen tile — distinct from CRM blue/grey mark on white -->
+  <!-- Taxi yellow tile; mark inset matches CRM favicon (~65px / ~74% of canvas) -->
   <rect width="512" height="512" fill="#FFEB3D"/>
-  <g transform="translate(36 36) scale(0.725)">
+  <g transform="translate(65 65) scale(0.6341)">
     <path d="M173.928 575.508L274.321 475.122L200.812 401.595L401.622 200.798L200.812 0H0L200.812 200.798L0 401.595L173.928 575.508Z" fill="#020407"/>
     <path d="M328.084 328.108L401.622 401.629L200.81 602.426H401.622L602.398 401.629L428.502 227.718L328.084 328.108Z" fill="#020407"/>
     <path d="M0.0172817 219.737L85.0363 134.922L0.00128174 49.9105L0.0172817 219.737Z" fill="#020407"/>

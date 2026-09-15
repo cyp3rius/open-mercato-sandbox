@@ -91,8 +91,8 @@ self.addEventListener('push', (event) => {
       body: payload.body,
       tag: payload.tag,
       renotify: true,
-      icon: '/driver/icon-192.png?v=20260915',
-      badge: '/driver/icon-192.png?v=20260915',
+      icon: '/driver/icon-192.png?v=20260915b',
+      badge: '/driver/icon-192.png?v=20260915b',
       data: {
         url: payload.url,
         tripId: payload.tripId,

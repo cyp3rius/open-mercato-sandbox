@@ -2,7 +2,7 @@
  * Install driver-PWA head tags and remove CRM/root branding icons that would
  * otherwise win on iOS "Add to Home Screen" (first apple-touch-icon in document).
  */
-export const DRIVER_PWA_ICON_VERSION = '20260915'
+export const DRIVER_PWA_ICON_VERSION = '20260915b'
 
 const DRIVER_MANIFEST_HREF = `/driver/manifest.webmanifest?v=${DRIVER_PWA_ICON_VERSION}`
 const DRIVER_APPLE_TOUCH_HREF = `/driver/apple-touch-icon.png?v=${DRIVER_PWA_ICON_VERSION}`
