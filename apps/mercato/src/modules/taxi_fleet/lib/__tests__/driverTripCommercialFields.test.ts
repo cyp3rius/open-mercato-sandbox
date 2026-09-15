@@ -33,11 +33,32 @@ describe('driverTripCommercialFields', () => {
     expect(tripTypeRequiresCustomer('street_hail')).toBe(false)
   })
 
+  it('never shows platform picker for driver commercial types', () => {
+    for (const tripType of DRIVER_COMMERCIAL_TRIP_TYPES) {
+      expect(resolveDriverCommercialFieldVisibility(tripType).showPlatform).toBe(false)
+    }
+  })
+
   it('hides platform and keeps optional customer for street hail', () => {
     expect(resolveDriverCommercialFieldVisibility('street_hail')).toEqual({
       showPlatform: false,
       showCustomer: true,
       customerRequired: false,
+      showPayment: true,
+    })
+  })
+
+  it('hides platform for client and other (CRM-only)', () => {
+    expect(resolveDriverCommercialFieldVisibility('client')).toEqual({
+      showPlatform: false,
+      showCustomer: true,
+      customerRequired: true,
+      showPayment: true,
+    })
+    expect(resolveDriverCommercialFieldVisibility('other')).toEqual({
+      showPlatform: false,
+      showCustomer: true,
+      customerRequired: true,
       showPayment: true,
     })
   })

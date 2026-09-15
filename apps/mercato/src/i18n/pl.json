@@ -319,6 +319,7 @@
   "taxi_fleet.assignments.filterDrivers": "Filtruj kierowców…",
   "taxi_fleet.assignments.filterDriver": "Wybierz kierowcę…",
   "taxi_fleet.assignments.filterVehicle": "Wybierz pojazd…",
+  "taxi_fleet.assignments.filterTripType": "Typ kursu",
   "taxi_fleet.calendar.panelTitle": "Szczegóły kursu",
   "taxi_fleet.calendar.editTrip": "Edytuj kurs",
   "taxi_fleet.calendar.closePanel": "Zamknij",

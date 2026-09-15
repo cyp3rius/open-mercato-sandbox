@@ -91,7 +91,11 @@ async function buildTripListFilters(
   const ids = parseIds(query.ids)
   if (ids.length) filters.id = { $in: ids }
   if (query.resourceId) filters.resourceId = query.resourceId
-  if (query.tripType) filters.tripType = query.tripType
+  if (query.tripType) {
+    const tripTypes = parseIds(query.tripType)
+    if (tripTypes.length === 1) filters.tripType = tripTypes[0]
+    else if (tripTypes.length > 1) filters.tripType = { $in: tripTypes }
+  }
   if (query.status) filters.status = query.status
   if (query.platform) filters.platform = query.platform
   if (query.unscheduled === true) filters.teamMemberId = null

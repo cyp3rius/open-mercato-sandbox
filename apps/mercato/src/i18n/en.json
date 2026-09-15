@@ -319,6 +319,7 @@
   "taxi_fleet.assignments.filterDrivers": "Filter drivers…",
   "taxi_fleet.assignments.filterDriver": "Select driver…",
   "taxi_fleet.assignments.filterVehicle": "Select vehicle…",
+  "taxi_fleet.assignments.filterTripType": "Trip type",
   "taxi_fleet.calendar.panelTitle": "Trip details",
   "taxi_fleet.calendar.editTrip": "Edit trip",
   "taxi_fleet.calendar.closePanel": "Close",

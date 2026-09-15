@@ -23,6 +23,7 @@ export type DriverCommercialFieldVisibility = {
 export function resolveDriverCommercialFieldVisibility(
   tripType: TaxiFleetTripType,
 ): DriverCommercialFieldVisibility {
+  // Platform trip type + platform brand are CRM / sync only — never editable in the driver app.
   switch (tripType) {
     case 'private':
     case 'internal':
@@ -43,15 +44,15 @@ export function resolveDriverCommercialFieldVisibility(
     case 'client':
     case 'other':
       return {
-        showPlatform: true,
+        showPlatform: false,
         showCustomer: true,
         customerRequired: true,
         showPayment: true,
       }
     default:
-      // event / platform / unknown — keep full fields for operator/legacy edits
+      // event / platform / unknown — customer optional; platform still CRM-only
       return {
-        showPlatform: true,
+        showPlatform: false,
         showCustomer: true,
         customerRequired: false,
         showPayment: true,

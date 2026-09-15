@@ -22,10 +22,21 @@ import { useResourceLabels } from '../../../components/useResourceLabels'
 import { useFleetBackendSession } from '../../../components/useFleetBackendSession'
 import { useTaxiFleetSettings } from '../../../components/useTaxiFleetSettings'
 import { TripCreateDialog, type TripCreateSeed } from '../../../components/TripCreateDialog'
+import {
+  TAXI_FLEET_PLANNING_DEFAULT_TRIP_TYPES,
+  TAXI_FLEET_TRIP_TYPES,
+  useTaxiFleetLabels,
+} from '../../../components/useTaxiFleetLabels'
 import { remoteSearchFleetResources } from '../../../lib/fleetResourceSearch'
 import { transformTripListItem } from '../../../lib/listItemFields'
 
 type TripsResponse = { items: Record<string, unknown>[]; totalPages: number }
+
+function createDefaultAssignmentFilters(): FilterValues {
+  return {
+    tripTypes: [...TAXI_FLEET_PLANNING_DEFAULT_TRIP_TYPES],
+  }
+}
 
 export default function TaxiFleetAssignmentsPage() {
   const t = useT()
@@ -33,6 +44,7 @@ export default function TaxiFleetAssignmentsPage() {
   const dateLocale = React.useMemo(() => resolveScheduleDateFnsLocale(appLocale), [appLocale])
   const scopeVersion = useOrganizationScopeVersion()
   const { profiles, resolveName } = useFleetDriverDirectory()
+  const { resolveTripTypeLabel } = useTaxiFleetLabels()
   const { isDriverOnly, lockedTeamMemberId } = useFleetBackendSession()
   const { resourceTypeId } = useTaxiFleetSettings()
   const [view, setView] = React.useState<ScheduleViewMode>('week')
@@ -44,7 +56,7 @@ export default function TaxiFleetAssignmentsPage() {
       end: endOfWeek(reference, { locale }),
     }
   })
-  const [filterValues, setFilterValues] = React.useState<FilterValues>({})
+  const [filterValues, setFilterValues] = React.useState<FilterValues>(() => createDefaultAssignmentFilters())
   const [trips, setTrips] = React.useState<CalendarTrip[]>([])
   const [reloadToken, setReloadToken] = React.useState(0)
   const [tripDialogOpen, setTripDialogOpen] = React.useState(false)
@@ -72,6 +84,14 @@ export default function TaxiFleetAssignmentsPage() {
     typeof filterValues.resourceId === 'string' && filterValues.resourceId.length > 0
       ? filterValues.resourceId
       : null
+
+  const selectedTripTypes = React.useMemo(() => {
+    const raw = filterValues.tripTypes
+    if (!Array.isArray(raw)) return [...TAXI_FLEET_PLANNING_DEFAULT_TRIP_TYPES]
+    return raw
+      .map((value) => (typeof value === 'string' ? value.trim() : ''))
+      .filter((value): value is string => value.length > 0)
+  }, [filterValues.tripTypes])
 
   const resourceIds = React.useMemo(() => {
     const ids = new Set<string>()
@@ -117,6 +137,16 @@ export default function TaxiFleetAssignmentsPage() {
   const filters = React.useMemo<FilterDef[]>(
     () => [
       {
+        id: 'tripTypes',
+        label: t('taxi_fleet.assignments.filterTripType', 'Trip type'),
+        type: 'select',
+        multiple: true,
+        options: TAXI_FLEET_TRIP_TYPES.map((type) => ({
+          value: type,
+          label: resolveTripTypeLabel(type),
+        })),
+      },
+      {
         id: 'teamMemberId',
         label: t('taxi_fleet.assignments.driver', 'Driver'),
         type: 'combobox',
@@ -142,12 +172,24 @@ export default function TaxiFleetAssignmentsPage() {
         placeholder: t('taxi_fleet.assignments.filterVehicle', 'Select vehicle…'),
       },
     ],
-    [driverFilterOptions, resolveName, resolveResourceLabel, resourceTypeId, t, vehicleFilterOptions],
+    [
+      driverFilterOptions,
+      resolveName,
+      resolveResourceLabel,
+      resolveTripTypeLabel,
+      resourceTypeId,
+      t,
+      vehicleFilterOptions,
+    ],
   )
 
   React.useEffect(() => {
     let cancelled = false
     async function load() {
+      if (selectedTripTypes.length === 0) {
+        setTrips([])
+        return
+      }
       const dateFrom = format(range.start, 'yyyy-MM-dd')
       const dateTo = format(endOfDay(range.end), "yyyy-MM-dd'T'HH:mm:ss")
       const tripParams = new URLSearchParams({
@@ -155,6 +197,7 @@ export default function TaxiFleetAssignmentsPage() {
         pageSize: '100',
         dateFrom,
         dateTo,
+        tripType: selectedTripTypes.join(','),
       })
       if (selectedTeamMemberId) {
         tripParams.set('teamMemberId', selectedTeamMemberId)
@@ -171,7 +214,15 @@ export default function TaxiFleetAssignmentsPage() {
     return () => {
       cancelled = true
     }
-  }, [range.end, range.start, scopeVersion, reloadToken, selectedResourceId, selectedTeamMemberId])
+  }, [
+    range.end,
+    range.start,
+    scopeVersion,
+    reloadToken,
+    selectedResourceId,
+    selectedTeamMemberId,
+    selectedTripTypes,
+  ])
 
   return (
     <Page className="flex h-[calc(100svh-8rem)] max-h-[calc(100svh-8rem)] flex-col overflow-hidden !space-y-0">
@@ -204,7 +255,7 @@ export default function TaxiFleetAssignmentsPage() {
               filters={isDriverOnly ? [] : filters}
               values={filterValues}
               onApply={setFilterValues}
-              onClear={() => setFilterValues({})}
+              onClear={() => setFilterValues(createDefaultAssignmentFilters())}
             />
           </div>
           <div className="min-h-0 flex-1 overflow-hidden">
