@@ -940,6 +940,7 @@
   "taxi_fleet.drivers.form.updated": "Changes saved.",
   "taxi_fleet.drivers.form.missingId": "No id returned.",
   "taxi_fleet.drivers.detail.backToList": "Back to drivers",
+  "taxi_fleet.drivers.detail.actions.sendMessage": "Send message",
   "taxi_fleet.drivers.detail.actions.previewApp": "Preview driver app",
   "taxi_fleet.drivers.mobileAppAccess": "Access via mobile app",
   "taxi_fleet.drivers.vehicleSearch": "Search vehicle…",
@@ -3020,5 +3021,12 @@
   "taxi_fleet.communications.errors.retryNotFailed": "Only failed or pending recipients can be retried.",
   "taxi_fleet.communications.errors.ackNotFound": "Communication receipt not found.",
   "taxi_fleet.communications.errors.titleTooLong": "Title is too long.",
-  "taxi_fleet.communications.errors.bodyTooLong": "Message is too long."
+  "taxi_fleet.communications.errors.bodyTooLong": "Message is too long.",
+  "taxi_fleet.communications.form.recipient": "Recipient",
+  "taxi_fleet.communications.form.pushHint": "Sent as a push notification to the driver app.",
+  "taxi_fleet.communications.form.appDisabledWarning": "This driver does not have the mobile app enabled — delivery may fail.",
+  "taxi_fleet.communications.sendToDriver.title": "Send message",
+  "taxi_fleet.communications.sendToDriver.submit": "Send (⌘/Ctrl + Enter)",
+  "taxi_fleet.communications.sendToDriver.successNow": "Message sent to the driver as a push notification.",
+  "taxi_fleet.communications.sendToDriver.successScheduled": "Message scheduled for the driver."
 }

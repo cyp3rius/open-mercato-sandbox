@@ -940,6 +940,7 @@
   "taxi_fleet.drivers.form.updated": "Zmiany zapisane.",
   "taxi_fleet.drivers.form.missingId": "Brak identyfikatora w odpowiedzi.",
   "taxi_fleet.drivers.detail.backToList": "Powrót do listy kierowców",
+  "taxi_fleet.drivers.detail.actions.sendMessage": "Wyślij wiadomość",
   "taxi_fleet.drivers.detail.actions.previewApp": "Podgląd aplikacji kierowcy",
   "taxi_fleet.drivers.mobileAppAccess": "Dostęp przez aplikację mobilną",
   "taxi_fleet.drivers.vehicleSearch": "Szukaj pojazdu…",
@@ -3020,5 +3021,12 @@
   "taxi_fleet.communications.errors.retryNotFailed": "Ponowić można tylko nieudane lub oczekujące dostawy.",
   "taxi_fleet.communications.errors.ackNotFound": "Nie znaleziono potwierdzenia odczytu.",
   "taxi_fleet.communications.errors.titleTooLong": "Tytuł jest za długi.",
-  "taxi_fleet.communications.errors.bodyTooLong": "Treść jest za długa."
+  "taxi_fleet.communications.errors.bodyTooLong": "Treść jest za długa.",
+  "taxi_fleet.communications.form.recipient": "Odbiorca",
+  "taxi_fleet.communications.form.pushHint": "Wiadomość zostanie wysłana jako powiadomienie push do aplikacji kierowcy.",
+  "taxi_fleet.communications.form.appDisabledWarning": "Ten kierowca nie ma włączonej aplikacji mobilnej — dostawa może się nie udać.",
+  "taxi_fleet.communications.sendToDriver.title": "Wyślij wiadomość",
+  "taxi_fleet.communications.sendToDriver.submit": "Wyślij (⌘/Ctrl + Enter)",
+  "taxi_fleet.communications.sendToDriver.successNow": "Wiadomość wysłana do kierowcy jako powiadomienie push.",
+  "taxi_fleet.communications.sendToDriver.successScheduled": "Wiadomość zaplanowana dla kierowcy."
 }

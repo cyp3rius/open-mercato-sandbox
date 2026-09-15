@@ -40,6 +40,9 @@ export async function sendDriverWebPush(
   let delivered = 0
   let removed = 0
   const body = JSON.stringify(params.payload)
+  // web-push `topic` must be URL-safe Base64 charset only (A–Z a–z 0–9 - _).
+  // Our notification tags use `:` — sanitize; SW still uses payload.tag for renotify.
+  const topic = params.payload.tag.replace(/[^A-Za-z0-9\-_]/g, '-').slice(0, 32)
 
   for (const row of subscriptions) {
     try {
@@ -52,7 +55,7 @@ export async function sendDriverWebPush(
         {
           TTL: 60 * 60,
           urgency: params.payload.urgency === 'normal' ? 'normal' : 'high',
-          topic: params.payload.tag.slice(0, 32),
+          topic,
         },
       )
       delivered += 1

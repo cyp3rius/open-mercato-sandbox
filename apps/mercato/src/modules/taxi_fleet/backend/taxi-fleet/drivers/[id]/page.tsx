@@ -2,9 +2,11 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import { MessageSquare, Smartphone } from 'lucide-react'
 import { ApplyBreadcrumb } from '@open-mercato/ui/backend/AppShell'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { FormHeader } from '@open-mercato/ui/backend/forms'
+import type { ActionItem } from '@open-mercato/ui/backend/forms'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
@@ -105,13 +107,14 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
     [t],
   )
 
-  const menuActions = React.useMemo(() => {
+  const menuActions = React.useMemo((): ActionItem[] | undefined => {
     if (!row) return undefined
-    const items: Array<{ id: string; label: string; onSelect: () => void }> = []
+    const items: ActionItem[] = []
     if (canManageDriverCommunications) {
       items.push({
         id: 'send-message',
         label: t('taxi_fleet.drivers.detail.actions.sendMessage', 'Send message'),
+        icon: MessageSquare,
         onSelect: () => setSendMessageOpen(true),
       })
     }
@@ -119,6 +122,7 @@ export default function TaxiFleetDriverDetailPage({ params }: { params?: { id?: 
       items.push({
         id: 'preview-app',
         label: t('taxi_fleet.drivers.detail.actions.previewApp', 'Preview driver app'),
+        icon: Smartphone,
         onSelect: () => {
           void startDriverAppImpersonation({
             teamMemberId: row.teamMemberId,

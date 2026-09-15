@@ -171,7 +171,7 @@ export function ActionsDropdown({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="w-full justify-start"
+                className="w-full !justify-start gap-2 px-2 text-left font-normal"
                 role="menuitem"
                 disabled={item.disabled}
                 onClick={() => {
@@ -180,13 +180,13 @@ export function ActionsDropdown({
                 }}
               >
                 {item.loading ? (
-                  <Loader2 className="size-4 animate-spin" />
+                  <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
                 ) : Icon ? (
-                  <Icon className="size-4" />
+                  <Icon className="size-4 shrink-0" aria-hidden />
                 ) : (
-                  <span className="size-4" />
+                  <span className="size-4 shrink-0" aria-hidden />
                 )}
-                {item.label}
+                <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
               </Button>
             )
           })}
