@@ -47,7 +47,8 @@ const referralCodeFieldSchema = z.string().trim().max(64).optional().nullable()
 const baseEntitySchema = {
   displayName: displayNameSchema,
   description: z.string().trim().max(4000).optional(),
-  ownerUserId: uuid().optional(),
+  // Forms send explicit null when “No guardian” is chosen; optional alone rejects null.
+  ownerUserId: uuid().nullable().optional(),
   primaryEmail: z
     .string()
     .trim()
@@ -232,7 +233,7 @@ export const dealCreateSchema = scopedSchema.extend({
   valueCurrency: z.string().min(3).max(3).optional(),
   probability: z.number().min(0).max(100).optional(),
   expectedCloseAt: z.coerce.date().optional(),
-  ownerUserId: uuid().optional(),
+  ownerUserId: uuid().nullable().optional(),
   source: z.string().max(150).optional(),
   externalId: z.string().trim().min(1).max(191).optional().nullable(),
   payload: z.record(z.string(), z.unknown()).optional().nullable(),
