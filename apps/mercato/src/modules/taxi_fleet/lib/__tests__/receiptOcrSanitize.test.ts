@@ -68,6 +68,41 @@ describe('receiptOcrSanitize', () => {
     ).toBe('W001776')
   })
 
+  it('ignores Nr boczny 0000 and takes the W-serial below it', () => {
+    const excerpt = [
+      'RS INVESTMENT GROUP SP. Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ',
+      'Jaworskiego 8/ 1, 31-519 Kraków',
+      'NIP: 945-218-91-82',
+      'Nr rejestr.: KK7300G,',
+      'Nr boczny: 0000',
+      'W001530',
+      'PARAGON FISKALNY',
+      'Początek kursu : 16-09-2026 03:51',
+      'SUMA: PLN 121.20',
+      'F940 #001 16.Administrator',
+    ].join('\n')
+    expect(extractFiscalDocumentNumberFromExcerpt(excerpt)).toBe('W001530')
+
+    const sanitized = sanitizeReceiptOcrFields({
+      documentNumber: '0000',
+      sellerNip: null,
+      grossAmount: 121.2,
+      rawExcerpt: excerpt,
+      confidence: 0.8,
+    })
+    expect(sanitized.documentNumber).toBe('W001530')
+    expect(sanitized.sellerNip).toBe(RS_MOTO_ISSUER_NIP_DIGITS)
+  })
+
+  it('clears documentNumber when it is only the Nr boczny value', () => {
+    const excerpt = 'Nr boczny: 12\nW001900\nPARAGON FISKALNY'
+    const sanitized = sanitizeReceiptOcrFields({
+      documentNumber: '12',
+      rawExcerpt: excerpt,
+    })
+    expect(sanitized.documentNumber).toBe('W001900')
+  })
+
   it('recovers buyer NIP from NIP nabywcy line in excerpt', () => {
     expect(
       extractBuyerNipFromExcerpt(
@@ -97,6 +132,50 @@ describe('receiptOcrSanitize', () => {
     })
     expect(sanitized.buyerNip).toBeNull()
     expect(sanitized.sellerNip).toBe(RS_MOTO_ISSUER_NIP_DIGITS)
+  })
+
+  it('trip mode: header seller NIP misread as buyer is cleared on individual receipts', () => {
+    const sanitized = sanitizeReceiptOcrFields({
+      buyerNip: '9452189102',
+      sellerNip: null,
+      documentNumber: 'W001530',
+      grossAmount: 121.2,
+      rawExcerpt: [
+        'RS INVESTMENT GROUP SP. Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ',
+        'Jaworskiego 8/ 1, 31-519 Kraków',
+        'NIP: 945-218-91-82',
+        'Nr rejestr.: KK7300G',
+        'PARAGON FISKALNY',
+        'Poczatek kursu: 16-09-2026 03:51',
+        'Koniec kursu: 16-09-2026 04:07',
+        'SUMA PLN 121.20',
+        'Imię i nazwisko, adres zamawiającego :',
+        'Kurs z :',
+        'do :',
+        'DO ZAPŁATY: 121.20',
+      ].join('\n'),
+    })
+    expect(sanitized.buyerNip).toBeNull()
+    expect(sanitized.sellerNip).toBe(RS_MOTO_ISSUER_NIP_DIGITS)
+  })
+
+  it('trip mode: does not invent buyer from unlabeled header NIP lines', () => {
+    expect(
+      extractBuyerNipFromExcerpt('NIP: 945-218-91-82\nPARAGON FISKALNY\nDO ZAPŁATY 121.20', {
+        labeledOnly: true,
+      }),
+    ).toBeNull()
+    expect(
+      extractSellerNipFromExcerpt(
+        [
+          'RS INVESTMENT',
+          'NIP: 945-218-91-82',
+          'PARAGON FISKALNY',
+          'DO ZAPŁATY 121.20',
+          'NIP nabywcy: 701-053-39-02',
+        ].join('\n'),
+      ),
+    ).toBe('9452189182')
   })
 
   it('expense mode keeps fleet NIP as buyer and never promotes to seller', () => {

@@ -70,7 +70,14 @@ async function syncTripIncomeFromReceiptExtraction(
   documentNumber: string | null,
   options?: { forceOcrValues?: boolean },
 ): Promise<void> {
-  const revenueAmount = Number(trip.revenueAmount ?? 0)
+  const ocrAmount = row.ocrGrossAmount != null ? Number(row.ocrGrossAmount) : null
+  const tripRevenue = Number(trip.revenueAmount ?? 0)
+  const revenueAmount =
+    Number.isFinite(tripRevenue) && tripRevenue > 0
+      ? tripRevenue
+      : ocrAmount != null && Number.isFinite(ocrAmount) && ocrAmount > 0
+        ? ocrAmount
+        : 0
   const hasCustomer = Boolean(trip.customerCompanyId || trip.customerPersonId)
   const hasReceipt = Boolean(row.attachmentId)
   if (
@@ -93,7 +100,6 @@ async function syncTripIncomeFromReceiptExtraction(
         entry.documentNumber = documentNumber
         entry.updatedAt = new Date()
       }
-      const ocrAmount = row.ocrGrossAmount != null ? Number(row.ocrGrossAmount) : null
       const currentAmount = Number(entry.amount)
       if (ocrAmount != null && Number.isFinite(ocrAmount) && ocrAmount > 0) {
         const amountEmpty = !Number.isFinite(currentAmount) || currentAmount <= 0
@@ -126,6 +132,29 @@ async function syncTripIncomeFromReceiptExtraction(
     return
   }
 
+  const existingByTrip = await em.findOne(TaxiFleetFinancialEntry, {
+    tripId: trip.id,
+    tenantId: trip.tenantId,
+    organizationId: trip.organizationId,
+    kind: 'income',
+    deletedAt: null,
+  })
+  if (existingByTrip) {
+    row.financialEntryId = existingByTrip.id
+    if (documentNumber && !existingByTrip.documentNumber?.trim()) {
+      existingByTrip.documentNumber = documentNumber
+      existingByTrip.updatedAt = new Date()
+    }
+    if (!existingByTrip.receiptAttachmentId && row.attachmentId) {
+      existingByTrip.receiptAttachmentId = row.attachmentId
+      existingByTrip.updatedAt = new Date()
+    }
+    await em.flush()
+    await syncFinancialEntryDocumentDuplicates(em, existingByTrip)
+    await recalculateWeeklySettlementsForFinancialEntry(em, existingByTrip)
+    return
+  }
+
   const now = new Date()
   const entry = em.create(TaxiFleetFinancialEntry, {
     tenantId: trip.tenantId,
@@ -154,6 +183,30 @@ async function syncTripIncomeFromReceiptExtraction(
   row.updatedAt = now
   await syncFinancialEntryDocumentDuplicates(em, entry)
   await recalculateWeeklySettlementsForFinancialEntry(em, entry)
+  try {
+    const container = await createRequestContainer()
+    const eventBus = container.resolve('eventBus') as {
+      emitEvent: (event: string, data: unknown) => Promise<void>
+    }
+    await eventBus.emitEvent('taxi_fleet.financial_entry.created', {
+      id: entry.id,
+      tenantId: entry.tenantId,
+      organizationId: entry.organizationId,
+      teamMemberId: entry.teamMemberId,
+      kind: entry.kind,
+      incomeDocumentType: entry.incomeDocumentType ?? null,
+      costType: entry.costType ?? null,
+      amount: entry.amount,
+      currencyCode: entry.currencyCode,
+      documentNumber: entry.documentNumber ?? null,
+      occurredAt: entry.occurredAt.toISOString(),
+    })
+  } catch (error) {
+    console.error('[taxi_fleet.receipt_ocr] financial_entry.created emit failed', {
+      entryId: entry.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 }
 
 

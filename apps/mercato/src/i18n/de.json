@@ -873,5 +873,7 @@
   "security.notifications.preferences.mfa_enforcement_deadline": "MFA-Registrierung erforderlich",
   "security.notifications.preferences.mfa_enrolled": "MFA-Methode aktiviert",
   "security.notifications.preferences.mfa_reset": "MFA-Methoden zurückgesetzt",
-  "security.notifications.preferences.password_changed": "Passwort geändert"
+  "security.notifications.preferences.password_changed": "Passwort geändert",
+  "taxi_fleet.driverApp.updateAvailable": "Eine neue Version der Fahrer-App ist bereit. Bitte jetzt aktualisieren.",
+  "taxi_fleet.driverApp.updateNow": "Aktualisieren"
 }

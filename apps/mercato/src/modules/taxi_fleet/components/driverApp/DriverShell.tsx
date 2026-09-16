@@ -16,7 +16,12 @@ import { useDriverPwa } from './useDriverPwa'
 import { useDriverPush } from './useDriverPush'
 import { useDriverForcedLightTheme } from './useDriverForcedLightTheme'
 import { clearDriverLocalData } from '../../lib/driverOffline/clearDriverLocalData'
-import { flushDriverOutbox, getPendingOutboxCount } from '../../lib/driverOffline/outbox'
+import {
+  flushDriverOutbox,
+  getOutboxSyncCounts,
+} from '../../lib/driverOffline/outbox'
+import { loadDriverMeWithCache } from '../../lib/driverOffline/queueOrSendShiftMutation'
+import { seedDriverOfflineSnapshots } from '../../lib/driverOffline/seedDriverOfflineSnapshots'
 import { clearLiveTripDraft, getActiveLiveTripDraft } from '../../lib/driverOffline/tripDrafts'
 import { installDriverPwaHead } from '../../lib/driverPwaHead'
 import { useDriverTracking } from './useDriverTracking'
@@ -25,6 +30,7 @@ import { DriverAppModeProvider } from './useDriverAppMode'
 import type { DriverImpersonationInfo } from '../../lib/driverImpersonation'
 import { TAXI_FLEET_BASE } from '../../backend/taxi-fleet/paths'
 import {
+  driverBadgeDangerClass,
   driverBadgeInfoClass,
   driverBadgeNeutralClass,
   driverBadgeSuccessClass,
@@ -121,10 +127,11 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
     showConsentBanner: showPushBanner,
     requestAccess: requestPushAccess,
   } = useDriverPush()
-  const { canInstall, install } = useDriverPwa()
+  const { canInstall, install, updateReady, applyUpdate } = useDriverPwa()
   const [gpsBusy, setGpsBusy] = React.useState(false)
   const [pushBusy, setPushBusy] = React.useState(false)
   const [pending, setPending] = React.useState(0)
+  const [failedSync, setFailedSync] = React.useState(0)
   const [driverName, setDriverName] = React.useState<string | null>(null)
   const [liveTripId, setLiveTripId] = React.useState<string | null>(null)
   const [serverInProgressTripId, setServerInProgressTripId] = React.useState<string | null>(null)
@@ -143,7 +150,7 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
 
   const refreshDriverSession = React.useCallback(async () => {
     try {
-      const { result } = await apiCall<{
+      const { me: result } = await loadDriverMeWithCache<{
         member: { displayName: string }
         impersonation?: DriverImpersonationInfo | null
         todayAssignment: {
@@ -152,7 +159,7 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
           shiftStart: string | null
           shiftEnd: string | null
         } | null
-      }>('/api/taxi_fleet/driver/me')
+      }>()
       if (!result) return
       setDriverName(result.member?.displayName?.trim() || null)
       setImpersonation(result.impersonation?.active ? result.impersonation : null)
@@ -171,7 +178,7 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
   }, [shiftActive])
 
   const refreshLiveAndOutbox = React.useCallback(async () => {
-    const count = await getPendingOutboxCount()
+    const counts = await getOutboxSyncCounts()
     let live = await getActiveLiveTripDraft()
     let serverInProgressId: string | null = null
     if (navigator.onLine) {
@@ -197,7 +204,8 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
         serverInProgressId = null
       }
     }
-    setPending(count)
+    setPending(counts.total)
+    setFailedSync(counts.failed)
     setLiveTripId(live?.id ?? null)
     setServerInProgressTripId(serverInProgressId)
   }, [])
@@ -205,8 +213,11 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
   const refreshShell = React.useCallback(async () => {
     await Promise.all([refreshDriverSession(), refreshLiveAndOutbox()])
     if (navigator.onLine) {
+      await seedDriverOfflineSnapshots().catch(() => undefined)
       await flushDriverOutbox().catch(() => undefined)
-      setPending(await getPendingOutboxCount())
+      const counts = await getOutboxSyncCounts()
+      setPending(counts.total)
+      setFailedSync(counts.failed)
     }
     router.refresh()
   }, [refreshDriverSession, refreshLiveAndOutbox, router])
@@ -214,6 +225,24 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
   React.useEffect(() => {
     void refreshDriverSession()
   }, [refreshDriverSession, pathname])
+
+  React.useEffect(() => {
+    if (!online) return
+    let cancelled = false
+    ;(async () => {
+      await seedDriverOfflineSnapshots().catch(() => undefined)
+      if (cancelled) return
+      await flushDriverOutbox().catch(() => undefined)
+      if (cancelled) return
+      const counts = await getOutboxSyncCounts()
+      if (cancelled) return
+      setPending(counts.total)
+      setFailedSync(counts.failed)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [online])
 
   useDriverTracking({
     enabled: resolvedShiftActive && !impersonation?.active,
@@ -223,7 +252,7 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
   React.useEffect(() => {
     let active = true
     const tick = async () => {
-      const count = await getPendingOutboxCount()
+      const counts = await getOutboxSyncCounts()
       let live = await getActiveLiveTripDraft()
       let serverInProgressId: string | null = null
       if (navigator.onLine) {
@@ -250,7 +279,8 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
         }
       }
       if (!active) return
-      setPending(count)
+      setPending(counts.total)
+      setFailedSync(counts.failed)
       setLiveTripId(live?.id ?? null)
       setServerInProgressTripId(serverInProgressId)
     }
@@ -263,13 +293,6 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
   }, [online, pathname])
 
   React.useEffect(() => {
-    if (!online) return
-    void flushDriverOutbox().then(async () => {
-      setPending(await getPendingOutboxCount())
-    })
-  }, [online])
-
-  React.useEffect(() => {
     ensureDriverViewportMeta()
   }, [])
 
@@ -279,6 +302,7 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
     setLiveTripId(null)
     setServerInProgressTripId(null)
     setPending(0)
+    setFailedSync(0)
     router.replace('/driver/login')
   }
 
@@ -435,8 +459,13 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
                   : t('taxi_fleet.driverApp.pushEnable', 'Enable alerts')}
             </button>
           ) : null}
+          {failedSync > 0 ? (
+            <span className={driverBadgeDangerClass}>
+              {t('taxi_fleet.driverApp.sync.failedCount', 'Sync failed')}: {failedSync}
+            </span>
+          ) : null}
           {pending > 0 ? (
-            <span className={driverBadgeInfoClass}>
+            <span className={failedSync > 0 ? driverBadgeWarningClass : driverBadgeInfoClass}>
               {t('taxi_fleet.driverApp.pendingSync', 'Pending sync')}: {pending}
             </span>
           ) : null}
@@ -451,6 +480,26 @@ export function DriverShell({ children, title, shiftActive, assignmentId }: Prop
             </span>
           ) : null}
         </div>
+        {updateReady ? (
+          <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5">
+            <div className="mx-auto flex w-full max-w-lg items-center justify-between gap-3">
+              <p className="text-xs font-medium text-amber-950">
+                {t(
+                  'taxi_fleet.driverApp.updateAvailable',
+                  'A new driver app version is ready. Update now to continue.',
+                )}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 shrink-0 px-3 text-xs font-semibold"
+                onClick={() => applyUpdate()}
+              >
+                {t('taxi_fleet.driverApp.updateNow', 'Update')}
+              </Button>
+            </div>
+          </div>
+        ) : null}
         {impersonation?.active ? (
           <div className="mx-auto w-full max-w-lg px-4 pb-3">
             <div className="flex flex-col gap-2 rounded-lg border border-[#FFE8A3] bg-[#FFF8DD] px-3 py-2.5 text-sm text-[#9A7700] sm:flex-row sm:items-center sm:justify-between">

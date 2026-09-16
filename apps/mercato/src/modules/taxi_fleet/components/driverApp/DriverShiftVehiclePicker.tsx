@@ -34,12 +34,17 @@ type Props = {
 export function buildShiftVehicleOptions(input: {
   defaults: DriverDefaultVehicleOption[]
   assignment?: AssignmentVehicleSeed
+  /** Offline: ignore server "busy" flags so the driver can still pick a known vehicle. */
+  ignoreAvailability?: boolean
 }): DriverDefaultVehicleOption[] {
-  const availableDefaults = input.defaults.filter((v) => v.available !== false)
+  const sourceDefaults = input.ignoreAvailability
+    ? input.defaults.map((v) => ({ ...v, available: true }))
+    : input.defaults
+  const availableDefaults = sourceDefaults.filter((v) => v.available !== false)
   const allowlist = buildShiftStartAllowlist({
     defaultResourceIds: availableDefaults.map((v) => v.id),
   })
-  const byId = new Map(input.defaults.map((v) => [v.id, v]))
+  const byId = new Map(sourceDefaults.map((v) => [v.id, v]))
   if (input.assignment?.resourceId && allowlist.includes(input.assignment.resourceId)) {
     const existing = byId.get(input.assignment.resourceId)
     const name =

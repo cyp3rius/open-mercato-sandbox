@@ -8,6 +8,7 @@ import { DriverBrandMark } from '../../../components/driverApp/DriverBrandMark'
 import { useDriverDefaultLocale } from '../../../components/driverApp/useDriverDefaultLocale'
 import { useDriverForcedLightTheme } from '../../../components/driverApp/useDriverForcedLightTheme'
 import { installDriverPwaHead } from '../../../lib/driverPwaHead'
+import { DRIVER_APP_VERSION } from '../../../lib/driverAppVersion'
 import {
   driverCardClass,
   driverFieldClass,
@@ -79,7 +80,12 @@ export default function DriverLoginPage() {
     installDriverPwaHead()
 
     if ('serviceWorker' in navigator) {
-      void navigator.serviceWorker.register('/driver-sw.js', { scope: '/driver' }).catch(() => undefined)
+      void navigator.serviceWorker
+        .register(`/driver-sw.js?v=${DRIVER_APP_VERSION}`, {
+          scope: '/driver',
+          updateViaCache: 'none',
+        })
+        .catch(() => undefined)
     }
   }, [])
 

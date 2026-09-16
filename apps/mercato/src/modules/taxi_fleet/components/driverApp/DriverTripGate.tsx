@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import React from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { DriverShell } from './DriverShell'
@@ -14,6 +13,7 @@ import {
   useShiftVehicleSelection,
   type DriverDefaultVehicleOption,
 } from './DriverShiftVehiclePicker'
+import { DriverSyncStatusBadge } from './DriverSyncStatusBadge'
 import { hasDriverTripsBypass } from './driverTripAccess'
 import {
   driverCardClass,
@@ -23,8 +23,14 @@ import {
   driverSectionDescClass,
   driverSectionTitleClass,
 } from './driverUi'
+import { useDriverOnlineStatus } from './useDriverOnlineStatus'
+import { useDriverOutboxItems } from './useDriverOutboxItems'
 import { isDriverOnOpenShift } from '../../lib/driverTripShiftWindow'
-import { cacheDriverJson, enqueueDriverMutation, readCachedDriverJson } from '../../lib/driverOffline/outbox'
+import {
+  loadDriverMeWithCache,
+  queueOrSendShiftMutation,
+} from '../../lib/driverOffline/queueOrSendShiftMutation'
+import { resolveShiftOutboxSyncState } from '../../lib/driverOffline/outboxSyncState'
 
 type MeResponse = {
   member: { id: string; displayName: string }
@@ -68,33 +74,37 @@ type Props = {
 export function DriverTripGate({ children, title, showShiftPrompt = true }: Props) {
   const t = useT()
   const router = useRouter()
+  const online = useDriverOnlineStatus()
+  const { items: outboxItems } = useDriverOutboxItems()
   const [me, setMe] = React.useState<MeResponse | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [bypass, setBypass] = React.useState(false)
   const [ready, setReady] = React.useState(false)
+  const [fromCache, setFromCache] = React.useState(false)
 
   const load = React.useCallback(async () => {
-    try {
-      const { result } = await apiCall<MeResponse>('/api/taxi_fleet/driver/me')
-      setMe(result)
-      await cacheDriverJson('driver/me', result)
-    } catch (err) {
-      const cached = await readCachedDriverJson<MeResponse>('driver/me')
+    const { me: next, fromCache: cached } = await loadDriverMeWithCache<MeResponse>()
+    if (next) {
+      setMe(next)
+      setFromCache(cached)
       if (cached) {
-        setMe(cached)
         flash(t('taxi_fleet.driverApp.usingCache', 'Showing cached data (offline).'), 'warning')
-      } else {
-        const status = (err as { status?: number } | null)?.status
-        if (status === 401 || status === 403) {
-          router.replace('/driver/login')
-          return
-        }
-        flash(t('taxi_fleet.driverApp.home.loadFailed', 'Could not load driver session.'), 'error')
       }
-    } finally {
-      setBypass(hasDriverTripsBypass())
-      setReady(true)
+    } else if (!navigator.onLine) {
+      flash(
+        t(
+          'taxi_fleet.driverApp.home.profileCacheMissing',
+          'No saved driver profile on this device. Connect once to download vehicles and shift data.',
+        ),
+        'error',
+      )
+    } else {
+      flash(t('taxi_fleet.driverApp.home.loadFailed', 'Could not load driver session.'), 'error')
+      router.replace('/driver/login')
+      return
     }
+    setBypass(hasDriverTripsBypass())
+    setReady(true)
   }, [router, t])
 
   React.useEffect(() => {
@@ -117,17 +127,19 @@ export function DriverTripGate({ children, title, showShiftPrompt = true }: Prop
                 resourcePlate: assignment.resourcePlate,
               }
             : null,
+        ignoreAvailability: !online || fromCache,
       }),
-    [assignment, me?.profile?.defaultResourceIds],
+    [assignment, fromCache, me?.profile?.defaultResourceIds, online],
   )
   const { selectedResourceId, setSelectedResourceId, needsVehiclePick } = useShiftVehicleSelection(
     shiftVehicles,
     assignment?.resourceId,
   )
+  const shiftSyncState = resolveShiftOutboxSyncState(outboxItems)
 
   async function clockInPlanned() {
     if (readOnly) return
-    if (!assignment || !selectedResourceId) {
+    if (!me || !assignment || !selectedResourceId) {
       flash(
         t('taxi_fleet.driverApp.shift.vehicleRequired', 'Select a vehicle before starting your shift.'),
         'error',
@@ -136,38 +148,35 @@ export function DriverTripGate({ children, title, showShiftPrompt = true }: Prop
     }
     setBusy(true)
     try {
-      if (!navigator.onLine) {
-        await enqueueDriverMutation({
-          type: 'assignment.shift',
-          payload: {
-            assignmentId: assignment.id,
-            action: 'start',
-            resourceId: selectedResourceId,
-          },
-        })
-        setMe((prev) =>
-          prev && prev.todayAssignment
-            ? {
-                ...prev,
-                todayAssignment: {
-                  ...prev.todayAssignment,
-                  resourceId: selectedResourceId,
-                  shiftStart: new Date().toISOString(),
-                  status: 'confirmed',
-                },
-              }
-            : prev,
-        )
-        return
-      }
-      await apiCall(`/api/taxi_fleet/driver/assignments/${assignment.id}/shift`, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'start',
+      const optimisticMe: MeResponse = {
+        ...me,
+        todayAssignment: {
+          ...assignment,
           resourceId: selectedResourceId,
-        }),
+          shiftStart: new Date().toISOString(),
+          shiftEnd: null,
+          status: 'confirmed',
+        },
+      }
+      const { queued } = await queueOrSendShiftMutation({
+        kind: 'planned',
+        assignmentId: assignment.id,
+        action: 'start',
+        resourceId: selectedResourceId,
+        optimisticMe,
       })
-      await load()
+      setMe(optimisticMe)
+      if (queued) {
+        flash(
+          t(
+            'taxi_fleet.driverApp.shift.queuedOffline',
+            'Shift started offline. It will sync when you are online.',
+          ),
+          'success',
+        )
+      } else {
+        await load()
+      }
     } catch {
       flash(t('taxi_fleet.driverApp.home.shiftFailed', 'Could not update shift.'), 'error')
     } finally {
@@ -177,7 +186,7 @@ export function DriverTripGate({ children, title, showShiftPrompt = true }: Prop
 
   async function clockInAdHoc() {
     if (readOnly) return
-    if (!selectedResourceId) {
+    if (!me || !selectedResourceId) {
       flash(
         t('taxi_fleet.driverApp.shift.vehicleRequired', 'Select a vehicle before starting your shift.'),
         'error',
@@ -186,32 +195,37 @@ export function DriverTripGate({ children, title, showShiftPrompt = true }: Prop
     }
     setBusy(true)
     try {
-      if (!navigator.onLine) {
-        await enqueueDriverMutation({
-          type: 'assignment.self_start',
-          payload: { resourceId: selectedResourceId },
-        })
-        setMe((prev) =>
-          prev
-            ? {
-                ...prev,
-                todayAssignment: {
-                  id: `local-${selectedResourceId}`,
-                  resourceId: selectedResourceId,
-                  status: 'confirmed',
-                  shiftStart: new Date().toISOString(),
-                  shiftEnd: null,
-                },
-              }
-            : prev,
-        )
-        return
+      const picked = shiftVehicles.find((v) => v.id === selectedResourceId)
+      const optimisticMe: MeResponse = {
+        ...me,
+        todayAssignment: {
+          id: `local-${selectedResourceId}`,
+          resourceId: selectedResourceId,
+          resourceLabel: picked?.label ?? null,
+          resourceName: picked?.name ?? null,
+          resourcePlate: picked?.plate ?? null,
+          status: 'confirmed',
+          shiftStart: new Date().toISOString(),
+          shiftEnd: null,
+        },
       }
-      await apiCall('/api/taxi_fleet/driver/assignments/start', {
-        method: 'POST',
-        body: JSON.stringify({ resourceId: selectedResourceId }),
+      const { queued } = await queueOrSendShiftMutation({
+        kind: 'ad_hoc',
+        resourceId: selectedResourceId,
+        optimisticMe,
       })
-      await load()
+      setMe(optimisticMe)
+      if (queued) {
+        flash(
+          t(
+            'taxi_fleet.driverApp.shift.queuedOffline',
+            'Shift started offline. It will sync when you are online.',
+          ),
+          'success',
+        )
+      } else {
+        await load()
+      }
     } catch {
       flash(t('taxi_fleet.driverApp.home.shiftFailed', 'Could not update shift.'), 'error')
     } finally {
@@ -241,6 +255,11 @@ export function DriverTripGate({ children, title, showShiftPrompt = true }: Prop
   return (
     <DriverTripGateContext.Provider value={{ shiftActive, ready }}>
       <DriverShell title={title} shiftActive={shiftActive} assignmentId={assignment?.id ?? null}>
+        {shiftSyncState ? (
+          <div className="mb-3">
+            <DriverSyncStatusBadge state={shiftSyncState} />
+          </div>
+        ) : null}
         {showPlannedPrompt ? (
           <div className={`${driverCardClass} mb-3 space-y-3`}>
             <div className={driverSectionTitleClass}>

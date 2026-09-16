@@ -1,6 +1,12 @@
+import {
+  DRIVER_LAST_TEAM_MEMBER_STORAGE_KEY,
+  loadDriverFleetProfilesCache,
+  seedDriverFleetProfilesCache,
+} from './driverDataCache'
+
 const DB_NAME = 'taxi-fleet-driver'
 const DB_VERSION = 2
-const CACHE_NAME = 'taxi-fleet-driver-v3'
+const CACHE_NAME_PREFIX = 'taxi-fleet-driver-'
 
 const SESSION_KEYS = [
   // Intentionally omit GPS grant flags — GPS consent must survive logout/login.
@@ -8,8 +14,10 @@ const SESSION_KEYS = [
   'taxi_fleet.driver.localeReloadPl',
 ] as const
 
-async function clearIndexedDb(): Promise<void> {
+async function clearIndexedDbPreservingFleetProfiles(): Promise<void> {
   if (typeof indexedDB === 'undefined') return
+
+  const fleetProfiles = await loadDriverFleetProfilesCache().catch(() => [])
 
   await new Promise<void>((resolve) => {
     const openReq = indexedDB.open(DB_NAME, DB_VERSION)
@@ -36,6 +44,12 @@ async function clearIndexedDb(): Promise<void> {
       }
     }
   })
+
+  // Shared-device fallback: keep the fleet directory so offline settings can
+  // rebuild /me after a cache miss (pobranie online odświeża całą listę).
+  if (fleetProfiles.length) {
+    await seedDriverFleetProfilesCache(fleetProfiles, 'replace').catch(() => undefined)
+  }
 }
 
 function clearSessionKeys(): void {
@@ -49,20 +63,32 @@ function clearSessionKeys(): void {
   }
 }
 
-async function clearServiceWorkerCache(): Promise<void> {
+async function clearServiceWorkerCaches(): Promise<void> {
   if (typeof caches === 'undefined') return
   try {
-    await caches.delete(CACHE_NAME)
+    const keys = await caches.keys()
+    await Promise.all(
+      keys.filter((key) => key.startsWith(CACHE_NAME_PREFIX)).map((key) => caches.delete(key)),
+    )
   } catch {
     // ignore
   }
 }
 
 /**
- * Wipes driver-app offline state (live trip drafts, outbox, cache, receipts)
- * plus session flags. Best-effort — never throws.
+ * Wipes driver-app offline state (live trip drafts, outbox, me/trips cache, receipts)
+ * plus session flags. Keeps fleet profiles directory for shared-device offline settings.
+ * Best-effort — never throws.
  */
 export async function clearDriverLocalData(): Promise<void> {
   clearSessionKeys()
-  await Promise.all([clearIndexedDb(), clearServiceWorkerCache()])
+  // Drop last member pointer with the session — do not let the next user inherit /me.
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(DRIVER_LAST_TEAM_MEMBER_STORAGE_KEY)
+    }
+  } catch {
+    // ignore
+  }
+  await Promise.all([clearIndexedDbPreservingFleetProfiles(), clearServiceWorkerCaches()])
 }

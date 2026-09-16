@@ -7,7 +7,7 @@ import {
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
-import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+import type { CommandBus, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
@@ -17,10 +17,12 @@ import {
   linkReceiptExtractionToTrip,
   scheduleReceiptExtractionProcessing,
 } from '@/modules/taxi_fleet/lib/receiptExtractionPipeline'
+import { createTripIncomeIfNeeded } from '@/modules/taxi_fleet/lib/createTripIncomeIfNeeded'
 import { TAXI_FLEET_DRIVER_RECEIPTS_PARTITION } from '@/modules/taxi_fleet/lib/receiptPartition'
 import { TAXI_FLEET_FINANCIAL_ENTRY_ENTITY_ID } from '@/modules/taxi_fleet/lib/financialEntryEntity'
 import {
   tripDetailLockMode,
+  coerceTripStatusForPersistence,
 } from '@/modules/taxi_fleet/lib/tripDetailWorkflow'
 import { normalizeTripStatus } from '@/modules/taxi_fleet/lib/tripStatuses'
 
@@ -87,12 +89,13 @@ export async function POST(req: Request, routeCtx: { params?: { id?: string } })
       normalized === 'completed' ||
       normalized === 'pending_authorization' ||
       normalized === 'paid' ||
-      normalized === 'in_progress'
+      normalized === 'in_progress' ||
+      normalized === 'scheduled'
     if (!allowReceiptOnStatus) {
       throw new CrudHttpError(409, {
         error: translate(
           'taxi_fleet.trips.errors.receiptRequiresCompleted',
-          'Attach a receipt only after the trip is in progress or completed.',
+          'Attach a receipt only after the trip is scheduled, in progress, or completed.',
         ),
       })
     }
@@ -105,6 +108,8 @@ export async function POST(req: Request, routeCtx: { params?: { id?: string } })
         ),
       })
     }
+
+    const wasScheduled = normalized === 'scheduled'
 
     const form = await req.formData()
     const file = form.get('file') as File | null
@@ -173,11 +178,51 @@ export async function POST(req: Request, routeCtx: { params?: { id?: string } })
     })
     scheduleReceiptExtractionProcessing(em, extraction.id)
 
+    // Uploading a receipt on a scheduled trip marks it finished (driver intent: done).
+    if (wasScheduled) {
+      const commandBus = context.container.resolve('commandBus') as CommandBus
+      await commandBus.execute('taxi_fleet.trips.complete', {
+        input: { id: trip.id },
+        ctx: context,
+      })
+      await em.refresh(trip)
+      if (trip.teamMemberId) {
+        await createTripIncomeIfNeeded({
+          commandBus,
+          ctx: context,
+          scoped: {
+            tenantId: trip.tenantId,
+            organizationId: trip.organizationId,
+            teamMemberId: trip.teamMemberId,
+            tripId: trip.id,
+            revenueAmount: trip.revenueAmount,
+            currencyCode: trip.currencyCode,
+            startedAt: trip.startedAt ?? trip.endedAt ?? null,
+            customerPersonId: trip.customerPersonId ?? null,
+            customerCompanyId: trip.customerCompanyId ?? null,
+            customerEntityId:
+              trip.metadata &&
+              typeof trip.metadata === 'object' &&
+              typeof (trip.metadata as { customerEntityId?: unknown }).customerEntityId === 'string'
+                ? (trip.metadata as { customerEntityId: string }).customerEntityId
+                : null,
+          },
+          receiptAttachmentId: item.id,
+        })
+      }
+    }
+
+    const refreshedStatus = wasScheduled
+      ? coerceTripStatusForPersistence({
+          tripType: trip.tripType,
+          requestedStatus: 'completed',
+        })
+      : normalizeTripStatus(trip.status)
     return NextResponse.json(
       {
         attachmentId: item.id,
         extractionId: extraction.id,
-        status: normalizeTripStatus(trip.status),
+        status: refreshedStatus,
       },
       { status: 201 },
     )

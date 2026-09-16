@@ -1,5 +1,7 @@
 import { deleteReceiptBlob, getReceiptBlob } from './tripDrafts'
 
+export type DriverOutboxSyncStatus = 'pending' | 'failed'
+
 export type DriverOutboxItem = {
   id: string
   clientMutationId: string
@@ -7,6 +9,10 @@ export type DriverOutboxItem = {
   payload: Record<string, unknown>
   createdAt: string
   retryCount: number
+  /** Absent on legacy rows — treat as pending. */
+  status?: DriverOutboxSyncStatus
+  lastError?: string | null
+  failedAt?: string | null
 }
 
 const DB_NAME = 'taxi-fleet-driver'
@@ -36,20 +42,17 @@ function uuid(): string {
   return `m_${Date.now()}_${Math.random().toString(16).slice(2)}`
 }
 
-export async function enqueueDriverMutation(input: {
-  type: DriverOutboxItem['type']
-  payload: Record<string, unknown>
-  clientMutationId?: string
-}): Promise<DriverOutboxItem> {
-  const db = await openDb()
-  const item: DriverOutboxItem = {
-    id: uuid(),
-    clientMutationId: input.clientMutationId ?? uuid(),
-    type: input.type,
-    payload: input.payload,
-    createdAt: new Date().toISOString(),
-    retryCount: 0,
+function normalizeOutboxItem(item: DriverOutboxItem): DriverOutboxItem {
+  return {
+    ...item,
+    status: item.status === 'failed' ? 'failed' : 'pending',
+    lastError: item.lastError ?? null,
+    failedAt: item.failedAt ?? null,
   }
+}
+
+async function putOutboxItem(item: DriverOutboxItem): Promise<void> {
+  const db = await openDb()
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite')
     tx.objectStore(STORE).put(item)
@@ -57,32 +60,77 @@ export async function enqueueDriverMutation(input: {
     tx.onerror = () => reject(tx.error)
   })
   db.close()
+}
+
+export async function enqueueDriverMutation(input: {
+  type: DriverOutboxItem['type']
+  payload: Record<string, unknown>
+  clientMutationId?: string
+}): Promise<DriverOutboxItem> {
+  const item: DriverOutboxItem = {
+    id: uuid(),
+    clientMutationId: input.clientMutationId ?? uuid(),
+    type: input.type,
+    payload: input.payload,
+    createdAt: new Date().toISOString(),
+    retryCount: 0,
+    status: 'pending',
+    lastError: null,
+    failedAt: null,
+  }
+  await putOutboxItem(item)
   return item
 }
 
-export async function getPendingOutboxCount(): Promise<number> {
-  if (typeof indexedDB === 'undefined') return 0
-  const db = await openDb()
-  const count = await new Promise<number>((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly')
-    const req = tx.objectStore(STORE).count()
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-  })
-  db.close()
-  return count
-}
-
-async function listOutbox(): Promise<DriverOutboxItem[]> {
+export async function listDriverOutboxItems(): Promise<DriverOutboxItem[]> {
+  if (typeof indexedDB === 'undefined') return []
   const db = await openDb()
   const items = await new Promise<DriverOutboxItem[]>((resolve, reject) => {
     const tx = db.transaction(STORE, 'readonly')
     const req = tx.objectStore(STORE).getAll()
-    req.onsuccess = () => resolve(req.result as DriverOutboxItem[])
+    req.onsuccess = () => resolve((req.result as DriverOutboxItem[]).map(normalizeOutboxItem))
     req.onerror = () => reject(req.error)
   })
   db.close()
   return items.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+}
+
+export async function getPendingOutboxCount(): Promise<number> {
+  const items = await listDriverOutboxItems()
+  return items.length
+}
+
+export async function getOutboxSyncCounts(): Promise<{
+  total: number
+  pending: number
+  failed: number
+}> {
+  const items = await listDriverOutboxItems()
+  let failed = 0
+  for (const item of items) {
+    if (item.status === 'failed') failed += 1
+  }
+  return {
+    total: items.length,
+    pending: items.length - failed,
+    failed,
+  }
+}
+
+async function markOutboxItemFailed(item: DriverOutboxItem, error: unknown): Promise<void> {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : 'Sync failed'
+  await putOutboxItem({
+    ...item,
+    status: 'failed',
+    lastError: message.slice(0, 500),
+    failedAt: new Date().toISOString(),
+    retryCount: (item.retryCount ?? 0) + 1,
+  })
 }
 
 async function removeOutboxItem(id: string): Promise<void> {
@@ -170,7 +218,7 @@ async function resolveReceiptAttachment(
 export async function flushDriverOutbox(): Promise<void> {
   if (typeof indexedDB === 'undefined' || typeof fetch === 'undefined') return
   if (!navigator.onLine) return
-  const items = await listOutbox()
+  const items = await listDriverOutboxItems()
   for (const item of items) {
     try {
       if (item.type === 'assignment.shift') {
@@ -212,7 +260,13 @@ export async function flushDriverOutbox(): Promise<void> {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ ...payload, clientMutationId: item.clientMutationId }),
         })
-        if (!res.ok) throw new Error(`trip.update ${res.status}`)
+        if (!res.ok) {
+          if (res.status === 409) {
+            await removeOutboxItem(item.id)
+            continue
+          }
+          throw new Error(`trip.update ${res.status}`)
+        }
       } else if (item.type === 'expense.create') {
         const payload = await resolveReceiptAttachment(item.payload)
         const res = await fetch('/api/taxi_fleet/driver/expenses', {
@@ -228,8 +282,6 @@ export async function flushDriverOutbox(): Promise<void> {
           body: JSON.stringify({ ...item.payload, clientMutationId: item.clientMutationId }),
         })
         if (!res.ok) {
-          // After clock-out, leftover GPS batches are expected to fail — drop them so
-          // the outbox can continue with later mutations (trips/expenses).
           if (res.status === 400) {
             const body = (await res.json().catch(() => null)) as { code?: string } | null
             if (body?.code === 'SHIFT_REQUIRED') {
@@ -241,7 +293,8 @@ export async function flushDriverOutbox(): Promise<void> {
         }
       }
       await removeOutboxItem(item.id)
-    } catch {
+    } catch (error) {
+      await markOutboxItemFailed(item, error).catch(() => undefined)
       break
     }
   }

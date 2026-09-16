@@ -25,9 +25,14 @@ import {
   driverSectionTitleClass,
 } from '../../../../components/driverApp/driverUi'
 import {
-  enqueueDriverMutation,
-  readCachedDriverJson,
-} from '../../../../lib/driverOffline/outbox'
+  DRIVER_CACHE_KEYS,
+  loadDriverSnapshot,
+  normalizeCachedItemList,
+  patchCachedTrip,
+} from '../../../../lib/driverOffline/driverDataCache'
+import { queueOrSendTripUpdate } from '../../../../lib/driverOffline/queueOrSendTripUpdate'
+import { fileToBase64 } from '../../../../lib/driverOffline/buildTripPayload'
+import { saveReceiptBlob } from '../../../../lib/driverOffline/tripDrafts'
 import { tripRequestDetailsFromMetadata } from '../../../../lib/tripRequestForm'
 import { readQuoteSnapshotFromMetadata } from '../../../../lib/pricing/tripFormQuote'
 import { isDriverTripElectronicallyPrepaid } from '../../../../lib/driverTripPayment'
@@ -109,20 +114,14 @@ function findTrip(items: TripRow[], tripId: string): TripRow | null {
 }
 
 function normalizeCachedTrips(cached: TripRow[] | { items?: TripRow[] } | null): TripRow[] {
-  if (!cached) return []
-  if (Array.isArray(cached)) return cached
-  return Array.isArray(cached.items) ? cached.items : []
+  return normalizeCachedItemList(cached)
 }
 
-async function putTripUpdate(payload: Record<string, unknown>): Promise<void> {
-  if (!navigator.onLine) {
-    await enqueueDriverMutation({ type: 'trip.update', payload })
-    return
-  }
-  await apiCall('/api/taxi_fleet/driver/trips', {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  })
+async function putTripUpdate(
+  payload: Record<string, unknown>,
+  cachePatch?: Record<string, unknown>,
+): Promise<{ queued: boolean }> {
+  return queueOrSendTripUpdate(payload, cachePatch ? { cachePatch } : undefined)
 }
 
 function yesNo(value: boolean, yes: string, no: string): string {
@@ -163,36 +162,59 @@ function DriverTripDetailContent({
   const [receiptDocumentNumber, setReceiptDocumentNumber] = React.useState('')
   const [receiptAttachmentId, setReceiptAttachmentId] = React.useState<string | null>(null)
   const [receiptAttachmentName, setReceiptAttachmentName] = React.useState<string | null>(null)
+  const [receiptBlobId, setReceiptBlobId] = React.useState<string | null>(null)
 
   const reload = React.useCallback(async () => {
     if (!tripId) {
       flash(t('taxi_fleet.driverApp.trips.notFound', 'Trip not found.'), 'error')
       return
     }
+    const applyTrip = (found: TripRow) => {
+      setTrip(found)
+      setRevenueAmount(found.revenueAmount != null ? String(found.revenueAmount) : '')
+      setDistanceKm(found.distanceKm != null ? String(found.distanceKm) : '')
+    }
+    const loadFromCache = async (warn: boolean) => {
+      const cached = await loadDriverSnapshot<TripRow[] | { items?: TripRow[] }>(
+        DRIVER_CACHE_KEYS.trips,
+      )
+      const found = findTrip(normalizeCachedTrips(cached), tripId)
+      if (found) {
+        applyTrip(found)
+        if (warn) {
+          flash(t('taxi_fleet.driverApp.usingCache', 'Showing cached data (offline).'), 'warning')
+        }
+        return true
+      }
+      return false
+    }
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const ok = await loadFromCache(true)
+      if (!ok) flash(t('taxi_fleet.driverApp.trips.notFound', 'Trip not found.'), 'error')
+      return
+    }
+
     try {
       const { result } = await apiCall<{ items: TripRow[] }>(
         `/api/taxi_fleet/driver/trips?id=${encodeURIComponent(tripId)}`,
       )
       const items = result?.items ?? []
       const found = findTrip(items, tripId)
-      setTrip(found)
       if (!found) {
-        flash(t('taxi_fleet.driverApp.trips.notFound', 'Trip not found.'), 'error')
+        const ok = await loadFromCache(true)
+        if (!ok) flash(t('taxi_fleet.driverApp.trips.notFound', 'Trip not found.'), 'error')
         return
       }
-      setRevenueAmount(found.revenueAmount != null ? String(found.revenueAmount) : '')
-      setDistanceKm(found.distanceKm != null ? String(found.distanceKm) : '')
+      applyTrip(found)
+      await patchCachedTrip(found.id, found as unknown as Record<string, unknown>).catch(
+        () => undefined,
+      )
     } catch {
-      const cached = await readCachedDriverJson<TripRow[] | { items?: TripRow[] }>('driver/trips')
-      const found = findTrip(normalizeCachedTrips(cached), tripId)
-      if (found) {
-        setTrip(found)
-        setRevenueAmount(found.revenueAmount != null ? String(found.revenueAmount) : '')
-        setDistanceKm(found.distanceKm != null ? String(found.distanceKm) : '')
-        flash(t('taxi_fleet.driverApp.usingCache', 'Showing cached data (offline).'), 'warning')
-        return
+      const ok = await loadFromCache(true)
+      if (!ok) {
+        flash(t('taxi_fleet.driverApp.trips.loadFailed', 'Could not load trips.'), 'error')
       }
-      flash(t('taxi_fleet.driverApp.trips.loadFailed', 'Could not load trips.'), 'error')
     }
   }, [tripId, t])
 
@@ -221,9 +243,9 @@ function DriverTripDetailContent({
   }, [reload, trip])
 
   async function saveReceipt() {
-    if (!trip || trip.status !== 'completed') return
+    if (!trip || (trip.status !== 'completed' && trip.status !== 'scheduled')) return
     if (tripHasReceiptAttachment(trip)) return
-    if (!receiptAttachmentId) {
+    if (!receiptAttachmentId && !receiptBlobId) {
       flash(
         t('taxi_fleet.driverApp.receipt.photoRequired', 'Receipt photo is required for this trip.'),
         'error',
@@ -233,16 +255,62 @@ function DriverTripDetailContent({
     setBusy(true)
     setNotice(null)
     try {
-      await putTripUpdate({
+      const payload: Record<string, unknown> = {
         id: trip.id,
-        receiptAttachmentId,
         receiptDocumentNumber: receiptDocumentNumber.trim() || undefined,
-      })
+      }
+      if (receiptAttachmentId) payload.receiptAttachmentId = receiptAttachmentId
+      if (receiptBlobId) payload.receiptBlobId = receiptBlobId
+      const cachePatch: Record<string, unknown> = {
+        receiptAttachmentId: receiptAttachmentId ?? trip.receiptAttachmentId ?? null,
+        metadata: {
+          ...(trip.metadata && typeof trip.metadata === 'object' ? trip.metadata : {}),
+          ...(receiptAttachmentId ? { receiptAttachmentId } : {}),
+          ...(receiptDocumentNumber.trim()
+            ? { receiptDocumentNumber: receiptDocumentNumber.trim() }
+            : {}),
+          ...(receiptBlobId ? { receiptBlobId } : {}),
+        },
+      }
+      if (trip.status === 'scheduled') {
+        cachePatch.status = 'completed'
+        cachePatch.endedAt = new Date().toISOString()
+      }
+      const { queued } = await putTripUpdate(payload, cachePatch)
       setReceiptAttachmentId(null)
       setReceiptAttachmentName(null)
+      setReceiptBlobId(null)
       setReceiptDocumentNumber('')
-      flash(t('taxi_fleet.driverApp.trips.receiptSaved', 'Receipt saved.'), 'success')
-      await reload()
+      if (queued) {
+        flash(
+          t(
+            'taxi_fleet.driverApp.trips.receiptQueuedOffline',
+            'Receipt saved offline. It will sync when you are online.',
+          ),
+          'success',
+        )
+        setTrip({
+          ...trip,
+          ...(cachePatch.status ? { status: String(cachePatch.status) } : {}),
+          ...(typeof cachePatch.endedAt === 'string' ? { endedAt: cachePatch.endedAt } : {}),
+          metadata: cachePatch.metadata as Record<string, unknown>,
+          receiptAttachmentId:
+            typeof cachePatch.receiptAttachmentId === 'string'
+              ? cachePatch.receiptAttachmentId
+              : trip.receiptAttachmentId,
+        })
+      } else {
+        flash(
+          trip.status === 'scheduled'
+            ? t(
+                'taxi_fleet.driverApp.trips.receiptCompletedTrip',
+                'Receipt saved. Trip marked as completed.',
+              )
+            : t('taxi_fleet.driverApp.trips.receiptSaved', 'Receipt saved.'),
+          'success',
+        )
+        await reload()
+      }
     } catch (err) {
       const message =
         (err as { body?: { error?: string }; message?: string } | null)?.body?.error ||
@@ -275,7 +343,13 @@ function DriverTripDetailContent({
     setBusy(true)
     setNotice(null)
     try {
-      await putTripUpdate(payload)
+      const cachePatch: Record<string, unknown> = {
+        distanceKm: distance.toFixed(2),
+        ...(typeof payload.revenueAmount === 'number'
+          ? { revenueAmount: payload.revenueAmount.toFixed(2) }
+          : {}),
+      }
+      const { queued } = await putTripUpdate(payload, cachePatch)
       setTrip({
         ...trip,
         distanceKm: distance.toFixed(2),
@@ -283,7 +357,14 @@ function DriverTripDetailContent({
           ? { revenueAmount: payload.revenueAmount.toFixed(2) }
           : {}),
       })
-      setNotice(t('taxi_fleet.driverApp.trips.pricingSaved', 'Price and distance saved.'))
+      setNotice(
+        queued
+          ? t(
+              'taxi_fleet.driverApp.trips.pricingQueuedOffline',
+              'Price saved offline. It will sync when you are online.',
+            )
+          : t('taxi_fleet.driverApp.trips.pricingSaved', 'Price and distance saved.'),
+      )
     } catch {
       flash(t('taxi_fleet.driverApp.trips.saveFailed', 'Could not save trip.'), 'error')
     } finally {
@@ -322,13 +403,23 @@ function DriverTripDetailContent({
         )
         return
       }
-      await putTripUpdate({
-        id: trip.id,
-        startedAt,
-        status: 'in_progress',
-      })
+      const { queued } = await putTripUpdate(
+        {
+          id: trip.id,
+          startedAt,
+          status: 'in_progress',
+        },
+        { status: 'in_progress', startedAt, endedAt: null },
+      )
       setTrip({ ...trip, status: 'in_progress', startedAt, endedAt: null })
-      setNotice(t('taxi_fleet.driverApp.trips.started', 'Trip started. Start time updated.'))
+      setNotice(
+        queued
+          ? t(
+              'taxi_fleet.driverApp.trips.startedQueuedOffline',
+              'Trip started offline. It will sync when you are online.',
+            )
+          : t('taxi_fleet.driverApp.trips.started', 'Trip started. Start time updated.'),
+      )
     } catch (err) {
       const message =
         (err as { body?: { error?: string }; message?: string } | null)?.body?.error ||
@@ -361,13 +452,23 @@ function DriverTripDetailContent({
         )
         return
       }
-      await putTripUpdate({
-        id: trip.id,
-        endedAt,
-        status: 'completed',
-      })
+      const { queued } = await putTripUpdate(
+        {
+          id: trip.id,
+          endedAt,
+          status: 'completed',
+        },
+        { status: 'completed', endedAt },
+      )
       setTrip({ ...trip, status: 'completed', endedAt })
-      setNotice(t('taxi_fleet.driverApp.trips.completed', 'Trip completed. End time updated.'))
+      setNotice(
+        queued
+          ? t(
+              'taxi_fleet.driverApp.trips.completedQueuedOffline',
+              'Trip completed offline. It will sync when you are online.',
+            )
+          : t('taxi_fleet.driverApp.trips.completed', 'Trip completed. End time updated.'),
+      )
     } catch (err) {
       const message =
         (err as { body?: { error?: string }; message?: string } | null)?.body?.error ||
@@ -388,7 +489,7 @@ function DriverTripDetailContent({
   const canSupplementReceipt =
     Boolean(
       trip &&
-        trip.status === 'completed' &&
+        (trip.status === 'completed' || trip.status === 'scheduled') &&
         trip.tripType !== 'internal' &&
         !tripHasReceiptAttachment(trip),
     ) && !isPlatformTrip
@@ -614,10 +715,15 @@ function DriverTripDetailContent({
                   {t('taxi_fleet.driverApp.trips.receiptSupplementTitle', 'Add receipt')}
                 </div>
                 <p className={driverSectionDescClass}>
-                  {t(
-                    'taxi_fleet.driverApp.trips.receiptSupplementHint',
-                    'This trip has no receipt yet. You can add one now.',
-                  )}
+                  {isScheduled
+                    ? t(
+                        'taxi_fleet.driverApp.trips.receiptCompletesScheduledHint',
+                        'Uploading a receipt will mark this scheduled trip as completed.',
+                      )
+                    : t(
+                        'taxi_fleet.driverApp.trips.receiptSupplementHint',
+                        'This trip has no receipt yet. You can add one now.',
+                      )}
                 </p>
                 <div className="mt-4">
                   <DriverReceiptFields
@@ -631,13 +737,29 @@ function DriverTripDetailContent({
                     onAttachmentChange={({ id, fileName }) => {
                       setReceiptAttachmentId(id)
                       setReceiptAttachmentName(fileName)
+                      setReceiptBlobId(null)
+                    }}
+                    onOfflineFile={async (file) => {
+                      const dataBase64 = await fileToBase64(file)
+                      const row = await saveReceiptBlob({
+                        draftRecordId: trip.id,
+                        fileName: file.name,
+                        mime: file.type || 'application/octet-stream',
+                        dataBase64,
+                      })
+                      return { blobId: row.id, fileName: row.fileName }
+                    }}
+                    onOfflineStored={({ blobId, fileName }) => {
+                      setReceiptBlobId(blobId)
+                      setReceiptAttachmentId(null)
+                      setReceiptAttachmentName(fileName)
                     }}
                   />
                 </div>
                 <Button
                   type="button"
                   className={`${driverPrimaryActionClass} mt-4`}
-                  disabled={busy || !receiptAttachmentId}
+                  disabled={busy || (!receiptAttachmentId && !receiptBlobId)}
                   onClick={() => void saveReceipt()}
                 >
                   {busy

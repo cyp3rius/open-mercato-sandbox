@@ -9,6 +9,7 @@ export type DriverTripExecutionAction =
   | 'complete'
   | 'live_update'
   | 'receipt_supplement'
+  | 'receipt_complete_scheduled'
 
 const RECEIPT_SUPPLEMENT_KEYS = new Set([
   'receiptAttachmentId',
@@ -23,9 +24,18 @@ function presentKeys(body: Record<string, unknown>): string[] {
   })
 }
 
+function isReceiptAttachmentPayload(body: Record<string, unknown>, keys: string[]): boolean {
+  return (
+    keys.includes('receiptAttachmentId') &&
+    typeof body.receiptAttachmentId === 'string' &&
+    body.receiptAttachmentId.trim().length > 0 &&
+    keys.every((key) => RECEIPT_SUPPLEMENT_KEYS.has(key))
+  )
+}
+
 /**
  * Restricts driver trip updates:
- * - `scheduled`: only price/distance, or start (overwrite startedAt → in_progress)
+ * - `scheduled`: price/distance, start → in_progress, or receipt attach → auto-complete
  * - `in_progress`: complete with endedAt only, or full live-trip finish payload
  * - `completed`: supplement receipt when none is attached yet
  * - `pending_authorization` / other statuses: no writes
@@ -57,6 +67,17 @@ export function resolveDriverTripUpdateInput(
         },
       }
     }
+    if (isReceiptAttachmentPayload(body, keys)) {
+      const finishStatus = resolveDriverTripFinishStatus(tripType, 'completed')
+      return {
+        action: 'receipt_complete_scheduled',
+        input: {
+          id,
+          endedAt: new Date().toISOString(),
+          status: finishStatus,
+        },
+      }
+    }
     const isPricing = keys.length > 0 && keys.every((key) => key === 'revenueAmount' || key === 'distanceKm')
     if (isPricing) {
       const input: Record<string, unknown> = { id }
@@ -65,7 +86,7 @@ export function resolveDriverTripUpdateInput(
       return { action: 'pricing', input }
     }
     throw new CrudHttpError(400, {
-      error: 'Scheduled trips only allow price/distance edits or start.',
+      error: 'Scheduled trips only allow price/distance edits, start, or receipt attach.',
     })
   }
 
@@ -100,12 +121,7 @@ export function resolveDriverTripUpdateInput(
   }
 
   if (status === 'completed') {
-    const isReceiptSupplement =
-      keys.includes('receiptAttachmentId') &&
-      typeof body.receiptAttachmentId === 'string' &&
-      body.receiptAttachmentId.trim().length > 0 &&
-      keys.every((key) => RECEIPT_SUPPLEMENT_KEYS.has(key))
-    if (isReceiptSupplement) {
+    if (isReceiptAttachmentPayload(body, keys)) {
       return { action: 'receipt_supplement', input: { id } }
     }
   }

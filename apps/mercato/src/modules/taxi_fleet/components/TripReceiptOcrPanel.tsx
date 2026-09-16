@@ -155,7 +155,7 @@ export function TripReceiptOcrPanel({
     try {
       const form = new FormData()
       form.set('file', file)
-      const call = await apiCall<{ attachmentId?: string; error?: string }>(
+      const call = await apiCall<{ attachmentId?: string; status?: string; error?: string }>(
         `/api/taxi_fleet/trips/${encodeURIComponent(tripId)}/receipt`,
         { method: 'POST', body: form },
       )
@@ -167,7 +167,16 @@ export function TripReceiptOcrPanel({
         )
         return
       }
-      flash(t('taxi_fleet.receiptOcr.uploadSuccess', 'Receipt uploaded. OCR started.'), 'success')
+      const nextStatus = typeof call.result.status === 'string' ? call.result.status : null
+      flash(
+        nextStatus === 'completed' || nextStatus === 'pending_authorization'
+          ? t(
+              'taxi_fleet.receiptOcr.uploadCompletedScheduled',
+              'Receipt uploaded. Scheduled trip marked as completed.',
+            )
+          : t('taxi_fleet.receiptOcr.uploadSuccess', 'Receipt uploaded. OCR started.'),
+        'success',
+      )
       await load()
       onApplied?.()
     } finally {

@@ -129,6 +129,8 @@ Vendor JSON items are normalized by `lib/platformSync/adapters/mapVendorTrip.ts`
 - Env: `WEB_PUSH_ENABLED` (default false) + `WEB_PUSH_VAPID_*` + `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY` (see `.env.example`)
 - When disabled: GET `configured:false`, no driver alerts UI, POST → 403 (not 503)
 - SW: `apps/mercato/public/driver-sw.js` — `push` + `notificationclick` → `/driver/trips/{id}`
+- PWA version: `DRIVER_APP_VERSION` in `lib/driverAppVersion.ts` + `public/driver-sw.js` (kept in sync by `scripts/bump-driver-pwa-version.mjs` on husky pre-commit when driver-app paths change). New SW auto-activates and reloads installed home-screen clients.
+- Offline fleet profiles: `GET /api/taxi_fleet/driver/profiles` → IndexedDB `driver/fleetProfiles` (replace on download; survives logout) for settings / vehicle fallback when `/me` is missing.
 - Assign push: `subscribers/trip-assigned-notification.ts` after in-app notify
 - T−1h reminders: cron `*/5` → queue `taxi-fleet-driver-push-reminders` → stamps `trips.driver_reminder_push_sent_at`
 - UX: `useDriverPush` + banner/badge in `DriverShell`

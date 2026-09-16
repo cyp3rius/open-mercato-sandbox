@@ -316,7 +316,8 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
                       normalizedStatus === 'completed' ||
                       normalizedStatus === 'pending_authorization' ||
                       normalizedStatus === 'paid' ||
-                      normalizedStatus === 'in_progress')
+                      normalizedStatus === 'in_progress' ||
+                      normalizedStatus === 'scheduled')
                   }
                   onApplied={() => {
                     void (async () => {

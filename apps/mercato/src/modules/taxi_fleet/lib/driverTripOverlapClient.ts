@@ -1,17 +1,14 @@
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { cacheDriverJson, readCachedDriverJson } from './driverOffline/outbox'
+import {
+  DRIVER_CACHE_KEYS,
+  loadDriverSnapshot,
+  normalizeCachedItemList,
+  seedDriverTripsCache,
+} from './driverOffline/driverDataCache'
 import { findOverlappingTrip, type TripTimeRange } from './tripTimeOverlap'
 
 export type DriverTripOverlapRow = TripTimeRange & {
   id: string
-}
-
-function normalizeTrips(
-  cached: DriverTripOverlapRow[] | { items?: DriverTripOverlapRow[] } | null,
-): DriverTripOverlapRow[] {
-  if (!cached) return []
-  if (Array.isArray(cached)) return cached
-  return Array.isArray(cached.items) ? cached.items : []
 }
 
 export async function loadDriverTripsForOverlapCheck(): Promise<DriverTripOverlapRow[]> {
@@ -21,16 +18,19 @@ export async function loadDriverTripsForOverlapCheck(): Promise<DriverTripOverla
         '/api/taxi_fleet/driver/trips',
       )
       const items = Array.isArray(result?.items) ? result.items : []
-      await cacheDriverJson('driver/trips', { items })
+      await seedDriverTripsCache(
+        items as Array<{ id: string } & Record<string, unknown>>,
+        'replace',
+      )
       return items
     } catch {
       // fall through to cache
     }
   }
-  const cached = await readCachedDriverJson<
+  const cached = await loadDriverSnapshot<
     DriverTripOverlapRow[] | { items?: DriverTripOverlapRow[] }
-  >('driver/trips')
-  return normalizeTrips(cached)
+  >(DRIVER_CACHE_KEYS.trips)
+  return normalizeCachedItemList(cached)
 }
 
 export async function findDriverTripOverlap(input: {

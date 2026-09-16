@@ -164,45 +164,80 @@ export function isTripHiddenFromCalendar(status: string | null | undefined): boo
   return normalizeTripStatus(status) === 'cancelled'
 }
 
-function normalizeCalendarAssignment(assignment: CalendarAssignment): CalendarAssignment {
-  const plannedStart =
-    assignment.plannedShiftStart ??
-    assignment.planned_shift_start ??
-    assignment.shiftStart ??
-    assignment.shift_start ??
-    null
-  const plannedEnd =
-    assignment.plannedShiftEnd ??
-    assignment.planned_shift_end ??
-    assignment.shiftEnd ??
-    assignment.shift_end ??
-    null
+function readOptionalIso(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length ? trimmed : null
+}
+
+function toValidDate(value: string | null | undefined): Date | null {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+/**
+ * Keep planned vs actual punch times separate.
+ * Ad-hoc self-start shifts have null planned window and only shiftStart/shiftEnd.
+ */
+export function normalizeCalendarAssignment(assignment: CalendarAssignment): CalendarAssignment {
   return {
     ...assignment,
     teamMemberId: assignment.teamMemberId || assignment.team_member_id || '',
     resourceId: assignment.resourceId || assignment.resource_id || '',
     assignmentDate: assignment.assignmentDate || assignment.assignment_date || '',
-    plannedShiftStart: plannedStart,
-    plannedShiftEnd: plannedEnd,
-    // Calendar displays planned window; keep shift* aliases for callers that read them.
-    shiftStart: plannedStart,
-    shiftEnd: plannedEnd,
+    plannedShiftStart: readOptionalIso(
+      assignment.plannedShiftStart ?? assignment.planned_shift_start ?? null,
+    ),
+    plannedShiftEnd: readOptionalIso(
+      assignment.plannedShiftEnd ?? assignment.planned_shift_end ?? null,
+    ),
+    shiftStart: readOptionalIso(assignment.shiftStart ?? assignment.shift_start ?? null),
+    shiftEnd: readOptionalIso(assignment.shiftEnd ?? assignment.shift_end ?? null),
   }
 }
 
-function resolveAssignmentWindow(assignment: CalendarAssignment): { start: Date; end: Date } {
-  const startRaw = assignment.plannedShiftStart ?? assignment.shiftStart
-  const endRaw = assignment.plannedShiftEnd ?? assignment.shiftEnd
-  if (startRaw && endRaw) {
-    const start = new Date(startRaw)
-    const end = new Date(endRaw)
-    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end > start) {
-      return { start, end }
-    }
+export function isAdHocCalendarAssignment(assignment: CalendarAssignment): boolean {
+  const normalized = normalizeCalendarAssignment(assignment)
+  return !normalized.plannedShiftStart && !normalized.plannedShiftEnd
+}
+
+/**
+ * Planned allocations use the planned window.
+ * Ad-hoc (no planned times) use actual punch times so self-started shifts stay visible.
+ */
+export function resolveAssignmentWindow(assignment: CalendarAssignment): { start: Date; end: Date } {
+  const normalized = normalizeCalendarAssignment(assignment)
+  const plannedStart = toValidDate(normalized.plannedShiftStart)
+  const plannedEnd = toValidDate(normalized.plannedShiftEnd)
+  const actualStart = toValidDate(normalized.shiftStart)
+  const actualEnd = toValidDate(normalized.shiftEnd)
+
+  if (plannedStart && plannedEnd && plannedEnd > plannedStart) {
+    return { start: plannedStart, end: plannedEnd }
   }
+
+  if (!plannedStart && !plannedEnd && actualStart) {
+    if (actualEnd && actualEnd > actualStart) {
+      return { start: actualStart, end: actualEnd }
+    }
+    // Open ad-hoc shift: show from clock-in through now (min 1h) so it lands on the day grid.
+    const openEnd = new Date(Math.max(actualStart.getTime() + 60 * 60 * 1000, Date.now()))
+    return { start: actualStart, end: openEnd }
+  }
+
+  if (plannedStart && actualEnd && actualEnd > plannedStart) {
+    return { start: plannedStart, end: actualEnd }
+  }
+
+  if (actualStart && actualEnd && actualEnd > actualStart) {
+    return { start: actualStart, end: actualEnd }
+  }
+
+  const day = normalized.assignmentDate || new Date().toISOString().slice(0, 10)
   return {
-    start: new Date(`${assignment.assignmentDate}T06:00:00`),
-    end: new Date(`${assignment.assignmentDate}T22:00:00`),
+    start: new Date(`${day}T06:00:00`),
+    end: new Date(`${day}T22:00:00`),
   }
 }
 
@@ -272,6 +307,7 @@ export function mapAssignmentsToScheduleItems(
       const driverName = resolveHumanLabel(assignment.teamMemberId, resolvers.resolveDriverName)
       const vehicleLabel = resolveHumanLabel(assignment.resourceId, resolvers.resolveResourceLabel)
       const titleParts = [driverName, vehicleLabel].filter(Boolean)
+      const adHoc = isAdHocCalendarAssignment(assignment)
       const color = resolveEventColor({
         teamMemberId: assignment.teamMemberId,
         resourceId: assignment.resourceId,
@@ -294,6 +330,7 @@ export function mapAssignmentsToScheduleItems(
           assignmentId: assignment.id,
           resourceId: assignment.resourceId,
           assignmentStatus: assignment.status,
+          adHoc,
           driverName,
           vehicleLabel,
         },

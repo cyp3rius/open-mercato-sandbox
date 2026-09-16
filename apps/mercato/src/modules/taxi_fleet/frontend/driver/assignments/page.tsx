@@ -29,7 +29,18 @@ import {
   DRIVER_LIST_PAGE_SIZE,
   useDriverPagedList,
 } from '../../../components/driverApp/useDriverPagedList'
-import { enqueueDriverMutation } from '../../../lib/driverOffline/outbox'
+import {
+  DRIVER_CACHE_KEYS,
+  loadDriverSnapshot,
+  normalizeCachedItemList,
+  paginateCachedItems,
+  rememberDriverSnapshot,
+  seedDriverAssignmentsCache,
+} from '../../../lib/driverOffline/driverDataCache'
+import {
+  loadDriverMeWithCache,
+  queueOrSendShiftMutation,
+} from '../../../lib/driverOffline/queueOrSendShiftMutation'
 import { formatVehicleResourceLabel, stripPlateFromVehicleName } from '../../../lib/vehicleResourceLabel'
 
 type AssignmentRow = {
@@ -112,6 +123,7 @@ function TodayShiftStartCard({
   onStartAdHoc: (resourceId: string) => void
 }) {
   const t = useT()
+  const offline = typeof navigator !== 'undefined' && !navigator.onLine
   const canStartPlanned = Boolean(todayAssignment && !todayAssignment.shiftStart)
   const canStartAdHoc = !todayAssignment || Boolean(todayAssignment.shiftEnd)
   const shiftVehicles = React.useMemo(
@@ -128,8 +140,9 @@ function TodayShiftStartCard({
                 resourcePlate: todayAssignment.resourcePlate,
               }
             : null,
+        ignoreAvailability: offline,
       }),
-    [canStartPlanned, defaults, todayAssignment],
+    [canStartPlanned, defaults, offline, todayAssignment],
   )
   const { selectedResourceId, setSelectedResourceId, needsVehiclePick } = useShiftVehicleSelection(
     shiftVehicles,
@@ -232,12 +245,10 @@ export default function DriverAssignmentsPage() {
 
   React.useEffect(() => {
     let active = true
-    void apiCall<MeResponse>('/api/taxi_fleet/driver/me')
-      .then(({ result }) => {
-        if (!active) return
-        setMe(result ?? null)
-      })
-      .catch(() => undefined)
+    void loadDriverMeWithCache<MeResponse>().then(({ me: next }) => {
+      if (!active || !next) return
+      setMe(next)
+    })
     return () => {
       active = false
     }
@@ -267,21 +278,42 @@ export default function DriverAssignmentsPage() {
         params.set('dateFrom', weekRange.dateFrom)
         params.set('dateTo', weekRange.dateTo)
       }
-      const { result, ok } = await apiCall<{
-        items: AssignmentRow[]
-        page: number
-        pageSize: number
-        total: number
-      }>(`/api/taxi_fleet/driver/assignments?${params}`)
-      if (!ok || !result) throw new Error('load_failed')
-      return {
-        items: result.items ?? [],
-        page: result.page ?? page,
-        pageSize: result.pageSize ?? pageSize,
-        total: result.total ?? 0,
+      try {
+        const { result, ok } = await apiCall<{
+          items: AssignmentRow[]
+          page: number
+          pageSize: number
+          total: number
+        }>(`/api/taxi_fleet/driver/assignments?${params}`)
+        if (!ok || !result) throw new Error('load_failed')
+        const items = result.items ?? []
+        await seedDriverAssignmentsCache(
+          items as Array<{ id: string } & Record<string, unknown>>,
+          'merge',
+        )
+        return {
+          items,
+          page: result.page ?? page,
+          pageSize: result.pageSize ?? pageSize,
+          total: result.total ?? 0,
+        }
+      } catch {
+        const cached = await loadDriverSnapshot<AssignmentRow[] | { items?: AssignmentRow[] }>(
+          DRIVER_CACHE_KEYS.assignments,
+        )
+        let items = normalizeCachedItemList(cached)
+        if (filter === 'week') {
+          items = items.filter((row) => {
+            const date = String(row.assignmentDate ?? '')
+            return date >= weekRange.dateFrom && date <= weekRange.dateTo
+          })
+        }
+        if (!items.length) throw new Error('load_failed')
+        flash(t('taxi_fleet.driverApp.usingCache', 'Showing cached data (offline).'), 'warning')
+        return paginateCachedItems(items, page, pageSize)
       }
     },
-    [filter, weekRange.dateFrom, weekRange.dateTo],
+    [filter, t, weekRange.dateFrom, weekRange.dateTo],
   )
 
   const {
@@ -325,21 +357,36 @@ export default function DriverAssignmentsPage() {
     setBusyId(row.id)
     try {
       await flushDriverLocationTracking()
-      if (!navigator.onLine) {
-        await enqueueDriverMutation({
-          type: 'assignment.shift',
-          payload: { assignmentId: row.id, action: 'end' },
-        })
-        await reload()
-        flash(t('taxi_fleet.driverApp.assignments.shiftEnded', 'Shift ended.'), 'success')
-        return
-      }
-      await apiCall(`/api/taxi_fleet/driver/assignments/${row.id}/shift`, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'end' }),
+      const { queued } = await queueOrSendShiftMutation({
+        kind: 'planned',
+        assignmentId: row.id,
+        action: 'end',
       })
+      if (me) {
+        const nextMe = {
+          ...me,
+          todayAssignment:
+            me.todayAssignment?.id === row.id
+              ? {
+                  ...me.todayAssignment,
+                  shiftEnd: new Date().toISOString(),
+                  status: 'completed',
+                }
+              : me.todayAssignment,
+        }
+        setMe(nextMe)
+        await rememberDriverSnapshot(DRIVER_CACHE_KEYS.me, nextMe).catch(() => undefined)
+      }
       await reload()
-      flash(t('taxi_fleet.driverApp.assignments.shiftEnded', 'Shift ended.'), 'success')
+      flash(
+        queued
+          ? t(
+              'taxi_fleet.driverApp.shift.queuedOffline',
+              'Shift started offline. It will sync when you are online.',
+            )
+          : t('taxi_fleet.driverApp.assignments.shiftEnded', 'Shift ended.'),
+        'success',
+      )
     } catch {
       flash(t('taxi_fleet.driverApp.home.shiftFailed', 'Could not update shift.'), 'error')
     } finally {
@@ -350,21 +397,39 @@ export default function DriverAssignmentsPage() {
   async function startPlanned(assignmentId: string, resourceId: string) {
     setBusyId(assignmentId)
     try {
-      if (!navigator.onLine) {
-        await enqueueDriverMutation({
-          type: 'assignment.shift',
-          payload: { assignmentId, action: 'start', resourceId },
-        })
-        await reload()
-        flash(t('taxi_fleet.driverApp.assignments.shiftStarted', 'Shift started.'), 'success')
-        return
-      }
-      await apiCall(`/api/taxi_fleet/driver/assignments/${assignmentId}/shift`, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'start', resourceId }),
+      const optimisticMe = me
+        ? {
+            ...me,
+            todayAssignment: me.todayAssignment
+              ? {
+                  ...me.todayAssignment,
+                  id: assignmentId,
+                  resourceId,
+                  shiftStart: new Date().toISOString(),
+                  shiftEnd: null,
+                  status: 'confirmed',
+                }
+              : me.todayAssignment,
+          }
+        : null
+      const { queued } = await queueOrSendShiftMutation({
+        kind: 'planned',
+        assignmentId,
+        action: 'start',
+        resourceId,
+        optimisticMe: optimisticMe ?? undefined,
       })
+      if (optimisticMe) setMe(optimisticMe)
       await reload()
-      flash(t('taxi_fleet.driverApp.assignments.shiftStarted', 'Shift started.'), 'success')
+      flash(
+        queued
+          ? t(
+              'taxi_fleet.driverApp.shift.queuedOffline',
+              'Shift started offline. It will sync when you are online.',
+            )
+          : t('taxi_fleet.driverApp.assignments.shiftStarted', 'Shift started.'),
+        'success',
+      )
     } catch {
       flash(t('taxi_fleet.driverApp.home.shiftFailed', 'Could not update shift.'), 'error')
     } finally {
@@ -375,21 +440,35 @@ export default function DriverAssignmentsPage() {
   async function startAdHoc(resourceId: string) {
     setBusyId('adhoc')
     try {
-      if (!navigator.onLine) {
-        await enqueueDriverMutation({
-          type: 'assignment.self_start',
-          payload: { resourceId },
-        })
-        await reload()
-        flash(t('taxi_fleet.driverApp.assignments.shiftStarted', 'Shift started.'), 'success')
-        return
-      }
-      await apiCall('/api/taxi_fleet/driver/assignments/start', {
-        method: 'POST',
-        body: JSON.stringify({ resourceId }),
+      const optimisticMe = me
+        ? {
+            ...me,
+            todayAssignment: {
+              id: `local-${resourceId}`,
+              assignmentDate: me.today ?? new Date().toISOString().slice(0, 10),
+              resourceId,
+              status: 'confirmed',
+              shiftStart: new Date().toISOString(),
+              shiftEnd: null,
+            },
+          }
+        : null
+      const { queued } = await queueOrSendShiftMutation({
+        kind: 'ad_hoc',
+        resourceId,
+        optimisticMe: optimisticMe ?? undefined,
       })
+      if (optimisticMe) setMe(optimisticMe as MeResponse)
       await reload()
-      flash(t('taxi_fleet.driverApp.assignments.shiftStarted', 'Shift started.'), 'success')
+      flash(
+        queued
+          ? t(
+              'taxi_fleet.driverApp.shift.queuedOffline',
+              'Shift started offline. It will sync when you are online.',
+            )
+          : t('taxi_fleet.driverApp.assignments.shiftStarted', 'Shift started.'),
+        'success',
+      )
     } catch {
       flash(t('taxi_fleet.driverApp.home.shiftFailed', 'Could not update shift.'), 'error')
     } finally {
@@ -467,9 +546,15 @@ export default function DriverAssignmentsPage() {
                   </div>
                   {vehicleLine(row, t)}
                   <div className={`mt-2 ${driverMutedTextClass}`}>
-                    {t('taxi_fleet.driverApp.assignments.planned', 'Planned')}:{' '}
-                    {formatClock(row.plannedShiftStart ?? null)}
-                    {row.plannedShiftEnd ? ` – ${formatClock(row.plannedShiftEnd)}` : ''}
+                    {row.plannedShiftStart || row.plannedShiftEnd
+                      ? (
+                          <>
+                            {t('taxi_fleet.driverApp.assignments.planned', 'Planned')}:{' '}
+                            {formatClock(row.plannedShiftStart ?? null)}
+                            {row.plannedShiftEnd ? ` – ${formatClock(row.plannedShiftEnd)}` : ''}
+                          </>
+                        )
+                      : t('taxi_fleet.driverApp.assignments.adHoc', 'Ad-hoc shift')}
                   </div>
                   {row.shiftStart ? (
                     <div className={`mt-1 ${driverMutedTextClass}`}>

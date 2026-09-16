@@ -26,6 +26,19 @@ import type {
   DriverExpenseWarning,
 } from '../../../lib/driverExpenses'
 import { formatReceiptOcrWarningLabel } from '../../../lib/receiptOcrWarningLabel'
+import {
+  DRIVER_CACHE_KEYS,
+  loadDriverSnapshot,
+  normalizeCachedItemList,
+  paginateCachedItems,
+  seedDriverExpensesCache,
+} from '../../../lib/driverOffline/driverDataCache'
+import {
+  resolveCachedPendingFlag,
+  resolveExpenseOutboxSyncState,
+} from '../../../lib/driverOffline/outboxSyncState'
+import { DriverSyncStatusBadge } from '../../../components/driverApp/DriverSyncStatusBadge'
+import { useDriverOutboxItems } from '../../../components/driverApp/useDriverOutboxItems'
 
 const PAGE_SIZE = 10
 
@@ -161,6 +174,7 @@ function ExpenseWarnings({
 
 export default function DriverExpensesPage() {
   const t = useT()
+  const { items: outboxItems } = useDriverOutboxItems()
   const [items, setItems] = React.useState<DriverExpenseListItem[]>([])
   const [loaded, setLoaded] = React.useState(false)
   const [deletingId, setDeletingId] = React.useState<string | null>(null)
@@ -181,17 +195,35 @@ export default function DriverExpensesPage() {
         sort: nextSort,
         order: nextOrder,
       })
-      const { ok, result } = await apiCall<ExpensesListResponse>(
-        `/api/taxi_fleet/driver/expenses?${params.toString()}`,
-      )
-      if (!ok || !result) throw new Error('load_failed')
-      setItems(result.items ?? [])
-      setTotal(result.total ?? 0)
-      setPage(result.page ?? nextPage)
-      setSort(result.sort ?? nextSort)
-      setOrder(result.order === 'asc' ? 'asc' : 'desc')
+      try {
+        const { ok, result } = await apiCall<ExpensesListResponse>(
+          `/api/taxi_fleet/driver/expenses?${params.toString()}`,
+        )
+        if (!ok || !result) throw new Error('load_failed')
+        const nextItems = result.items ?? []
+        await seedDriverExpensesCache(
+          nextItems as Array<{ id: string } & Record<string, unknown>>,
+          'merge',
+        )
+        setItems(nextItems)
+        setTotal(result.total ?? 0)
+        setPage(result.page ?? nextPage)
+        setSort(result.sort ?? nextSort)
+        setOrder(result.order === 'asc' ? 'asc' : 'desc')
+      } catch {
+        const cached = await loadDriverSnapshot<
+          DriverExpenseListItem[] | { items?: DriverExpenseListItem[] }
+        >(DRIVER_CACHE_KEYS.expenses)
+        const all = normalizeCachedItemList(cached)
+        if (!all.length) throw new Error('load_failed')
+        const pageResult = paginateCachedItems(all, nextPage, PAGE_SIZE)
+        setItems(pageResult.items)
+        setTotal(pageResult.total)
+        setPage(pageResult.page)
+        flash(t('taxi_fleet.driverApp.usingCache', 'Showing cached data (offline).'), 'warning')
+      }
     },
-    [],
+    [t],
   )
 
   React.useEffect(() => {
@@ -384,6 +416,12 @@ export default function DriverExpensesPage() {
                   <div className="text-sm font-semibold text-[#071437]">
                     {t(`taxi_fleet.financial.costTypes.${item.costType ?? 'other'}`, item.costType ?? 'other')}
                   </div>
+                  <DriverSyncStatusBadge
+                    state={resolveCachedPendingFlag(
+                      item,
+                      resolveExpenseOutboxSyncState(outboxItems, item.id),
+                    )}
+                  />
                   <ExpenseOcrStatusBadge item={item} t={t} />
                 </div>
                 <div className="mt-0.5 text-xs text-[#78829D]">
@@ -401,11 +439,6 @@ export default function DriverExpensesPage() {
                 </div>
                 {item.documentNumber ? (
                   <div className="mt-0.5 truncate text-xs text-[#4B5675]">{item.documentNumber}</div>
-                ) : null}
-                {item.pending ? (
-                  <div className="mt-1 text-[11px] font-medium text-[#1B84FF]">
-                    {t('taxi_fleet.driverApp.receipt.queuedOffline', 'saved offline')}
-                  </div>
                 ) : null}
               </div>
               <div className="shrink-0 text-right text-sm font-semibold tabular-nums text-[#071437]">

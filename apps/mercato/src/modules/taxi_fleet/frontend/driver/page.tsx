@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { CalendarDays, CarFront, Clock3, Fuel, Plus } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { DriverShell } from '../../components/driverApp/DriverShell'
@@ -29,7 +28,14 @@ import {
   driverSectionDescClass,
   driverSectionTitleClass,
 } from '../../components/driverApp/driverUi'
-import { cacheDriverJson, enqueueDriverMutation, readCachedDriverJson } from '../../lib/driverOffline/outbox'
+import { DriverSyncStatusBadge } from '../../components/driverApp/DriverSyncStatusBadge'
+import { useDriverOnlineStatus } from '../../components/driverApp/useDriverOnlineStatus'
+import { useDriverOutboxItems } from '../../components/driverApp/useDriverOutboxItems'
+import {
+  loadDriverMeWithCache,
+  queueOrSendShiftMutation,
+} from '../../lib/driverOffline/queueOrSendShiftMutation'
+import { resolveShiftOutboxSyncState } from '../../lib/driverOffline/outboxSyncState'
 import {
   flushDriverLocationTracking,
   useDriverTrackingEstimatedKm,
@@ -143,31 +149,34 @@ function ShiftVehicle({
 export default function DriverHomePage() {
   const t = useT()
   const router = useRouter()
+  const online = useDriverOnlineStatus()
+  const { items: outboxItems } = useDriverOutboxItems()
   const [me, setMe] = React.useState<MeResponse | null>(null)
   const [loaded, setLoaded] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
+  const [fromCache, setFromCache] = React.useState(false)
 
   const load = React.useCallback(async () => {
-    try {
-      const { result } = await apiCall<MeResponse>('/api/taxi_fleet/driver/me')
-      setMe(result)
-      await cacheDriverJson('driver/me', result)
-    } catch (err) {
-      const cached = await readCachedDriverJson<MeResponse>('driver/me')
+    const { me: next, fromCache: cached } = await loadDriverMeWithCache<MeResponse>()
+    if (next) {
+      setMe(next)
+      setFromCache(cached)
       if (cached) {
-        setMe(cached)
         flash(t('taxi_fleet.driverApp.usingCache', 'Showing cached data (offline).'), 'warning')
-        return
       }
-      const status = (err as { status?: number } | null)?.status
-      if (status === 401 || status === 403) {
-        router.replace('/driver/login')
-        return
-      }
-      flash(t('taxi_fleet.driverApp.home.loadFailed', 'Could not load driver session.'), 'error')
-    } finally {
-      setLoaded(true)
+    } else if (!navigator.onLine) {
+      flash(
+        t(
+          'taxi_fleet.driverApp.home.profileCacheMissing',
+          'No saved driver profile on this device. Connect once to download vehicles and shift data.',
+        ),
+        'error',
+      )
+    } else {
+      router.replace('/driver/login')
+      return
     }
+    setLoaded(true)
   }, [router, t])
 
   useRegisterDriverPullToRefresh(load)
@@ -180,12 +189,13 @@ export default function DriverHomePage() {
   const homeState = loaded ? resolveHomeState(assignment) : 'loading'
   const shiftActive = homeState === 'on_shift'
   const estimatedKmLabel = useDriverTrackingEstimatedKm(shiftActive)
+  const shiftSyncState = resolveShiftOutboxSyncState(outboxItems)
 
   React.useEffect(() => {
-    if (!shiftActive) return
+    if (!shiftActive || !online) return
     const id = window.setInterval(() => void load(), 60_000)
     return () => window.clearInterval(id)
-  }, [load, shiftActive])
+  }, [load, online, shiftActive])
 
   const gpsKmLabel = React.useMemo(() => {
     const server = assignment?.gpsDistanceKm?.trim()
@@ -206,8 +216,9 @@ export default function DriverHomePage() {
                 resourcePlate: assignment.resourcePlate,
               }
             : null,
+        ignoreAvailability: !online || fromCache,
       }),
-    [assignment, profileDefaults],
+    [assignment, fromCache, online, profileDefaults],
   )
   const {
     selectedResourceId,
@@ -217,11 +228,11 @@ export default function DriverHomePage() {
     shiftVehicles,
     assignment && !assignment.shiftStart ? assignment.resourceId : null,
   )
-  const hasDefaultsButNoneFree = profileDefaults.length > 0 && !needsVehiclePick
+  const hasDefaultsButNoneFree = profileDefaults.length > 0 && !needsVehiclePick && online && !fromCache
 
   async function runShift(action: 'start' | 'end') {
     if (me?.impersonation?.active) return
-    if (!assignment) return
+    if (!me || !assignment) return
     if (action === 'start' && !selectedResourceId) {
       flash(
         t('taxi_fleet.driverApp.shift.vehicleRequired', 'Select a vehicle before starting your shift.'),
@@ -235,49 +246,43 @@ export default function DriverHomePage() {
         await flushDriverLocationTracking()
       }
       const resourceId = action === 'start' ? selectedResourceId : null
-      if (!navigator.onLine) {
-        await enqueueDriverMutation({
-          type: 'assignment.shift',
-          payload: {
-            assignmentId: assignment.id,
-            action,
-            ...(resourceId ? { resourceId } : {}),
-          },
-        })
-        const picked = resourceId ? shiftVehicles.find((v) => v.id === resourceId) : null
-        setMe((prev) =>
-          prev && prev.todayAssignment
+      const picked = resourceId ? shiftVehicles.find((v) => v.id === resourceId) : null
+      const optimisticMe: MeResponse = {
+        ...me,
+        todayAssignment: {
+          ...assignment,
+          ...(resourceId
             ? {
-                ...prev,
-                todayAssignment: {
-                  ...prev.todayAssignment,
-                  ...(resourceId
-                    ? {
-                        resourceId,
-                        resourceLabel: picked?.label ?? prev.todayAssignment.resourceLabel,
-                        resourceName: picked?.name ?? prev.todayAssignment.resourceName,
-                        resourcePlate: picked?.plate ?? prev.todayAssignment.resourcePlate,
-                      }
-                    : {}),
-                  shiftStart:
-                    action === 'start' ? new Date().toISOString() : prev.todayAssignment.shiftStart,
-                  shiftEnd:
-                    action === 'end' ? new Date().toISOString() : prev.todayAssignment.shiftEnd,
-                  status: action === 'start' ? 'confirmed' : 'completed',
-                },
+                resourceId,
+                resourceLabel: picked?.label ?? assignment.resourceLabel,
+                resourceName: picked?.name ?? assignment.resourceName,
+                resourcePlate: picked?.plate ?? assignment.resourcePlate,
               }
-            : prev,
-        )
-        return
+            : {}),
+          shiftStart: action === 'start' ? new Date().toISOString() : assignment.shiftStart,
+          shiftEnd: action === 'end' ? new Date().toISOString() : assignment.shiftEnd,
+          status: action === 'start' ? 'confirmed' : 'completed',
+        },
       }
-      await apiCall(`/api/taxi_fleet/driver/assignments/${assignment.id}/shift`, {
-        method: 'POST',
-        body: JSON.stringify({
-          action,
-          ...(resourceId ? { resourceId } : {}),
-        }),
+      const { queued } = await queueOrSendShiftMutation({
+        kind: 'planned',
+        assignmentId: assignment.id,
+        action,
+        resourceId,
+        optimisticMe,
       })
-      await load()
+      setMe(optimisticMe)
+      if (queued) {
+        flash(
+          t(
+            'taxi_fleet.driverApp.shift.queuedOffline',
+            'Shift started offline. It will sync when you are online.',
+          ),
+          'success',
+        )
+      } else {
+        await load()
+      }
     } catch {
       flash(t('taxi_fleet.driverApp.home.shiftFailed', 'Could not update shift.'), 'error')
     } finally {
@@ -287,6 +292,7 @@ export default function DriverHomePage() {
 
   async function startAdHocShift() {
     if (me?.impersonation?.active) return
+    if (!me) return
     if (!selectedResourceId) {
       flash(
         t('taxi_fleet.driverApp.shift.vehicleRequired', 'Select a vehicle before starting your shift.'),
@@ -296,36 +302,37 @@ export default function DriverHomePage() {
     }
     setBusy(true)
     try {
-      if (!navigator.onLine) {
-        await enqueueDriverMutation({
-          type: 'assignment.self_start',
-          payload: { resourceId: selectedResourceId },
-        })
-        const picked = shiftVehicles.find((v) => v.id === selectedResourceId)
-        setMe((prev) =>
-          prev
-            ? {
-                ...prev,
-                todayAssignment: {
-                  id: `local-${selectedResourceId}`,
-                  resourceId: selectedResourceId,
-                  resourceLabel: picked?.label ?? null,
-                  resourceName: picked?.name ?? null,
-                  resourcePlate: picked?.plate ?? null,
-                  status: 'confirmed',
-                  shiftStart: new Date().toISOString(),
-                  shiftEnd: null,
-                },
-              }
-            : prev,
-        )
-        return
+      const picked = shiftVehicles.find((v) => v.id === selectedResourceId)
+      const optimisticMe: MeResponse = {
+        ...me,
+        todayAssignment: {
+          id: `local-${selectedResourceId}`,
+          resourceId: selectedResourceId,
+          resourceLabel: picked?.label ?? null,
+          resourceName: picked?.name ?? null,
+          resourcePlate: picked?.plate ?? null,
+          status: 'confirmed',
+          shiftStart: new Date().toISOString(),
+          shiftEnd: null,
+        },
       }
-      await apiCall('/api/taxi_fleet/driver/assignments/start', {
-        method: 'POST',
-        body: JSON.stringify({ resourceId: selectedResourceId }),
+      const { queued } = await queueOrSendShiftMutation({
+        kind: 'ad_hoc',
+        resourceId: selectedResourceId,
+        optimisticMe,
       })
-      await load()
+      setMe(optimisticMe)
+      if (queued) {
+        flash(
+          t(
+            'taxi_fleet.driverApp.shift.queuedOffline',
+            'Shift started offline. It will sync when you are online.',
+          ),
+          'success',
+        )
+      } else {
+        await load()
+      }
     } catch {
       flash(t('taxi_fleet.driverApp.home.shiftFailed', 'Could not update shift.'), 'error')
     } finally {
@@ -345,6 +352,7 @@ export default function DriverHomePage() {
       assignmentId={assignment?.id ?? null}
     >
       <div className="space-y-4">
+        {shiftSyncState ? <DriverSyncStatusBadge state={shiftSyncState} /> : null}
 
         {homeState === 'loading' ? (
           <div className={`px-1 py-8 text-center ${driverMutedTextClass}`}>

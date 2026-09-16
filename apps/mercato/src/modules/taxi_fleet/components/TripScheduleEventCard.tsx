@@ -140,6 +140,7 @@ export function AssignmentScheduleEventCard({ item }: { item: ScheduleItem }) {
   const vehicleLabel = readDisplayLabel(metadata.vehicleLabel)
   const assignmentStatus =
     typeof metadata.assignmentStatus === 'string' ? metadata.assignmentStatus.trim() : null
+  const adHoc = metadata.adHoc === true
   const minutes = eventDurationMinutes(item)
   const showDetails = minutes >= 90
 
@@ -149,6 +150,11 @@ export function AssignmentScheduleEventCard({ item }: { item: ScheduleItem }) {
       {driverName ? <div className="truncate font-medium">{driverName}</div> : null}
       {showDetails && vehicleLabel ? (
         <div className="truncate text-muted-foreground">{vehicleLabel}</div>
+      ) : null}
+      {adHoc ? (
+        <div className="truncate text-muted-foreground/80">
+          {t('taxi_fleet.assignments.adHoc', 'Ad-hoc')}
+        </div>
       ) : null}
       {showDetails && assignmentStatus ? (
         <div className="truncate text-muted-foreground/80">

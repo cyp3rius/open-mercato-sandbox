@@ -1,5 +1,11 @@
-/* Driver PWA service worker — scoped to /driver */
-const CACHE = 'taxi-fleet-driver-v7'
+/* Driver PWA service worker — scoped to /driver
+ *
+ * DRIVER_APP_VERSION must stay in sync with
+ * apps/mercato/src/modules/taxi_fleet/lib/driverAppVersion.ts
+ * (bumped by scripts/bump-driver-pwa-version.mjs on driver-app commits).
+ */
+const DRIVER_APP_VERSION = '20260916a'
+const CACHE = 'taxi-fleet-driver-' + DRIVER_APP_VERSION
 
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting())
@@ -12,6 +18,12 @@ self.addEventListener('activate', (event) => {
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   )
+})
+
+self.addEventListener('message', (event) => {
+  if (event && event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  }
 })
 
 self.addEventListener('fetch', (event) => {
@@ -91,8 +103,8 @@ self.addEventListener('push', (event) => {
       body: payload.body,
       tag: payload.tag,
       renotify: true,
-      icon: '/driver/icon-192.png?v=20260915b',
-      badge: '/driver/icon-192.png?v=20260915b',
+      icon: '/driver/icon-192.png?v=' + DRIVER_APP_VERSION,
+      badge: '/driver/icon-192.png?v=' + DRIVER_APP_VERSION,
       data: {
         url: payload.url,
         tripId: payload.tripId,

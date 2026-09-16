@@ -5,11 +5,17 @@ import { resolveReceiptDocumentKind } from './receiptDocumentKind'
 /** RS Investment Group — fleet company NIP (seller on taxi receipts; buyer on expense slips). */
 export const RS_MOTO_ISSUER_NIP_DIGITS = '9452189152'
 
-/** Common OCR misreads of the fleet NIP (checksum digit). */
+/** Common OCR misreads of the fleet NIP (checksum / last digits). */
 const KNOWN_FLEET_ISSUER_NIP_DIGITS = new Set([
   RS_MOTO_ISSUER_NIP_DIGITS,
   '9452189182',
+  '9452189102',
+  '9452189150',
+  '9452189158',
 ])
+
+/** Same 8-digit stem as RS Investment Group — OCR often flips the last 1–2 digits. */
+const FLEET_NIP_STEM = '94521891'
 
 export type ReceiptOcrSanitizeMode = 'trip' | 'expense'
 
@@ -24,7 +30,10 @@ export function normalizeReceiptOcrNip(value: string | null | undefined): string
 
 export function isKnownFleetIssuerNip(value: string | null | undefined): boolean {
   const digits = normalizeReceiptOcrNip(value)
-  return Boolean(digits && KNOWN_FLEET_ISSUER_NIP_DIGITS.has(digits))
+  if (!digits) return false
+  if (KNOWN_FLEET_ISSUER_NIP_DIGITS.has(digits)) return true
+  // Soft match: printed fleet NIP with OCR noise on the checksum / tail.
+  return digits.startsWith(FLEET_NIP_STEM)
 }
 
 export function canonicalizeFleetNip(value: string | null | undefined): string | null {
@@ -50,72 +59,129 @@ export function looksLikeNipAsDocumentNumber(value: string | null | undefined): 
 }
 
 /**
- * Prefer fiscal receipt numbers like W001776 from excerpt; never return a NIP.
+ * Prefer fiscal receipt numbers like W001776 from excerpt; never return a NIP
+ * or a taxi "Nr boczny" (side number) value such as 0000.
  */
 export function extractFiscalDocumentNumberFromExcerpt(excerpt: string | null | undefined): string | null {
   if (!excerpt?.trim()) return null
-  const text = excerpt.replace(/\r/g, '\n')
+  const text = excerpt
+    .replace(/\r/g, '\n')
+    // Side / fleet numbers are labeled "Nr boczny" — never treat them as the receipt id.
+    .split(/\n+/)
+    .filter((line) => !/nr\.?\s*boczny/i.test(line))
+    .join('\n')
 
   const labeled = text.match(
     /(?:nr\.?\s*(?:paragonu|dokumentu|dok\.?)|paragon(?:\s+fiskalny)?|dokument)\s*[:#]?\s*([A-Z]\d{3,}|\d{3,}[A-Z]?\d*)/i,
   )
-  if (labeled?.[1] && !looksLikeNipAsDocumentNumber(labeled[1])) {
+  if (
+    labeled?.[1] &&
+    !looksLikeNipAsDocumentNumber(labeled[1]) &&
+    !looksLikeSideNumberAsDocumentNumber(labeled[1])
+  ) {
     return labeled[1].trim().toUpperCase()
   }
 
-  // Common taxi fiscal print: letter + serial (e.g. W001776) — skip bare NIP lines
+  // Common taxi fiscal print: letter + serial (e.g. W001776 / W001530) — skip bare NIP lines
   const serials = text.match(/\b([A-Z]\d{4,8})\b/gi) ?? []
   for (const serial of serials) {
-    if (!looksLikeNipAsDocumentNumber(serial)) return serial.toUpperCase()
+    if (looksLikeNipAsDocumentNumber(serial)) continue
+    if (looksLikeSideNumberAsDocumentNumber(serial)) continue
+    return serial.toUpperCase()
   }
 
   return null
 }
 
 /**
- * Recover buyer NIP from excerpt when the model skipped "NIP nabywcy" near the footer.
- * Accepts dashed (701-053-39-02) and compact (7010533902) forms.
- * Never treats BDO (waste registry) numbers as NIP.
+ * Taxi printers show "Nr boczny: 0000" (vehicle side number). That is never the
+ * fiscal document number — the W-serial sits on the next line (e.g. W001530).
  */
-export function extractBuyerNipFromExcerpt(
+export function looksLikeSideNumberAsDocumentNumber(value: string | null | undefined): boolean {
+  if (value == null) return false
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  // Pure zero pads and other short numeric side codes (no letters).
+  if (/^0{1,8}$/.test(trimmed)) return true
+  if (/^#?0{1,6}$/.test(trimmed)) return true
+  return false
+}
+
+/** True when `documentNumber` appears only as the value of a "Nr boczny" label. */
+export function isDocumentNumberTiedToBocznyLabel(
   excerpt: string | null | undefined,
-  options?: { allowFleetNip?: boolean },
-): string | null {
-  if (!excerpt?.trim()) return null
-  const text = excerpt.replace(/\r/g, '\n')
-  const match = text.match(
-    /NIP\s*nabyw\w*\s*[:#]?\s*(?:PL)?([0-9][\d\-./ ]{8,14}[0-9])/i,
-  )
-  if (!match?.[1]) {
-    const lines = text.split(/\n+/)
-    for (const line of lines) {
-      if (lineLooksLikeBdo(line) || /nabyw/i.test(line)) continue
-      const other = line.match(/\bNIP\s*[:#]?\s*(?:PL)?([0-9][\d\-./ ]{8,14}[0-9])/i)
-      if (!other?.[1]) continue
-      const digits = canonicalizeFleetNip(other[1]) ?? normalizeReceiptOcrNip(other[1])
-      if (!digits) continue
-      if (isKnownFleetIssuerNip(digits) && !options?.allowFleetNip) continue
-      if (isBdoNumberInExcerpt(digits, excerpt)) continue
-      return digits
-    }
-    return null
-  }
-  const digits = canonicalizeFleetNip(match[1]) ?? normalizeReceiptOcrNip(match[1])
-  if (!digits) return null
-  if (isKnownFleetIssuerNip(digits) && !options?.allowFleetNip) return null
-  if (isBdoNumberInExcerpt(digits, excerpt)) return null
-  return digits
+  documentNumber: string | null | undefined,
+): boolean {
+  if (!excerpt?.trim() || !documentNumber?.trim()) return false
+  const escaped = documentNumber.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`nr\\.?\\s*boczny\\s*[:#]?\\s*${escaped}\\b`, 'i').test(excerpt)
 }
 
 /**
- * Recover seller/issuer NIP from header "NIP:" line (not "NIP nabywcy", not BDO).
- * Accepts dashed and compact forms; normalizes to digits only.
+ * Recover buyer NIP from excerpt.
+ *
+ * Trip receipts: only accept an explicit "NIP nabywcy" label (footer). Individual
+ * trips often have no buyer NIP — never fall back to the header seller "NIP:" line.
+ * Expense slips may also recover from a labeled nabywcy / buyer block.
+ */
+export function extractBuyerNipFromExcerpt(
+  excerpt: string | null | undefined,
+  options?: { allowFleetNip?: boolean; labeledOnly?: boolean },
+): string | null {
+  if (!excerpt?.trim()) return null
+  const text = excerpt.replace(/\r/g, '\n')
+  const labeledOnly = options?.labeledOnly === true
+  const match = text.match(
+    /NIP\s*nabyw\w*\s*[:#]?\s*(?:PL)?([0-9][\d\-./ ]{8,14}[0-9])/i,
+  )
+  if (match?.[1]) {
+    const digits = canonicalizeFleetNip(match[1]) ?? normalizeReceiptOcrNip(match[1])
+    if (!digits) return null
+    if (isKnownFleetIssuerNip(digits) && !options?.allowFleetNip) return null
+    if (isBdoNumberInExcerpt(digits, excerpt)) return null
+    return digits
+  }
+  if (labeledOnly) return null
+
+  // Expense fallback only: scan remaining lines, still skip BDO / unlabeled header noise when possible.
+  const lines = text.split(/\n+/)
+  const footerStart = Math.max(0, Math.floor(lines.length * 0.45))
+  for (let index = footerStart; index < lines.length; index += 1) {
+    const line = lines[index] ?? ''
+    if (lineLooksLikeBdo(line) || /nabyw/i.test(line)) continue
+    if (!/(?:nabyw|kupuj|nazwa\s+firmy|dane\s+nabyw)/i.test(line) && !/\bNIP\b/i.test(line)) {
+      continue
+    }
+    const other = line.match(/\bNIP\s*[:#]?\s*(?:PL)?([0-9][\d\-./ ]{8,14}[0-9])/i)
+    if (!other?.[1]) continue
+    const digits = canonicalizeFleetNip(other[1]) ?? normalizeReceiptOcrNip(other[1])
+    if (!digits) continue
+    if (isKnownFleetIssuerNip(digits) && !options?.allowFleetNip) continue
+    if (isBdoNumberInExcerpt(digits, excerpt)) continue
+    return digits
+  }
+  return null
+}
+
+/**
+ * Recover seller/issuer NIP from the HEADER "NIP:" line (top of receipt).
+ * Skips "NIP nabywcy" and BDO. Prefers lines above the fiscal body.
  */
 export function extractSellerNipFromExcerpt(excerpt: string | null | undefined): string | null {
   if (!excerpt?.trim()) return null
   const text = excerpt.replace(/\r/g, '\n')
-  const lines = text.split(/\n+/)
-  for (const line of lines) {
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean)
+  if (!lines.length) return null
+
+  const bodyMarkerIndex = lines.findIndex((line) =>
+    /paragon\s+fiskalny|pocz[aą]tek\s+kursu|do\s+zapłaty|rozliczenie\s+płat/i.test(line),
+  )
+  const headerLimit =
+    bodyMarkerIndex > 0 ? bodyMarkerIndex : Math.max(3, Math.ceil(lines.length / 3))
+  const headerLines = lines.slice(0, headerLimit)
+  const searchOrder = [...headerLines, ...lines.slice(headerLimit)]
+
+  for (const line of searchOrder) {
     if (/nabyw/i.test(line)) continue
     if (lineLooksLikeBdo(line)) continue
     const match = line.match(/\bNIP\s*[:#]?\s*(?:PL)?([0-9][\d\-./ ]{8,14}[0-9])/i)
@@ -258,6 +324,15 @@ export function sanitizeReceiptOcrFields(
     documentNumber = null
   }
 
+  // "Nr boczny: 0000" is the vehicle side number — never the fiscal receipt id.
+  if (
+    documentNumber &&
+    (looksLikeSideNumberAsDocumentNumber(documentNumber) ||
+      isDocumentNumberTiedToBocznyLabel(fields.rawExcerpt, documentNumber))
+  ) {
+    documentNumber = null
+  }
+
   if (!sellerNip && !isWzExpense) {
     sellerNip = extractSellerNipFromExcerpt(fields.rawExcerpt)
   }
@@ -284,13 +359,22 @@ export function sanitizeReceiptOcrFields(
     if (sellerNip && isKnownFleetIssuerNip(sellerNip)) {
       sellerNip = RS_MOTO_ISSUER_NIP_DIGITS
     }
-    // Never keep buyerNip as our issuer NIP (that NIP is always the seller on our receipts)
+    // Never keep buyerNip as our issuer NIP (header seller NIP on taxi receipts).
     if (buyerNip && isKnownFleetIssuerNip(buyerNip)) {
       if (!sellerNip) sellerNip = RS_MOTO_ISSUER_NIP_DIGITS
       buyerNip = null
     }
-    if (!buyerNip) {
-      buyerNip = extractBuyerNipFromExcerpt(fields.rawExcerpt)
+    // Trip receipts: buyer only from an explicit "NIP nabywcy" footer label.
+    const labeledBuyer = extractBuyerNipFromExcerpt(fields.rawExcerpt, { labeledOnly: true })
+    if (labeledBuyer) {
+      buyerNip = labeledBuyer
+    } else if (
+      !buyerNip ||
+      (sellerNip != null && buyerNip === sellerNip) ||
+      !/NIP\s*nabyw/i.test(fields.rawExcerpt ?? '')
+    ) {
+      // Individual trips have blank orderer fields — do not invent buyer from header NIP.
+      buyerNip = null
     }
   }
 

@@ -19,6 +19,7 @@ import {
   normalizeReceiptCompletionCreateBody,
   type DriverTripReceiptInput,
 } from '@/modules/taxi_fleet/lib/driverTripReceiptFinalize'
+import { createTripIncomeIfNeeded } from '@/modules/taxi_fleet/lib/createTripIncomeIfNeeded'
 import {
   parseDriverTripReceiptWarnings,
   resolveTripReceiptAttachmentId,
@@ -324,64 +325,6 @@ const driverTripReceiptSchema = z.object({
   completionMode: z.enum(['manual', 'receipt']).optional().nullable(),
 })
 
-async function createTripIncomeIfNeeded(params: {
-  commandBus: CommandBus
-  ctx: CommandRuntimeContext
-  driver: Awaited<ReturnType<typeof resolveDriverContext>>
-  tripId: string
-  scoped: {
-    revenueAmount?: number | null
-    currencyCode?: string
-    startedAt?: Date | null
-    customerEntityId?: string | null
-    customerPersonId?: string | null
-    customerCompanyId?: string | null
-  }
-  receiptDocumentNumber: string | null
-  receiptAttachmentId: string | null
-}): Promise<string | null> {
-  const revenueAmount =
-    typeof params.scoped.revenueAmount === 'number'
-      ? params.scoped.revenueAmount
-      : Number(params.scoped.revenueAmount ?? 0)
-  const hasCustomerLink = Boolean(
-    params.scoped.customerEntityId ||
-      params.scoped.customerPersonId ||
-      params.scoped.customerCompanyId,
-  )
-  if (
-    !params.tripId ||
-    revenueAmount <= 0 ||
-    !hasCustomerLink ||
-    (!params.receiptDocumentNumber && !params.receiptAttachmentId)
-  ) {
-    return null
-  }
-
-  const created = await params.commandBus.execute('taxi_fleet.financial_entries.create', {
-    input: {
-      tenantId: params.driver.teamMember.tenantId,
-      organizationId: params.driver.teamMember.organizationId,
-      teamMemberId: params.driver.teamMemberId,
-      kind: 'income',
-      incomeDocumentType: 'receipt',
-      tripId: params.tripId,
-      customerEntityId: params.scoped.customerEntityId ?? undefined,
-      customerPersonId: params.scoped.customerPersonId ?? undefined,
-      customerCompanyId: params.scoped.customerCompanyId ?? undefined,
-      amount: revenueAmount,
-      currencyCode: params.scoped.currencyCode ?? 'PLN',
-      documentNumber: params.receiptDocumentNumber,
-      occurredAt: params.scoped.startedAt ?? new Date(),
-      receiptAttachmentId: params.receiptAttachmentId,
-    },
-    ctx: params.ctx,
-  })
-  return created?.result && typeof created.result === 'object' && 'entryId' in created.result
-    ? String((created.result as { entryId: string }).entryId)
-    : null
-}
-
 export async function POST(req: Request) {
   try {
     const context = await buildContext(req)
@@ -471,9 +414,18 @@ export async function POST(req: Request) {
       financialEntryId = await createTripIncomeIfNeeded({
         commandBus,
         ctx: context,
-        driver,
-        tripId: tripId ?? '',
-        scoped,
+        scoped: {
+          tenantId: driver.teamMember.tenantId,
+          organizationId: driver.teamMember.organizationId,
+          teamMemberId: driver.teamMemberId,
+          tripId: tripId ?? '',
+          revenueAmount: scoped.revenueAmount,
+          currencyCode: scoped.currencyCode,
+          startedAt: scoped.startedAt ?? null,
+          customerEntityId: scoped.customerEntityId ?? null,
+          customerPersonId: scoped.customerPersonId ?? null,
+          customerCompanyId: scoped.customerCompanyId ?? null,
+        },
         receiptDocumentNumber,
         receiptAttachmentId,
       })
@@ -536,7 +488,7 @@ export async function PUT(req: Request) {
     if (
       typeof receiptAttachmentId === 'string' &&
       receiptAttachmentId &&
-      existing.status === 'completed' &&
+      (existing.status === 'completed' || existing.status === 'scheduled') &&
       tripHasReceiptAttachment(existing)
     ) {
       throw new CrudHttpError(409, {
@@ -548,6 +500,9 @@ export async function PUT(req: Request) {
     }
 
     const { action, input } = resolveDriverTripUpdateInput(existing.status, body, existing.tripType)
+    if (action === 'receipt_complete_scheduled' && !existing.startedAt) {
+      input.startedAt = typeof input.endedAt === 'string' ? input.endedAt : new Date().toISOString()
+    }
     const nextTripType =
       typeof body.tripType === 'string' ? body.tripType : existing.tripType
     const nextStatus =
@@ -557,7 +512,9 @@ export async function PUT(req: Request) {
           ? resolveDriverTripFinishStatus(nextTripType, body.status)
           : existing.status
     const isFinishing =
-      (action === 'live_update' || action === 'complete') &&
+      (action === 'live_update' ||
+        action === 'complete' ||
+        action === 'receipt_complete_scheduled') &&
       (nextStatus === 'completed' || nextStatus === 'pending_authorization')
     // Full live/past finish payloads must include a receipt when required.
     // Minimal `complete` (endedAt + status only) may finish first; receipt can be added after.
@@ -609,7 +566,12 @@ export async function PUT(req: Request) {
     const commandBus = context.container.resolve('commandBus') as CommandBus
     await commandBus.execute('taxi_fleet.trips.update', { input: parsed, ctx: context })
 
-    if ((action === 'live_update' || action === 'receipt_supplement') && receiptAttachmentId) {
+    if (
+      (action === 'live_update' ||
+        action === 'receipt_supplement' ||
+        action === 'receipt_complete_scheduled') &&
+      receiptAttachmentId
+    ) {
       const revenueAmount =
         typeof parsed.revenueAmount === 'number'
           ? parsed.revenueAmount
@@ -620,9 +582,11 @@ export async function PUT(req: Request) {
         financialEntryId = await createTripIncomeIfNeeded({
           commandBus,
           ctx: context,
-          driver,
-          tripId,
           scoped: {
+            tenantId: driver.teamMember.tenantId,
+            organizationId: driver.teamMember.organizationId,
+            teamMemberId: driver.teamMemberId,
+            tripId,
             revenueAmount,
             currencyCode: parsed.currencyCode ?? existing.currencyCode ?? 'PLN',
             startedAt: parsed.startedAt ?? existing.startedAt ?? null,

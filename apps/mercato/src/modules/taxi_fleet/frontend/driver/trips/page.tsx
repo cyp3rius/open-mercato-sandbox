@@ -9,10 +9,11 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { DriverTripGate } from '../../../components/driverApp/DriverTripGate'
 import { useRegisterDriverPullToRefresh } from '../../../components/driverApp/DriverPullToRefresh'
-import {
-  DriverTripReceiptStatusBadge,
+import { DriverTripReceiptStatusBadge,
   tripListHasProcessingReceipt,
 } from '../../../components/driverApp/DriverTripReceiptStatusBadge'
+import { DriverSyncStatusBadge } from '../../../components/driverApp/DriverSyncStatusBadge'
+import { useDriverOutboxItems } from '../../../components/driverApp/useDriverOutboxItems'
 import {
   DRIVER_LIST_PAGE_SIZE,
   useDriverPagedList,
@@ -33,6 +34,19 @@ import { isDriverOnOpenShift } from '../../../lib/driverTripShiftWindow'
 import { useTaxiFleetLabels } from '../../../components/useTaxiFleetLabels'
 import { readPlatformTripIngestLabel } from '../../../components/PlatformTripIngestBadge'
 import { resolveDriverFacingTripStatus } from '../../../lib/driverVisibleTripStatuses'
+import {
+  DRIVER_CACHE_KEYS,
+  filterCachedTripsForLocalDay,
+  loadDriverSnapshot,
+  normalizeCachedItemList,
+  paginateCachedItems,
+  rememberDriverSnapshot,
+  seedDriverTripsCache,
+} from '../../../lib/driverOffline/driverDataCache'
+import {
+  resolveCachedPendingFlag,
+  resolveTripOutboxSyncState,
+} from '../../../lib/driverOffline/outboxSyncState'
 
 type TripRow = {
   id: string
@@ -47,6 +61,7 @@ type TripRow = {
   receiptAttachmentId?: string | null
   ocrStatus?: string | null
   warnings?: DriverTripReceiptWarning[]
+  pending?: boolean
 }
 
 type TripListResponse = {
@@ -99,6 +114,7 @@ function endOfLocalDay(date = new Date()): Date {
 export default function DriverTripsPage() {
   const t = useT()
   const { resolveTripStatusLabel } = useTaxiFleetLabels()
+  const { items: outboxItems } = useDriverOutboxItems()
   const [onOpenShift, setOnOpenShift] = React.useState(false)
   const [shiftReady, setShiftReady] = React.useState(false)
   const [filter, setFilter] = React.useState<TripFilter>('today')
@@ -108,14 +124,24 @@ export default function DriverTripsPage() {
     void apiCall<{
       todayAssignment: { shiftStart: string | null; shiftEnd: string | null } | null
     }>('/api/taxi_fleet/driver/me')
-      .then(({ result }) => {
+      .then(async ({ result }) => {
         if (!active || !result) return
+        await rememberDriverSnapshot(DRIVER_CACHE_KEYS.me, result).catch(() => undefined)
         const open = isDriverOnOpenShift(result.todayAssignment)
         setOnOpenShift(open)
         setFilter(open ? 'today' : 'all')
       })
-      .catch(() => {
+      .catch(async () => {
         if (!active) return
+        const cached = await loadDriverSnapshot<{
+          todayAssignment: { shiftStart: string | null; shiftEnd: string | null } | null
+        }>(DRIVER_CACHE_KEYS.me)
+        if (cached) {
+          const open = isDriverOnOpenShift(cached.todayAssignment)
+          setOnOpenShift(open)
+          setFilter(open ? 'today' : 'all')
+          return
+        }
         setOnOpenShift(false)
         setFilter('all')
       })
@@ -140,18 +166,36 @@ export default function DriverTripsPage() {
         params.set('startedFrom', startOfLocalDay().toISOString())
         params.set('startedTo', endOfLocalDay().toISOString())
       }
-      const { result, ok } = await apiCall<TripListResponse>(
-        `/api/taxi_fleet/driver/trips?${params}`,
-      )
-      if (!ok || !result) throw new Error('load_failed')
-      return {
-        items: result.items ?? [],
-        page: result.page ?? page,
-        pageSize: result.pageSize ?? pageSize,
-        total: result.total ?? 0,
+      try {
+        const { result, ok } = await apiCall<TripListResponse>(
+          `/api/taxi_fleet/driver/trips?${params}`,
+        )
+        if (!ok || !result) throw new Error('load_failed')
+        const items = result.items ?? []
+        await seedDriverTripsCache(
+          items as Array<{ id: string } & Record<string, unknown>>,
+          'merge',
+        )
+        return {
+          items,
+          page: result.page ?? page,
+          pageSize: result.pageSize ?? pageSize,
+          total: result.total ?? 0,
+        }
+      } catch {
+        const cached = await loadDriverSnapshot<TripRow[] | { items?: TripRow[] }>(
+          DRIVER_CACHE_KEYS.trips,
+        )
+        let items = normalizeCachedItemList(cached)
+        if (effectiveFilter === 'today') {
+          items = filterCachedTripsForLocalDay(items, startOfLocalDay(), endOfLocalDay())
+        }
+        if (!items.length) throw new Error('load_failed')
+        flash(t('taxi_fleet.driverApp.usingCache', 'Showing cached data (offline).'), 'warning')
+        return paginateCachedItems(items, page, pageSize)
       }
     },
-    [effectiveFilter],
+    [effectiveFilter, t],
   )
 
   const {
@@ -265,6 +309,10 @@ export default function DriverTripsPage() {
                 warnings: trip.warnings ?? [],
               }
               const ingestLabel = readPlatformTripIngestLabel(trip.metadata ?? null, t)
+              const syncState = resolveCachedPendingFlag(
+                trip,
+                resolveTripOutboxSyncState(outboxItems, trip.id),
+              )
               return (
                 <Link key={trip.id} href={`/driver/trips/${trip.id}`} className={driverListRowClass}>
                   <div className="flex items-start justify-between gap-3">
@@ -276,6 +324,7 @@ export default function DriverTripsPage() {
                         {ingestLabel ? (
                           <span className={`${driverBadgeNeutralClass} text-xs`}>{ingestLabel}</span>
                         ) : null}
+                        <DriverSyncStatusBadge state={syncState} />
                         <DriverTripReceiptStatusBadge item={receiptItem} t={t} />
                       </div>
                       {timeRange ? (
