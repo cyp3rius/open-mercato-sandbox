@@ -502,6 +502,13 @@ function refineFinancialEntry(data: z.infer<typeof financialEntryBaseSchema>, ct
       path: ['costType'],
     })
   }
+  if (!data.receiptAttachmentId) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'taxi_fleet.financial.errors.receiptRequired',
+      path: ['receiptAttachmentId'],
+    })
+  }
 }
 
 export const financialEntryCreateSchema = financialEntryBaseSchema.superRefine(refineFinancialEntry)
@@ -539,7 +546,7 @@ export const driverExpenseCreateSchema = z.object({
   }, expenseVatRateSchema.nullable().optional()),
   documentNumber: z.string().max(120).optional().nullable(),
   occurredAt: z.coerce.date().optional(),
-  receiptAttachmentId: optionalUuid,
+  receiptAttachmentId: uuid,
   notes: z.string().max(5000).optional().nullable(),
   tripId: optionalUuid,
 })

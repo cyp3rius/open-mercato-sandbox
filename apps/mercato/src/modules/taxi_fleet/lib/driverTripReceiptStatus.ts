@@ -64,17 +64,7 @@ export function parseDriverTripReceiptWarnings(
 }
 
 export function isTripReceiptProcessing(item: DriverTripListExtras): boolean {
-  if (item.ocrStatus === 'pending' || item.ocrStatus === 'processing') return true
-  if (!item.receiptAttachmentId) return false
-  if (
-    item.ocrStatus === 'failed' ||
-    item.ocrStatus === 'applied' ||
-    item.ocrStatus === 'needs_review' ||
-    item.ocrStatus === 'extracted'
-  ) {
-    return false
-  }
-  return true
+  return item.ocrStatus === 'pending' || item.ocrStatus === 'processing'
 }
 
 export function tripReceiptHasWarnings(item: DriverTripListExtras): boolean {

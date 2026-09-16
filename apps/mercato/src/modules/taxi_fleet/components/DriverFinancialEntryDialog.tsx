@@ -274,6 +274,13 @@ export function DriverFinancialEntryDialog({
       flash(t('taxi_fleet.trips.errors.customerRequired', 'Select a customer (person or company).'), 'error')
       return
     }
+    if (kind === 'expense' && !receiptAttachmentId) {
+      flash(
+        t('taxi_fleet.financial.validation.receiptRequired', 'Receipt photo is required for a cost.'),
+        'error',
+      )
+      return
+    }
     setIsSaving(true)
     try {
       const payload = {
@@ -536,7 +543,7 @@ export function DriverFinancialEntryDialog({
           ) : null}
         </FieldBlock>
         {renderLinkedTripField(false)}
-        <FieldBlock label={t('taxi_fleet.financial.attachment', 'Attachment')}>
+        <FieldBlock label={t('taxi_fleet.financial.attachment', 'Attachment')} required>
           <FinancialAttachmentField
             attachmentId={receiptAttachmentId}
             recordId={attachmentRecordId}

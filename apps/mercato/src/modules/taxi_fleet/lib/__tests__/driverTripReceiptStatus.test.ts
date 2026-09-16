@@ -28,6 +28,16 @@ describe('driverTripReceiptStatus', () => {
     ).toBe(true)
   })
 
+  it('does not treat missing OCR status as processing', () => {
+    expect(
+      isTripReceiptProcessing({
+        receiptAttachmentId: 'att-1',
+        ocrStatus: null,
+        warnings: [],
+      }),
+    ).toBe(false)
+  })
+
   it('marks applied OCR without warnings as verified', () => {
     expect(
       isTripReceiptVerified({

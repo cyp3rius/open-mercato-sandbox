@@ -223,13 +223,13 @@ export default function DriverTripsPage() {
   }, [error, t])
 
   useRegisterDriverPullToRefresh(async () => {
-    await reload().catch(() => undefined)
+    await reload({ soft: true }).catch(() => undefined)
   })
 
   React.useEffect(() => {
     if (!tripListHasProcessingReceipt(items)) return
     const timer = window.setInterval(() => {
-      void reload().catch(() => undefined)
+      void reload({ soft: true }).catch(() => undefined)
     }, 3000)
     return () => window.clearInterval(timer)
   }, [items, reload])

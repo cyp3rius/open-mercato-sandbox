@@ -25,7 +25,6 @@ import {
   serializeDriverExpense,
 } from '@/modules/taxi_fleet/lib/driverExpenses'
 import {
-  applyReceiptExtractionToLinkedRecords,
   linkReceiptExtractionToFinancialEntry,
 } from '@/modules/taxi_fleet/lib/receiptExtractionPipeline'
 import {
@@ -90,20 +89,12 @@ async function repairOcrApplyIfNeeded(
     if (!extraction) continue
     if (!extraction.financialEntryId) {
       extraction.financialEntryId = entry.id
+      repaired = true
     }
-    const amount = Number(entry.amount)
-    const amountEmpty = !Number.isFinite(amount) || amount <= 0
-    const missingDocument =
-      !entry.documentNumber?.trim() &&
-      Boolean(extraction.ocrDocumentNumber || extraction.appliedDocumentNumber)
-    const ready =
-      extraction.status === 'applied' ||
-      extraction.status === 'needs_review' ||
-      extraction.status === 'extracted'
-    if (!ready) continue
-    if (!amountEmpty && !missingDocument && entry.documentNip) continue
-    await applyReceiptExtractionToLinkedRecords(em, extraction.id)
-    repaired = true
+  }
+  if (repaired) {
+    // Link-only heal on list GET — do not run OCR apply (blocks driver expense list).
+    await em.flush()
   }
   return repaired
 }
@@ -149,36 +140,11 @@ export async function GET(req: Request) {
       ...scope,
       entries: rows,
     })
-    const repaired = await repairOcrApplyIfNeeded(em, rows, extractions)
-    const refreshedRows = repaired
-      ? (
-          await findAndCountWithDecryption(
-            em,
-            TaxiFleetFinancialEntry,
-            {
-              teamMemberId: driver.teamMemberId,
-              kind: 'expense',
-              deletedAt: null,
-            },
-            {
-              orderBy: { [sort]: order },
-              limit: pageSize,
-              offset,
-            },
-            scope,
-          )
-        )[0]
-      : rows
-    const refreshedExtractions = repaired
-      ? await loadExtractionsForEntries(em, {
-          ...scope,
-          entries: refreshedRows,
-        })
-      : extractions
+    await repairOcrApplyIfNeeded(em, rows, extractions)
 
     return NextResponse.json({
-      items: refreshedRows.map((row) =>
-        serializeWithExtraction(row, refreshedExtractions.get(row.id)),
+      items: rows.map((row) =>
+        serializeWithExtraction(row, extractions.get(row.id)),
       ),
       page,
       pageSize,
@@ -212,7 +178,7 @@ export async function POST(req: Request) {
       ctx: context,
     })
 
-    if (result?.entryId && parsed.receiptAttachmentId) {
+    if (result?.entryId) {
       const em = context.container.resolve('em') as EntityManager
       await linkReceiptExtractionToFinancialEntry(em, {
         attachmentId: parsed.receiptAttachmentId,

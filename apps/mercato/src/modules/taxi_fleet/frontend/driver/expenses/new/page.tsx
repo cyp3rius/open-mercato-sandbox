@@ -67,6 +67,13 @@ export default function DriverExpenseCreatePage() {
       flash(t('taxi_fleet.driverApp.expenses.occurredAtInvalid', 'Enter a valid date and time.'), 'error')
       return
     }
+    if (!receiptAttachmentId && !receiptBlobId) {
+      flash(
+        t('taxi_fleet.driverApp.expenses.receiptRequired', 'Receipt photo is required for a cost.'),
+        'error',
+      )
+      return
+    }
 
     const payload = {
       costType,
@@ -103,6 +110,14 @@ export default function DriverExpenseCreatePage() {
         return
       }
 
+      if (!receiptAttachmentId) {
+        flash(
+          t('taxi_fleet.driverApp.expenses.receiptRequired', 'Receipt photo is required for a cost.'),
+          'error',
+        )
+        return
+      }
+
       const call = await apiCall<{ id?: string | null }>('/api/taxi_fleet/driver/expenses', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -129,6 +144,8 @@ export default function DriverExpenseCreatePage() {
     }
   }
 
+  const hasReceipt = Boolean(receiptAttachmentId || receiptBlobId)
+
   return (
     <DriverShell title={t('taxi_fleet.driverApp.expenses.new', 'Register a cost')}>
       <div className="space-y-5">
@@ -139,7 +156,7 @@ export default function DriverExpenseCreatePage() {
           <p className={driverSectionDescClass}>
             {t(
               'taxi_fleet.driverApp.expenses.hint',
-              'Fuel and other costs are included in the weekly settlement. Amount is gross; VAT is optional and can be filled from the receipt.',
+              'Fuel and other costs are included in the weekly settlement. Receipt photo is required. Amount is gross; VAT is optional and can be filled from the receipt.',
             )}
           </p>
         </div>
@@ -228,7 +245,12 @@ export default function DriverExpenseCreatePage() {
           />
         </div>
 
-        <Button type="button" className={driverPrimaryActionClass} disabled={busy} onClick={() => void submit()}>
+        <Button
+          type="button"
+          className={driverPrimaryActionClass}
+          disabled={busy || !hasReceipt}
+          onClick={() => void submit()}
+        >
           {busy
             ? t('taxi_fleet.driverApp.expenses.submitting', 'Saving…')
             : t('taxi_fleet.driverApp.expenses.submit', 'Save cost')}

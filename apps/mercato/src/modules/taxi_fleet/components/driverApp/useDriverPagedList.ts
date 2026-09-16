@@ -52,9 +52,11 @@ export function useDriverPagedList<T>({
   }, [queryKey, enabled, pageSize])
 
   const ensurePage = React.useCallback(
-    async (targetPage: number, opts?: { silent?: boolean }) => {
+    async (targetPage: number, opts?: { silent?: boolean; force?: boolean }) => {
       if (!enabled || targetPage < 1) return null
-      if (cacheRef.current.has(targetPage)) return cacheRef.current.get(targetPage) ?? null
+      if (!opts?.force && cacheRef.current.has(targetPage)) {
+        return cacheRef.current.get(targetPage) ?? null
+      }
       if (inflightRef.current.has(targetPage)) return null
 
       inflightRef.current.add(targetPage)
@@ -118,20 +120,29 @@ export function useDriverPagedList<T>({
     setPage(Math.max(1, nextPage))
   }, [])
 
-  const reload = React.useCallback(async () => {
-    setCache(new Map())
-    inflightRef.current.clear()
-    setLoading(true)
-    try {
-      await ensurePage(page)
-      const pageCountNow = Math.max(1, Math.ceil(totalRef.current / pageSize) || 1)
-      if (page < pageCountNow) {
-        void ensurePage(page + 1, { silent: true }).catch(() => undefined)
+  const reload = React.useCallback(
+    async (opts?: { soft?: boolean }) => {
+      const soft = opts?.soft === true
+      if (!soft) {
+        setCache(new Map())
+        inflightRef.current.clear()
+        setLoading(true)
+      } else {
+        // Allow refetch of the visible page without blanking the UI.
+        inflightRef.current.delete(page)
       }
-    } finally {
-      setLoading(false)
-    }
-  }, [ensurePage, page, pageSize])
+      try {
+        await ensurePage(page, { silent: soft, force: true })
+        const pageCountNow = Math.max(1, Math.ceil(totalRef.current / pageSize) || 1)
+        if (page < pageCountNow) {
+          void ensurePage(page + 1, { silent: true, force: soft }).catch(() => undefined)
+        }
+      } finally {
+        if (!soft) setLoading(false)
+      }
+    },
+    [ensurePage, page, pageSize],
+  )
 
   return {
     items,

@@ -31,7 +31,6 @@ import { enrichDriverTripsCustomerMetadata } from '@/modules/taxi_fleet/lib/enri
 import { assertDriverCanMutatePlatformTrip } from '@/modules/taxi_fleet/lib/platformSync/platformTripIngest'
 import { TAXI_FLEET_FINANCIAL_ENTRY_ENTITY_ID } from '@/modules/taxi_fleet/lib/financialEntryEntity'
 import { TAXI_FLEET_DRIVER_RECEIPTS_PARTITION } from '@/modules/taxi_fleet/lib/receiptPartition'
-import { applyReceiptExtractionToLinkedRecords } from '@/modules/taxi_fleet/lib/receiptExtractionPipeline'
 import { DRIVER_VISIBLE_TRIP_STATUSES } from '@/modules/taxi_fleet/lib/driverVisibleTripStatuses'
 import {
   resolveDriverTripFinishStatus,
@@ -183,7 +182,6 @@ async function resolveTripExtractionMap(
   }
 
   let healed = false
-  const healedExtractions: TaxiFleetReceiptExtraction[] = []
   for (const trip of tripsMissingReceipt) {
     const attachment = latestAttachmentByTripId.get(trip.id)
     if (!attachment) continue
@@ -193,7 +191,6 @@ async function resolveTripExtractionMap(
         extraction.tripId = trip.id
         extraction.updatedAt = new Date()
         healed = true
-        healedExtractions.push(extraction)
       }
       map.set(trip.id, extraction)
     }
@@ -211,16 +208,8 @@ async function resolveTripExtractionMap(
     }
   }
   if (healed) {
+    // Link-only heal on list GET — do not run OCR apply (too slow / blocks the driver list).
     await em.flush()
-    for (const extraction of healedExtractions) {
-      const status = String(extraction.status ?? '')
-      if (status === 'extracted' || status === 'applied' || status === 'needs_review') {
-        const trip = tripsMissingReceipt.find((row) => row.id === extraction.tripId)
-        await applyReceiptExtractionToLinkedRecords(em, extraction.id, {
-          tripRevenueAmount: trip?.revenueAmount != null ? Number(trip.revenueAmount) : null,
-        }).catch(() => undefined)
-      }
-    }
   }
 
   return map

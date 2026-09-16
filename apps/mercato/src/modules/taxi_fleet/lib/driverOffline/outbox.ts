@@ -269,10 +269,19 @@ export async function flushDriverOutbox(): Promise<void> {
         }
       } else if (item.type === 'expense.create') {
         const payload = await resolveReceiptAttachment(item.payload)
+        const receiptAttachmentId =
+          typeof payload.receiptAttachmentId === 'string' ? payload.receiptAttachmentId.trim() : ''
+        if (!receiptAttachmentId) {
+          throw new Error('expense.create missing receipt')
+        }
         const res = await fetch('/api/taxi_fleet/driver/expenses', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ ...payload, clientMutationId: item.clientMutationId }),
+          body: JSON.stringify({
+            ...payload,
+            receiptAttachmentId,
+            clientMutationId: item.clientMutationId,
+          }),
         })
         if (!res.ok) throw new Error(`expense.create ${res.status}`)
       } else if (item.type === 'location.batch') {
