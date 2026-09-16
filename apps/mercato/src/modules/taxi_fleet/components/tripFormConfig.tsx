@@ -39,10 +39,9 @@ import {
   TRIP_SERVICE_TYPES,
   type TripRequestDetails,
 } from '../lib/tripRequestForm'
-import { MoneyInputField } from '@open-mercato/ui/backend/inputs/MoneyInputField'
 import { TripRouteDistanceSync, buildTripRouteFingerprint } from './route/TripRouteDistanceSync'
 import { TripQuoteAmountField, TripQuoteSync } from './route/TripQuoteSync'
-import { TripPricingSidebar } from './TripPricingSidebar'
+import { TripFinalPriceInput, TripPricingSidebar } from './TripPricingSidebar'
 import { TripStatusField } from './TripStatusField'
 import { readQuoteSnapshotFromMetadata } from '../lib/pricing/tripFormQuote'
 import { buildTripRequestFormFields, pickTripRequestDetails } from './tripRequestFormFields'
@@ -752,10 +751,10 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
       type: 'custom',
       label: t('taxi_fleet.trips.form.finalPrice', 'Final price'),
       layout: 'half',
-      component: ({ value, setValue, disabled, readOnly: fieldReadOnly }) => (
-        <MoneyInputField
-          value={typeof value === 'string' ? value : ''}
-          onChange={(next) => setValue(next)}
+      component: ({ values, setFormValue, disabled, readOnly: fieldReadOnly }) => (
+        <TripFinalPriceInput
+          values={(values ?? {}) as TripFormValues}
+          setFormValue={setFormValue}
           disabled={disabled}
           readOnly={fieldReadOnly || readOnly}
         />
@@ -788,10 +787,10 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
       type: 'custom',
       label: t('taxi_fleet.trips.form.finalPrice', 'Final price'),
       layout: 'half',
-      component: ({ value, setValue, disabled, readOnly: fieldReadOnly }) => (
-        <MoneyInputField
-          value={typeof value === 'string' ? value : ''}
-          onChange={(next) => setValue(next)}
+      component: ({ values, setFormValue, disabled, readOnly: fieldReadOnly }) => (
+        <TripFinalPriceInput
+          values={(values ?? {}) as TripFormValues}
+          setFormValue={setFormValue}
           disabled={disabled}
           readOnly={fieldReadOnly || readOnly}
         />
@@ -864,6 +863,7 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
     surface === 'dialog'
       ? [...ROUTE_FIELD_IDS, ...DETAILS_FIELD_IDS, ...ASSIGNMENT_FIELD_IDS, ...CUSTOMER_FIELD_IDS, ...INTERNAL_TRIP_FORM_FIELD_IDS]
       : [
+          '__tripQuoteSync',
           ...ROUTE_FIELD_IDS,
           ...DETAILS_FIELD_IDS,
           ...ASSIGNMENT_FIELD_IDS,

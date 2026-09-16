@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { parseNumericValue } from '@open-mercato/shared/lib/numeric'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { MoneyInputField } from '@open-mercato/ui/backend/inputs/MoneyInputField'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
@@ -9,7 +10,7 @@ import type { TripFormValues } from '../tripFormConfig'
 
 const QUOTE_DEBOUNCE_MS = 500
 
-type QuoteApiResponse = {
+export type QuoteApiResponse = {
   currency?: string
   vehicleCategory?: string
   basePrice?: number
@@ -26,6 +27,26 @@ type TripQuoteSyncProps = {
   disabled?: boolean
 }
 
+function isBlankOrZeroRevenue(value: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed.length) return true
+  const parsed = parseNumericValue(trimmed)
+  return parsed !== null && parsed === 0
+}
+
+function formatQuotedTotal(totalPrice: number): string {
+  return totalPrice.toFixed(2)
+}
+
+function quoteFingerprint(values: TripFormValues): string | null {
+  const input = buildQuoteInputFromTripForm(values)
+  return input ? JSON.stringify(input) : null
+}
+
+/**
+ * Auto-fills final price from fleet pricing when empty / still matching last auto quote.
+ * Manual edits are preserved until the user clicks Recalculate.
+ */
 export function TripQuoteSync({ values, setFormValue, disabled = false }: TripQuoteSyncProps) {
   const debounceRef = React.useRef<ReturnType<typeof setTimeout>>(undefined)
   const abortRef = React.useRef<AbortController | null>(null)
@@ -35,7 +56,7 @@ export function TripQuoteSync({ values, setFormValue, disabled = false }: TripQu
   const revenueAmountRef = React.useRef(values.revenueAmount)
   revenueAmountRef.current = values.revenueAmount
 
-  const quoteInput = React.useMemo(() => buildQuoteInputFromTripForm(values as TripFormValues), [values])
+  const fingerprint = quoteFingerprint(values as TripFormValues)
 
   React.useEffect(() => {
     if (!setFormValue || disabled) return
@@ -43,7 +64,7 @@ export function TripQuoteSync({ values, setFormValue, disabled = false }: TripQu
     clearTimeout(debounceRef.current)
     abortRef.current?.abort()
 
-    if (!quoteInput) {
+    if (!fingerprint) {
       setFormValue('basePrice', '')
       setFormValue('quoteSnapshotJson', '')
       return
@@ -56,6 +77,9 @@ export function TripQuoteSync({ values, setFormValue, disabled = false }: TripQu
 
       void (async () => {
         try {
+          const quoteInput = JSON.parse(fingerprint) as ReturnType<typeof buildQuoteInputFromTripForm>
+          if (!quoteInput) return
+
           const call = await apiCall<QuoteApiResponse>(
             '/api/taxi_fleet/pricing/quote',
             {
@@ -84,10 +108,10 @@ export function TripQuoteSync({ values, setFormValue, disabled = false }: TripQu
             ...(Array.isArray(data.warnings) && data.warnings.length ? { warnings: data.warnings } : {}),
           }
 
-          const quotedTotal = String(data.totalPrice)
+          const quotedTotal = formatQuotedTotal(data.totalPrice)
           const currentRevenue = String(revenueAmountRef.current ?? '').trim()
           const shouldSyncFinalPrice =
-            !currentRevenue ||
+            isBlankOrZeroRevenue(currentRevenue) ||
             currentRevenue === lastAutoRevenueRef.current ||
             currentRevenue === quotedTotal
 
@@ -116,9 +140,60 @@ export function TripQuoteSync({ values, setFormValue, disabled = false }: TripQu
       clearTimeout(debounceRef.current)
       abortRef.current?.abort()
     }
-  }, [disabled, quoteInput, setFormValue])
+  }, [disabled, fingerprint, setFormValue])
 
   return null
+}
+
+/**
+ * Forces a quote refresh and writes the result into final price (overrides manual edits).
+ */
+export async function recalculateTripFinalPrice(params: {
+  values: TripFormValues
+  setFormValue: (id: string, value: unknown) => void
+  signal?: AbortSignal
+}): Promise<{ ok: true; totalPrice: number } | { ok: false; reason: 'incomplete' | 'failed' }> {
+  const quoteInput = buildQuoteInputFromTripForm(params.values)
+  if (!quoteInput) return { ok: false, reason: 'incomplete' }
+
+  try {
+    const call = await apiCall<QuoteApiResponse>(
+      '/api/taxi_fleet/pricing/quote',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(quoteInput),
+        signal: params.signal,
+      },
+      { fallback: {} },
+    )
+    const data = call.result ?? {}
+    if (!call.ok || typeof data.totalPrice !== 'number') {
+      return { ok: false, reason: 'failed' }
+    }
+
+    const quotedTotal = formatQuotedTotal(data.totalPrice)
+    const snapshot = {
+      currency: data.currency ?? 'PLN',
+      vehicleCategory: data.vehicleCategory,
+      basePrice: data.basePrice,
+      surcharges: data.surcharges ?? [],
+      totalPrice: data.totalPrice,
+      ...(Array.isArray(data.warnings) && data.warnings.length ? { warnings: data.warnings } : {}),
+    }
+    params.setFormValue('basePrice', String(data.basePrice ?? ''))
+    params.setFormValue('revenueAmount', quotedTotal)
+    params.setFormValue('quoteSnapshotJson', JSON.stringify(snapshot))
+    if (data.vehicleCategory === 'standard' || data.vehicleCategory === 'van') {
+      params.setFormValue('vehicleCategory', data.vehicleCategory)
+    }
+    return { ok: true, totalPrice: data.totalPrice }
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      return { ok: false, reason: 'failed' }
+    }
+    return { ok: false, reason: 'failed' }
+  }
 }
 
 type TripQuoteAmountFieldProps = {

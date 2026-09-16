@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
-import { BadgeCheck, CalendarClock, Check, CreditCard, ShieldCheck, X } from 'lucide-react'
+import { BadgeCheck, CalendarClock, Check, Copy, CreditCard, ShieldCheck, X } from 'lucide-react'
 import { ApplyBreadcrumb } from '@open-mercato/ui/backend/AppShell'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -329,8 +329,23 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
               )
             }
             extraActions={
-              availableActions.length > 0 ? (
+              canManageTrips || availableActions.length > 0 ? (
                 <div className="flex flex-wrap items-center gap-2">
+                  {canManageTrips ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={ACTION_BUTTON_CLASS}
+                      onClick={() =>
+                        router.push(
+                          `${TAXI_FLEET_BASE}/trips/create?duplicateFrom=${encodeURIComponent(row.id)}`,
+                        )
+                      }
+                    >
+                      <Copy className="size-4 shrink-0" aria-hidden />
+                      {t('taxi_fleet.trips.actions.duplicate', 'Duplicate')}
+                    </Button>
+                  ) : null}
                   {availableActions.map((action) => (
                     <Button
                       key={action}

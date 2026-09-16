@@ -652,6 +652,14 @@ export default function TaxiFleetTripsPage() {
                 ...(canManageTrips
                   ? [
                       {
+                        id: 'duplicate',
+                        label: t('taxi_fleet.trips.list.actions.duplicate', 'Duplicate'),
+                        onSelect: () =>
+                          router.push(
+                            `${TAXI_FLEET_BASE}/trips/create?duplicateFrom=${encodeURIComponent(row.id)}`,
+                          ),
+                      },
+                      {
                         id: 'delete',
                         label: t('taxi_fleet.trips.list.actions.delete', 'Delete'),
                         destructive: true as const,

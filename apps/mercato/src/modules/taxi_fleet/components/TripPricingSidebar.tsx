@@ -1,9 +1,13 @@
 'use client'
 
 import * as React from 'react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { formatMoneyDisplay } from '@open-mercato/shared/lib/numeric'
+import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { MoneyInputField } from '@open-mercato/ui/backend/inputs/MoneyInputField'
+import { IconButton } from '@open-mercato/ui/primitives/icon-button'
+import { recalculateTripFinalPrice } from './route/TripQuoteSync'
 import type { TripFormValues } from './tripFormConfig'
 
 type QuoteSnapshot = {
@@ -27,6 +31,83 @@ function readQuoteSnapshot(values: Record<string, unknown>): QuoteSnapshot | nul
 
 function formatMoney(amount: number, currency: string): string {
   return formatMoneyDisplay(amount, { currency })
+}
+
+type TripFinalPriceInputProps = {
+  values: TripFormValues & Record<string, unknown>
+  setFormValue?: (id: string, value: unknown) => void
+  disabled?: boolean
+  readOnly?: boolean
+}
+
+export function TripFinalPriceInput({
+  values,
+  setFormValue,
+  disabled = false,
+  readOnly = false,
+}: TripFinalPriceInputProps) {
+  const t = useT()
+  const [busy, setBusy] = React.useState(false)
+  const snapshot = readQuoteSnapshot(values)
+  const currency = snapshot?.currency ?? 'PLN'
+  const finalRaw = typeof values.revenueAmount === 'string' ? values.revenueAmount : ''
+
+  async function handleRecalculate() {
+    if (!setFormValue || disabled || readOnly || busy) return
+    setBusy(true)
+    try {
+      const result = await recalculateTripFinalPrice({
+        values: values as TripFormValues,
+        setFormValue,
+      })
+      if (!result.ok) {
+        flash(
+          result.reason === 'incomplete'
+            ? t(
+                'taxi_fleet.trips.form.quote.pending',
+                'Fill route, schedule, and passengers to calculate the price automatically.',
+              )
+            : t('taxi_fleet.trips.form.quote.recalculateFailed', 'Could not recalculate the price.'),
+          'error',
+        )
+        return
+      }
+      flash(t('taxi_fleet.trips.form.quote.recalculated', 'Price recalculated.'), 'success')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex min-w-0 items-stretch gap-2">
+      <MoneyInputField
+        className="min-w-0 flex-1"
+        value={finalRaw}
+        onChange={(next) => setFormValue?.('revenueAmount', next)}
+        disabled={disabled || busy}
+        readOnly={readOnly}
+        currency={currency}
+      />
+      {!readOnly ? (
+        <IconButton
+          type="button"
+          variant="outline"
+          size="lg"
+          className="shrink-0 self-stretch"
+          disabled={disabled || busy || !setFormValue}
+          aria-label={t('taxi_fleet.trips.form.quote.recalculate', 'Recalculate')}
+          title={t('taxi_fleet.trips.form.quote.recalculate', 'Recalculate')}
+          onClick={() => void handleRecalculate()}
+        >
+          {busy ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+          ) : (
+            <RefreshCw className="size-4" aria-hidden />
+          )}
+        </IconButton>
+      ) : null}
+    </div>
+  )
 }
 
 type TripPricingSidebarProps = {
@@ -68,12 +149,11 @@ export function TripPricingSidebar({
         <div className="text-sm font-medium">
           {t('taxi_fleet.trips.form.finalPrice', 'Final price')}
         </div>
-        <MoneyInputField
-          value={finalRaw}
-          onChange={(next) => setFormValue?.('revenueAmount', next)}
+        <TripFinalPriceInput
+          values={values}
+          setFormValue={setFormValue}
           disabled={disabled}
           readOnly={readOnly}
-          currency={currency}
         />
       </div>
 
