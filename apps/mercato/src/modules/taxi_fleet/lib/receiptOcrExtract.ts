@@ -35,7 +35,7 @@ export type ReceiptOcrProviderId = 'openai' | 'anthropic'
 const PROMPT = `You extract fields from Polish fiscal receipts (paragon fiskalny), invoices, KWIT WZ slips, fuel station documents, and card-payment confirmations (e.g. Polcard / Routex).
 Return ONLY valid JSON with keys:
 documentKind (string|null) — one of: "fiscal_receipt", "invoice", "wz_slip" (KWIT WZ / release note), "polcard_payment_confirmation", "payment_confirmation", "unknown",
-documentNumber (string|null) — receipt/invoice/WZ NUMBER only (e.g. W001776, W001530, WZ26161B02011540, FV/12/2026). NEVER put a NIP here. NEVER use "Nr boczny" / side number (e.g. 0000). On taxi fiscal receipts the W-serial under the plate/boczny block is the document number. For card slips use auth/reference number if present,
+documentNumber (string|null) — receipt/invoice/WZ NUMBER only (e.g. W001776, W001530, WZ26161B02011540, FV/12/2026). NEVER put a NIP here. NEVER use "Nr boczny" / side number (e.g. 0000). On taxi fiscal receipts the W-serial under the plate/boczny block is the document number. NEVER use PolCard auth codes, MID, POS ID, or "RACHUNEK NR",
 grossAmount (number|null) — total gross amount PLN (SUMA / RAZEM / KWOTA / DO ZAPŁATY),
 distanceKm (number|null) — trip distance in kilometers if printed,
 vatRatePercent (number|null) — VAT rate percent when printed as % (typically 8 or 23). If only VAT amount is shown, leave null,
@@ -48,6 +48,7 @@ confidence (0..1),
 rawExcerpt (short string of key lines — include NIPs, Rejestracja, VAT lines when visible).
 
 Critical rules:
+- Dual photo / two slips in one image: if BOTH a fiscal receipt ("PARAGON FISKALNY", trip times, PTU/VAT) AND a PolCard / Fiserv card confirmation (MID, POS ID, KOD AUTORYZACJI, CONTACTLESS) are visible, IGNORE the PolCard slip entirely. Set documentKind="fiscal_receipt" and extract ALL fields ONLY from the fiscal receipt (amount, VAT, distance, plate, W-serial, trip times). Never use PolCard auth/reference as documentNumber.
 - Taxi fiscal receipts (paragon): TOP/header company "NIP:" is sellerNip (often fleet 9452189152). buyerNip ONLY from an explicit "NIP nabywcy" near the FOOTER when present — leave null on individual trips with blank orderer fields.
 - Never put the header seller NIP into buyerNip.
 - Expense / fuel / KWIT WZ / BP / Routex: Fleet company NIP (9452189152) under "Nazwa firmy" / buyer block is buyerNip — NEVER sellerNip.
@@ -57,7 +58,7 @@ Critical rules:
 - documentNumber is never a NIP, never a BDO number, and never "Nr boczny" (vehicle side number).
 - Taxi paragon: prefer the W##### serial printed near the header (below Nr rejestr. / Nr boczny), not the boczny value itself.
 - If VAT % is missing but VAT amount and gross are visible, still return vatAmount and grossAmount (leave vatRatePercent null).
-- WZ and card payment slips are valid cost documents — still extract amount, date, plate, buyer NIP when present.
+- Standalone PolCard / card payment slips (NO "PARAGON FISKALNY" in the image): documentKind="polcard_payment_confirmation"; still extract amount, date, plate, buyer NIP when present.
 If a field is unreadable, use null.`
 
 const DEFAULT_MODELS: Record<ReceiptOcrProviderId, string> = {

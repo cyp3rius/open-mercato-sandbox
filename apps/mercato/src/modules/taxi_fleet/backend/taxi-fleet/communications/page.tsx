@@ -43,6 +43,26 @@ type CommunicationRow = {
 
 type ListResponse = { items: CommunicationRow[]; totalPages: number; total?: number }
 
+function readSelectFilter(value: unknown): string | null {
+  if (Array.isArray(value)) {
+    const parts = value
+      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .filter(Boolean)
+    return parts.length ? parts.join(',') : null
+  }
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  return null
+}
+
+function readDateRange(value: unknown): { from?: string; to?: string } | null {
+  if (!value || typeof value !== 'object') return null
+  const range = value as { from?: unknown; to?: unknown }
+  const from = typeof range.from === 'string' && range.from.trim() ? range.from.trim() : undefined
+  const to = typeof range.to === 'string' && range.to.trim() ? range.to.trim() : undefined
+  if (!from && !to) return null
+  return { from, to }
+}
+
 export default function TaxiFleetCommunicationsPage() {
   const t = useT()
   const router = useRouter()
@@ -63,6 +83,7 @@ export default function TaxiFleetCommunicationsPage() {
         id: 'status',
         label: t('taxi_fleet.communications.list.filters.status', 'Status'),
         type: 'select',
+        multiple: true,
         options: [
           { value: 'draft', label: t('taxi_fleet.communications.status.draft', 'Draft') },
           { value: 'scheduled', label: t('taxi_fleet.communications.status.scheduled', 'Scheduled') },
@@ -76,11 +97,22 @@ export default function TaxiFleetCommunicationsPage() {
         id: 'kind',
         label: t('taxi_fleet.communications.list.filters.kind', 'Type'),
         type: 'select',
+        multiple: true,
         options: [
           { value: 'info', label: t('taxi_fleet.communications.kind.info', 'Info') },
           { value: 'service', label: t('taxi_fleet.communications.kind.service', 'Service') },
           { value: 'direct', label: t('taxi_fleet.communications.kind.direct', 'Direct') },
         ],
+      },
+      {
+        id: 'sentAt',
+        label: t('taxi_fleet.communications.list.filters.sentAt', 'Sent date'),
+        type: 'dateRange',
+      },
+      {
+        id: 'createdAt',
+        label: t('taxi_fleet.communications.list.filters.createdAt', 'Created date'),
+        type: 'dateRange',
       },
     ],
     [t],
@@ -96,21 +128,28 @@ export default function TaxiFleetCommunicationsPage() {
         sortField: 'createdAt',
         sortDir: 'desc',
       })
-      if (typeof filterValues.status === 'string' && filterValues.status) {
-        params.set('status', filterValues.status)
-      }
-      if (typeof filterValues.kind === 'string' && filterValues.kind) {
-        params.set('kind', filterValues.kind)
-      }
+      const searchTerm = search.trim()
+      if (searchTerm) params.set('search', searchTerm)
+
+      const status = readSelectFilter(filterValues.status)
+      if (status) params.set('status', status)
+      const kind = readSelectFilter(filterValues.kind)
+      if (kind) params.set('kind', kind)
+
+      const sentAt = readDateRange(filterValues.sentAt)
+      if (sentAt?.from) params.set('sentFrom', sentAt.from)
+      if (sentAt?.to) params.set('sentTo', sentAt.to)
+
+      const createdAt = readDateRange(filterValues.createdAt)
+      if (createdAt?.from) params.set('createdFrom', createdAt.from)
+      if (createdAt?.to) params.set('createdTo', createdAt.to)
+
       const call = await apiCall<ListResponse>(`/api/taxi_fleet/driver-communications?${params}`)
       if (cancelled) return
       const items = Array.isArray(call.result?.items) ? call.result.items : []
-      const filtered = search.trim()
-        ? items.filter((row) => row.title.toLowerCase().includes(search.trim().toLowerCase()))
-        : items
-      setRows(filtered)
+      setRows(items)
       setTotalPages(call.result?.totalPages ?? 1)
-      setTotal(call.result?.total ?? filtered.length)
+      setTotal(call.result?.total ?? items.length)
       setIsLoading(false)
     }
     void load()
@@ -158,7 +197,15 @@ export default function TaxiFleetCommunicationsPage() {
         cell: ({ row }) => {
           const counts = row.original.recipientCounts
           if (!counts) return '—'
-          return `${counts.sent}/${counts.total} · ${counts.read} ${t('taxi_fleet.communications.list.read', 'read')}`
+          return t(
+            'taxi_fleet.communications.list.deliverySummary',
+            '{sent}/{total} · {read} read',
+            {
+              sent: String(counts.sent),
+              total: String(counts.total),
+              read: String(counts.read),
+            },
+          )
         },
       },
       {
@@ -175,6 +222,12 @@ export default function TaxiFleetCommunicationsPage() {
         cell: ({ row }) =>
           row.original.sentAt ? new Date(row.original.sentAt).toLocaleString() : '—',
       },
+      {
+        accessorKey: 'createdAt',
+        header: t('taxi_fleet.communications.list.columns.createdAt', 'Created'),
+        cell: ({ row }) =>
+          row.original.createdAt ? new Date(row.original.createdAt).toLocaleString() : '—',
+      },
     ],
     [t],
   )
@@ -183,7 +236,11 @@ export default function TaxiFleetCommunicationsPage() {
     <Page>
       <PageBody>
         <DataTable
-          title={t('taxi_fleet.communications.list.title', 'Driver communications')}
+          title={t('taxi_fleet.communications.list.title', 'Communications')}
+          description={t(
+            'taxi_fleet.communications.list.description',
+            'Broadcast messages to drivers in the mobile app.',
+          )}
           refreshButton={{
             label: t('taxi_fleet.communications.list.actions.refresh', 'Refresh'),
             onRefresh: () => {
@@ -199,7 +256,7 @@ export default function TaxiFleetCommunicationsPage() {
               </Link>
             </Button>
           }
-          searchPlaceholder={t('taxi_fleet.communications.list.search', 'Search title…')}
+          searchPlaceholder={t('taxi_fleet.communications.list.search', 'Search title or message…')}
           searchValue={search}
           onSearchChange={(value) => {
             setSearch(value)
@@ -218,6 +275,7 @@ export default function TaxiFleetCommunicationsPage() {
           columns={columns}
           data={rows}
           isLoading={isLoading}
+          emptyState={t('taxi_fleet.communications.list.empty', 'No communications yet.')}
           perspective={{ tableId: 'taxi_fleet.communications' }}
           pagination={{
             page,
@@ -233,6 +291,15 @@ export default function TaxiFleetCommunicationsPage() {
                 {
                   label: t('taxi_fleet.communications.list.actions.viewDetails', 'View details'),
                   onSelect: () => router.push(`${TAXI_FLEET_BASE}/communications/${row.id}`),
+                },
+                {
+                  label: t('taxi_fleet.communications.list.actions.openInNewTab', 'Open in new tab'),
+                  onSelect: () =>
+                    window.open(
+                      `${TAXI_FLEET_BASE}/communications/${row.id}`,
+                      '_blank',
+                      'noopener,noreferrer',
+                    ),
                 },
                 {
                   label: t('taxi_fleet.communications.list.actions.delete', 'Delete'),

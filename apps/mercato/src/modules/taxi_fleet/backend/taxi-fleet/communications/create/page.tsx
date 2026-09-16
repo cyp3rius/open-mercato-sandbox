@@ -54,14 +54,13 @@ export default function CreateDriverCommunicationPage() {
               id: 'basics',
               title: t('taxi_fleet.communications.form.groups.basics', 'Basics'),
               column: 1,
-              fields: [
-                'kind',
-                'title',
-                'body',
-                'teamMemberIds',
-                'deliveryMode',
-                'scheduledAt',
-              ],
+              fields: ['kind', 'title', 'body', 'teamMemberIds'],
+            },
+            {
+              id: 'delivery',
+              title: t('taxi_fleet.communications.form.groups.delivery', 'Delivery'),
+              column: 2,
+              fields: ['deliveryMode', 'scheduledAt'],
             },
           ]}
           fields={[

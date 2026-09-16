@@ -1,8 +1,10 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
+import { FormHeader } from '@open-mercato/ui/backend/forms'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Badge } from '@open-mercato/ui/primitives/badge'
@@ -11,6 +13,7 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
+import { ApplyBreadcrumb } from '@open-mercato/ui/backend/AppShell'
 import { useFleetDriverDirectory } from '../../../../components/useFleetDriverDirectory'
 import { TAXI_FLEET_BASE } from '../../paths'
 
@@ -22,6 +25,7 @@ type Communication = {
   status: string
   scheduledAt?: string | null
   sentAt?: string | null
+  createdAt?: string | null
 }
 
 type Recipient = {
@@ -127,15 +131,13 @@ export default function DriverCommunicationDetailPage({
           <ErrorMessage
             label={error ?? t('taxi_fleet.communications.detail.notFound', 'Not found')}
           />
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-4"
-            onClick={() => router.push(`${TAXI_FLEET_BASE}/communications`)}
-          >
-            {t('common.back', 'Back')}
-          </Button>
+          <p className="mt-4 text-sm">
+            <Link href={`${TAXI_FLEET_BASE}/communications`} className="text-primary hover:underline">
+              {t('taxi_fleet.communications.detail.backToList', 'Back to communications')}
+            </Link>
+          </p>
         </PageBody>
+        {ConfirmDialogElement}
       </Page>
     )
   }
@@ -144,151 +146,200 @@ export default function DriverCommunicationDetailPage({
   const canCancel = row.status === 'draft' || row.status === 'scheduled'
 
   return (
-    <Page>
-      <PageBody className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-2">
-            <h1 className="text-xl font-semibold">{row.title}</h1>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">
-                {t(`taxi_fleet.communications.kind.${row.kind}`, row.kind)}
-              </Badge>
-              <Badge variant="outline">
-                {t(`taxi_fleet.communications.status.${row.status}`, row.status)}
-              </Badge>
+    <>
+      <ApplyBreadcrumb
+        breadcrumb={[
+          { label: 'Dashboard', labelKey: 'taxi_fleet.hub.dashboardTitle', href: TAXI_FLEET_BASE },
+          {
+            label: 'Communications',
+            labelKey: 'taxi_fleet.communications.title',
+            href: `${TAXI_FLEET_BASE}/communications`,
+          },
+          { label: row.title },
+        ]}
+        title={row.title}
+      />
+      <Page>
+        <PageBody>
+          <FormHeader
+            mode="detail"
+            backHref={`${TAXI_FLEET_BASE}/communications`}
+            backLabel={t('taxi_fleet.communications.detail.backToList', 'Back to communications')}
+            entityTypeLabel={t('taxi_fleet.communications.detail.title', 'Communication')}
+            title={row.title}
+          />
+
+          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[7fr_3fr] lg:items-start">
+            <div className="min-w-0 space-y-4">
+              <section className="rounded-lg border bg-card px-4 py-3 space-y-3">
+                <h2 className="text-sm font-semibold">
+                  {t('taxi_fleet.communications.detail.message', 'Message')}
+                </h2>
+                <p className="whitespace-pre-wrap text-sm text-foreground">{row.body}</p>
+              </section>
+
+              <section className="rounded-lg border bg-card px-4 py-3 space-y-3">
+                <h2 className="text-sm font-semibold">
+                  {t('taxi_fleet.communications.detail.recipients', 'Recipients')}
+                </h2>
+                <div className="divide-y rounded-md border">
+                  {recipients.length === 0 ? (
+                    <div className="p-3 text-sm text-muted-foreground">
+                      {t('taxi_fleet.communications.detail.noRecipients', 'No recipients.')}
+                    </div>
+                  ) : (
+                    recipients.map((recipient) => (
+                      <div
+                        key={recipient.id}
+                        className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-medium">
+                            {resolveName(recipient.teamMemberId) || recipient.teamMemberId}
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {t(
+                              `taxi_fleet.communications.delivery.${recipient.deliveryStatus}`,
+                              recipient.deliveryStatus,
+                            )}
+                            {recipient.attemptCount > 0
+                              ? ` · ${t(
+                                  'taxi_fleet.communications.detail.attempts',
+                                  '{count} attempts',
+                                  { count: recipient.attemptCount },
+                                )}`
+                              : ''}
+                            {recipient.readAt
+                              ? ` · ${t('taxi_fleet.communications.detail.readAt', 'Read')} ${new Date(recipient.readAt).toLocaleString()}`
+                              : ''}
+                            {recipient.lastError ? ` · ${recipient.lastError}` : ''}
+                          </div>
+                        </div>
+                        {recipient.deliveryStatus === 'failed' ||
+                        recipient.deliveryStatus === 'pending' ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() =>
+                              void runAction(
+                                `/api/taxi_fleet/driver-communications/${encodeURIComponent(row.id)}/recipients/${encodeURIComponent(recipient.id)}/retry`,
+                                'taxi_fleet.communications.detail.retrySuccess',
+                                'Retry queued.',
+                              )
+                            }
+                          >
+                            {t('taxi_fleet.communications.detail.retry', 'Retry')}
+                          </Button>
+                        ) : null}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+            </div>
+
+            <div className="min-w-0 space-y-3">
+              <section className="rounded-lg border bg-card px-4 py-3 space-y-3">
+                <h2 className="text-sm font-semibold">
+                  {t('taxi_fleet.communications.detail.overview', 'Overview')}
+                </h2>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">
+                    {t(`taxi_fleet.communications.kind.${row.kind}`, row.kind)}
+                  </Badge>
+                  <Badge variant="outline">
+                    {t(`taxi_fleet.communications.status.${row.status}`, row.status)}
+                  </Badge>
+                </div>
+                <dl className="space-y-2 text-sm">
+                  {row.createdAt ? (
+                    <div>
+                      <dt className="text-xs text-muted-foreground">
+                        {t('taxi_fleet.communications.detail.createdAt', 'Created')}
+                      </dt>
+                      <dd>{new Date(row.createdAt).toLocaleString()}</dd>
+                    </div>
+                  ) : null}
+                  {row.scheduledAt ? (
+                    <div>
+                      <dt className="text-xs text-muted-foreground">
+                        {t('taxi_fleet.communications.detail.scheduledAt', 'Scheduled')}
+                      </dt>
+                      <dd>{new Date(row.scheduledAt).toLocaleString()}</dd>
+                    </div>
+                  ) : null}
+                  {row.sentAt ? (
+                    <div>
+                      <dt className="text-xs text-muted-foreground">
+                        {t('taxi_fleet.communications.detail.sentAt', 'Sent')}
+                      </dt>
+                      <dd>{new Date(row.sentAt).toLocaleString()}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              </section>
+
+              {(canSend || canCancel) && (
+                <section className="rounded-lg border bg-card px-4 py-3 space-y-2">
+                  <h2 className="text-sm font-semibold">
+                    {t('taxi_fleet.communications.detail.actions', 'Actions')}
+                  </h2>
+                  <div className="flex flex-col gap-2">
+                    {canSend ? (
+                      <Button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void runAction(
+                            `/api/taxi_fleet/driver-communications/${encodeURIComponent(row.id)}/send`,
+                            row.status === 'partial'
+                              ? 'taxi_fleet.communications.detail.retryAllSuccess'
+                              : 'taxi_fleet.communications.detail.sendSuccess',
+                            row.status === 'partial'
+                              ? 'Retry queued for failed recipients.'
+                              : 'Message sent.',
+                          )
+                        }
+                      >
+                        {row.status === 'partial'
+                          ? t('taxi_fleet.communications.detail.retryAll', 'Retry failed')
+                          : t('taxi_fleet.communications.detail.sendNow', 'Send now')}
+                      </Button>
+                    ) : null}
+                    {canCancel ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={async () => {
+                          const ok = await confirm({
+                            text: t(
+                              'taxi_fleet.communications.detail.cancelConfirm',
+                              'Cancel this communication?',
+                            ),
+                            confirmText: t('common.confirm', 'Confirm'),
+                          })
+                          if (!ok) return
+                          await runAction(
+                            `/api/taxi_fleet/driver-communications/${encodeURIComponent(row.id)}/cancel`,
+                            'taxi_fleet.communications.detail.cancelSuccess',
+                            'Cancelled.',
+                          )
+                        }}
+                      >
+                        {t('taxi_fleet.communications.detail.cancel', 'Cancel')}
+                      </Button>
+                    ) : null}
+                  </div>
+                </section>
+              )}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.push(`${TAXI_FLEET_BASE}/communications`)}
-            >
-              {t('common.back', 'Back')}
-            </Button>
-            {canSend ? (
-              <Button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void runAction(
-                    `/api/taxi_fleet/driver-communications/${encodeURIComponent(row.id)}/send`,
-                    row.status === 'partial'
-                      ? 'taxi_fleet.communications.detail.retryAllSuccess'
-                      : 'taxi_fleet.communications.detail.sendSuccess',
-                    row.status === 'partial' ? 'Retry queued for failed recipients.' : 'Message sent.',
-                  )
-                }
-              >
-                {row.status === 'partial'
-                  ? t('taxi_fleet.communications.detail.retryAll', 'Retry failed')
-                  : t('taxi_fleet.communications.detail.sendNow', 'Send now')}
-              </Button>
-            ) : null}
-            {canCancel ? (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy}
-                onClick={async () => {
-                  const ok = await confirm({
-                    text: t(
-                      'taxi_fleet.communications.detail.cancelConfirm',
-                      'Cancel this communication?',
-                    ),
-                    confirmText: t('common.confirm', 'Confirm'),
-                  })
-                  if (!ok) return
-                  await runAction(
-                    `/api/taxi_fleet/driver-communications/${encodeURIComponent(row.id)}/cancel`,
-                    'taxi_fleet.communications.detail.cancelSuccess',
-                    'Cancelled.',
-                  )
-                }}
-              >
-                {t('taxi_fleet.communications.detail.cancel', 'Cancel')}
-              </Button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="rounded border p-4 space-y-2">
-          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{row.body}</p>
-          <div className="text-xs text-muted-foreground space-y-1">
-            {row.scheduledAt ? (
-              <div>
-                {t('taxi_fleet.communications.detail.scheduledAt', 'Scheduled')}:{' '}
-                {new Date(row.scheduledAt).toLocaleString()}
-              </div>
-            ) : null}
-            {row.sentAt ? (
-              <div>
-                {t('taxi_fleet.communications.detail.sentAt', 'Sent')}:{' '}
-                {new Date(row.sentAt).toLocaleString()}
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold">
-            {t('taxi_fleet.communications.detail.recipients', 'Recipients')}
-          </h2>
-          <div className="rounded border divide-y">
-            {recipients.length === 0 ? (
-              <div className="p-3 text-sm text-muted-foreground">
-                {t('taxi_fleet.communications.detail.noRecipients', 'No recipients.')}
-              </div>
-            ) : (
-              recipients.map((recipient) => (
-                <div
-                  key={recipient.id}
-                  className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm"
-                >
-                  <div>
-                    <div className="font-medium">
-                      {resolveName(recipient.teamMemberId) || recipient.teamMemberId}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {t(
-                        `taxi_fleet.communications.delivery.${recipient.deliveryStatus}`,
-                        recipient.deliveryStatus,
-                      )}
-                      {recipient.attemptCount > 0
-                        ? ` · ${t('taxi_fleet.communications.detail.attempts', '{count} attempts', {
-                            count: recipient.attemptCount,
-                          })}`
-                        : ''}
-                      {recipient.readAt
-                        ? ` · ${t('taxi_fleet.communications.detail.readAt', 'Read')} ${new Date(recipient.readAt).toLocaleString()}`
-                        : ''}
-                      {recipient.lastError ? ` · ${recipient.lastError}` : ''}
-                    </div>
-                  </div>
-                  {recipient.deliveryStatus === 'failed' || recipient.deliveryStatus === 'pending' ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() =>
-                        void runAction(
-                          `/api/taxi_fleet/driver-communications/${encodeURIComponent(row.id)}/recipients/${encodeURIComponent(recipient.id)}/retry`,
-                          'taxi_fleet.communications.detail.retrySuccess',
-                          'Retry queued.',
-                        )
-                      }
-                    >
-                      {t('taxi_fleet.communications.detail.retry', 'Retry')}
-                    </Button>
-                  ) : null}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </PageBody>
-      {ConfirmDialogElement}
-    </Page>
+        </PageBody>
+        {ConfirmDialogElement}
+      </Page>
+    </>
   )
 }

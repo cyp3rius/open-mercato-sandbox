@@ -9,7 +9,7 @@ export const metadata = {
   breadcrumb: [
     { label: 'Dashboard', labelKey: 'taxi_fleet.hub.dashboardTitle', href: '/backend/taxi-fleet' },
     {
-      label: 'Driver communications',
+      label: 'Communications',
       labelKey: 'taxi_fleet.communications.title',
       href: '/backend/taxi-fleet/communications',
     },

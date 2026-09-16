@@ -1,6 +1,6 @@
 import { normalizeNipDigits } from '@open-mercato/core/modules/customers/lib/nip'
 import type { ReceiptOcrFields } from './receiptOcrExtract'
-import { resolveReceiptDocumentKind } from './receiptDocumentKind'
+import { resolveReceiptDocumentKind, excerptLooksLikeFiscalReceipt } from './receiptDocumentKind'
 
 /** RS Investment Group — fleet company NIP (seller on taxi receipts; buyer on expense slips). */
 export const RS_MOTO_ISSUER_NIP_DIGITS = '9452189152'
@@ -66,9 +66,15 @@ export function extractFiscalDocumentNumberFromExcerpt(excerpt: string | null | 
   if (!excerpt?.trim()) return null
   const text = excerpt
     .replace(/\r/g, '\n')
-    // Side / fleet numbers are labeled "Nr boczny" — never treat them as the receipt id.
+    // Side / fleet numbers and PolCard terminal lines are never the fiscal receipt id.
     .split(/\n+/)
     .filter((line) => !/nr\.?\s*boczny/i.test(line))
+    .filter(
+      (line) =>
+        !/\bpolcard\b|\bfiserv\b|kod\s+autoryzac|contactless|\bmid\s*:|\bpos\s*id\s*:|rachunek\s+nr/i.test(
+          line,
+        ),
+    )
     .join('\n')
 
   const labeled = text.match(
@@ -77,7 +83,8 @@ export function extractFiscalDocumentNumberFromExcerpt(excerpt: string | null | 
   if (
     labeled?.[1] &&
     !looksLikeNipAsDocumentNumber(labeled[1]) &&
-    !looksLikeSideNumberAsDocumentNumber(labeled[1])
+    !looksLikeSideNumberAsDocumentNumber(labeled[1]) &&
+    !looksLikePolcardAuthAsDocumentNumber(labeled[1])
   ) {
     return labeled[1].trim().toUpperCase()
   }
@@ -87,6 +94,7 @@ export function extractFiscalDocumentNumberFromExcerpt(excerpt: string | null | 
   for (const serial of serials) {
     if (looksLikeNipAsDocumentNumber(serial)) continue
     if (looksLikeSideNumberAsDocumentNumber(serial)) continue
+    if (looksLikePolcardAuthAsDocumentNumber(serial)) continue
     return serial.toUpperCase()
   }
 
@@ -105,6 +113,17 @@ export function looksLikeSideNumberAsDocumentNumber(value: string | null | undef
   if (/^0{1,8}$/.test(trimmed)) return true
   if (/^#?0{1,6}$/.test(trimmed)) return true
   return false
+}
+
+/**
+ * PolCard auth / reference codes are short digit-only tokens (e.g. 694974).
+ * Never treat them as the fiscal receipt number when a W-serial is available.
+ */
+export function looksLikePolcardAuthAsDocumentNumber(value: string | null | undefined): boolean {
+  if (value == null) return false
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  return /^\d{4,8}$/.test(trimmed)
 }
 
 /** True when `documentNumber` appears only as the value of a "Nr boczny" label. */
@@ -329,6 +348,15 @@ export function sanitizeReceiptOcrFields(
     documentNumber &&
     (looksLikeSideNumberAsDocumentNumber(documentNumber) ||
       isDocumentNumberTiedToBocznyLabel(fields.rawExcerpt, documentNumber))
+  ) {
+    documentNumber = null
+  }
+
+  // PolCard auth codes in dual photos must not replace the fiscal W-serial.
+  if (
+    documentNumber &&
+    looksLikePolcardAuthAsDocumentNumber(documentNumber) &&
+    excerptLooksLikeFiscalReceipt(fields.rawExcerpt)
   ) {
     documentNumber = null
   }

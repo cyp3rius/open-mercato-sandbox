@@ -29,6 +29,7 @@ export const MERCATO_SIDEBAR_DEDUPE_HREFS: readonly string[] = [
   '/backend/taxi-fleet/trips',
   '/backend/taxi-fleet/settlements-overview',
   '/backend/taxi-fleet/drivers',
+  '/backend/taxi-fleet/communications',
   '/backend/accounting',
   '/backend/customers/simple-deals',
   '/backend/sales/simple-orders',
@@ -150,6 +151,7 @@ export function buildMercatoDailyWorkStructuredGroup(
       '/backend/taxi-fleet/trips',
       '/backend/taxi-fleet/settlements-overview',
       '/backend/taxi-fleet/drivers',
+      '/backend/taxi-fleet/communications',
     ] as const
   )
     .map(pick)

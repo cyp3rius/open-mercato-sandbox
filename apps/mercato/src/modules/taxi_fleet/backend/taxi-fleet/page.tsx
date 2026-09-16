@@ -8,6 +8,7 @@ import { FleetWeekScheduleHubSection } from '../../components/hub/FleetWeekSched
 import { WeeklySettlementsHubSection } from '../../components/hub/WeeklySettlementsHubSection'
 import { MonthlySettlementsHubSection } from '../../components/hub/MonthlySettlementsHubSection'
 import { OnlineDriversHubSection } from '../../components/hub/OnlineDriversHubSection'
+import { CommunicationsHubSection } from '../../components/hub/CommunicationsHubSection'
 
 export default function TaxiFleetHubPage() {
   const t = useT()
@@ -30,6 +31,7 @@ export default function TaxiFleetHubPage() {
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <OnlineDriversHubSection />
+            <CommunicationsHubSection />
           </div>
         </div>
       </PageBody>

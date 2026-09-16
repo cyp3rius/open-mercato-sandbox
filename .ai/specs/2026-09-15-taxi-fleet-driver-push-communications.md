@@ -11,7 +11,7 @@
 - Push channel preferences (`pushChannel` + `push_enabled`) gate non-forced Web Push.
 - Trip assign/reminder push is **locked** (always delivered when push is configured).
 - New pushes: planned assignment (skip ad-hoc), weekly/monthly settlement approved.
-- CRM **Komunikaty** under Fleet (outside Daily work): pick specific drivers, schedule/send, read receipts, retry.
+- CRM **Komunikaty** under Fleet (Daily work → Fleet, last item): pick specific drivers, schedule/send, read receipts, retry.
 
 ## Overview
 
@@ -46,7 +46,7 @@ Deep links: trips `/driver/trips/{id}`, assignments `/driver/assignments`, weekl
 - Limits: title ≤80, body ≤180; kinds `info|service|direct` (urgency normal/high/high)
 - Status: `draft|scheduled|sending|sent|cancelled`
 - ACL: `taxi_fleet.manage_driver_communications`
-- Nav: `/backend/taxi-fleet/communications` — `pageGroupKey: backend.nav.section.fleet`, `navFlat: true`, `pageOrder: 4610` (not Daily work dedupe)
+- Nav: `/backend/taxi-fleet/communications` — `pageGroupKey: backend.nav.section.fleet`, `navFlat: true`, `pageOrder: 4610`; also in Daily work → Fleet (last item) via `MERCATO_SIDEBAR_DEDUPE_HREFS` / `fleetChildren`. Hub shows last 5 sent.
 - APIs: CRUD, send, schedule, cancel, recipient retry, driver `POST .../communications/ack`
 - Cron `* * * * *` → queue `taxi-fleet-driver-communications`
 

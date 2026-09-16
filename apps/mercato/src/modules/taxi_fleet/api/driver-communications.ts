@@ -3,6 +3,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { resolveCrudRecordId, parseScopedCommandInput } from '@open-mercato/shared/lib/api/scoped'
+import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
 import {
   TaxiFleetDriverCommunication,
   TaxiFleetDriverCommunicationRecipient,
@@ -33,8 +34,13 @@ const listSchema = z
     page: z.coerce.number().min(1).default(1),
     pageSize: z.coerce.number().min(1).max(100).default(20),
     ids: z.string().optional(),
+    search: z.string().optional(),
     status: z.string().optional(),
     kind: z.string().optional(),
+    sentFrom: z.string().optional(),
+    sentTo: z.string().optional(),
+    createdFrom: z.string().optional(),
+    createdTo: z.string().optional(),
     sortField: z.string().optional(),
     sortDir: z.enum(['asc', 'desc']).optional(),
   })
@@ -46,6 +52,15 @@ const parseIds = (value?: string) => {
     .split(',')
     .map((item) => item.trim())
     .filter((item) => item.length > 0)
+}
+
+function parseDateBound(value: string | undefined, endOfDay: boolean): Date | null {
+  if (!value?.trim()) return null
+  const raw = value.trim()
+  const hasTime = raw.includes('T')
+  const iso = hasTime ? raw : `${raw}${endOfDay ? 'T23:59:59.999' : 'T00:00:00.000'}`
+  const date = new Date(iso)
+  return Number.isNaN(date.getTime()) ? null : date
 }
 
 async function attachRecipientCounts(
@@ -129,8 +144,41 @@ const crud = makeCrudRoute({
       const filters: Record<string, unknown> = {}
       const ids = parseIds(query.ids)
       if (ids.length) filters.id = { $in: ids }
-      if (query.status) filters.status = query.status
-      if (query.kind) filters.kind = query.kind
+
+      const search = typeof query.search === 'string' ? query.search.trim() : ''
+      if (search) {
+        filters.$or = [
+          { title: { $ilike: `%${escapeLikePattern(search)}%` } },
+          { body: { $ilike: `%${escapeLikePattern(search)}%` } },
+        ]
+      }
+
+      const statuses = parseIds(typeof query.status === 'string' ? query.status : undefined)
+      if (statuses.length === 1) filters.status = statuses[0]
+      else if (statuses.length > 1) filters.status = { $in: statuses }
+
+      const kinds = parseIds(typeof query.kind === 'string' ? query.kind : undefined)
+      if (kinds.length === 1) filters.kind = kinds[0]
+      else if (kinds.length > 1) filters.kind = { $in: kinds }
+
+      const sentFrom = parseDateBound(query.sentFrom, false)
+      const sentTo = parseDateBound(query.sentTo, true)
+      if (sentFrom || sentTo) {
+        filters.sent_at = {
+          ...(sentFrom ? { $gte: sentFrom } : {}),
+          ...(sentTo ? { $lte: sentTo } : {}),
+        }
+      }
+
+      const createdFrom = parseDateBound(query.createdFrom, false)
+      const createdTo = parseDateBound(query.createdTo, true)
+      if (createdFrom || createdTo) {
+        filters.created_at = {
+          ...(createdFrom ? { $gte: createdFrom } : {}),
+          ...(createdTo ? { $lte: createdTo } : {}),
+        }
+      }
+
       return filters
     },
   },
