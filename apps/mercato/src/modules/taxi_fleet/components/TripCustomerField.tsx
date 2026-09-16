@@ -23,20 +23,26 @@ import {
 const UUID_LIKE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-type TripCustomerFieldProps = {
-  value: string
-  onChange: (next: string) => void
-  disabled?: boolean
-  /** Prefer when CRM label lookup is slow/unavailable (e.g. trip contact/company name). */
-  fallbackLabel?: string
+function isUsableCustomerLabel(value: string | null | undefined): value is string {
+  if (!value) return false
+  const trimmed = value.trim()
+  return trimmed.length > 0 && !UUID_LIKE.test(trimmed)
 }
 
 function pickInitialLabel(value: string, fallbackLabel?: string): string {
   const pendingPhone = decodePendingTripCustomerPhone(value)
   if (pendingPhone) return pendingPhone
   const fallback = fallbackLabel?.trim() ?? ''
-  if (fallback.length && !UUID_LIKE.test(fallback)) return fallback
+  if (isUsableCustomerLabel(fallback)) return fallback
   return ''
+}
+
+type TripCustomerFieldProps = {
+  value: string
+  onChange: (next: string) => void
+  disabled?: boolean
+  /** Prefer when CRM label lookup is slow/unavailable (e.g. trip contact/company name). */
+  fallbackLabel?: string
 }
 
 function buildPendingPhoneOption(
@@ -91,12 +97,11 @@ export function TripCustomerField({
     setLabel(pickInitialLabel(trimmed, fallbackLabel))
     void resolveFleetCustomerDisplayLabel(trimmed).then((resolved) => {
       if (cancelled) return
-      if (resolved?.trim()) {
+      if (isUsableCustomerLabel(resolved)) {
         setLabel(resolved.trim())
         return
       }
-      const fallback = pickInitialLabel(trimmed, fallbackLabel)
-      setLabel(fallback)
+      setLabel(pickInitialLabel(trimmed, fallbackLabel))
     })
     return () => {
       cancelled = true
@@ -109,11 +114,19 @@ export function TripCustomerField({
   }, [])
 
   const displayLabel = label || pickInitialLabel(value, fallbackLabel)
+  const usableDisplayLabel = isUsableCustomerLabel(displayLabel)
+    ? displayLabel
+    : ''
+  const optionLabel =
+    usableDisplayLabel ||
+    (value.trim()
+      ? t('taxi_fleet.trips.customerResolving', 'Loading customer…')
+      : '')
 
   if (disabled) {
     return (
       <p className="text-sm text-foreground">
-        {displayLabel || t('taxi_fleet.trips.customerUnknown', 'Unknown customer')}
+        {usableDisplayLabel || t('taxi_fleet.trips.customerUnknown', 'Unknown customer')}
       </p>
     )
   }
@@ -125,8 +138,8 @@ export function TripCustomerField({
         onChange={onChange}
         disabled={disabled}
         className="min-w-0 flex-1"
-        options={mergeEntitySearchOption([], value, displayLabel || value)}
-        selectedDisplayOverride={displayLabel || undefined}
+        options={value.trim() ? mergeEntitySearchOption([], value, optionLabel) : []}
+        selectedDisplayOverride={usableDisplayLabel || optionLabel || undefined}
         onRemoteSearch={async (query) => {
           const rows = await remoteSearchFleetCustomers(query, kindLabels)
           const pending = buildPendingPhoneOption(query, t)
@@ -134,7 +147,11 @@ export function TripCustomerField({
             pending && !rows.some((row) => row.value === pending.value)
               ? [pending, ...rows]
               : rows
-          return mergeEntitySearchOption(withPending, value, displayLabel || value)
+          return mergeEntitySearchOption(
+            withPending,
+            value,
+            usableDisplayLabel || optionLabel,
+          )
         }}
         placeholder={t('taxi_fleet.trips.customerSearch', 'Search customer…')}
         searchPlaceholder={t(

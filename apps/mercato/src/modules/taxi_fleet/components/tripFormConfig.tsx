@@ -181,7 +181,10 @@ function tripRequestSchemaShape() {
     fromAddress: z.string().trim().min(1),
     toAddress: z.string().trim().min(1),
     waypointAddresses: z.string().max(10000).optional(),
-    distanceKm: z.string().optional(),
+    distanceKm: z.preprocess(
+      (value) => (value == null || value === '' ? '' : String(value)),
+      z.string().optional(),
+    ),
     durationText: z.string().max(200).optional(),
     passengers: z.string().refine((value) => {
       const parsed = Number(value)

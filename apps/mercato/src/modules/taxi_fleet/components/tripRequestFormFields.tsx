@@ -135,7 +135,7 @@ export function buildTripRequestFormFields(t: TranslateFn, options: TripRequestF
     },
     {
       id: 'distanceKm',
-      type: 'number',
+      type: 'text',
       label: t('taxi_fleet.trips.form.distanceKm', 'Distance (km)'),
       description: t('taxi_fleet.trips.form.distanceKmHelp', 'Calculated automatically from the route; you can adjust manually.'),
       layout: 'half',

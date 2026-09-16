@@ -283,6 +283,7 @@
   "taxi_fleet.trips.createValidation": "Uzupełnij kierowcę, pojazd, klienta oraz poprawne godziny rozpoczęcia i zakończenia.",
   "taxi_fleet.trips.customer": "Klient",
   "taxi_fleet.trips.customerUnknown": "Nieznany klient",
+  "taxi_fleet.trips.customerResolving": "Wczytywanie klienta…",
   "taxi_fleet.trips.customerSearch": "Szukaj klienta…",
   "taxi_fleet.trips.customerSearchPhoneHint": "Szukaj po nazwisku lub telefonie…",
   "taxi_fleet.trips.customerEmpty": "Nie znaleziono klientów.",

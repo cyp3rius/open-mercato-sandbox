@@ -283,6 +283,7 @@
   "taxi_fleet.trips.createValidation": "Fill in driver, vehicle, customer, and valid start/end times.",
   "taxi_fleet.trips.customer": "Customer",
   "taxi_fleet.trips.customerUnknown": "Unknown customer",
+  "taxi_fleet.trips.customerResolving": "Loading customer…",
   "taxi_fleet.trips.customerSearch": "Search customer…",
   "taxi_fleet.trips.customerSearchPhoneHint": "Search by name or phone…",
   "taxi_fleet.trips.customerEmpty": "No customers found.",
