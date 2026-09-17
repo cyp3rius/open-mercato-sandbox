@@ -21,6 +21,8 @@ import {
   type TripRequestPaymentType,
 } from '../lib/tripRequestForm'
 import { TAXI_FLEET_TRIP_PLATFORMS } from '../lib/tripPlatforms'
+import { mergeIdFilter, resolveTripListSearchIds } from '../lib/tripListSearch'
+import { E } from '@/.mercato/generated/entities.ids.generated'
 
 const routeMetadata = {
   GET: { requireAuth: true, requireFeatures: ['taxi_fleet.view'] },
@@ -48,6 +50,7 @@ const listSchema = z
     status: z.string().optional(),
     platform: platformSchema.optional(),
     paymentType: paymentTypeSchema.optional(),
+    search: z.string().optional(),
     unscheduled: z.coerce.boolean().optional(),
     dateFrom: z.string().optional(),
     dateTo: z.string().optional(),
@@ -80,6 +83,7 @@ function hasTripListFilterQuery(query: TripListQuery | undefined): boolean {
   if (typeof query.tripType === 'string' && query.tripType.trim()) return true
   if (typeof query.dateFrom === 'string' && query.dateFrom.trim()) return true
   if (typeof query.dateTo === 'string' && query.dateTo.trim()) return true
+  if (typeof query.search === 'string' && query.search.trim()) return true
   return parseIds(query.ids).length > 0
 }
 
@@ -115,6 +119,27 @@ async function buildTripListFilters(
     if (query.dateTo) range.$lte = new Date(query.dateTo)
     filters.startedAt = range
   }
+
+  const searchTerm = typeof query.search === 'string' ? query.search.trim() : ''
+  if (searchTerm) {
+    const tenantId = ctx.auth?.tenantId ?? null
+    if (!tenantId) {
+      filters.id = { $in: [] }
+    } else {
+      const em = (ctx.container.resolve('em') as EntityManager).fork()
+      const searchIds = await resolveTripListSearchIds({
+        search: searchTerm,
+        tenantId,
+        organizationId: ctx.selectedOrganizationId ?? ctx.auth?.orgId ?? null,
+        organizationIds: ctx.organizationIds ?? null,
+        container: ctx.container,
+        em,
+      })
+      const mergedIds = mergeIdFilter(ids.length ? ids : undefined, searchIds)
+      filters.id = { $in: mergedIds }
+    }
+  }
+
   return applyFleetDriverListScope(ctx, filters, query.teamMemberId)
 }
 
@@ -207,6 +232,7 @@ async function enrichTripListItemsWithReceiptOcr(
 
 const crud = makeCrudRoute({
   metadata: routeMetadata,
+  indexer: { entityType: E.taxi_fleet.taxi_fleet_trip },
   orm: {
     entity: TaxiFleetTrip,
     idField: 'id',

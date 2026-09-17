@@ -31,7 +31,7 @@ type ExtractionItem = {
   distanceSource: string | null
 }
 
-type ApplyField = 'distance' | 'amount' | 'documentNumber'
+type ApplyField = 'distance' | 'amount' | 'documentNumber' | 'customer'
 
 type TripReceiptOcrPanelProps = {
   tripId: string
@@ -78,6 +78,10 @@ function hasDocumentConflict(item: ExtractionItem): boolean {
     const field = String(warning.field ?? '')
     return code === 'field_conflict' && field === 'documentNumber'
   })
+}
+
+function hasCustomerConflict(item: ExtractionItem): boolean {
+  return hasWarningCode(item, 'customer_nip_conflict')
 }
 
 export function TripReceiptOcrPanel({
@@ -287,11 +291,13 @@ export function TripReceiptOcrPanel({
 
   const distanceMismatch = hasWarningCode(item, 'distance_mismatch_trip')
   const amountMismatch = hasAmountConflict(item)
+  const customerConflict = hasCustomerConflict(item)
   const showOverwriteSection =
     canManage &&
     (Boolean(item.ocrDistanceKm) ||
       Boolean(item.ocrGrossAmount) ||
-      Boolean(item.ocrDocumentNumber?.trim()))
+      Boolean(item.ocrDocumentNumber?.trim()) ||
+      Boolean(item.ocrBuyerNip?.trim()))
 
   return (
     <section className="mt-6 space-y-3 rounded-lg border bg-card px-4 py-3">
@@ -433,9 +439,9 @@ export function TripReceiptOcrPanel({
           {canPurgeReceipts ? (
             <Button
               type="button"
-              variant="destructive"
+              variant="outline"
               size="sm"
-              className="h-8 px-2.5 text-xs font-medium"
+              className="h-8 px-2.5 text-xs font-medium text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
               disabled={busy}
               onClick={() => void runPurge()}
             >
@@ -483,6 +489,16 @@ export function TripReceiptOcrPanel({
                 onClick={() => void applyField('documentNumber')}
               >
                 {t('taxi_fleet.receiptOcr.applyDocumentNumber', 'Document number')}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={`${groupButtonClass}${customerConflict ? ' bg-amber-50 text-amber-950' : ''}`}
+                disabled={busy || !item.ocrBuyerNip?.trim()}
+                onClick={() => void applyField('customer')}
+              >
+                {t('taxi_fleet.receiptOcr.applyCustomer', 'Customer')}
               </Button>
             </div>
             <p className="text-[11px] text-muted-foreground">

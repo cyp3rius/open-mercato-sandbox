@@ -48,6 +48,30 @@ export async function findCompanyEntityIdByNip(
   return typeof entityId === 'string' && entityId.length > 0 ? entityId : null
 }
 
+/** Returns digit-normalized NIP for a CRM company entity, if present. */
+export async function findCompanyNipByEntityId(
+  em: EntityManager,
+  params: { tenantId: string; organizationId: string; entityId: string },
+): Promise<string | null> {
+  const rows = await em.getConnection().execute<{ nip: string | null }[]>(
+    `
+      select cc.nip
+      from customer_companies cc
+      inner join customer_entities ce on ce.id = cc.entity_id
+      where cc.entity_id = ?
+        and cc.tenant_id = ?
+        and cc.organization_id = ?
+        and ce.deleted_at is null
+        and ce.kind = 'company'
+      limit 1
+    `,
+    [params.entityId, params.tenantId, params.organizationId],
+  )
+  const nip = rows[0]?.nip
+  if (typeof nip !== 'string' || !nip.trim()) return null
+  return normalizeNipDigits(nip) || null
+}
+
 /** Creates CRM company from MF data using EM only (safe for OCR background worker). */
 export async function createCompanyFromMfRegistry(
   em: EntityManager,

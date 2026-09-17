@@ -336,9 +336,9 @@ export function ExpenseReceiptOcrPanel({
           {canPurgeReceipts ? (
             <Button
               type="button"
-              variant="destructive"
+              variant="outline"
               size="sm"
-              className="h-8 px-2.5 text-xs font-medium"
+              className="h-8 px-2.5 text-xs font-medium text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
               disabled={busy}
               onClick={() => void runPurge()}
             >

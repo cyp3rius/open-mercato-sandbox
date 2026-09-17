@@ -41,4 +41,15 @@ describe('formatReceiptOcrWarningLabel', () => {
     expect(label.toLowerCase()).toContain('polcard')
     expect(label.toLowerCase()).toContain('not a fiscal receipt')
   })
+
+  it('formats customer relationship conflict with buyer NIP', () => {
+    const label = formatReceiptOcrWarningLabel(t, {
+      code: 'customer_nip_conflict',
+      field: 'buyerNip',
+      ocrValue: '6762566967',
+      driverValue: null,
+    })
+    expect(label).toContain('Customer relationship conflict')
+    expect(label).toContain('6762566967')
+  })
 })

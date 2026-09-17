@@ -177,7 +177,11 @@ NIP:
 2. Invalid → warning `nip_invalid`, no CRM write.
 3. Valid → `fetchCompanyFromMfVatRegistry`.
 4. Not found / API error → warning `nip_not_found` / `nip_lookup_failed`, `needs_review` if no other hard conflicts.
-5. Found → find company by NIP in tenant/org or create via customers command; set `customer_company_id` on trip + financial_entry when previously empty or person-only (policy: if trip already has company with different NIP → warning `customer_nip_conflict`, needs_review — **unless** high-confidence auto-apply overwrites with OCR company).
+5. Found → find company by NIP in tenant/org or create via customers command.
+   - No customer on trip → set `customer_company_id` on trip + financial_entry.
+   - Trip already has a **person** or a **company with a different NIP** → warning `customer_nip_conflict` (`needs_review`); do **not** auto-replace. Operator uses Nadpisz → **Klient** to ensure company from OCR NIP (CRM search → MF create if missing) and replace the trip customer (clears person). High-confidence auto-apply (≥ 0.85) may still overwrite without the button.
+   - Linked company NIP already matches OCR → noop (may set `resolved_company_id`).
+6. MF not found while a conflicting customer is linked → prefer `customer_nip_conflict` over bare `nip_not_found` so Nadpisz → Klient can retry registry lookup.
 
 ## API Contracts
 

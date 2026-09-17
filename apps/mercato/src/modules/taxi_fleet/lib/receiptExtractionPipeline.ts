@@ -23,9 +23,16 @@ import {
 } from './receiptExtractionRules'
 import {
   ensureCrmCompanyFromBuyerNipEm,
+  ensureCrmCompanyFromBuyerNip,
   extractionHasReviewWarnings,
   clearFleetBuyerNipOnTripExtraction,
+  findCompanyNipByEntityId,
 } from './receiptExtractionCompany'
+import {
+  clearCustomerNipConflictWarnings,
+  decideTripCustomerOcrLink,
+  upsertCustomerNipConflictWarning,
+} from './receiptTripCustomerOcr'
 import {
   mergeExpenseOccurredAt,
   mergeExpenseVatRate,
@@ -122,6 +129,9 @@ async function syncTripIncomeFromReceiptExtraction(
         (options?.forceOcrValues || !entry.customerCompanyId)
       ) {
         entry.customerCompanyId = trip.customerCompanyId
+        if (options?.forceOcrValues || trip.customerPersonId == null) {
+          entry.customerPersonId = trip.customerPersonId ?? null
+        }
         entry.updatedAt = new Date()
       }
       if (!entry.customerPersonId && trip.customerPersonId) {
@@ -1005,27 +1015,40 @@ export async function applyReceiptExtractionToLinkedRecords(
         trip.updatedAt = new Date()
       }
 
-      if (row.resolvedCompanyId && (!trip.customerCompanyId || preferOcrOnConflict)) {
-        if (trip.customerCompanyId !== row.resolvedCompanyId) {
-          trip.customerCompanyId = row.resolvedCompanyId
-          if (trip.tripType !== 'client') {
-            trip.tripType = 'client'
-          }
-          trip.updatedAt = new Date()
-        }
-      } else if (
-        trip.customerCompanyId &&
-        row.resolvedCompanyId &&
-        trip.customerCompanyId !== row.resolvedCompanyId &&
-        row.ocrBuyerNip
-      ) {
-        if (!deduped.some((w) => w.code === 'customer_nip_conflict')) {
-          deduped.push({
-            code: 'customer_nip_conflict',
-            field: 'buyerNip',
-            ocrValue: row.ocrBuyerNip,
+      const linkedCompanyNip = trip.customerCompanyId
+        ? await findCompanyNipByEntityId(em, {
+            tenantId: trip.tenantId,
+            organizationId: trip.organizationId,
+            entityId: trip.customerCompanyId,
           })
+        : null
+      const customerDecision = decideTripCustomerOcrLink({
+        ocrBuyerNip: row.ocrBuyerNip,
+        resolvedCompanyId: row.resolvedCompanyId,
+        tripCustomerPersonId: trip.customerPersonId,
+        tripCustomerCompanyId: trip.customerCompanyId,
+        linkedCompanyNip,
+        preferOcrOnConflict,
+      })
+      if (customerDecision.action === 'apply') {
+        trip.customerCompanyId = customerDecision.companyEntityId
+        if (customerDecision.clearPerson) trip.customerPersonId = null
+        if (trip.tripType !== 'client') trip.tripType = 'client'
+        trip.updatedAt = new Date()
+        if (!row.resolvedCompanyId) {
+          row.resolvedCompanyId = customerDecision.companyEntityId
         }
+        const withoutConflict = clearCustomerNipConflictWarnings(deduped)
+        deduped.length = 0
+        deduped.push(...withoutConflict)
+        row.warningsJson = toWarningRecords(deduped)
+      } else if (customerDecision.action === 'conflict') {
+        const nextWarnings = upsertCustomerNipConflictWarning(deduped, {
+          ocrBuyerNip: customerDecision.ocrBuyerNip,
+          driverValue: customerDecision.driverValue,
+        })
+        deduped.length = 0
+        deduped.push(...nextWarnings)
         row.warningsJson = toWarningRecords(deduped)
         row.status = 'needs_review'
       }
@@ -1071,7 +1094,7 @@ export async function overwriteReceiptExtraction(
   return refreshed
 }
 
-export type ReceiptOcrApplyField = 'distance' | 'amount' | 'documentNumber' | 'vatRatePercent'
+export type ReceiptOcrApplyField = 'distance' | 'amount' | 'documentNumber' | 'vatRatePercent' | 'customer'
 
 /**
  * One-click apply of an OCR value onto the linked trip (and income sync),
@@ -1084,6 +1107,8 @@ export async function applyReceiptOcrFieldToTrip(
     field: Exclude<ReceiptOcrApplyField, 'vatRatePercent'>
     tenantId: string
     organizationId: string
+    commandBus?: import('@open-mercato/shared/lib/commands').CommandBus
+    ctx?: import('@open-mercato/shared/lib/commands').CommandRuntimeContext
   },
 ): Promise<TaxiFleetReceiptExtraction> {
   const row = await em.findOne(TaxiFleetReceiptExtraction, {
@@ -1103,6 +1128,66 @@ export async function applyReceiptOcrFieldToTrip(
     : []
   let warnings = [...previousWarnings]
   const now = new Date()
+
+  if (params.field === 'customer') {
+    const nip = row.ocrBuyerNip?.trim() || null
+    if (!nip) throw new Error('OCR buyer NIP is not available')
+
+    let companyEntityId = row.resolvedCompanyId
+    if (!companyEntityId) {
+      const ensured =
+        params.commandBus && params.ctx
+          ? await ensureCrmCompanyFromBuyerNip({
+              em,
+              commandBus: params.commandBus,
+              ctx: params.ctx,
+              tenantId: row.tenantId,
+              organizationId: row.organizationId,
+              buyerNip: nip,
+            })
+          : await ensureCrmCompanyFromBuyerNipEm(em, {
+              tenantId: row.tenantId,
+              organizationId: row.organizationId,
+              buyerNip: nip,
+            })
+      if (!ensured.companyEntityId) {
+        if (ensured.warningCode === 'nip_invalid') {
+          throw new Error('OCR buyer NIP is invalid')
+        }
+        if (ensured.warningCode === 'nip_lookup_failed') {
+          throw new Error('Could not verify buyer NIP in the registry')
+        }
+        throw new Error('Buyer NIP was not found in the registry')
+      }
+      companyEntityId = ensured.companyEntityId
+      row.resolvedCompanyId = companyEntityId
+    }
+
+    trip.customerCompanyId = companyEntityId
+    trip.customerPersonId = null
+    if (trip.tripType !== 'client') trip.tripType = 'client'
+    trip.updatedAt = now
+    warnings = clearCustomerNipConflictWarnings(warnings)
+    row.warningsJson = toWarningRecords(warnings)
+    row.status = resolveFinalStatus({
+      documentNumber: row.appliedDocumentNumber ?? row.ocrDocumentNumber ?? null,
+      mergeNeedsReview: false,
+      warnings,
+    })
+    row.updatedAt = now
+    await em.flush()
+    await syncTripIncomeFromReceiptExtraction(
+      em,
+      row,
+      trip,
+      row.appliedDocumentNumber ?? row.ocrDocumentNumber ?? null,
+      { forceOcrValues: true },
+    )
+    await recalculateWeeklySettlementsForTrip(em, trip)
+    const refreshedCustomer = await em.findOne(TaxiFleetReceiptExtraction, { id: row.id })
+    if (!refreshedCustomer) throw new Error('Receipt extraction not found')
+    return refreshedCustomer
+  }
 
   if (params.field === 'distance') {
     const ocrDistance =

@@ -48,6 +48,7 @@ import {
   resolveTripWeekStart,
 } from '../lib/settlementWeekScope'
 import { scheduleTripGoogleCalendarSync } from '../lib/googleCalendar/tripGoogleCalendarSync'
+import { emitTripIndexerSideEffects } from '../lib/tripCrudIndexer'
 
 async function actorMayEditCompletedTrip(
   ctx: Parameters<CommandHandler<TripUpdateInput, { tripId: string }>['execute']>[1],
@@ -252,6 +253,7 @@ const createTripCommand: CommandHandler<TripCreateInput, { tripId: string }> = {
     }
     await recalculateWeeklySettlementsForTrip(em, record)
     scheduleTripGoogleCalendarSync(record.id)
+    await emitTripIndexerSideEffects(ctx, 'created', record)
     return { tripId: record.id }
   },
 }
@@ -430,6 +432,7 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
     await emitTripAssignedIfNeeded(ctx, row, previousTeamMemberId)
     await recalculateWeeklySettlementsForTrip(em, row, previousWeekStart)
     scheduleTripGoogleCalendarSync(row.id)
+    await emitTripIndexerSideEffects(ctx, 'updated', row)
     return { tripId: row.id }
   },
 }
@@ -450,6 +453,7 @@ const deleteTripCommand: CommandHandler<{ id: string }, { ok: true }> = {
     await em.flush()
     await recalculateWeeklySettlementsForTrip(em, row, previousWeekStart)
     scheduleTripGoogleCalendarSync(row.id)
+    await emitTripIndexerSideEffects(ctx, 'deleted', row)
     return { ok: true }
   },
 }

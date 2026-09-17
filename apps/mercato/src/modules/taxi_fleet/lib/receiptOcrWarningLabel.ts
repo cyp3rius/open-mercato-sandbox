@@ -53,6 +53,14 @@ export function formatReceiptOcrWarningLabel(
     )
   }
 
+  if (code === 'customer_nip_conflict') {
+    return t(
+      'taxi_fleet.receiptOcr.warnings.customerNipConflict',
+      'Customer relationship conflict detected, buyer NIP — OCR: {ocr}, linked: {driver}',
+      { ocr, driver },
+    )
+  }
+
   if (code === 'field_conflict' && fieldName) {
     return t(
       'taxi_fleet.receiptOcr.warnings.fieldConflict',

@@ -120,6 +120,7 @@ export default function TaxiFleetTripsPage() {
   const [customerFilterOptions, setCustomerFilterOptions] = React.useState<Array<{ value: string; label: string }>>([])
 
   const [filterValues, setFilterValues] = React.useState<FilterValues>(() => createDefaultTripListFilters())
+  const [search, setSearch] = React.useState('')
 
   const [isLoading, setIsLoading] = React.useState(true)
   const [reloadToken, setReloadToken] = React.useState(0)
@@ -348,6 +349,7 @@ export default function TaxiFleetTripsPage() {
     if (typeof paymentType === 'string' && paymentType.trim()) {
       params.set('paymentType', paymentType.trim())
     }
+    if (search.trim()) params.set('search', search.trim())
     return params.toString()
   }, [
     filterValues.customerEntityId,
@@ -358,6 +360,7 @@ export default function TaxiFleetTripsPage() {
     filterValues.status,
     filterValues.teamMemberId,
     page,
+    search,
     selectedTripTypes,
     unscheduledOnly,
   ])
@@ -626,6 +629,15 @@ export default function TaxiFleetTripsPage() {
           }
           columns={columns}
           data={rows}
+          searchValue={search}
+          onSearchChange={(value) => {
+            setSearch(value)
+            setPage(1)
+          }}
+          searchPlaceholder={t(
+            'taxi_fleet.trips.list.searchPlaceholder',
+            'Search address or customer…',
+          )}
           filters={filters}
           filterValues={filterValues}
           onFiltersApply={(values) => {

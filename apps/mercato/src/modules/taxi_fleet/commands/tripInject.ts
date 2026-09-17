@@ -14,6 +14,7 @@ import {
 import { STRAPI_TAXI_REQUEST_SOURCE } from '../lib/strapiTaxiRequestMapper'
 import { resolveReferringPartnerEntityId } from '../../insurance_desk/lib/resolveReferringPartner'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
+import { emitTripIndexerSideEffects } from '../lib/tripCrudIndexer'
 
 async function findTripByExternalId(
   em: EntityManager,
@@ -125,6 +126,7 @@ const injectTripCommand: CommandHandler<TripInjectInput, { tripId: string; creat
       status: record.status,
       requestId: parsed.externalId,
     })
+    await emitTripIndexerSideEffects(ctx, 'created', record)
     return { tripId: record.id, created: true }
   },
 }

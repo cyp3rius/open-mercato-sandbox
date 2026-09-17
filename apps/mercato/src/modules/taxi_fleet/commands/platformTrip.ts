@@ -11,6 +11,7 @@ import {
 } from '../lib/platformSync/tripSnapshot'
 import { TaxiFleetTrip } from '../data/entities'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
+import { emitTripIndexerSideEffects } from '../lib/tripCrudIndexer'
 
 type PlatformTripUpsertUndoPayload = {
   created: boolean
@@ -79,6 +80,7 @@ const upsertPlatformTripCommand: CommandHandler<PlatformTripUpsertInput, Platfor
           await eventBus.emitEvent('taxi_fleet.trip.updated', payload)
         }
       }
+      await emitTripIndexerSideEffects(ctx, result.created ? 'created' : 'updated', trip)
     }
 
     return { tripId: result.tripId, created: result.created, skipped: false }
@@ -132,11 +134,13 @@ const upsertPlatformTripCommand: CommandHandler<PlatformTripUpsertInput, Platfor
       trip.deletedAt = new Date()
       trip.updatedAt = new Date()
       await em.flush()
+      await emitTripIndexerSideEffects(ctx, 'deleted', trip)
       return
     }
     if (payload.before) {
       applyPlatformTripSnapshot(trip, payload.before)
       await em.flush()
+      await emitTripIndexerSideEffects(ctx, 'updated', trip)
     }
   },
 }

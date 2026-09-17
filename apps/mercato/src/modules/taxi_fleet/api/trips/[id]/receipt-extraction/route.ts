@@ -126,7 +126,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
 const postSchema = z.object({
   action: z.enum(['retry', 'overwrite', 'apply_field']),
   documentNumber: z.string().trim().min(1).max(120).optional(),
-  field: z.enum(['distance', 'amount', 'documentNumber']).optional(),
+  field: z.enum(['distance', 'amount', 'documentNumber', 'customer']).optional(),
 })
 
 export async function POST(req: Request, ctx: { params?: { id?: string } }) {
@@ -166,11 +166,14 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
         })
       }
       try {
+        const commandBus = context.container.resolve('commandBus') as CommandBus
         extraction = await applyReceiptOcrFieldToTrip(em, {
           extractionId: extraction.id,
-          field: body.field as 'distance' | 'amount' | 'documentNumber',
+          field: body.field as 'distance' | 'amount' | 'documentNumber' | 'customer',
           tenantId: trip.tenantId,
           organizationId: trip.organizationId,
+          commandBus,
+          ctx: context,
         })
       } catch (error) {
         throw new CrudHttpError(400, {

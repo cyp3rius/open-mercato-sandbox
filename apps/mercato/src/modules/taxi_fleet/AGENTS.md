@@ -108,6 +108,19 @@ Vendor JSON items are normalized by `lib/platformSync/adapters/mapVendorTrip.ts`
 - Drivers must have matching `uberDriverId` / `boltDriverId` / `freeDriverId` on the profile.
 - Run history lives in the import dialog (**History**), not on the trips list page.
 
+## Trip list search (CRM)
+
+- DataTable search on `/backend/taxi-fleet/trips` → `?search=` on `GET /api/taxi_fleet/trips`
+- Indexed entity: `taxi_fleet:taxi_fleet_trip` via `search.ts` (fulltext + vector + tokens)
+- Searchable text: `metadata.tripRequest` from/to/stops + CRM customer `display_name` (+ contact/company fallbacks)
+- List applies SearchService hits as `id $in`, then AND with FilterBar filters; SQL fallback when SearchService is unavailable
+- Indexing on create/update/delete via `emitTripIndexerSideEffects` in trip / platform / inject commands
+- After deploy or bulk import, reindex existing trips:
+
+```bash
+yarn mercato search reindex --tenant <tenantId> --entity taxi_fleet:taxi_fleet_trip --purgeFirst
+```
+
 ## Receipt OCR (trips + expenses)
 
 - Partition: `taxi_fleet_driver_receipts`; entity: `taxi_fleet_receipt_extractions`
