@@ -198,7 +198,7 @@ export function TripReceiptOcrPanel({
         'taxi_fleet.receiptOcr.purgeTripConfirmTitle',
         'Delete receipt and OCR?',
       ),
-      description: t(
+      text: t(
         'taxi_fleet.receiptOcr.purgeTripConfirmDescription',
         'This permanently deletes the receipt file from storage (including Google Drive), OCR result and the linked income entry. The trip itself is kept. This cannot be undone.',
       ),

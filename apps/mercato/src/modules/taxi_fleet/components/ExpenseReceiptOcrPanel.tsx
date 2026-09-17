@@ -166,7 +166,7 @@ export function ExpenseReceiptOcrPanel({
         'taxi_fleet.receiptOcr.purgeExpenseConfirmTitle',
         'Delete cost, receipt and OCR?',
       ),
-      description: t(
+      text: t(
         'taxi_fleet.receiptOcr.purgeExpenseConfirmDescription',
         'This permanently deletes the cost entry, OCR result and the receipt file from storage (including Google Drive). This cannot be undone.',
       ),
