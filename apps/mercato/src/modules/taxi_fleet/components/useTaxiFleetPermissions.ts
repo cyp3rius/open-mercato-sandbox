@@ -12,6 +12,7 @@ type PermissionState = {
   canManagePlatformSync: boolean
   canImpersonateDriver: boolean
   canManageDriverCommunications: boolean
+  canPurgeReceipts: boolean
   isLoading: boolean
 }
 
@@ -25,6 +26,7 @@ export function useTaxiFleetPermissions(): PermissionState {
     canManagePlatformSync: false,
     canImpersonateDriver: false,
     canManageDriverCommunications: false,
+    canPurgeReceipts: false,
     isLoading: true,
   })
 
@@ -44,6 +46,7 @@ export function useTaxiFleetPermissions(): PermissionState {
             'taxi_fleet.manage_platform_sync',
             'taxi_fleet.driver.impersonate',
             'taxi_fleet.manage_driver_communications',
+            'taxi_fleet.receipts.purge',
           ],
         }),
       })
@@ -62,6 +65,7 @@ export function useTaxiFleetPermissions(): PermissionState {
         canImpersonateDriver: allGranted || granted.includes('taxi_fleet.driver.impersonate'),
         canManageDriverCommunications:
           allGranted || granted.includes('taxi_fleet.manage_driver_communications'),
+        canPurgeReceipts: allGranted || granted.includes('taxi_fleet.receipts.purge'),
         isLoading: false,
       })
     }

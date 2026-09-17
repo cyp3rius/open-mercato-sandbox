@@ -12,6 +12,11 @@ export const features = [
     title: 'Edit completed trips (including receipt reupload and OCR)',
     module: 'taxi_fleet',
   },
+  {
+    id: 'taxi_fleet.receipts.purge',
+    title: 'Permanently delete receipt, OCR extraction and storage file (cost/trip)',
+    module: 'taxi_fleet',
+  },
   { id: 'taxi_fleet.trips.inject', title: 'Inject trips from external channels', module: 'taxi_fleet' },
   { id: 'taxi_fleet.manage_settlements', title: 'Manage weekly settlements', module: 'taxi_fleet' },
   { id: 'taxi_fleet.manage_platform_sync', title: 'Sync platform trips (Bolt/Uber/Free)', module: 'taxi_fleet' },

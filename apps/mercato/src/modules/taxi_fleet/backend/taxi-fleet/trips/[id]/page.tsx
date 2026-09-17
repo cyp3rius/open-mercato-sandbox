@@ -325,6 +325,12 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
                       setFormKey((value) => value + 1)
                     })()
                   }}
+                  onPurged={() => {
+                    void (async () => {
+                      await load({ soft: true })
+                      setFormKey((value) => value + 1)
+                    })()
+                  }}
                 />
               )
             }

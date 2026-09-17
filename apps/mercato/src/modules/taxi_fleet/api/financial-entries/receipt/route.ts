@@ -89,7 +89,7 @@ export async function POST(req: Request) {
       buffer: buf,
       fileName: safeName,
       mimeType: mime,
-      tags: ['taxi_fleet', 'operator_receipt'],
+      tags: ['taxi_fleet', 'operator_receipt', 'expense_receipt'],
       partitionOverride: TAXI_FLEET_DRIVER_RECEIPTS_PARTITION,
     })
 

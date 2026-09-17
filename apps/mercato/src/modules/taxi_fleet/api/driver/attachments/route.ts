@@ -18,6 +18,10 @@ import {
   scheduleReceiptExtractionProcessing,
 } from '@/modules/taxi_fleet/lib/receiptExtractionPipeline'
 import { TAXI_FLEET_DRIVER_RECEIPTS_PARTITION } from '@/modules/taxi_fleet/lib/receiptPartition'
+import {
+  TAXI_FLEET_EXPENSE_RECEIPT_TAG,
+  TAXI_FLEET_TRIP_RECEIPT_TAG,
+} from '@/modules/taxi_fleet/lib/receiptOcrSanitize'
 
 export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['taxi_fleet.driver'] },
@@ -36,6 +40,11 @@ async function buildContext(req: Request): Promise<CommandRuntimeContext> {
     organizationIds: scope?.filterIds ?? (auth.orgId ? [auth.orgId] : null),
     request: req,
   }
+}
+
+function resolveDriverReceiptPurpose(raw: FormDataEntryValue | null): 'trip' | 'expense' {
+  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : ''
+  return value === 'expense' ? 'expense' : 'trip'
 }
 
 export async function POST(req: Request) {
@@ -57,6 +66,7 @@ export async function POST(req: Request) {
     const form = await req.formData()
     const recordId = String(form.get('recordId') || '').trim()
     const file = form.get('file') as File | null
+    const purpose = resolveDriverReceiptPurpose(form.get('purpose'))
     if (!recordId || !file) {
       throw new CrudHttpError(400, {
         error: translate('taxi_fleet.driverApp.receipt.fileRequired', 'Receipt photo is required.'),
@@ -83,6 +93,9 @@ export async function POST(req: Request) {
     )
     await ensureTaxiFleetDriverReceiptsPartition(em)
 
+    const purposeTag =
+      purpose === 'expense' ? TAXI_FLEET_EXPENSE_RECEIPT_TAG : TAXI_FLEET_TRIP_RECEIPT_TAG
+
     const { item } = await createStoredAttachment({
       em,
       dataEngine,
@@ -92,7 +105,7 @@ export async function POST(req: Request) {
       buffer: buf,
       fileName: safeName,
       mimeType: mime,
-      tags: ['taxi_fleet', 'driver_receipt'],
+      tags: ['taxi_fleet', 'driver_receipt', purposeTag],
       partitionOverride: TAXI_FLEET_DRIVER_RECEIPTS_PARTITION,
     })
 
@@ -106,6 +119,7 @@ export async function POST(req: Request) {
       attachmentId: item.id,
       extractionId: extraction.id,
       recordId,
+      purpose,
     })
 
     return NextResponse.json(
@@ -129,7 +143,7 @@ export async function POST(req: Request) {
 
 export const openApi = {
   POST: {
-    summary: 'Upload receipt photo for driver trip form',
+    summary: 'Upload receipt photo for driver trip or expense form',
     tags: ['Taxi fleet driver'],
   },
 }

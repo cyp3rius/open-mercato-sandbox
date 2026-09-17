@@ -1,14 +1,16 @@
 'use client'
 
 import * as React from 'react'
-import { ExternalLink, Loader2, RefreshCw, Upload } from 'lucide-react'
+import { ExternalLink, Loader2, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Separator } from '@open-mercato/ui/primitives/separator'
 import { formatReceiptOcrWarningLabel } from '../lib/receiptOcrWarningLabel'
+import { useTaxiFleetPermissions } from './useTaxiFleetPermissions'
 
 type ExtractionItem = {
   id: string
@@ -39,6 +41,8 @@ type TripReceiptOcrPanelProps = {
   canReplaceReceipt?: boolean
   /** Called after OCR field is applied so the parent form can reload. */
   onApplied?: () => void
+  /** Called after receipt + OCR (+ linked income) were permanently deleted. */
+  onPurged?: () => void
 }
 
 const statusClass: Record<string, string> = {
@@ -81,8 +85,11 @@ export function TripReceiptOcrPanel({
   canManage,
   canReplaceReceipt = false,
   onApplied,
+  onPurged,
 }: TripReceiptOcrPanelProps) {
   const t = useT()
+  const { canPurgeReceipts } = useTaxiFleetPermissions()
+  const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const [item, setItem] = React.useState<ExtractionItem | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [busy, setBusy] = React.useState(false)
@@ -184,6 +191,45 @@ export function TripReceiptOcrPanel({
     }
   }
 
+  const runPurge = async () => {
+    if (!canPurgeReceipts) return
+    const ok = await confirm({
+      title: t(
+        'taxi_fleet.receiptOcr.purgeTripConfirmTitle',
+        'Delete receipt and OCR?',
+      ),
+      description: t(
+        'taxi_fleet.receiptOcr.purgeTripConfirmDescription',
+        'This permanently deletes the receipt file from storage (including Google Drive), OCR result and the linked income entry. The trip itself is kept. This cannot be undone.',
+      ),
+      variant: 'destructive',
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      const call = await apiCall<{ ok?: boolean; error?: string }>(
+        `/api/taxi_fleet/trips/${encodeURIComponent(tripId)}/receipt`,
+        { method: 'DELETE' },
+      )
+      if (!call.ok) {
+        flash(
+          (typeof call.result?.error === 'string' && call.result.error) ||
+            t('taxi_fleet.receiptOcr.purgeFailed', 'Could not delete receipt and OCR.'),
+          'error',
+        )
+        return
+      }
+      flash(
+        t('taxi_fleet.receiptOcr.purgeTripSuccess', 'Receipt, OCR and linked income deleted.'),
+        'success',
+      )
+      setItem(null)
+      onPurged?.()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const uploadInput = canReplaceReceipt ? (
     <input
       ref={fileRef}
@@ -249,6 +295,7 @@ export function TripReceiptOcrPanel({
 
   return (
     <section className="mt-6 space-y-3 rounded-lg border bg-card px-4 py-3">
+      {ConfirmDialogElement}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">{t('taxi_fleet.receiptOcr.title', 'Receipt / OCR')}</h2>
         <Badge variant="outline" className={statusClass[item.status] ?? statusClass.pending}>
@@ -339,46 +386,61 @@ export function TripReceiptOcrPanel({
           {t('taxi_fleet.receiptOcr.receiptActions', 'Receipt')}
         </div>
         {uploadInput}
-        <div className={buttonGroupClass}>
-          <Button type="button" variant="ghost" size="sm" className={groupButtonClass} asChild>
-            <a
-              href={item.attachmentUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center"
-            >
-              <ExternalLink className="mr-1.5 size-3.5" aria-hidden />
-              {t('taxi_fleet.receiptOcr.openDocument', 'Open')}
-            </a>
-          </Button>
-          {canReplaceReceipt ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className={groupButtonClass}
-              disabled={busy}
-              onClick={() => fileRef.current?.click()}
-            >
-              {busy ? (
-                <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden />
-              ) : (
-                <Upload className="mr-1.5 size-3.5" aria-hidden />
-              )}
-              {t('taxi_fleet.receiptOcr.reupload', 'Upload again')}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className={buttonGroupClass}>
+            <Button type="button" variant="ghost" size="sm" className={groupButtonClass} asChild>
+              <a
+                href={item.attachmentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center"
+              >
+                <ExternalLink className="mr-1.5 size-3.5" aria-hidden />
+                {t('taxi_fleet.receiptOcr.openDocument', 'Open')}
+              </a>
             </Button>
-          ) : null}
-          {canManage ? (
+            {canReplaceReceipt ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={groupButtonClass}
+                disabled={busy}
+                onClick={() => fileRef.current?.click()}
+              >
+                {busy ? (
+                  <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <Upload className="mr-1.5 size-3.5" aria-hidden />
+                )}
+                {t('taxi_fleet.receiptOcr.reupload', 'Upload again')}
+              </Button>
+            ) : null}
+            {canManage ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={groupButtonClass}
+                disabled={busy}
+                onClick={() => void runRetry()}
+              >
+                <RefreshCw className="mr-1.5 size-3.5" aria-hidden />
+                {t('taxi_fleet.receiptOcr.retry', 'Retry OCR')}
+              </Button>
+            ) : null}
+          </div>
+          {canPurgeReceipts ? (
             <Button
               type="button"
-              variant="ghost"
+              variant="destructive"
               size="sm"
-              className={groupButtonClass}
+              className="h-8 px-2.5 text-xs font-medium"
               disabled={busy}
-              onClick={() => void runRetry()}
+              onClick={() => void runPurge()}
             >
-              <RefreshCw className="mr-1.5 size-3.5" aria-hidden />
-              {t('taxi_fleet.receiptOcr.retry', 'Retry OCR')}
+              <Trash2 className="mr-1.5 size-3.5" aria-hidden />
+              {t('taxi_fleet.receiptOcr.purge', 'Delete receipt')}
             </Button>
           ) : null}
         </div>

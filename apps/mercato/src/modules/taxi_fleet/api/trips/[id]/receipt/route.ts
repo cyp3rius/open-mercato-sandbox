@@ -11,7 +11,7 @@ import type { CommandBus, CommandRuntimeContext } from '@open-mercato/shared/lib
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
-import { TaxiFleetTrip } from '@/modules/taxi_fleet/data/entities'
+import { TaxiFleetTrip, TaxiFleetReceiptExtraction } from '@/modules/taxi_fleet/data/entities'
 import {
   createPendingReceiptExtraction,
   linkReceiptExtractionToTrip,
@@ -25,9 +25,11 @@ import {
   coerceTripStatusForPersistence,
 } from '@/modules/taxi_fleet/lib/tripDetailWorkflow'
 import { normalizeTripStatus } from '@/modules/taxi_fleet/lib/tripStatuses'
+import { purgeTripReceiptBundle } from '@/modules/taxi_fleet/lib/purgeReceiptBundle'
 
 export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['taxi_fleet.manage_trips'] },
+  DELETE: { requireAuth: true, requireFeatures: ['taxi_fleet.receipts.purge'] },
 }
 
 async function buildContext(req: Request): Promise<CommandRuntimeContext> {
@@ -236,9 +238,51 @@ export async function POST(req: Request, routeCtx: { params?: { id?: string } })
   }
 }
 
+export async function DELETE(req: Request, routeCtx: { params?: { id?: string } }) {
+  try {
+    const context = await buildContext(req)
+    const { translate } = await resolveTranslations()
+    const tripId = routeCtx.params?.id
+    if (!tripId) throw new CrudHttpError(400, { error: 'Missing trip id' })
+
+    const em = context.container.resolve('em') as EntityManager
+    const trip = await em.findOne(TaxiFleetTrip, { id: tripId, deletedAt: null })
+    if (!trip) throw new CrudHttpError(404, { error: 'Not found' })
+
+    const hasReceiptMeta =
+      trip.metadata &&
+      typeof trip.metadata === 'object' &&
+      typeof (trip.metadata as { receiptAttachmentId?: unknown }).receiptAttachmentId === 'string' &&
+      Boolean((trip.metadata as { receiptAttachmentId: string }).receiptAttachmentId.trim())
+    const linkedExtraction = await em.findOne(TaxiFleetReceiptExtraction, {
+      tripId: trip.id,
+      tenantId: trip.tenantId,
+      organizationId: trip.organizationId,
+      deletedAt: null,
+    })
+    if (!hasReceiptMeta && !linkedExtraction) {
+      throw new CrudHttpError(404, {
+        error: translate('taxi_fleet.receiptOcr.notFound', 'No receipt OCR found for this trip.'),
+      })
+    }
+
+    const dataEngine = context.container.resolve('dataEngine') as DataEngine | undefined
+    const result = await purgeTripReceiptBundle(em, { trip, dataEngine })
+    return NextResponse.json({ ok: true, ...result })
+  } catch (err) {
+    if (err instanceof CrudHttpError) return NextResponse.json(err.body, { status: err.status })
+    console.error('taxi_fleet.trips.receipt.purge failed', err)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+
 export const openApi = {
   POST: {
     summary: 'Upload or replace receipt for a trip (CRM); triggers OCR',
+    tags: ['Taxi fleet'],
+  },
+  DELETE: {
+    summary: 'Permanently delete trip receipt, OCR extraction, storage file and linked income',
     tags: ['Taxi fleet'],
   },
 }

@@ -16,6 +16,8 @@ type Props = {
   attachmentId: string | null
   attachmentName: string | null
   draftRecordId: string
+  /** Trip vs expense — selects OCR sanitize mode before the record is linked. */
+  purpose?: 'trip' | 'expense'
   required?: boolean
   hideDocumentNumber?: boolean
   disabled?: boolean
@@ -30,6 +32,7 @@ export function DriverReceiptFields({
   attachmentId,
   attachmentName,
   draftRecordId,
+  purpose = 'trip',
   required = false,
   hideDocumentNumber = false,
   disabled = false,
@@ -56,6 +59,7 @@ export function DriverReceiptFields({
       }
       const form = new FormData()
       form.set('recordId', draftRecordId)
+      form.set('purpose', purpose)
       form.set('file', file)
       const call = await apiCall<{ id: string; fileName: string }>(
         '/api/taxi_fleet/driver/attachments',

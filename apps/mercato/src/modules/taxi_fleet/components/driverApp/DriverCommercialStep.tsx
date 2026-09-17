@@ -178,6 +178,7 @@ export function DriverCommercialStep({
             attachmentId={value.receiptAttachmentId}
             attachmentName={value.receiptAttachmentName}
             draftRecordId={receiptDraftRecordId}
+            purpose="trip"
             required
             disabled={disabled}
             onDocumentNumberChange={(receiptDocumentNumber) =>

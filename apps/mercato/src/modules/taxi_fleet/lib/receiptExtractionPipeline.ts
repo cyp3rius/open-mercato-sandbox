@@ -5,9 +5,11 @@ import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attach
 import {
   isKnownFleetIssuerNip,
   normalizeReceiptOcrNip,
+  resolveReceiptOcrSanitizeMode,
   sanitizeReceiptOcrFields,
 } from '@/modules/taxi_fleet/lib/receiptOcrSanitize'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import { normalizeAttachmentTags } from '@open-mercato/core/modules/attachments/lib/metadata'
 import {
   TaxiFleetDailyAssignment,
   TaxiFleetFinancialEntry,
@@ -22,6 +24,7 @@ import {
 import {
   ensureCrmCompanyFromBuyerNipEm,
   extractionHasReviewWarnings,
+  clearFleetBuyerNipOnTripExtraction,
 } from './receiptExtractionCompany'
 import {
   mergeExpenseOccurredAt,
@@ -376,8 +379,16 @@ export async function processReceiptExtraction(
     if (!attachment) throw new Error('Attachment not found')
     const storageDriverKey = attachment.storageDriver || 'local'
     const mimeType = attachment.mimeType
+    const attachmentTags = normalizeAttachmentTags(
+      attachment.storageMetadata && typeof attachment.storageMetadata === 'object'
+        ? (attachment.storageMetadata as { tags?: unknown }).tags
+        : null,
+    )
 
-    const sanitizeMode = row.tripId ? 'trip' : 'expense'
+    const sanitizeMode = resolveReceiptOcrSanitizeMode({
+      tripId: row.tripId,
+      attachmentTags,
+    })
     let ocrResult: Awaited<ReturnType<typeof extractReceiptFieldsFromImage>>
     if (isLocalAttachmentStorageDriver(storageDriverKey)) {
       const filePath = resolveAttachmentAbsolutePath(
@@ -427,7 +438,7 @@ export async function processReceiptExtraction(
     const warnings: ReceiptOcrWarning[] = []
     let resolvedCompanyId: string | null = null
     let normalizedBuyerNip: string | null = null
-    const isExpensePath = !row.tripId
+    const isExpensePath = sanitizeMode === 'expense'
 
     const isNonReceipt = isPolcardPaymentConfirmation(fields)
     // Expense costs may be WZ / card confirms — do not flag as review.
@@ -470,27 +481,32 @@ export async function processReceiptExtraction(
         normalizedBuyerNip = normalizeReceiptOcrNip(fields.buyerNip)
       }
     } else if (fields.buyerNip?.trim()) {
-      const ensured = await ensureCrmCompanyFromBuyerNipEm(em, {
-        tenantId: row.tenantId,
-        organizationId: row.organizationId,
-        buyerNip: fields.buyerNip,
-      })
-      normalizedBuyerNip = normalizeReceiptOcrNip(fields.buyerNip)
-      if (ensured.companyEntityId) {
-        resolvedCompanyId = ensured.companyEntityId
-        console.info('[taxi_fleet.receipt_ocr] CRM company resolved by NIP', {
-          extractionId,
-          companyEntityId: ensured.companyEntityId,
-          reusedExisting: ensured.reusedExisting,
-          nip: normalizedBuyerNip,
-          nipRole: 'buyer',
+      if (isKnownFleetIssuerNip(fields.buyerNip)) {
+        // Trip sanitize should already clear this; never CRM-ensure fleet issuer as buyer.
+        normalizedBuyerNip = null
+      } else {
+        const ensured = await ensureCrmCompanyFromBuyerNipEm(em, {
+          tenantId: row.tenantId,
+          organizationId: row.organizationId,
+          buyerNip: fields.buyerNip,
         })
-      } else if (ensured.warningCode) {
-        warnings.push({
-          code: ensured.warningCode,
-          field: 'buyerNip',
-          ocrValue: normalizedBuyerNip ?? fields.buyerNip,
-        })
+        normalizedBuyerNip = normalizeReceiptOcrNip(fields.buyerNip)
+        if (ensured.companyEntityId) {
+          resolvedCompanyId = ensured.companyEntityId
+          console.info('[taxi_fleet.receipt_ocr] CRM company resolved by NIP', {
+            extractionId,
+            companyEntityId: ensured.companyEntityId,
+            reusedExisting: ensured.reusedExisting,
+            nip: normalizedBuyerNip,
+            nipRole: 'buyer',
+          })
+        } else if (ensured.warningCode) {
+          warnings.push({
+            code: ensured.warningCode,
+            field: 'buyerNip',
+            ocrValue: normalizedBuyerNip ?? fields.buyerNip,
+          })
+        }
       }
     }
 
@@ -615,6 +631,8 @@ export async function linkReceiptExtractionToTrip(
   if (params.driverDocumentNumber?.trim()) {
     row.driverDocumentNumber = params.driverDocumentNumber.trim()
   }
+  // OCR may have run in expense mode before the trip link (driver upload-first flow).
+  clearFleetBuyerNipOnTripExtraction(row)
   row.updatedAt = new Date()
   await em.flush()
 

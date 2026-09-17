@@ -4,10 +4,36 @@ import {
   extractSellerNipFromExcerpt,
   looksLikeNipAsDocumentNumber,
   normalizeReceiptOcrNip,
+  resolveReceiptOcrSanitizeMode,
   RS_MOTO_ISSUER_NIP_DIGITS,
   sanitizeReceiptOcrFields,
+  TAXI_FLEET_TRIP_RECEIPT_TAG,
 } from '../receiptOcrSanitize'
 import { mergeReceiptDocumentNumber } from '../receiptExtractionRules'
+
+describe('resolveReceiptOcrSanitizeMode', () => {
+  it('uses trip mode when tripId is set', () => {
+    expect(resolveReceiptOcrSanitizeMode({ tripId: 'trip-1', attachmentTags: [] })).toBe('trip')
+  })
+
+  it('uses trip mode from trip_receipt tag before tripId is linked', () => {
+    expect(
+      resolveReceiptOcrSanitizeMode({
+        tripId: null,
+        attachmentTags: ['taxi_fleet', 'driver_receipt', TAXI_FLEET_TRIP_RECEIPT_TAG],
+      }),
+    ).toBe('trip')
+  })
+
+  it('defaults to expense when neither tripId nor trip tag is present', () => {
+    expect(
+      resolveReceiptOcrSanitizeMode({
+        tripId: null,
+        attachmentTags: ['taxi_fleet', 'driver_receipt', 'expense_receipt'],
+      }),
+    ).toBe('expense')
+  })
+})
 
 describe('normalizeReceiptOcrNip', () => {
   it('accepts dashed and compact forms and strips separators', () => {

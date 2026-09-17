@@ -19,6 +19,26 @@ const FLEET_NIP_STEM = '94521891'
 
 export type ReceiptOcrSanitizeMode = 'trip' | 'expense'
 
+/** Attachment tag: driver/CRM trip receipt — OCR must use trip (buyer) sanitize rules. */
+export const TAXI_FLEET_TRIP_RECEIPT_TAG = 'trip_receipt'
+
+/** Attachment tag: expense / cost slip — OCR uses expense (seller) sanitize rules. */
+export const TAXI_FLEET_EXPENSE_RECEIPT_TAG = 'expense_receipt'
+
+/**
+ * Trip receipts uploaded before `tripId` is linked must still use trip sanitize rules.
+ * Prefer an explicit trip link, then the `trip_receipt` attachment tag from upload purpose.
+ */
+export function resolveReceiptOcrSanitizeMode(params: {
+  tripId?: string | null
+  attachmentTags?: readonly string[] | null
+}): ReceiptOcrSanitizeMode {
+  if (params.tripId) return 'trip'
+  const tags = params.attachmentTags ?? []
+  if (tags.includes(TAXI_FLEET_TRIP_RECEIPT_TAG)) return 'trip'
+  return 'expense'
+}
+
 /**
  * Accept Polish NIP in dashed or compact form (945-218-91-52 / 9452189152)
  * and normalize to 10 digits without separators. Returns null if not 10 digits.

@@ -215,6 +215,33 @@ export async function ensureCrmCompanyFromBuyerNip(params: {
   return { companyEntityId, reusedExisting: false, mf }
 }
 
+function stripBuyerNipInvalidWarning(
+  warnings: ReceiptOcrWarning[] | Record<string, unknown>[] | null | undefined,
+): ReceiptOcrWarning[] {
+  if (!Array.isArray(warnings)) return []
+  return (warnings as ReceiptOcrWarning[]).filter(
+    (warning) => !(warning?.code === 'nip_invalid' && warning?.field === 'buyerNip'),
+  )
+}
+
+/**
+ * After linking a trip receipt that was OCR'd in expense mode, fleet issuer NIP may
+ * sit in `ocrBuyerNip` and falsely fail checksum validation. Clear it before CRM ensure.
+ */
+export function clearFleetBuyerNipOnTripExtraction(
+  extraction: TaxiFleetReceiptExtraction,
+): boolean {
+  if (!extraction.tripId) return false
+  if (!isKnownFleetIssuerNip(extraction.ocrBuyerNip)) return false
+  extraction.ocrBuyerNip = null
+  extraction.warningsJson = stripBuyerNipInvalidWarning(extraction.warningsJson) as unknown as Record<
+    string,
+    unknown
+  >[]
+  extraction.updatedAt = new Date()
+  return true
+}
+
 export async function maybeEnsureCompanyForExtraction(params: {
   em: EntityManager
   commandBus?: CommandBus
@@ -224,13 +251,18 @@ export async function maybeEnsureCompanyForExtraction(params: {
   if (params.extraction.resolvedCompanyId) return
 
   const isExpensePath = !params.extraction.tripId
+  if (!isExpensePath && clearFleetBuyerNipOnTripExtraction(params.extraction)) {
+    await params.em.flush()
+  }
+
   // Expense: seller (issuer) only — never fall back to buyer (often fleet NIP).
   const nip = isExpensePath
     ? params.extraction.ocrSellerNip
     : params.extraction.ocrBuyerNip
   if (!nip) return
 
-  if (isExpensePath && isKnownFleetIssuerNip(nip)) return
+  // Fleet issuer is never a CRM customer NIP (checksum often fails on printed variants).
+  if (isKnownFleetIssuerNip(nip)) return
 
   const ensured =
     params.commandBus && params.ctx

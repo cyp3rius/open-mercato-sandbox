@@ -166,6 +166,7 @@ export default function DriverExpenseCreatePage() {
           attachmentId={receiptAttachmentId}
           attachmentName={receiptAttachmentName}
           draftRecordId={receiptDraftRecordId}
+          purpose="expense"
           required
           disabled={busy}
           onDocumentNumberChange={setDocumentNumber}

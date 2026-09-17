@@ -575,6 +575,10 @@ export function DriverFinancialEntryDialog({
             if (ocrItem.entryResourceId) setResourceId(ocrItem.entryResourceId)
             if (ocrItem.attachmentUrl) setAttachmentUrl(ocrItem.attachmentUrl)
           }}
+          onPurged={() => {
+            onOpenChange(false)
+            onSaved()
+          }}
         />
       </div>
     </div>

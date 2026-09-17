@@ -731,6 +731,7 @@ function DriverTripDetailContent({
                     attachmentId={receiptAttachmentId}
                     attachmentName={receiptAttachmentName}
                     draftRecordId={trip.id}
+                    purpose="trip"
                     required
                     disabled={busy}
                     onDocumentNumberChange={setReceiptDocumentNumber}

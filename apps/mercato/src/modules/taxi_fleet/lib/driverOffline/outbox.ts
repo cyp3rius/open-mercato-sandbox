@@ -195,6 +195,7 @@ function dataUrlToBlob(dataBase64: string, mime: string): Blob {
 
 async function resolveReceiptAttachment(
   payload: Record<string, unknown>,
+  purpose: 'trip' | 'expense' = 'trip',
 ): Promise<Record<string, unknown>> {
   const blobId = typeof payload.receiptBlobId === 'string' ? payload.receiptBlobId : null
   if (!blobId) return payload
@@ -205,6 +206,7 @@ async function resolveReceiptAttachment(
   }
   const form = new FormData()
   form.set('recordId', blobRow.draftRecordId)
+  form.set('purpose', purpose)
   form.set('file', dataUrlToBlob(blobRow.dataBase64, blobRow.mime), blobRow.fileName)
   const res = await fetch('/api/taxi_fleet/driver/attachments', { method: 'POST', body: form })
   if (!res.ok) throw new Error(`receipt upload ${res.status}`)
@@ -246,7 +248,7 @@ export async function flushDriverOutbox(): Promise<void> {
         })
         if (!res.ok) throw new Error(`self_start ${res.status}`)
       } else if (item.type === 'trip.create') {
-        const payload = await resolveReceiptAttachment(item.payload)
+        const payload = await resolveReceiptAttachment(item.payload, 'trip')
         const res = await fetch('/api/taxi_fleet/driver/trips', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -254,7 +256,7 @@ export async function flushDriverOutbox(): Promise<void> {
         })
         if (!res.ok) throw new Error(`trip.create ${res.status}`)
       } else if (item.type === 'trip.update') {
-        const payload = await resolveReceiptAttachment(item.payload)
+        const payload = await resolveReceiptAttachment(item.payload, 'trip')
         const res = await fetch('/api/taxi_fleet/driver/trips', {
           method: 'PUT',
           headers: { 'content-type': 'application/json' },
@@ -268,7 +270,7 @@ export async function flushDriverOutbox(): Promise<void> {
           throw new Error(`trip.update ${res.status}`)
         }
       } else if (item.type === 'expense.create') {
-        const payload = await resolveReceiptAttachment(item.payload)
+        const payload = await resolveReceiptAttachment(item.payload, 'expense')
         const receiptAttachmentId =
           typeof payload.receiptAttachmentId === 'string' ? payload.receiptAttachmentId.trim() : ''
         if (!receiptAttachmentId) {
