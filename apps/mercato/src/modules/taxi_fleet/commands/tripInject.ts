@@ -11,7 +11,7 @@ import {
   buildTripScheduleFromInjectInput,
   tripRequestDetailsFromInjectInput,
 } from '../lib/tripInjectNative'
-import { STRAPI_TAXI_REQUEST_SOURCE } from '../lib/strapiTaxiRequestMapper'
+import { STRAPI_TAXI_REQUEST_SOURCE, normalizeTripInjectSource } from '../lib/strapiTaxiRequestMapper'
 import { resolveReferringPartnerEntityId } from '../../insurance_desk/lib/resolveReferringPartner'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
 import { emitTripIndexerSideEffects } from '../lib/tripCrudIndexer'
@@ -65,7 +65,7 @@ const injectTripCommand: CommandHandler<TripInjectInput, { tripId: string; creat
       })
     }
 
-    const source = parsed.source?.trim() || STRAPI_TAXI_REQUEST_SOURCE
+    const source = normalizeTripInjectSource(parsed.source, STRAPI_TAXI_REQUEST_SOURCE)
 
     let referringPartnerEntityId: string | null = null
     if (parsed.referralCode?.trim()) {

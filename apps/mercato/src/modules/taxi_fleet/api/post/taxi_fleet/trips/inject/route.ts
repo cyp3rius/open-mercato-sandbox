@@ -13,7 +13,7 @@ import {
   tripInjectSchema,
   type TripInjectInput,
 } from '../../../../../data/validators'
-import { STRAPI_TAXI_REQUEST_SOURCE } from '../../../../../lib/strapiTaxiRequestMapper'
+import { STRAPI_TAXI_REQUEST_SOURCE, normalizeTripInjectSource } from '../../../../../lib/strapiTaxiRequestMapper'
 import {
   isLegacyTripInjectEnvelope,
   toNativeTripInjectInputFromLegacyPayload,
@@ -59,7 +59,7 @@ function normalizeInjectBody(rawBody: unknown): Record<string, unknown> {
       organizationId: envelope.organizationId,
       tenantId: envelope.tenantId,
       externalId: envelope.externalId,
-      source: envelope.source?.trim() || STRAPI_TAXI_REQUEST_SOURCE,
+      source: normalizeTripInjectSource(envelope.source, STRAPI_TAXI_REQUEST_SOURCE),
       payload: envelope.payload,
     })
   }

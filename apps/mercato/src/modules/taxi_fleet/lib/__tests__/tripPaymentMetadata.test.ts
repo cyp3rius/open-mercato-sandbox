@@ -13,7 +13,7 @@ describe('mergeTripUpdateMetadata', () => {
       paymentHash: '08142dd2-ac97-4128-94a7-0d0976d14812',
       paymentLink: 'https://paypal.example/approve',
       paypalOrderId: 'ORDER-1',
-      source: 'rsmototaxi-calculator',
+      source: 'rsmototaxi_calculator',
       locale: 'pl',
       tripRequest: { fromAddress: 'Old' },
     }
@@ -27,7 +27,7 @@ describe('mergeTripUpdateMetadata', () => {
     expect(merged?.paymentHash).toBe('08142dd2-ac97-4128-94a7-0d0976d14812')
     expect(merged?.paymentLink).toBe('https://paypal.example/approve')
     expect(merged?.paypalOrderId).toBe('ORDER-1')
-    expect(merged?.source).toBe('rsmototaxi-calculator')
+    expect(merged?.source).toBe('rsmototaxi_calculator')
     expect(merged?.locale).toBe('pl')
     expect((merged?.tripRequest as { fromAddress: string }).fromAddress).toBe('New')
     expect(merged?.quoteSnapshot).toEqual({ totalPrice: 100 })

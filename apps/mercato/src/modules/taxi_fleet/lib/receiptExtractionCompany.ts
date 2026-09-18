@@ -96,7 +96,7 @@ export async function createCompanyFromMfRegistry(
     primaryPhone: null,
     status: 'active',
     lifecycleStage: 'customer',
-    source: 'taxi_fleet.receipt_ocr',
+    source: 'taxi_fleet_driver_app',
     isActive: true,
   })
   const profile = em.create(CustomerCompanyProfile, {
@@ -233,7 +233,7 @@ export async function ensureCrmCompanyFromBuyerNip(params: {
         legalName: mf.legalName || mf.displayName || null,
         nip: normalizedNip,
         regon: mf.regon ?? null,
-        source: 'taxi_fleet.receipt_ocr',
+        source: 'taxi_fleet_driver_app',
         crmRecordType: 'customer',
         status: 'active',
         lifecycleStage: 'customer',

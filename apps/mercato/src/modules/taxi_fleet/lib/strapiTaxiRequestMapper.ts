@@ -2,6 +2,17 @@ import type { TripRequestDetails } from './tripRequestForm'
 import { buildTripRouteNotes, defaultTripRequestDetails } from './tripRequestForm'
 
 export const STRAPI_TAXI_REQUEST_SOURCE = 'rsmototaxi-strapi'
+export const RSMOTOTAXI_CALCULATOR_SOURCE = 'rsmototaxi_calculator'
+
+/** Normalize inject `source` values (legacy calculator hyphen → underscore). */
+export function normalizeTripInjectSource(
+  source: string | null | undefined,
+  fallback: string = STRAPI_TAXI_REQUEST_SOURCE,
+): string {
+  const trimmed = source?.trim() || fallback
+  if (trimmed === 'rsmototaxi-calculator') return RSMOTOTAXI_CALCULATOR_SOURCE
+  return trimmed
+}
 
 export type StrapiTaxiContactType = 'private' | 'company'
 

@@ -55,6 +55,8 @@ import { createCompanyRegistrySyncBridgeField } from './companyRegistrySync'
 import {
   mergeEntitySearchOption,
   remoteSearchAuthUsers,
+  remoteSearchCustomerCompanies,
+  resolveCustomerEntityDisplayLabel,
   resolveUserDisplayLabel,
 } from '../../procurement/lib/procurementEntitySearch'
 
@@ -607,23 +609,54 @@ type CompanySelectFieldProps = {
   value?: string
   onChange: (value: string | undefined) => void
   labels: CompanySelectLabels
+  disabled?: boolean
 }
 
-type CompanyOption = { value: string; label: string }
+/**
+ * Company picker for person forms — searchable CRM companies only (no person/company label prefixes).
+ */
+export function CompanySelectField({ value, onChange, labels, disabled = false }: CompanySelectFieldProps) {
+  const t = useT()
+  const normalized = typeof value === 'string' && value.trim().length ? value.trim() : ''
+  const [label, setLabel] = React.useState('')
 
-function normalizeCompanyOption(raw: unknown): CompanyOption | null {
-  if (!raw || typeof raw !== 'object') return null
-  const candidate = raw as Record<string, unknown>
-  const id = typeof candidate.id === 'string' ? candidate.id : null
-  if (!id) return null
-  const displayName =
-    typeof candidate.display_name === 'string' && candidate.display_name.trim().length
-      ? candidate.display_name.trim()
-      : typeof candidate.displayName === 'string' && candidate.displayName.trim().length
-        ? candidate.displayName.trim()
-        : null
-  if (!displayName) return null
-  return { value: id, label: displayName }
+  React.useEffect(() => {
+    let cancelled = false
+    if (!normalized) {
+      setLabel('')
+      return
+    }
+    setLabel('')
+    void resolveCustomerEntityDisplayLabel(normalized).then((resolved) => {
+      if (cancelled) return
+      const next = typeof resolved === 'string' && resolved.trim().length ? resolved.trim() : normalized
+      setLabel(next)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [normalized])
+
+  const displayLabel = label || normalized
+
+  return (
+    <EntitySearchCombobox
+      value={normalized}
+      onChange={(next) => onChange(next.trim().length ? next.trim() : undefined)}
+      options={mergeEntitySearchOption([], normalized, displayLabel)}
+      selectedDisplayOverride={displayLabel || undefined}
+      onRemoteSearch={async (query) => {
+        const rows = await remoteSearchCustomerCompanies(query)
+        return mergeEntitySearchOption(rows, normalized, displayLabel)
+      }}
+      placeholder={labels.placeholder}
+      searchPlaceholder={t('customers.deals.form.companies.searchPlaceholder', 'Search companies…')}
+      emptyText={t('customers.deals.form.companies.noResults', 'No companies match your search.')}
+      disabled={disabled}
+      createInNewTabHref="/backend/customers/companies/create"
+      createInNewTabAriaLabel={labels.addLabel}
+    />
+  )
 }
 
 type CustomerEntityPickerOption = {
@@ -1216,178 +1249,6 @@ export function CustomerEntitySinglePicker({
           </DialogContent>
         </Dialog>
       </div>
-    </div>
-  )
-}
-
-export function CompanySelectField({ value, onChange, labels }: CompanySelectFieldProps) {
-  const [options, setOptions] = React.useState<CompanyOption[]>([])
-  const [loading, setLoading] = React.useState(true)
-  const [dialogOpen, setDialogOpen] = React.useState(false)
-  const [newCompany, setNewCompany] = React.useState('')
-  const [saving, setSaving] = React.useState(false)
-  const [formError, setFormError] = React.useState<string | null>(null)
-
-  const loadOptions = React.useCallback(async () => {
-    setLoading(true)
-    try {
-      const payload = await readApiResultOrThrow<{ items?: unknown[] }>(
-        '/api/customers/companies?pageSize=100&sortField=name&sortDir=asc',
-        undefined,
-        { errorMessage: labels.errorLoad },
-      )
-      const items = Array.isArray(payload?.items) ? payload.items : []
-      const normalized = items
-        .map((item: unknown) => normalizeCompanyOption(item))
-        .filter((item: CompanyOption | null): item is CompanyOption => item !== null)
-        .sort((a: CompanyOption, b: CompanyOption) =>
-          a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
-        )
-      setOptions(normalized)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : labels.errorLoad
-      flash(message, 'error')
-      setOptions([])
-    } finally {
-      setLoading(false)
-    }
-  }, [labels.errorLoad])
-
-  React.useEffect(() => {
-    loadOptions().catch(() => {})
-  }, [loadOptions])
-
-  const handleDialogChange = React.useCallback((open: boolean) => {
-    setDialogOpen(open)
-    if (!open) {
-      setNewCompany('')
-      setFormError(null)
-      setSaving(false)
-    }
-  }, [])
-
-  const handleDialogSubmit = React.useCallback(async () => {
-    if (saving) return
-    const trimmed = newCompany.trim()
-    if (!trimmed) {
-      setFormError(labels.emptyError)
-      return
-    }
-    setSaving(true)
-    try {
-      const call = await apiCallOrThrow<{ id?: string; entityId?: string }>(
-        '/api/customers/companies',
-        {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ displayName: trimmed }),
-        },
-        { errorMessage: labels.errorSave },
-      )
-      const payload = call.result ?? {}
-      const createdId =
-        typeof payload?.id === 'string'
-          ? payload.id
-          : typeof payload?.entityId === 'string'
-            ? payload.entityId
-            : null
-      await loadOptions()
-      if (createdId) {
-        onChange(createdId)
-      }
-      setDialogOpen(false)
-      setNewCompany('')
-      setFormError(null)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : labels.errorSave
-      flash(message, 'error')
-    } finally {
-      setSaving(false)
-    }
-  }, [labels.emptyError, labels.errorSave, loadOptions, newCompany, onChange, saving])
-
-  const handleInputKeyDown = React.useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === 'Enter') {
-        event.preventDefault()
-        handleDialogSubmit().catch(() => {})
-      }
-    },
-    [handleDialogSubmit]
-  )
-
-  const disabled = loading || saving
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <select
-          className="w-full h-9 rounded border px-2 text-sm"
-          value={value ?? ''}
-          onChange={(event) => onChange(event.target.value ? event.target.value : undefined)}
-          disabled={loading}
-        >
-          <option value="">{labels.placeholder}</option>
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <Dialog open={dialogOpen} onOpenChange={handleDialogChange}>
-          <DialogTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              disabled={disabled}
-              aria-label={labels.addLabel}
-              title={labels.addLabel}
-            >
-              <Plus className="h-4 w-4" aria-hidden />
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-sm">
-            <DialogHeader>
-              <DialogTitle>{labels.dialogTitle}</DialogTitle>
-              {labels.addPrompt ? <DialogDescription>{labels.addPrompt}</DialogDescription> : null}
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">{labels.inputLabel}</label>
-                <input
-                  className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  placeholder={labels.inputPlaceholder}
-                  value={newCompany}
-                  onChange={(event) => {
-                    setNewCompany(event.target.value)
-                    if (formError) setFormError(null)
-                  }}
-                  onKeyDown={handleInputKeyDown}
-                  autoFocus
-                  disabled={saving}
-                />
-              </div>
-              {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
-                  {labels.cancelLabel}
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    handleDialogSubmit().catch(() => {})
-                  }}
-                  disabled={saving || !newCompany.trim()}
-                >
-                  {saving ? `${labels.saveLabel}…` : labels.saveLabel}
-                </Button>
-              </DialogFooter>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-      {loading ? <div className="text-xs text-muted-foreground">{labels.loadingLabel}</div> : null}
     </div>
   )
 }

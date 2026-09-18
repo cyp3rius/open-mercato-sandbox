@@ -10,6 +10,7 @@ import {
   buildTripScheduleFromStrapi,
   mapStrapiPayloadToTaxiRequest,
   STRAPI_TAXI_REQUEST_SOURCE,
+  normalizeTripInjectSource,
   type MappedStrapiTaxiRequest,
 } from './strapiTaxiRequestMapper'
 
@@ -67,7 +68,7 @@ export function toNativeTripInjectInputFromMapped(
     organizationId: params.organizationId,
     tenantId: params.tenantId,
     externalId: params.externalId,
-    source: params.source?.trim() || STRAPI_TAXI_REQUEST_SOURCE,
+    source: normalizeTripInjectSource(params.source, STRAPI_TAXI_REQUEST_SOURCE),
     fromAddress: mapped.fromAddress,
     toAddress: mapped.toAddress,
     waypointAddresses: mapped.waypointAddresses,
