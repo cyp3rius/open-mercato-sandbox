@@ -718,10 +718,10 @@ async function reindexCommand(rest: string[]): Promise<void> {
     const wantsTokens = strategies.has('tokens') || strategies.has('all')
     const wantsVector = strategies.has('vector') || strategies.has('all') || !strategyRaw
 
-    if (wantsTokens) {
+    const runTokenReindex = async (): Promise<boolean> => {
       if (!tenantId) {
         console.error('--tenant is required when reindexing with --strategy tokens')
-        return
+        return false
       }
       const tokenEntities = entityId
         ? enabledEntities.has(entityId)
@@ -730,64 +730,67 @@ async function reindexCommand(rest: string[]): Promise<void> {
         : searchIndexer.listEnabledEntities()
       if (entityId && tokenEntities.length === 0) {
         console.error(`Entity ${entityId} is not enabled for search.`)
-        return
+        return false
       }
       if (!tokenEntities.length) {
         console.log('No entities enabled for search token reindex.')
-      } else {
-        console.log(
-          `Reindexing search strategies (tokens/fulltext via SearchIndexer) for ${tokenEntities.length} entit${tokenEntities.length === 1 ? 'y' : 'ies'}...`,
-        )
-        for (const id of tokenEntities) {
-          console.log(`  -> ${id}${defaultPurge ? ' [purge]' : ''}`)
-          const result = await searchIndexer.reindexEntity({
-            entityId: id as EntityId,
-            tenantId,
-            organizationId: organizationId ?? null,
-            purgeFirst: defaultPurge,
-          })
-          if (!result.success) {
-            const firstError = result.errors[0]?.error ?? 'unknown error'
-            console.error(`     failed: ${firstError}`)
-          } else {
-            console.log(`     indexed ${result.recordsIndexed.toLocaleString()} record(s)`)
-          }
+        return true
+      }
+      console.log(
+        `Reindexing search strategies (tokens/fulltext via SearchIndexer) for ${tokenEntities.length} entit${tokenEntities.length === 1 ? 'y' : 'ies'}...`,
+      )
+      for (const id of tokenEntities) {
+        console.log(`  -> ${id}${defaultPurge ? ' [purge]' : ''}`)
+        const result = await searchIndexer.reindexEntity({
+          entityId: id as EntityId,
+          tenantId,
+          organizationId: organizationId ?? null,
+          purgeFirst: defaultPurge,
+        })
+        if (!result.success) {
+          const firstError = result.errors[0]?.error ?? 'unknown error'
+          console.error(`     failed: ${firstError}`)
+        } else {
+          console.log(`     indexed ${result.recordsIndexed.toLocaleString()} record(s)`)
         }
-        console.log('Search strategy reindex completed.')
       }
-      if (!wantsVector) {
-        return
+      console.log('Search strategy reindex completed.')
+      return true
+    }
+
+    // Vector/query_index rebuild overwrites search_tokens from raw DB docs (no buildSource
+    // enrichment). When both are requested, run vector first and tokens last so enriched
+    // address/customer tokens win.
+    if (wantsVector) {
+      if (entityId) {
+        if (!enabledEntities.has(entityId)) {
+          console.error(`Entity ${entityId} is not enabled for vector search.`)
+          return
+        }
+        await runReindex(entityId, defaultPurge)
+        console.log('Vector reindex completed.')
+      } else {
+        const entityIds = searchIndexer.listEnabledEntities()
+        if (!entityIds.length) {
+          console.log('No entities enabled for vector search.')
+        } else {
+          console.log(`Reindexing ${entityIds.length} vector-enabled entities...`)
+          let processedOverall = 0
+          for (let idx = 0; idx < entityIds.length; idx += 1) {
+            const id = entityIds[idx]!
+            console.log(`[${idx + 1}/${entityIds.length}] Preparing ${id}...`)
+            processedOverall += await runReindex(id, defaultPurge)
+          }
+          console.log(
+            `Vector reindex completed. Total processed rows: ${processedOverall.toLocaleString()}`,
+          )
+        }
       }
     }
 
-    if (!wantsVector) {
-      return
+    if (wantsTokens) {
+      await runTokenReindex()
     }
-
-    if (entityId) {
-      if (!enabledEntities.has(entityId)) {
-        console.error(`Entity ${entityId} is not enabled for vector search.`)
-        return
-      }
-      const purgeFirst = defaultPurge
-      await runReindex(entityId, purgeFirst)
-      console.log('Vector reindex completed.')
-      return
-    }
-
-    const entityIds = searchIndexer.listEnabledEntities()
-    if (!entityIds.length) {
-      console.log('No entities enabled for vector search.')
-      return
-    }
-    console.log(`Reindexing ${entityIds.length} vector-enabled entities...`)
-    let processedOverall = 0
-    for (let idx = 0; idx < entityIds.length; idx += 1) {
-      const id = entityIds[idx]!
-      console.log(`[${idx + 1}/${entityIds.length}] Preparing ${id}...`)
-      processedOverall += await runReindex(id, defaultPurge)
-    }
-    console.log(`Vector reindex completed. Total processed rows: ${processedOverall.toLocaleString()}`)
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error))
     console.error('[search.cli] Reindex failed:', err.stack ?? err.message)
@@ -814,6 +817,8 @@ const reindexHelpCli: ModuleCli = {
     console.log('  --entity <module:entity> Reindex a single entity (defaults to all enabled entities).')
     console.log('  --strategy <list>       Comma-separated: tokens, vector, all (default: vector).')
     console.log('                          Use tokens when vector/Meilisearch are unavailable (local default).')
+    console.log('                          For --strategy all, vector runs first and tokens last so')
+    console.log('                          SearchIndexer enrichment is not overwritten by query_index.')
     console.log('  --partitions <n>        Number of partitions to process in parallel (default from query index).')
     console.log('  --partition <idx>       Restrict to a specific partition index.')
     console.log('  --batch <n>             Override batch size per chunk.')
@@ -825,6 +830,7 @@ const reindexHelpCli: ModuleCli = {
     console.log('Notes:')
     console.log('  - Default path rebuilds vector embeddings via query_index (needs OPENAI_API_KEY).')
     console.log('  - --strategy tokens rebuilds search_tokens via SearchIndexer (buildSource enrichment).')
+    console.log('  - Trip list search depends on tokens + CRM decrypt fallback for customer fields.')
     console.log('  - backend/query-indexes shows query_index coverage, not search vector rows.')
   },
 }

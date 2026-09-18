@@ -1,16 +1,10 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { SearchService } from '@open-mercato/search'
-import {
-  CustomerCompanyProfile,
-  CustomerEntity,
-  CustomerPersonProfile,
-} from '@open-mercato/core/modules/customers/data/entities'
-import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
 import { sanitizeSearchTerm } from '@open-mercato/shared/lib/query/sanitizeSearchTerm'
-import { normalizeNipDigits } from '@open-mercato/shared/lib/pl/nip'
 import { E } from '@/.mercato/generated/entities.ids.generated'
 import { TaxiFleetTrip } from '../data/entities'
+import { resolveFleetCustomerEntityIdsBySearch } from './customerEntitySearch'
 
 const SEARCH_HIT_LIMIT = 500
 
@@ -90,108 +84,25 @@ async function findMatchingCustomerEntityIds(
   params: ResolveTripListSearchIdsParams,
   term: string,
 ): Promise<string[]> {
-  const like = `%${escapeLikePattern(term)}%`
   const orgIds = resolveOrgIds(params)
-  const scope = {
-    tenantId: params.tenantId,
-    organizationId: orgIds[0] ?? params.organizationId ?? params.tenantId,
-  }
+  const orgs =
+    orgIds.length > 0
+      ? orgIds
+      : params.organizationId
+        ? [params.organizationId]
+        : []
+  if (!orgs.length) return []
+
   const ids = new Set<string>()
-
-  const entityWhere = applyOrgScope(
-    {
+  for (const organizationId of orgs) {
+    const matched = await resolveFleetCustomerEntityIdsBySearch(params.em, {
       tenantId: params.tenantId,
-      deletedAt: null,
-      $or: [{ displayName: { $ilike: like } }, { primaryPhone: { $ilike: like } }],
-    },
-    orgIds,
-  )
-  const entities = await findWithDecryption(
-    params.em,
-    CustomerEntity,
-    entityWhere,
-    { fields: ['id'], limit: SEARCH_HIT_LIMIT },
-    scope,
-  )
-  for (const row of entities) {
-    if (row.id) ids.add(row.id)
+      organizationId,
+      search: term,
+      limit: SEARCH_HIT_LIMIT,
+    })
+    for (const id of matched) ids.add(id)
   }
-
-  const personWhere = applyOrgScope(
-    {
-      tenantId: params.tenantId,
-      $or: [{ firstName: { $ilike: like } }, { lastName: { $ilike: like } }],
-    },
-    orgIds,
-  )
-  const people = await findWithDecryption(
-    params.em,
-    CustomerPersonProfile,
-    personWhere,
-    { fields: ['id', 'entity'], limit: SEARCH_HIT_LIMIT },
-    scope,
-  )
-  for (const profile of people) {
-    const entity = profile.entity
-    const entityId =
-      typeof entity === 'string'
-        ? entity
-        : entity && typeof entity === 'object' && typeof entity.id === 'string'
-          ? entity.id
-          : ''
-    if (entityId) ids.add(entityId)
-  }
-
-  const nipDigits = normalizeNipDigits(term)
-  if (nipDigits && nipDigits.length >= 6) {
-    const companyWhere = applyOrgScope(
-      {
-        tenantId: params.tenantId,
-        nip: { $ilike: `%${escapeLikePattern(nipDigits)}%` },
-      },
-      orgIds,
-    )
-    const companies = await findWithDecryption(
-      params.em,
-      CustomerCompanyProfile,
-      companyWhere,
-      { fields: ['id', 'entity'], limit: SEARCH_HIT_LIMIT },
-      scope,
-    )
-    for (const profile of companies) {
-      const entity = profile.entity
-      const entityId =
-        typeof entity === 'string'
-          ? entity
-          : entity && typeof entity === 'object' && typeof entity.id === 'string'
-            ? entity.id
-            : ''
-      if (entityId) ids.add(entityId)
-    }
-  }
-
-  const phoneDigits = term.replace(/\D/g, '')
-  if (phoneDigits.length >= 6) {
-    const phoneWhere = applyOrgScope(
-      {
-        tenantId: params.tenantId,
-        deletedAt: null,
-        primaryPhone: { $ilike: `%${escapeLikePattern(phoneDigits)}%` },
-      },
-      orgIds,
-    )
-    const phoneHits = await findWithDecryption(
-      params.em,
-      CustomerEntity,
-      phoneWhere,
-      { fields: ['id'], limit: SEARCH_HIT_LIMIT },
-      scope,
-    )
-    for (const row of phoneHits) {
-      if (row.id) ids.add(row.id)
-    }
-  }
-
   return [...ids]
 }
 
@@ -265,9 +176,8 @@ async function searchViaSqlFallback(
 
 /**
  * Resolve trip IDs matching a free-text search (addresses + customer / ordering party).
- * Prefers SearchService (fulltext/vector/tokens); falls back to SQL when the service is
- * unavailable or the token/vector index has no hits (common when only tokens are enabled
- * and trips have not been reindexed via SearchIndexer).
+ * Unions SearchService hits with SQL/CRM fallback so encrypted customer fields and nested
+ * tripRequest addresses both work even when trip token rows are incomplete.
  */
 export async function resolveTripListSearchIds(
   params: ResolveTripListSearchIdsParams,
@@ -275,8 +185,9 @@ export async function resolveTripListSearchIds(
   const term = sanitizeSearchTerm(params.search)
   if (!term) return []
 
-  const viaSearch = await searchViaSearchService(params, term)
-  if (viaSearch !== null && viaSearch.length > 0) return viaSearch
-
-  return searchViaSqlFallback(params, term)
+  const viaSearch = (await searchViaSearchService(params, term)) ?? []
+  const viaSql = await searchViaSqlFallback(params, term)
+  if (viaSearch.length === 0) return viaSql
+  if (viaSql.length === 0) return viaSearch
+  return [...new Set([...viaSearch, ...viaSql])]
 }

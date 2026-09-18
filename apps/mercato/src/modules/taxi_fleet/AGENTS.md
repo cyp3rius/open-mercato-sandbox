@@ -114,7 +114,7 @@ Vendor JSON items are normalized by `lib/platformSync/adapters/mapVendorTrip.ts`
 - Indexed entity: `taxi_fleet:taxi_fleet_trip` via `search.ts` (fulltext + vector + tokens)
 - Searchable text: `metadata.tripRequest` from/to/stops + CRM customer `display_name` / person name / phone / NIP + optional ordering person (name/phone) + contact/company fallbacks
 - Customer filter (`customerEntityId`) matches `customerPersonId` **or** `customerCompanyId` **or** `orderingPersonId`
-- List applies SearchService hits as `id $in`, then AND with FilterBar filters; SQL fallback when SearchService is unavailable **or returns no hits** (needed when only `tokens` is available and the index is empty/partial)
+- List applies SearchService hits as `id $in`, then AND with FilterBar filters; always unions SQL/CRM customer fallback (addresses in `metadata.tripRequest` + decrypted customer name/phone/NIP — SQL `$ilike` cannot match encrypted CRM fields)
 - Indexing on create/update/delete via `emitTripIndexerSideEffects` in trip / platform / inject commands
 - After deploy or bulk import, reindex existing trips for **token** search (local default — no OpenAI/Meilisearch):
 
@@ -125,6 +125,7 @@ yarn workspace @open-mercato/search build
 yarn mercato search reindex --tenant <tenantId> --entity taxi_fleet:taxi_fleet_trip --purgeFirst --strategy tokens
 ```
 
+- Prefer `--strategy tokens` for trip list search. With `--strategy all`, vector/query_index runs first and tokens last (query_index otherwise overwrites enriched address/customer tokens).
 - `yarn mercato search reindex` **without** `--strategy tokens` only rebuilds **vector** embeddings (needs `OPENAI_API_KEY`). That does **not** populate `backend/query-indexes` the way you might expect for trip list search.
 - `backend/query-indexes` is **query_index** coverage (`entity_index_coverage`), not SearchService. Refresh with:
 

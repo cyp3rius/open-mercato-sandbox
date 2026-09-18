@@ -7,7 +7,6 @@ import {
 import { findWithDecryption, findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { hashToken, tokenizeText } from '@open-mercato/shared/lib/search/tokenize'
 import { resolveSearchConfig } from '@open-mercato/shared/lib/search/config'
-import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
 import { normalizeNipDigits } from '@open-mercato/shared/lib/pl/nip'
 import { E } from '@/.mercato/generated/entities.ids.generated'
 
@@ -117,7 +116,7 @@ async function findCustomerEntityIdsByPhoneOrNip(
   const ids = new Set<string>()
 
   const nipDigits = normalizeNipDigits(params.search)
-  if (nipDigits && nipDigits.length === 10) {
+  if (nipDigits && nipDigits.length >= 6) {
     const companies = await findWithDecryption(
       em,
       CustomerCompanyProfile,
@@ -130,7 +129,12 @@ async function findCustomerEntityIdsByPhoneOrNip(
     )
     for (const company of companies) {
       const storedNip = normalizeNipDigits(company.nip ?? '')
-      if (storedNip === nipDigits) {
+      if (
+        storedNip &&
+        (storedNip === nipDigits ||
+          storedNip.includes(nipDigits) ||
+          (nipDigits.length === 10 && nipDigits.includes(storedNip)))
+      ) {
         const entityId = company.entity?.id
         if (entityId) ids.add(entityId)
       }
@@ -159,14 +163,21 @@ async function findCustomerEntityIdsByPhoneOrNip(
   return [...ids].slice(0, params.limit)
 }
 
-async function findCustomerEntityIdsByDisplayName(
+/**
+ * Match display names / person first+last in memory after decryption.
+ * SQL `$ilike` cannot match encrypted customer fields.
+ */
+async function findCustomerEntityIdsByDecryptedName(
   em: EntityManager,
   params: { tenantId: string; organizationId: string; search: string; limit: number },
 ): Promise<string[]> {
   const search = params.search.trim()
   if (search.length < 2) return []
+  const needle = search.toLowerCase()
   const scope = { tenantId: params.tenantId, organizationId: params.organizationId }
-  const rows = await findWithDecryption(
+  const ids = new Set<string>()
+
+  const entities = await findWithDecryption(
     em,
     CustomerEntity,
     {
@@ -174,12 +185,73 @@ async function findCustomerEntityIdsByDisplayName(
       organizationId: params.organizationId,
       deletedAt: null,
       kind: { $in: ['person', 'company'] },
-      displayName: { $ilike: `%${escapeLikePattern(search)}%` },
     },
-    { limit: params.limit },
+    { limit: Math.max(params.limit * 4, 400) },
     scope,
   )
-  return rows.map((row) => row.id)
+  for (const entity of entities) {
+    const label = entity.displayName?.trim() || ''
+    if (!label || looksEncryptedLabel(label)) continue
+    if (label.toLowerCase().includes(needle)) ids.add(entity.id)
+  }
+
+  const people = await findWithDecryption(
+    em,
+    CustomerPersonProfile,
+    {
+      tenantId: params.tenantId,
+      organizationId: params.organizationId,
+    },
+    { limit: Math.max(params.limit * 4, 400), populate: ['entity'] as never },
+    scope,
+  )
+  for (const profile of people) {
+    const first = profile.firstName?.trim() || ''
+    const last = profile.lastName?.trim() || ''
+    const haystack = `${first} ${last}`.trim().toLowerCase()
+    if (!haystack || looksEncryptedLabel(first) || looksEncryptedLabel(last)) continue
+    if (!haystack.includes(needle) && !first.toLowerCase().includes(needle) && !last.toLowerCase().includes(needle)) {
+      continue
+    }
+    const entity = profile.entity
+    const entityId =
+      typeof entity === 'string'
+        ? entity
+        : entity && typeof entity === 'object' && typeof entity.id === 'string'
+          ? entity.id
+          : ''
+    if (entityId) ids.add(entityId)
+  }
+
+  return [...ids].slice(0, params.limit)
+}
+
+/**
+ * Resolve CRM customer entity IDs for free-text search (tokens + phone/NIP + decrypted names).
+ * Safe for encrypted customer fields (unlike SQL `$ilike` on ciphertext).
+ */
+export async function resolveFleetCustomerEntityIdsBySearch(
+  em: EntityManager,
+  params: {
+    tenantId: string
+    organizationId: string
+    search: string
+    limit?: number
+  },
+): Promise<string[]> {
+  const limit = params.limit ?? 100
+  const search = params.search.trim()
+  if (!search) return []
+  const minLen = resolveSearchConfig().minTokenLength
+  const digitLen = digitsOnly(search).length
+  if (search.length < minLen && digitLen < 6) return []
+
+  const [tokenIds, contactIds, nameIds] = await Promise.all([
+    findCustomerEntityIdsBySearchTokens(em, { ...params, search, limit }),
+    findCustomerEntityIdsByPhoneOrNip(em, { ...params, search, limit }),
+    findCustomerEntityIdsByDecryptedName(em, { ...params, search, limit }),
+  ])
+  return [...new Set([...tokenIds, ...contactIds, ...nameIds])].slice(0, limit)
 }
 
 function mapCustomerEntityToSearchItem(
@@ -306,7 +378,7 @@ export async function searchFleetCustomerEntities(
   const [tokenIds, contactIds, nameIds] = await Promise.all([
     findCustomerEntityIdsBySearchTokens(em, { ...params, search, limit }),
     findCustomerEntityIdsByPhoneOrNip(em, { ...params, search, limit }),
-    findCustomerEntityIdsByDisplayName(em, { ...params, search, limit }),
+    findCustomerEntityIdsByDecryptedName(em, { ...params, search, limit }),
   ])
   const linkedIds = new Set(linkedPeople.map((item) => item.id))
   const matchedIds = [...new Set([...contactIds, ...tokenIds, ...nameIds])]
