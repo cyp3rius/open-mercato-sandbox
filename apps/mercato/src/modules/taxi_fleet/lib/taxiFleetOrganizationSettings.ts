@@ -87,6 +87,7 @@ export async function saveTaxiFleetOrganizationSettings(
       defaultPayoutPercent: String(normalized.defaultPayoutPercent),
       settingsJson: {
         customerEmailFrom: normalized.customerEmailFrom,
+        publicContactEmail: normalized.publicContactEmail,
         hoursBeforeShift: normalized.hoursBeforeShift,
         hoursAfterShift: normalized.hoursAfterShift,
         tripStatuses: normalized.tripStatuses,
@@ -107,6 +108,7 @@ export async function saveTaxiFleetOrganizationSettings(
     row.defaultPayoutPercent = String(normalized.defaultPayoutPercent)
     row.settingsJson = {
       customerEmailFrom: normalized.customerEmailFrom,
+      publicContactEmail: normalized.publicContactEmail,
       hoursBeforeShift: normalized.hoursBeforeShift,
       hoursAfterShift: normalized.hoursAfterShift,
       tripStatuses: normalized.tripStatuses,

@@ -41,6 +41,7 @@ import {
   isTripDriverChangeAllowed,
   tripDetailLockMode,
   isCompletedTripReceiptSupplementUpdate,
+  tripHasDriverForSchedule,
 } from '../lib/tripDetailWorkflow'
 import { tripHasReceiptAttachment } from '../lib/driverTripReceiptStatus'
 import {
@@ -49,6 +50,8 @@ import {
 } from '../lib/settlementWeekScope'
 import { scheduleTripGoogleCalendarSync } from '../lib/googleCalendar/tripGoogleCalendarSync'
 import { emitTripIndexerSideEffects } from '../lib/tripCrudIndexer'
+import { runTripApprovePaymentSideEffects } from '../lib/tripApprovePayment'
+import { mergeTripUpdateMetadata } from '../lib/tripPaymentMetadata'
 
 async function actorMayEditCompletedTrip(
   ctx: Parameters<CommandHandler<TripUpdateInput, { tripId: string }>['execute']>[1],
@@ -78,6 +81,19 @@ async function actorHasFeature(
   } catch {
     return false
   }
+}
+
+function assertTripHasDriverForSchedule(
+  row: { teamMemberId?: string | null },
+  translate: (key: string, fallback?: string) => string,
+) {
+  if (tripHasDriverForSchedule(row)) return
+  throw new CrudHttpError(400, {
+    error: translate(
+      'taxi_fleet.trips.errors.driverRequiredForSchedule',
+      'Assign a driver before marking the trip ready for fulfillment.',
+    ),
+  })
 }
 
 async function assertDriverScopedTeamMember(
@@ -384,13 +400,21 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
       )
     }
     if (parsed.notes !== undefined) row.notes = parsed.notes
-    if (parsed.metadata !== undefined) row.metadata = parsed.metadata
+    if (parsed.metadata !== undefined) {
+      row.metadata = mergeTripUpdateMetadata(
+        (row.metadata as Record<string, unknown> | null) ?? null,
+        parsed.metadata as Record<string, unknown> | null,
+      )
+    }
     if (parsed.status !== undefined) {
       const nextTripType = parsed.tripType ?? row.tripType
       const coerced = coerceTripStatusForPersistence({
         tripType: nextTripType,
         requestedStatus: parsed.status,
       })
+      if (normalizeTripStatus(coerced) === 'scheduled') {
+        assertTripHasDriverForSchedule(row, translate)
+      }
       await applyTripStatusChange(ctx, row, coerced)
     }
 
@@ -482,19 +506,29 @@ const deleteTripCommand: CommandHandler<{ id: string }, { ok: true }> = {
   },
 }
 
-const approveTripCommand: CommandHandler<{ id: string }, { tripId: string }> = {
+const approveTripCommand: CommandHandler<{ id: string }, { tripId: string; paymentLink?: string | null }> = {
   id: 'taxi_fleet.trips.approve',
   async execute(input, ctx) {
     const parsed = tripApproveSchema.parse(input)
     const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const { translate } = await resolveTranslations()
     const row = await findOneWithDecryption(em, TaxiFleetTrip, { id: parsed.id, deletedAt: null })
     if (!row) throw new CrudHttpError(404, { error: 'Not found' })
     ensureTenantScope(ctx, row.tenantId)
     ensureOrganizationScope(ctx, row.organizationId)
+    if (normalizeTripStatus(row.status) !== 'new') {
+      throw new CrudHttpError(409, {
+        error: translate(
+          'taxi_fleet.trips.errors.approveStatus',
+          'Only new trips can be approved.',
+        ),
+      })
+    }
     await applyTripStatusChange(ctx, row, 'approved')
+    const { paymentLink } = await runTripApprovePaymentSideEffects(ctx, em, row)
     await em.flush()
     scheduleTripGoogleCalendarSync(row.id)
-    return { tripId: row.id }
+    return { tripId: row.id, paymentLink }
   },
 }
 
@@ -573,10 +607,12 @@ const scheduleTripCommand: CommandHandler<{ id: string }, { tripId: string }> = 
   async execute(input, ctx) {
     const parsed = tripScheduleSchema.parse(input)
     const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const { translate } = await resolveTranslations()
     const row = await findOneWithDecryption(em, TaxiFleetTrip, { id: parsed.id, deletedAt: null })
     if (!row) throw new CrudHttpError(404, { error: 'Not found' })
     ensureTenantScope(ctx, row.tenantId)
     ensureOrganizationScope(ctx, row.organizationId)
+    assertTripHasDriverForSchedule(row, translate)
     await applyTripStatusChange(ctx, row, 'scheduled')
     await em.flush()
     scheduleTripGoogleCalendarSync(row.id)

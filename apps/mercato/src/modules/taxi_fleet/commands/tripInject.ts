@@ -15,6 +15,9 @@ import { STRAPI_TAXI_REQUEST_SOURCE } from '../lib/strapiTaxiRequestMapper'
 import { resolveReferringPartnerEntityId } from '../../insurance_desk/lib/resolveReferringPartner'
 import { ensureOrganizationScope, ensureTenantScope } from './shared'
 import { emitTripIndexerSideEffects } from '../lib/tripCrudIndexer'
+import { ensurePaymentHash } from '../lib/tripPaymentMetadata'
+import { resolveTripOrderingPersonId } from '../lib/customerLink.server'
+import { consumeDiscountCodeUsage, validateDiscountCode } from '../lib/discountCodes'
 
 async function findTripByExternalId(
   em: EntityManager,
@@ -82,8 +85,52 @@ const injectTripCommand: CommandHandler<TripInjectInput, { tripId: string; creat
       source,
     })
 
+    const orderingPersonId = await resolveTripOrderingPersonId(
+      em,
+      customer.orderingPersonId,
+      { tenantId: parsed.tenantId, organizationId: parsed.organizationId },
+      {
+        requireCompanyCustomer: true,
+        hasCompanyCustomer: Boolean(customer.customerCompanyId),
+      },
+    )
+
     const tripRequestDetails = tripRequestDetailsFromInjectInput(parsed, referringPartnerEntityId)
     const tripRequestMetadata = buildTripRequestMetadata(tripRequestDetails)
+
+    let revenueAmount =
+      parsed.revenueAmount != null && Number.isFinite(parsed.revenueAmount)
+        ? parsed.revenueAmount
+        : null
+    let discountSnapshot: Record<string, unknown> | null = null
+    const discountCode = parsed.discountCode?.trim() ?? ''
+    if (discountCode && revenueAmount != null && revenueAmount > 0) {
+      const validated = await validateDiscountCode(
+        em,
+        { tenantId: parsed.tenantId, organizationId: parsed.organizationId },
+        discountCode,
+        revenueAmount,
+      )
+      discountSnapshot = { ...validated }
+      revenueAmount = validated.totalAfter
+      await consumeDiscountCodeUsage(
+        em,
+        { tenantId: parsed.tenantId, organizationId: parsed.organizationId },
+        validated.code,
+        validated.discountAmount,
+      )
+    }
+
+    const { metadata: withHash } = ensurePaymentHash({
+      source,
+      requestId: parsed.externalId,
+      enquiryStatus: parsed.enquiryStatus ?? 'new',
+      locale: parsed.locale ?? 'pl',
+      ...(parsed.transporterPayload ? { strapi: parsed.transporterPayload } : {}),
+      ...(parsed.quoteSnapshot ? { quoteSnapshot: parsed.quoteSnapshot } : {}),
+      ...(discountSnapshot ? { discount: discountSnapshot } : {}),
+      ...tripRequestMetadata,
+    })
 
     const now = new Date()
     const record = em.create(TaxiFleetTrip, {
@@ -96,27 +143,22 @@ const injectTripCommand: CommandHandler<TripInjectInput, { tripId: string; creat
       startedAt,
       endedAt,
       distanceKm: parsed.distanceKm != null && parsed.distanceKm > 0 ? String(parsed.distanceKm) : null,
-      revenueAmount: parsed.revenueAmount != null ? String(parsed.revenueAmount) : null,
+      revenueAmount: revenueAmount != null ? String(revenueAmount) : null,
       currencyCode: parsed.currencyCode ?? 'PLN',
       customerPersonId: customer.customerPersonId,
       customerCompanyId: customer.customerCompanyId,
+      orderingPersonId,
       status: 'new',
       notes: buildTripNotesFromInjectInput(parsed),
-      metadata: {
-        source,
-        requestId: parsed.externalId,
-        enquiryStatus: parsed.enquiryStatus ?? 'new',
-        locale: parsed.locale ?? 'pl',
-        ...(parsed.transporterPayload ? { strapi: parsed.transporterPayload } : {}),
-        ...(parsed.quoteSnapshot ? { quoteSnapshot: parsed.quoteSnapshot } : {}),
-        ...tripRequestMetadata,
-      },
+      metadata: withHash,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
     })
     await em.persistAndFlush(record)
-    const eventBus = ctx.container.resolve('eventBus') as { emitEvent: (event: string, data: unknown) => Promise<void> }
+    const eventBus = ctx.container.resolve('eventBus') as {
+      emitEvent: (event: string, data: unknown) => Promise<void>
+    }
     await eventBus.emitEvent('taxi_fleet.trip.created', {
       id: record.id,
       tenantId: record.tenantId,
@@ -125,6 +167,13 @@ const injectTripCommand: CommandHandler<TripInjectInput, { tripId: string; creat
       tripType: record.tripType,
       status: record.status,
       requestId: parsed.externalId,
+      fromAddress: tripRequestDetails.fromAddress,
+      toAddress: tripRequestDetails.toAddress,
+      paymentType: tripRequestDetails.paymentType,
+      contactName: tripRequestDetails.contactName,
+      contactPhone: tripRequestDetails.contactPhone,
+      contactEmail: tripRequestDetails.contactEmail,
+      revenueAmount: record.revenueAmount,
     })
     await emitTripIndexerSideEffects(ctx, 'created', record)
     return { tripId: record.id, created: true }

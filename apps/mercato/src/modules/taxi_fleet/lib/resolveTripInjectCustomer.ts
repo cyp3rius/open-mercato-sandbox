@@ -10,6 +10,19 @@ import type { TripInjectInput } from '../data/validators'
 import { resolveTripCustomerLink } from './customerLink.server'
 import type { TripCustomerLink } from './customerLink'
 import { tripInjectHasDefinedCustomer } from './tripInjectNative'
+import {
+  createCompanyFromMfRegistry,
+  findCompanyEntityIdByNip,
+} from './receiptExtractionCompany'
+import {
+  fetchCompanyFromMfVatRegistry,
+  type MfRegistryCompanyData,
+} from '@open-mercato/core/modules/customers/lib/mfVatRegistry'
+import { resolveTripInjectNip, sanitizeTripInjectPhone } from './sanitizeTripInjectContact'
+
+export type TripInjectCustomerResult = TripCustomerLink & {
+  orderingPersonId: string | null
+}
 
 function splitFullName(fullName: string): { firstName: string; lastName: string; displayName: string } {
   const collapsed = fullName.trim().replace(/\s+/g, ' ')
@@ -50,7 +63,9 @@ async function findCompanyByNameOrTaxId(
       },
       { limit: 5, populate: ['entity'] },
     )
-    const match = profiles.find((profile) => profile.entity && !profile.entity.deletedAt && profile.entity.kind === 'company')
+    const match = profiles.find(
+      (profile) => profile.entity && !profile.entity.deletedAt && profile.entity.kind === 'company',
+    )
     if (match?.entity) return match.entity
   }
 
@@ -77,12 +92,7 @@ function looksLikeEmail(raw: string | undefined): string | null {
   return email
 }
 
-function looksLikeNip(raw: string | null | undefined): string | null {
-  const digits = (raw ?? '').replace(/\D/g, '')
-  return digits.length === 10 ? digits : null
-}
-
-async function resolveOrCreateContactCompany(
+async function resolveOrCreateCompanyFromInject(
   ctx: CommandRuntimeContext,
   translate: TranslateFn,
   params: {
@@ -93,18 +103,69 @@ async function resolveOrCreateContactCompany(
     primaryEmail?: string
     primaryPhone?: string
     source: string
+    /** When true (PL calculator), provided but invalid tax id is rejected. */
+    requireValidNip: boolean
   },
 ): Promise<string> {
   const em = (ctx.container.resolve('em') as EntityManager).fork()
+  const nipResolution = resolveTripInjectNip(params.companyTaxId)
+  if (nipResolution.status === 'invalid' && params.requireValidNip) {
+    throw new CrudHttpError(400, {
+      error: translate('taxi_fleet.trips.inject.error.invalidNip', 'Invalid NIP.'),
+      code: 'INVALID_NIP',
+    })
+  }
+  const nip = nipResolution.status === 'valid' ? nipResolution.nip : null
+  const phone = sanitizeTripInjectPhone(params.primaryPhone)
+
+  if (nip) {
+    const existingByNip = await findCompanyEntityIdByNip(em, {
+      tenantId: params.tenantId,
+      organizationId: params.organizationId,
+      nip,
+    })
+    if (existingByNip) return existingByNip
+
+    let mf: MfRegistryCompanyData | null = null
+    try {
+      mf = await fetchCompanyFromMfVatRegistry({ nip })
+    } catch {
+      mf = null
+    }
+
+    if (mf) {
+      return createCompanyFromMfRegistry(em, {
+        tenantId: params.tenantId,
+        organizationId: params.organizationId,
+        nip,
+        mf: {
+          ...mf,
+          displayName: mf.displayName || params.companyName.trim() || nip,
+          legalName: mf.legalName || params.companyName.trim() || nip,
+        },
+      })
+    }
+
+    return createCompanyFromMfRegistry(em, {
+      tenantId: params.tenantId,
+      organizationId: params.organizationId,
+      nip,
+      mf: {
+        displayName: params.companyName.trim() || `NIP ${nip}`,
+        legalName: params.companyName.trim() || `NIP ${nip}`,
+        nip,
+        regon: null,
+      },
+    })
+  }
+
   const existing = await findCompanyByNameOrTaxId(em, {
     ...params,
-    companyTaxId: looksLikeNip(params.companyTaxId),
+    companyTaxId: null,
   })
   if (existing) return existing.id
 
   const email = looksLikeEmail(params.primaryEmail)
-  const nip = looksLikeNip(params.companyTaxId)
-  const phone = params.primaryPhone?.trim() || null
 
   const companyInput = parseScopedCommandInput(
     companyCreateSchema,
@@ -116,7 +177,6 @@ async function resolveOrCreateContactCompany(
       crmRecordType: 'customer',
       source: params.source,
       status: 'active',
-      ...(nip ? { nip } : {}),
       ...(email ? { primaryEmail: email } : {}),
       ...(phone ? { primaryPhone: phone } : {}),
     },
@@ -138,6 +198,40 @@ async function resolveOrCreateContactCompany(
   return entityId
 }
 
+async function resolveOrderingPerson(
+  ctx: CommandRuntimeContext,
+  translate: TranslateFn,
+  params: {
+    organizationId: string
+    tenantId: string
+    contactName?: string
+    contactEmail?: string
+    contactPhone?: string
+    source: string
+  },
+): Promise<string | null> {
+  const contactName = params.contactName?.trim() ?? ''
+  if (!contactName && !params.contactEmail?.trim() && !params.contactPhone?.trim()) {
+    return null
+  }
+  const name = splitFullName(contactName || params.contactEmail || params.contactPhone || 'Kontakt')
+  const phone = sanitizeTripInjectPhone(params.contactPhone)
+  const personEntityId = await resolveOrCreateContactPerson(ctx, translate, {
+    organizationId: params.organizationId,
+    tenantId: params.tenantId,
+    personFields: {
+      firstName: name.firstName,
+      lastName: name.lastName,
+      displayName: name.displayName,
+      primaryEmail: params.contactEmail,
+      ...(phone ? { primaryPhone: phone } : {}),
+      source: params.source,
+      crmRecordType: 'customer',
+    },
+  })
+  return personEntityId
+}
+
 export async function resolveTripInjectCustomer(
   ctx: CommandRuntimeContext,
   translate: TranslateFn,
@@ -147,11 +241,11 @@ export async function resolveTripInjectCustomer(
     input: TripInjectInput
     source: string
   },
-): Promise<TripCustomerLink> {
+): Promise<TripInjectCustomerResult> {
   const em = (ctx.container.resolve('em') as EntityManager).fork()
 
   if (tripInjectHasDefinedCustomer(params.input)) {
-    return resolveTripCustomerLink(
+    const link = await resolveTripCustomerLink(
       em,
       {
         customerPersonId: params.input.customerPersonId,
@@ -161,29 +255,53 @@ export async function resolveTripInjectCustomer(
       { tenantId: params.tenantId, organizationId: params.organizationId },
       { required: true },
     )
+    return { ...link, orderingPersonId: null }
   }
 
   const contactType = params.input.contactType ?? 'private'
   if (contactType === 'company') {
     const companyName = params.input.companyName?.trim() ?? ''
-    if (!companyName) {
+    const requireValidNip = (params.input.locale ?? 'pl').toLowerCase().startsWith('pl')
+    const nipResolution = resolveTripInjectNip(params.input.companyTaxId)
+    if (nipResolution.status === 'invalid' && requireValidNip) {
+      throw new CrudHttpError(400, {
+        error: translate('taxi_fleet.trips.inject.error.invalidNip', 'Invalid NIP.'),
+        code: 'INVALID_NIP',
+      })
+    }
+    const validNip = nipResolution.status === 'valid' ? nipResolution.nip : null
+    if (!companyName && !validNip) {
       throw new CrudHttpError(400, {
         error: translate('taxi_fleet.trips.inject.error.companyNameRequired', 'Company name is required.'),
       })
     }
-    const companyEntityId = await resolveOrCreateContactCompany(ctx, translate, {
+    const companyEntityId = await resolveOrCreateCompanyFromInject(ctx, translate, {
       organizationId: params.organizationId,
       tenantId: params.tenantId,
-      companyName,
+      companyName: companyName || `NIP ${validNip}`,
       companyTaxId: params.input.companyTaxId,
       primaryEmail: params.input.contactEmail,
       primaryPhone: params.input.contactPhone,
       source: params.source,
+      requireValidNip,
     })
-    return { customerPersonId: null, customerCompanyId: companyEntityId }
+    const orderingPersonId = await resolveOrderingPerson(ctx, translate, {
+      organizationId: params.organizationId,
+      tenantId: params.tenantId,
+      contactName: params.input.contactName,
+      contactEmail: params.input.contactEmail,
+      contactPhone: params.input.contactPhone,
+      source: params.source,
+    })
+    return {
+      customerPersonId: null,
+      customerCompanyId: companyEntityId,
+      orderingPersonId,
+    }
   }
 
   const name = splitFullName(params.input.contactName ?? '')
+  const phone = sanitizeTripInjectPhone(params.input.contactPhone)
   const personEntityId = await resolveOrCreateContactPerson(ctx, translate, {
     organizationId: params.organizationId,
     tenantId: params.tenantId,
@@ -192,7 +310,7 @@ export async function resolveTripInjectCustomer(
       lastName: name.lastName,
       displayName: name.displayName,
       primaryEmail: params.input.contactEmail,
-      primaryPhone: params.input.contactPhone,
+      ...(phone ? { primaryPhone: phone } : {}),
       source: params.source,
       crmRecordType: 'customer',
     },
@@ -207,5 +325,6 @@ export async function resolveTripInjectCustomer(
   return {
     customerPersonId: personEntityId,
     customerCompanyId: null,
+    orderingPersonId: null,
   }
 }

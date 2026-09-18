@@ -7,6 +7,7 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { ButtonGroup, buttonGroupItemClassName } from '@open-mercato/ui/primitives/button-group'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Separator } from '@open-mercato/ui/primitives/separator'
 import { formatReceiptOcrWarningLabel } from '../lib/receiptOcrWarningLabel'
@@ -56,11 +57,7 @@ const statusClass: Record<string, string> = {
   applied: 'border-emerald-300 bg-emerald-50 text-emerald-950',
 }
 
-const buttonGroupClass =
-  'inline-flex flex-wrap overflow-hidden rounded-md border border-border divide-x divide-border'
-
-const groupButtonClass =
-  'h-8 rounded-none border-0 shadow-none px-2.5 text-xs font-medium'
+const groupButtonClass = `h-8 px-2.5 text-xs font-medium ${buttonGroupItemClassName}`
 
 function hasFieldConflict(item: ExtractionItem, field: string): boolean {
   return (item.warnings ?? []).some((warning) => {
@@ -350,7 +347,7 @@ export function ExpenseReceiptOcrPanel({
       <div className="space-y-2">
         <div className="text-xs font-medium">{t('taxi_fleet.receiptOcr.receiptActions', 'Receipt')}</div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className={buttonGroupClass}>
+          <ButtonGroup>
             <Button type="button" variant="ghost" size="sm" className={groupButtonClass} asChild>
               <a
                 href={item.attachmentUrl}
@@ -392,7 +389,7 @@ export function ExpenseReceiptOcrPanel({
                 {t('taxi_fleet.receiptOcr.ignoreErrors', 'Ignore errors')}
               </Button>
             ) : null}
-          </div>
+          </ButtonGroup>
           {canPurgeReceipts ? (
             <Button
               type="button"
@@ -416,7 +413,7 @@ export function ExpenseReceiptOcrPanel({
             <div className="text-xs font-medium">
               {t('taxi_fleet.receiptOcr.overwriteActions', 'Overwrite')}
             </div>
-            <div className={buttonGroupClass}>
+            <ButtonGroup>
               <Button
                 type="button"
                 variant="ghost"
@@ -447,7 +444,7 @@ export function ExpenseReceiptOcrPanel({
               >
                 {t('taxi_fleet.receiptOcr.applyDocumentNumber', 'Document number')}
               </Button>
-            </div>
+            </ButtonGroup>
             <p className="text-[11px] text-muted-foreground">
               {t(
                 'taxi_fleet.receiptOcr.overwriteHint',

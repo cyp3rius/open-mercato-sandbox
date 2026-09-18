@@ -8,6 +8,7 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { MoneyInputField } from '@open-mercato/ui/backend/inputs/MoneyInputField'
 import { IconButton } from '@open-mercato/ui/primitives/icon-button'
 import { recalculateTripFinalPrice } from './route/TripQuoteSync'
+import { TripQuoteWarningList } from './TripQuoteWarningList'
 import type { TripFormValues } from './tripFormConfig'
 
 type QuoteSnapshot = {
@@ -219,11 +220,7 @@ export function TripPricingSidebar({
           ) : null}
 
           {Array.isArray(snapshot?.warnings) && snapshot.warnings.length > 0 ? (
-            <ul className="space-y-1 border-t pt-3 text-xs text-amber-700 dark:text-amber-400">
-              {snapshot.warnings.map((warning) => (
-                <li key={warning}>{warning}</li>
-              ))}
-            </ul>
+            <TripQuoteWarningList warnings={snapshot.warnings} />
           ) : null}
 
           {Number.isFinite(finalAmount) && hasCalculated && Math.abs(finalAmount - calculatedTotal) > 0.009 ? (

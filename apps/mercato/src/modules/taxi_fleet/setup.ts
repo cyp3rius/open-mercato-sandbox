@@ -61,6 +61,7 @@ export const setup: ModuleSetupConfig = {
       'taxi_fleet.manage_trips',
       'taxi_fleet.trips.edit_completed',
       'taxi_fleet.trips.inject',
+      'taxi_fleet.pricing.quote',
       'taxi_fleet.manage_settlements',
       'taxi_fleet.manage_platform_sync',
       'taxi_fleet.manage_driver_communications',
@@ -75,7 +76,7 @@ export const setup: ModuleSetupConfig = {
       'taxi_fleet.settlement.submitted.notify',
       'taxi_fleet.platform_sync.notify',
     ],
-    driver: ['taxi_fleet.view', 'taxi_fleet.driver'],
+    driver: ['taxi_fleet.view', 'taxi_fleet.driver', 'taxi_fleet.pricing.quote'],
   },
 }
 

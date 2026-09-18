@@ -30,7 +30,7 @@ async function postMembership(
     token,
     data: { customerEntityId },
   })
-  const body = await readJsonSafe<JsonRecord>(res)
+  const body = (await readJsonSafe<JsonRecord>(res)) ?? {}
   return { ok: res.ok(), status: res.status(), body }
 }
 

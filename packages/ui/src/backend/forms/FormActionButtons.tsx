@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Trash2, Save, Loader2 } from 'lucide-react'
 import { cn } from '@open-mercato/shared/lib/utils'
 import { Button } from '../../primitives/button'
+import { Separator } from '../../primitives/separator'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 export type FormActionButtonsProps = {
@@ -64,9 +65,15 @@ export function FormActionButtons({
   const resolvedPendingLabel = submit?.pendingLabel ?? t('ui.forms.status.saving')
   const SubmitIcon = submit?.icon ?? Save
 
+  const hasStandardActions = Boolean(showDelete || cancelHref || submit)
+  const showExtraSeparator = Boolean(extraActions) && hasStandardActions
+
   return (
     <div className={cn('flex flex-row flex-nowrap items-center gap-2', className)}>
       {extraActions}
+      {showExtraSeparator ? (
+        <Separator orientation="vertical" className="mx-1 h-6 self-center" />
+      ) : null}
       {showDelete ? (
         <Button
           type="button"

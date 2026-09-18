@@ -106,7 +106,7 @@ When operator creates/receives a trip with `started_at` / `ended_at`:
 | GET | `/api/taxi_fleet/trips/suggest-drivers` | Availability-based driver ranking |
 | GET | `/api/taxi_fleet/route/places-autocomplete` | Address autocomplete (OpenRouteService proxy) |
 | POST | `/api/taxi_fleet/route/distance` | Driving distance + duration for route stops |
-| POST | `/api/taxi_fleet/pricing/quote` | Canonical trip price quote (CRM, driver app, future calculator inject); auth any-of `view`/`driver`/`trips.inject` |
+| POST | `/api/taxi_fleet/pricing/quote` | Canonical trip price quote (CRM, driver app, calculator); auth any-of `pricing.quote`/`view`/`driver`/`trips.inject` |
 | POST | `/api/taxi_fleet/quote` | Legacy alias of `/pricing/quote` (same contract) |
 | GET | `/api/taxi_fleet/route/reverse-geocode` | Reverse geocode coordinates to address |
 | POST | `/api/taxi_fleet/trips/{id}/approve` | Operator approval |
@@ -175,7 +175,7 @@ Preferencje użytkownika: `/backend/profile/notifications` (`NotificationPrefere
 ## Changelog
 
 ### 2026-09-14
-- Canonical quote endpoint `POST /api/taxi_fleet/pricing/quote` (CRM + driver app + inject auth); legacy `/quote` remains an alias. Source of trip pricing for CRM forms, driver commercial step, and future external calculator.
+- Canonical quote endpoint `POST /api/taxi_fleet/pricing/quote` (CRM + driver app + inject auth); dedicated ACL `taxi_fleet.pricing.quote` plus any-of `view`/`driver`/`trips.inject`; legacy `/quote` remains an alias. Source of trip pricing for CRM forms, driver commercial step, and external calculator.
 
 ### 2026-09-09
 - Monthly settlements become **per-driver payout** documents (hybrid calendar + platform-from-weeklies with trip-ID dedupe). Weeklies are control-only (no close payout). Driver PWA gains monthly read-only preview. Spec: `.ai/specs/2026-09-09-taxi-fleet-monthly-driver-settlement.md`.
@@ -224,6 +224,14 @@ Preferencje użytkownika: `/backend/profile/notifications` (`NotificationPrefere
 - TC-TAXI-007: offline outbox flush for trip create after reconnect (manual/PWA smoke)
 
 ## Changelog
+
+### 2026-09-18
+- **Calculator → CRM booking path:** `POST /api/taxi_fleet/trips/inject` creates `paymentHash`, ensures CRM person/company (MF NIP lookup / stub) + optional `orderingPersonId` (Zamawiający); optional `discountCode` validate+consume.
+- **PayPal runtime:** approve (`new` → `approved`) creates PayPal order + Strapi-style HTML payment-link email for `electronic`; cash/card stays `approved` with offline confirmation email. Public `GET /api/taxi_fleet/trips/payment/confirm/[hash]` captures → `paid`.
+- **Statuses:** never skip to `paid` on approve; operator then Mark paid (cash/card) or PayPal confirm; then Schedule (`scheduled`).
+- **Google Calendar:** upsert only when status is `scheduled`; delete otherwise.
+- **Discount codes:** entity + Fleet menu CRUD + `GET /api/taxi_fleet/discount-codes/validate` (feature `trips.inject`).
+- **Quote:** calculator uses `POST /api/taxi_fleet/pricing/quote` (CRM is source of truth).
 
 | GET/PUT | `/api/taxi_fleet/settings` | Ustawienia organizacji (flota, integracje, szablony maili) |
 

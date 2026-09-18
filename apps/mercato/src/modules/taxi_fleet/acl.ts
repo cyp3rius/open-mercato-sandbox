@@ -18,6 +18,11 @@ export const features = [
     module: 'taxi_fleet',
   },
   { id: 'taxi_fleet.trips.inject', title: 'Inject trips from external channels', module: 'taxi_fleet' },
+  {
+    id: 'taxi_fleet.pricing.quote',
+    title: 'Calculate trip prices (quote API)',
+    module: 'taxi_fleet',
+  },
   { id: 'taxi_fleet.manage_settlements', title: 'Manage weekly settlements', module: 'taxi_fleet' },
   { id: 'taxi_fleet.manage_platform_sync', title: 'Sync platform trips (Bolt/Uber/Free)', module: 'taxi_fleet' },
   {

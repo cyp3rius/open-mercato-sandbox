@@ -2,10 +2,11 @@
 
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
-import { BadgeCheck, CalendarClock, Check, Copy, CreditCard, ShieldCheck, X } from 'lucide-react'
+import { BadgeCheck, Ban, CalendarClock, Check, Copy, CreditCard, ShieldCheck, X } from 'lucide-react'
 import { ApplyBreadcrumb } from '@open-mercato/ui/backend/AppShell'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { ButtonGroup, buttonGroupItemClassName } from '@open-mercato/ui/primitives/button-group'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { updateCrud, deleteCrud } from '@open-mercato/ui/backend/utils/crud'
@@ -25,19 +26,23 @@ import { TripCrudForm } from '../../../../components/TripCrudForm'
 import { TripReceiptOcrPanel } from '../../../../components/TripReceiptOcrPanel'
 import { PlatformTripIngestBadge } from '../../../../components/PlatformTripIngestBadge'
 import { PlatformTripIngestPanel } from '../../../../components/PlatformTripIngestPanel'
+import { TripPaypalPaymentPanel } from '../../../../components/TripPaypalPaymentPanel'
 import { Notice } from '@open-mercato/ui/primitives/Notice'
 import { isPlatformIngestedTrip } from '../../../../lib/platformSync/platformTripIngest'
+import { shouldShowPaypalPaymentPanel } from '../../../../lib/tripPaymentMetadata'
 import {
   tripDetailActionsForStatus,
   tripDetailLockMode,
+  tripHasDriverForSchedule,
   type TripDetailActionId,
 } from '../../../../lib/tripDetailWorkflow'
 import { normalizeTripStatus } from '../../../../lib/tripStatuses'
+import type { TripFormValues } from '../../../../components/tripFormConfig'
 
 type TripRow = {
   id: string
-  teamMemberId: string
-  resourceId: string
+  teamMemberId?: string | null
+  resourceId?: string | null
   tripType: string
   status: string
   platform?: string | null
@@ -54,6 +59,11 @@ type TripRow = {
 }
 
 const ACTION_BUTTON_CLASS = 'h-9 rounded border shadow-none'
+const ACTION_GROUP_BUTTON_CLASS = `h-9 px-3 ${buttonGroupItemClassName}`
+const ACTION_GROUP_DANGER_CLASS =
+  `${ACTION_GROUP_BUTTON_CLASS} text-destructive hover:bg-destructive/10 hover:text-destructive`
+const ACTION_GROUP_SUCCESS_CLASS =
+  `${ACTION_GROUP_BUTTON_CLASS} text-emerald-700 hover:bg-emerald-500/10 hover:text-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-500/15 dark:hover:text-emerald-300`
 
 export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: string } }) {
   const t = useT()
@@ -69,6 +79,7 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
   const [error, setError] = React.useState<string | null>(null)
   const [formKey, setFormKey] = React.useState(0)
   const [pendingAction, setPendingAction] = React.useState<TripDetailActionId | null>(null)
+  const liveValuesRef = React.useRef<TripFormValues | null>(null)
 
   const load = React.useCallback(async (opts?: { soft?: boolean }) => {
     if (!tripId) return
@@ -127,12 +138,12 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
 
   const breadcrumbTitle = React.useMemo(() => {
     if (!row) return t('taxi_fleet.trips.detail.title', 'Trip')
-    return resolveName(row.teamMemberId)
+    return resolveName(row.teamMemberId ?? '')
   }, [resolveName, row, t])
 
   const runStatusAction = React.useCallback(
     async (action: TripDetailActionId) => {
-      if (!tripId) return
+      if (!tripId || !row) return
       if (action === 'reject') {
         const ok = await confirm({
           title: t('taxi_fleet.trips.rejectConfirm', 'Reject this trip?'),
@@ -140,6 +151,26 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
         })
         if (!ok) return
       }
+      if (action === 'cancel') {
+        const ok = await confirm({
+          title: t('taxi_fleet.trips.cancelConfirm', 'Cancel this trip?'),
+          variant: 'destructive',
+        })
+        if (!ok) return
+      }
+
+      const values = liveValuesRef.current ?? initialValues
+      if (action === 'schedule' && !tripHasDriverForSchedule(values)) {
+        flash(
+          t(
+            'taxi_fleet.trips.errors.driverRequiredForSchedule',
+            'Assign a driver before marking the trip ready for fulfillment.',
+          ),
+          'error',
+        )
+        return
+      }
+
       setPendingAction(action)
       const pathByAction: Record<TripDetailActionId, string> = {
         approve: `/api/taxi_fleet/trips/${tripId}/approve`,
@@ -148,6 +179,7 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
         mark_paid: `/api/taxi_fleet/trips/${tripId}/mark-paid`,
         complete: `/api/taxi_fleet/trips/${tripId}/complete`,
         authorize_internal: `/api/taxi_fleet/trips/${tripId}/authorize-internal`,
+        cancel: `/api/taxi_fleet/trips/${tripId}/cancel`,
       }
       const successByAction: Record<TripDetailActionId, string> = {
         approve: t('taxi_fleet.trips.approved', 'Trip approved.'),
@@ -159,8 +191,13 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
           'taxi_fleet.trips.authorizedInternalFlash',
           'Internal trip authorized.',
         ),
+        cancel: t('taxi_fleet.trips.cancelledFlash', 'Trip cancelled.'),
       }
       try {
+        // Persist live form first so assignment/pricing changes are not discarded.
+        await updateCrud('taxi_fleet/trips', tripFormValuesToUpdatePayload(row.id, values), {
+          errorMessage: t('taxi_fleet.trips.form.saveError', 'Could not save trip.'),
+        })
         const call = await apiCall<{ error?: string }>(pathByAction[action], { method: 'POST' })
         if (call.ok) {
           flash(successByAction[action], 'success')
@@ -172,6 +209,8 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
               ? call.result.error
               : t('taxi_fleet.errors.generic', 'Operation failed.')
           flash(message, 'error')
+          await load({ soft: true })
+          setFormKey((value) => value + 1)
         }
       } catch (err) {
         const message =
@@ -182,7 +221,7 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
         setPendingAction(null)
       }
     },
-    [confirm, load, t, tripId],
+    [confirm, initialValues, load, row, t, tripId],
   )
 
   if (loading) {
@@ -213,35 +252,36 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
     allowEditCompleted: canEditCompletedTrips,
   })
   const formFullyReadOnly = !canEditTrip || lockMode === 'full'
-  const availableActions = (() => {
-    if (
-      row.tripType === 'internal' &&
-      normalizedStatus === 'pending_authorization'
-    ) {
-      return canAuthorizeInternalTrips
-        ? (['authorize_internal'] as TripDetailActionId[])
-        : []
-    }
-    if (!canManageTrips) return []
-    return tripDetailActionsForStatus(normalizedStatus)
-  })()
+  const availableActions =
+    canManageTrips || (row.tripType === 'internal' && canAuthorizeInternalTrips)
+      ? tripDetailActionsForStatus(normalizedStatus, {
+          tripType: row.tripType,
+          canAuthorizeInternal: canAuthorizeInternalTrips,
+        }).filter((action) => {
+          if (action === 'authorize_internal') return canAuthorizeInternalTrips
+          return canManageTrips
+        })
+      : []
   const actionBusy = pendingAction !== null
 
   const actionButtons: Record<
     TripDetailActionId,
-    { icon: React.ReactNode; label: string }
+    { icon: React.ReactNode; label: string; danger?: boolean; success?: boolean }
   > = {
     approve: {
       icon: <Check className="size-4 shrink-0" aria-hidden />,
       label: t('taxi_fleet.trips.actions.approve', 'Accept'),
+      success: true,
     },
     reject: {
       icon: <X className="size-4 shrink-0" aria-hidden />,
       label: t('taxi_fleet.trips.actions.reject', 'Reject'),
+      danger: true,
     },
     schedule: {
       icon: <CalendarClock className="size-4 shrink-0" aria-hidden />,
       label: t('taxi_fleet.trips.actions.schedule', 'Ready for fulfillment'),
+      success: true,
     },
     mark_paid: {
       icon: <CreditCard className="size-4 shrink-0" aria-hidden />,
@@ -250,10 +290,16 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
     complete: {
       icon: <BadgeCheck className="size-4 shrink-0" aria-hidden />,
       label: t('taxi_fleet.trips.actions.complete', 'Completed'),
+      success: true,
     },
     authorize_internal: {
       icon: <ShieldCheck className="size-4 shrink-0" aria-hidden />,
       label: t('taxi_fleet.trips.actions.authorizeInternal', 'Authorize'),
+    },
+    cancel: {
+      icon: <Ban className="size-4 shrink-0" aria-hidden />,
+      label: t('taxi_fleet.trips.actions.cancel', 'Cancel trip'),
+      danger: true,
     },
   }
 
@@ -299,7 +345,19 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
             initialValues={initialValues}
             readOnly={formFullyReadOnly}
             lockStatus={canEditTrip && lockMode !== 'none' ? normalizedStatus : null}
+            onLiveValuesChange={(values) => {
+              liveValuesRef.current = values
+            }}
             onDelete={canManageTrips && lockMode !== 'full' ? handleDelete : undefined}
+            sidebarAfterPricing={
+              shouldShowPaypalPaymentPanel(row) ? (
+                <TripPaypalPaymentPanel
+                  tripId={row.id}
+                  status={row.status}
+                  metadata={row.metadata ?? null}
+                />
+              ) : null
+            }
             sidebarExtra={
               isPlatformIngestedTrip(row.metadata ?? null) ? (
                 <PlatformTripIngestPanel
@@ -307,18 +365,12 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
                   platform={row.platform ?? null}
                   externalTripId={row.externalTripId ?? null}
                 />
-              ) : (
+              ) : normalizedStatus === 'completed' ? (
                 <TripReceiptOcrPanel
                   tripId={row.id}
                   canManage={canManageTrips}
                   canReplaceReceipt={
-                    canManageTrips &&
-                    (canEditCompletedTrips ||
-                      normalizedStatus === 'completed' ||
-                      normalizedStatus === 'pending_authorization' ||
-                      normalizedStatus === 'paid' ||
-                      normalizedStatus === 'in_progress' ||
-                      normalizedStatus === 'scheduled')
+                    canManageTrips && (canEditCompletedTrips || normalizedStatus === 'completed')
                   }
                   onApplied={() => {
                     void (async () => {
@@ -333,7 +385,7 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
                     })()
                   }}
                 />
-              )
+              ) : null
             }
             extraActions={
               canManageTrips || availableActions.length > 0 ? (
@@ -353,19 +405,32 @@ export default function TaxiFleetTripDetailPage({ params }: { params?: { id?: st
                       {t('taxi_fleet.trips.actions.duplicate', 'Duplicate')}
                     </Button>
                   ) : null}
-                  {availableActions.map((action) => (
-                    <Button
-                      key={action}
-                      type="button"
-                      variant="outline"
-                      className={ACTION_BUTTON_CLASS}
-                      disabled={actionBusy}
-                      onClick={() => void runStatusAction(action)}
-                    >
-                      {actionButtons[action].icon}
-                      {actionButtons[action].label}
-                    </Button>
-                  ))}
+                  {availableActions.length > 0 ? (
+                    <ButtonGroup>
+                      {availableActions.map((action) => {
+                        const config = actionButtons[action]
+                        return (
+                          <Button
+                            key={action}
+                            type="button"
+                            variant="ghost"
+                            className={
+                              config.danger
+                                ? ACTION_GROUP_DANGER_CLASS
+                                : config.success
+                                  ? ACTION_GROUP_SUCCESS_CLASS
+                                  : ACTION_GROUP_BUTTON_CLASS
+                            }
+                            disabled={actionBusy}
+                            onClick={() => void runStatusAction(action)}
+                          >
+                            {config.icon}
+                            {config.label}
+                          </Button>
+                        )
+                      })}
+                    </ButtonGroup>
+                  ) : null}
                 </div>
               ) : null
             }

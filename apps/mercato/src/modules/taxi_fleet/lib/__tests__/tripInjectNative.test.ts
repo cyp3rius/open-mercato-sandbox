@@ -1,5 +1,6 @@
 import { tripInjectSchema } from '../../data/validators'
 import {
+  buildTripNotesFromInjectInput,
   buildTripScheduleFromInjectInput,
   isLegacyTripInjectEnvelope,
   toNativeTripInjectInputFromLegacyPayload,
@@ -145,5 +146,39 @@ describe('legacy transporter adapter', () => {
     const details = tripRequestDetailsFromInjectInput(parsed, null)
     expect(details.paymentType).toBe('cash')
     expect(details.fromAddress).toBe('Kraków, Rynek')
+  })
+})
+
+describe('buildTripNotesFromInjectInput', () => {
+  it('includes luggage, seats and airport options for the operator', () => {
+    const notes = buildTripNotesFromInjectInput({
+      ...scope,
+      externalId: 'notes-1',
+      fromAddress: 'A',
+      toAddress: 'B',
+      tripDate: '2026-08-04',
+      tripTime: '10:00',
+      contactName: 'Ada',
+      contactPhone: '500000000',
+      passengers: 3,
+      handLuggage: 2,
+      holdLuggage: 1,
+      childSeats: 2,
+      boosterSeats: 1,
+      englishSpeakingDriver: true,
+      isAirportPickup: true,
+      meetAndGreet: true,
+      flightNumber: 'LO123',
+      paymentType: 'card',
+      serviceType: 'airport',
+    })
+    expect(notes).toContain('Bagaż podręczny: 2')
+    expect(notes).toContain('Bagaż do luku: 1')
+    expect(notes).toContain('Foteliki: 2')
+    expect(notes).toContain('Podstawki: 1')
+    expect(notes).toContain('Kierowca anglojęzyczny: tak')
+    expect(notes).toContain('Odbiór z lotniska: tak')
+    expect(notes).toContain('Odbiór z tabliczką: tak')
+    expect(notes).toContain('Numer lotu: LO123')
   })
 })

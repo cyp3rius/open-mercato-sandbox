@@ -7,6 +7,7 @@ import { resolveFleetPricingConfig } from './resolveFleetPricingConfig'
 import type { QuoteResult } from './quote-types'
 
 export const FLEET_QUOTE_ACCESS_FEATURES = [
+  'taxi_fleet.pricing.quote',
   'taxi_fleet.view',
   'taxi_fleet.driver',
   'taxi_fleet.trips.inject',

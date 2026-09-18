@@ -1033,3 +1033,47 @@ export class TaxiFleetDriverCommunicationRecipient {
   @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
   updatedAt: Date = new Date()
 }
+
+@Entity({ tableName: 'taxi_fleet_discount_codes' })
+@Unique({ properties: ['tenantId', 'organizationId', 'code'] })
+@Index({ name: 'taxi_fleet_discount_codes_scope_idx', properties: ['tenantId', 'organizationId'] })
+export class TaxiFleetDiscountCode {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ type: 'text' })
+  code!: string
+
+  @Property({ type: 'text', nullable: true })
+  label?: string | null
+
+  @Property({ name: 'discount_type', type: 'text' })
+  discountType: 'percent' | 'amount' = 'percent'
+
+  @Property({ type: 'numeric', precision: 18, scale: 4 })
+  value!: string
+
+  @Property({ name: 'usage_limit', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  usageLimit?: string | null
+
+  @Property({ name: 'used_amount', type: 'numeric', precision: 18, scale: 4, default: 0 })
+  usedAmount: string = '0'
+
+  @Property({ type: 'boolean', default: true })
+  active: boolean = true
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}

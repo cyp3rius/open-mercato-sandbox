@@ -37,7 +37,7 @@ export const openApi = {
   POST: {
     summary: 'Calculate fleet trip quote (canonical)',
     description:
-      'Canonical pricing endpoint for CRM trip forms, the driver app, and future external calculators (e.g. Strapi inject). Uses organization taxi fleet pricing settings. Requires session auth and any of: taxi_fleet.view, taxi_fleet.driver, taxi_fleet.trips.inject. Legacy alias: POST /api/taxi_fleet/quote.',
+      'Canonical pricing endpoint for CRM trip forms, the driver app, and external calculators. Uses organization taxi fleet pricing settings. Requires session auth and any of: taxi_fleet.pricing.quote, taxi_fleet.view, taxi_fleet.driver, taxi_fleet.trips.inject. Legacy alias: POST /api/taxi_fleet/quote.',
     tags: ['Taxi fleet pricing'],
     requestBody: {
       schema: quoteBodySchema,

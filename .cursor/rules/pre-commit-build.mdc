@@ -1,18 +1,35 @@
 ---
-description: Before commit — run full yarn build with ≥8GB Node heap and fix errors
+description: Before commit — typecheck, build (≥8GB heap), commit; push only if asked; fix failures until commit succeeds
 alwaysApply: true
 ---
 
-# Pre-commit build gate
+# Pre-commit gate (typecheck → build → commit → push?)
 
-Before creating a **git commit** (when the user asks to commit, or when wrapping up a change set intended for commit):
+When the user asks to **commit** (or to wrap up a change set for commit), run this sequence. Do **not** skip steps or commit with a known broken typecheck/build.
 
-1. **Run a full production build** and **fix any failures** before committing. Do not commit with a known broken build.
-2. **Heap:** TypeScript / Next can OOM on default Node memory. Always set at least **8 GB**:
+## Sequence
 
-```bash
-. ~/.nvm/nvm.sh && nvm use && NODE_OPTIONS='--max-old-space-size=8192' yarn build
-```
+1. **Typecheck**
+   ```bash
+   . ~/.nvm/nvm.sh && nvm use && yarn typecheck
+   ```
+2. **Build** (minimum **8 GB** Node heap — TypeScript / Next often OOM on default memory):
+   ```bash
+   . ~/.nvm/nvm.sh && nvm use && NODE_OPTIONS='--max-old-space-size=8192' yarn build
+   ```
+3. **Commit** — only after typecheck and build succeed. Follow the user rule for git commits (status/diff/log, HEREDOC message, no secrets, no amend unless allowed).
+4. **Push** — only if the user asked to push (or clearly expects push in the same request). Follow **`.cursor/rules/git-push-fork.mdc`** (`git push -u fork HEAD`). Do **not** push unprompted.
 
-3. If the build fails: fix the reported errors, re-run the same command, then commit.
-4. Follow **`.cursor/rules/shell-commands.mdc`** (`nvm use` + `yarn`). Do not lower the heap below 8192 for `yarn build` in this repo.
+## Failure handling (MUST)
+
+If **typecheck**, **build**, or **commit** fails:
+
+1. Fix the reported errors.
+2. Re-run the failed step (and earlier gates if the fix could affect them).
+3. Repeat until typecheck + build pass and the commit succeeds.
+4. Do **not** stop after one failed attempt and leave the user with an uncommitted broken tree when they asked to commit.
+
+## Shell / heap
+
+- Follow **`.cursor/rules/shell-commands.mdc`** (`nvm use` + `yarn`).
+- Do **not** lower the heap below 8192 for `yarn build` in this repo.

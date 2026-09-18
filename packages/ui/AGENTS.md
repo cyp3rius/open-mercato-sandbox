@@ -25,6 +25,26 @@ This document captures UI usage patterns based on current implementations in the
 ```typescript
 import { Button } from '@open-mercato/ui/primitives/button'
 import { IconButton } from '@open-mercato/ui/primitives/icon-button'
+import { ButtonGroup, buttonGroupItemClassName } from '@open-mercato/ui/primitives/button-group'
+```
+
+### Button groups
+
+Use `ButtonGroup` for joined action clusters. It renders a shared border and **vertical separators between items** (do not rely on `divide-x` — child `border-0` cancels it).
+
+```tsx
+<ButtonGroup>
+  <Button type="button" variant="ghost" className={buttonGroupItemClassName}>
+    Accept
+  </Button>
+  <Button
+    type="button"
+    variant="ghost"
+    className={cn(buttonGroupItemClassName, 'text-destructive hover:bg-destructive/10')}
+  >
+    Reject
+  </Button>
+</ButtonGroup>
 ```
 
 ### MUST Rules

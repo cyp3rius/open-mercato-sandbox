@@ -5,7 +5,7 @@ import {
   tripInjectServiceTypeSchema,
 } from '../data/validators'
 import type { TripRequestDetails } from './tripRequestForm'
-import { tripPaymentTypeNotesLabelPl } from './tripRequestForm'
+import { buildTripRouteNotes, defaultTripRequestDetails } from './tripRequestForm'
 import {
   buildTripScheduleFromStrapi,
   mapStrapiPayloadToTaxiRequest,
@@ -91,6 +91,7 @@ export function toNativeTripInjectInputFromMapped(
     vehicleCategory: mapped.vehicleCategory,
     basePrice: mapped.basePrice,
     referralCode: mapped.referralCode,
+    discountCode: mapped.discountCode,
     quoteSnapshot: mapped.quoteSnapshot,
     locale: mapped.locale,
     enquiryStatus: mapped.enquiryStatus,
@@ -185,18 +186,36 @@ export function tripRequestDetailsFromInjectInput(
 }
 
 export function buildTripNotesFromInjectInput(input: TripInjectInput): string {
-  const lines = [
-    `Trasa: ${input.fromAddress} → ${input.toAddress}`,
-    input.waypointAddresses?.trim() ? `Punkty pośrednie:\n${input.waypointAddresses.trim()}` : null,
-    input.durationText?.trim()
-      ? `Czas: ${input.durationText.trim()}`
-      : null,
-    input.distanceKm != null && input.distanceKm > 0 ? `Dystans: ${input.distanceKm} km` : null,
-    input.passengers ? `Pasażerowie: ${input.passengers}` : null,
-    input.flightNumber?.trim() ? `Lot: ${input.flightNumber.trim()}` : null,
-    input.paymentType
-      ? `Płatność: ${tripPaymentTypeNotesLabelPl(input.paymentType) ?? input.paymentType}`
-      : null,
-  ].filter((line): line is string => Boolean(line?.length))
-  return lines.join('\n')
+  const details: TripRequestDetails = {
+    ...defaultTripRequestDetails(),
+    serviceType: input.serviceType === 'airport' ? 'airport' : 'local',
+    fromAddress: input.fromAddress,
+    toAddress: input.toAddress,
+    waypointAddresses: input.waypointAddresses?.trim() ?? '',
+    distanceKm:
+      input.distanceKm != null && Number.isFinite(input.distanceKm) && input.distanceKm > 0
+        ? String(input.distanceKm)
+        : '',
+    durationText: input.durationText?.trim() ?? '',
+    passengers: String(Math.max(1, input.passengers ?? 1)),
+    handLuggage: String(Math.max(0, input.handLuggage ?? 0)),
+    holdLuggage: String(Math.max(0, input.holdLuggage ?? 0)),
+    childSeats: String(Math.max(0, input.childSeats ?? 0)),
+    boosterSeats: String(Math.max(0, input.boosterSeats ?? 0)),
+    isAirportPickup: input.isAirportPickup === true,
+    flightNumber: input.flightNumber?.trim() ?? '',
+    meetAndGreet: input.meetAndGreet === true,
+    englishSpeakingDriver: input.englishSpeakingDriver === true,
+    paymentType:
+      input.paymentType === 'electronic' ||
+      input.paymentType === 'cash' ||
+      input.paymentType === 'card' ||
+      input.paymentType === 'transfer' ||
+      input.paymentType === 'loyalty_program' ||
+      input.paymentType === 'platform_app' ||
+      input.paymentType === 'other'
+        ? input.paymentType
+        : 'cash',
+  }
+  return buildTripRouteNotes(details) ?? ''
 }

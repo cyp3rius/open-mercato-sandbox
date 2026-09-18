@@ -683,6 +683,26 @@ export function TaxiFleetModuleSettings() {
             onChange={(event) => setSettings((current) => ({ ...current, customerEmailFrom: event.target.value }))}
           />
         </div>
+        <div className="space-y-1">
+          <Label className="text-sm font-medium">
+            {t('taxi_fleet.config.emails.publicContact', 'Public contact email')}
+          </Label>
+          <input
+            type="email"
+            className={CRUD_FORM_TEXT_INPUT_CLASS}
+            value={settings.publicContactEmail}
+            disabled={saving}
+            onChange={(event) =>
+              setSettings((current) => ({ ...current, publicContactEmail: event.target.value }))
+            }
+          />
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'taxi_fleet.config.emails.publicContactHelp',
+              'CC and reply-to on customer trip emails (e.g. office@…).',
+            )}
+          </p>
+        </div>
         <div className="space-y-6">
           {TAXI_FLEET_CUSTOMER_EMAIL_EVENTS.map((eventId) => {
             const template = settings.customerEmails[eventId]

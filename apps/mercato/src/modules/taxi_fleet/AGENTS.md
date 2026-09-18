@@ -6,7 +6,7 @@ App module: `apps/mercato/src/modules/taxi_fleet/`
 
 - **Canonical endpoint:** `POST /api/taxi_fleet/pricing/quote`
 - **Legacy alias (BC):** `POST /api/taxi_fleet/quote` — same body/response; prefer `/pricing/quote` for new clients
-- **Auth:** session required; access if the user has **any of** `taxi_fleet.view` | `taxi_fleet.driver` | `taxi_fleet.trips.inject` (checked in handler via `userHasAnyFeature`; no public unauthenticated quote)
+- **Auth:** session required; access if the user has **any of** `taxi_fleet.pricing.quote` | `taxi_fleet.view` | `taxi_fleet.driver` | `taxi_fleet.trips.inject` (checked in handler via `userHasAnyFeature`; no public unauthenticated quote)
 - **Service:** `lib/pricing/runFleetQuote.ts` — loads org settings → `resolveFleetPricingConfig` → Nager PL holiday when `isPublicHoliday` omitted → `calculateQuote`
 - **Request / response:** `quoteBodySchema` / `quoteResponseSchema` in `data/validators.ts` (`currency`, `vehicleCategory`, `basePrice`, `surcharges[]`, `totalPrice`, optional `warnings`)
 - **Vehicle category:** omit from client body so `selectVehicle` always runs (optional field is explicit API override only)

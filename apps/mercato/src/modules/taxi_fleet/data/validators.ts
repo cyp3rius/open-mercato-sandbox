@@ -234,6 +234,7 @@ export const tripInjectSchema = z
     vehicleCategory: z.string().trim().max(120).optional().nullable(),
     basePrice: z.coerce.number().optional().nullable(),
     referralCode: z.string().trim().max(120).optional().nullable(),
+    discountCode: z.string().trim().max(120).optional().nullable(),
     quoteSnapshot: z.record(z.string(), z.unknown()).optional().nullable(),
     locale: z.string().trim().max(16).optional().nullable(),
     enquiryStatus: z.string().trim().max(64).optional().nullable(),
@@ -375,8 +376,8 @@ export const tripCreateSchema = z
 export const tripUpdateSchema = z
   .object({
     id: uuid,
-    teamMemberId: uuid.optional(),
-    resourceId: uuid.optional(),
+    teamMemberId: optionalUuid,
+    resourceId: optionalUuid,
     assignmentId: optionalUuid,
     tripType: tripTypeSchema.optional(),
     platform: tripPlatformSchema.optional().nullable(),
@@ -669,6 +670,7 @@ export const taxiFleetSettingsPutSchema = z.object({
   hoursBeforeShift: z.coerce.number().int().min(0).max(48).optional().default(3),
   hoursAfterShift: z.coerce.number().int().min(0).max(48).optional().default(3),
   customerEmailFrom: z.string().max(500).optional().default(''),
+  publicContactEmail: z.string().max(500).optional().default(''),
   tripStatuses: tripStatusDictionarySchema.optional(),
   paypal: z.object({
     enabled: z.boolean(),
@@ -992,3 +994,103 @@ export type DriverCommunicationScheduleInput = z.infer<typeof driverCommunicatio
 export type DriverCommunicationCancelInput = z.infer<typeof driverCommunicationCancelSchema>
 export type DriverCommunicationRetryRecipientInput = z.infer<typeof driverCommunicationRetryRecipientSchema>
 export type DriverCommunicationAckInput = z.infer<typeof driverCommunicationAckSchema>
+
+export const discountCodeTypeSchema = z.enum(['percent', 'amount'])
+
+const discountCodeText = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .transform((value) => value.toUpperCase())
+
+export const discountCodeCreateSchema = z
+  .object({
+    tenantId: uuid,
+    organizationId: uuid,
+    code: discountCodeText,
+    label: z.string().trim().max(200).optional().nullable(),
+    discountType: discountCodeTypeSchema,
+    value: z.coerce.number().positive(),
+    usageLimit: z.coerce.number().positive().optional().nullable(),
+    active: z.boolean().optional().default(true),
+  })
+  .superRefine((data, ctx) => {
+    if (data.discountType === 'percent' && data.value > 100) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Percent discount cannot exceed 100.',
+        path: ['value'],
+      })
+    }
+    if (data.discountType === 'amount' && data.usageLimit == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Usage limit is required for amount discounts.',
+        path: ['usageLimit'],
+      })
+    }
+    if (data.discountType === 'percent' && data.usageLimit != null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Usage limit applies only to amount discounts.',
+        path: ['usageLimit'],
+      })
+    }
+  })
+
+export const discountCodeUpdateSchema = z
+  .object({
+    id: uuid,
+    code: discountCodeText.optional(),
+    label: z.string().trim().max(200).optional().nullable(),
+    discountType: discountCodeTypeSchema.optional(),
+    value: z.coerce.number().positive().optional(),
+    usageLimit: z.coerce.number().positive().optional().nullable(),
+    usedAmount: z.coerce.number().min(0).optional(),
+    active: z.boolean().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const discountType = data.discountType
+    const value = data.value
+    if (discountType === 'percent' && value != null && value > 100) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Percent discount cannot exceed 100.',
+        path: ['value'],
+      })
+    }
+  })
+
+export const discountCodeDeleteSchema = z.object({ id: uuid })
+
+export const discountCodeListQuerySchema = z
+  .object({
+    page: z.coerce.number().min(1).default(1),
+    pageSize: z.coerce.number().min(1).max(100).default(20),
+    ids: z.string().optional(),
+    search: z.string().optional(),
+    active: z.string().optional(),
+    sortField: z.string().optional(),
+    sortDir: z.enum(['asc', 'desc']).optional(),
+  })
+  .passthrough()
+
+export const discountCodeValidateQuerySchema = z.object({
+  code: z.string().trim().min(1).max(64),
+  totalPrice: z.coerce.number().min(0),
+})
+
+export const discountCodeValidateResponseSchema = z.object({
+  code: z.string(),
+  discountType: discountCodeTypeSchema,
+  value: z.number(),
+  discountAmount: z.number(),
+  totalBefore: z.number(),
+  totalAfter: z.number(),
+  remainingAmount: z.number().optional(),
+})
+
+export type DiscountCodeCreateInput = z.infer<typeof discountCodeCreateSchema>
+export type DiscountCodeUpdateInput = z.infer<typeof discountCodeUpdateSchema>
+export type DiscountCodeDeleteInput = z.infer<typeof discountCodeDeleteSchema>

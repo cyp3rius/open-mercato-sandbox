@@ -1,5 +1,5 @@
 import type { TripRequestDetails } from './tripRequestForm'
-import { tripPaymentTypeNotesLabelPl } from './tripRequestForm'
+import { buildTripRouteNotes, defaultTripRequestDetails } from './tripRequestForm'
 
 export const STRAPI_TAXI_REQUEST_SOURCE = 'rsmototaxi-strapi'
 
@@ -40,6 +40,7 @@ export type MappedStrapiTaxiRequest = {
   totalPrice: number | null
   paymentType: string | null
   referralCode: string | null
+  discountCode: string | null
   quoteSnapshot: Record<string, unknown> | null
   strapiPayload: Record<string, unknown>
 }
@@ -152,6 +153,7 @@ export function mapStrapiPayloadToTaxiRequest(payload: Record<string, unknown>):
     totalPrice: quote.totalPrice,
     paymentType: str(payload.paymentType) || null,
     referralCode: str(payload.referralCode) || null,
+    discountCode: str(payload.discountCode) || null,
     quoteSnapshot: quote.quoteSnapshot,
     strapiPayload: payload,
   }
@@ -219,18 +221,35 @@ export function tripRequestDetailsFromStrapiMapped(
 }
 
 export function buildTripNotesFromStrapi(mapped: MappedStrapiTaxiRequest): string {
-  const lines = [
-    `Trasa: ${mapped.fromAddress} → ${mapped.toAddress}`,
-    mapped.waypointAddresses ? `Punkty pośrednie:\n${mapped.waypointAddresses}` : null,
-    mapped.distanceText ? `Dystans: ${mapped.distanceText}` : mapped.distanceKm ? `Dystans: ${mapped.distanceKm} km` : null,
-    mapped.durationText ? `Czas: ${mapped.durationText}` : null,
-    mapped.passengers ? `Pasażerowie: ${mapped.passengers}` : null,
-    mapped.flightNumber ? `Lot: ${mapped.flightNumber}` : null,
-    mapped.paymentType
-      ? `Płatność: ${tripPaymentTypeNotesLabelPl(mapped.paymentType) ?? mapped.paymentType}`
-      : null,
-  ].filter((line): line is string => Boolean(line?.length))
-  return lines.join('\n')
+  const details: TripRequestDetails = {
+    ...defaultTripRequestDetails(),
+    serviceType: mapped.serviceType === 'airport' ? 'airport' : 'local',
+    fromAddress: mapped.fromAddress,
+    toAddress: mapped.toAddress,
+    waypointAddresses: mapped.waypointAddresses?.trim() ?? '',
+    distanceKm: mapped.distanceKm > 0 ? String(mapped.distanceKm) : '',
+    durationText: mapped.durationText?.trim() ?? '',
+    passengers: String(Math.max(1, mapped.passengers || 1)),
+    handLuggage: String(Math.max(0, mapped.handLuggage || 0)),
+    holdLuggage: String(Math.max(0, mapped.holdLuggage || 0)),
+    childSeats: String(Math.max(0, mapped.childSeats || 0)),
+    boosterSeats: String(Math.max(0, mapped.boosterSeats || 0)),
+    isAirportPickup: mapped.isAirportPickup,
+    flightNumber: mapped.flightNumber?.trim() ?? '',
+    meetAndGreet: mapped.meetAndGreet,
+    englishSpeakingDriver: mapped.englishSpeakingDriver,
+    paymentType:
+      mapped.paymentType === 'electronic' ||
+      mapped.paymentType === 'cash' ||
+      mapped.paymentType === 'card' ||
+      mapped.paymentType === 'transfer' ||
+      mapped.paymentType === 'loyalty_program' ||
+      mapped.paymentType === 'platform_app' ||
+      mapped.paymentType === 'other'
+        ? mapped.paymentType
+        : 'cash',
+  }
+  return buildTripRouteNotes(details) ?? ''
 }
 
 export function deriveInjectTripTitle(mapped: MappedStrapiTaxiRequest, fallback: string): string {

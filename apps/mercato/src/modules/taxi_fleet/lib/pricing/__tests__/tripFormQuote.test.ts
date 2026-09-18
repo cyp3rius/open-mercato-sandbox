@@ -164,8 +164,9 @@ describe('buildDriverQuoteInputFromRoute', () => {
 })
 
 describe('FLEET_QUOTE_ACCESS_FEATURES', () => {
-  it('lists view | driver | trips.inject', () => {
+  it('lists pricing.quote | view | driver | trips.inject', () => {
     expect([...FLEET_QUOTE_ACCESS_FEATURES]).toEqual([
+      'taxi_fleet.pricing.quote',
       'taxi_fleet.view',
       'taxi_fleet.driver',
       'taxi_fleet.trips.inject',

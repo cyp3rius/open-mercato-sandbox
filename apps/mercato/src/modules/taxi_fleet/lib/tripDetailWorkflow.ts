@@ -8,6 +8,37 @@ export type TripDetailActionId =
   | 'mark_paid'
   | 'complete'
   | 'authorize_internal'
+  | 'cancel'
+
+/** Status written by each detail-header shortcut (after form save). */
+export function tripDetailActionTargetStatus(action: TripDetailActionId): string {
+  switch (action) {
+    case 'approve':
+      return 'approved'
+    case 'reject':
+    case 'cancel':
+      return 'cancelled'
+    case 'schedule':
+      return 'scheduled'
+    case 'mark_paid':
+      return 'paid'
+    case 'complete':
+      return 'completed'
+    case 'authorize_internal':
+      return 'completed'
+    default:
+      return 'new'
+  }
+}
+
+/** Ready-for-fulfillment requires an assigned driver (and vehicle when present in form). */
+export function tripHasDriverForSchedule(values: {
+  teamMemberId?: string | null
+  resourceId?: string | null
+}): boolean {
+  const driver = typeof values.teamMemberId === 'string' ? values.teamMemberId.trim() : ''
+  return Boolean(driver)
+}
 
 export type TripDetailLockMode = 'none' | 'full' | 'status_only' | 'paid_partial'
 
@@ -49,25 +80,37 @@ export function tripDetailActionsForStatus(
   options?: { tripType?: string | null; canAuthorizeInternal?: boolean },
 ): TripDetailActionId[] {
   const normalized = normalizeTripStatus(status)
+  let actions: TripDetailActionId[] = []
   if (
     options?.tripType === 'internal' &&
     normalized === 'pending_authorization' &&
     options.canAuthorizeInternal
   ) {
-    return ['authorize_internal']
+    actions = ['authorize_internal']
+  } else {
+    switch (normalized) {
+      case 'new':
+        actions = ['reject', 'approve']
+        break
+      case 'approved':
+      case 'paid':
+        actions = ['schedule']
+        break
+      case 'scheduled':
+        actions = ['complete']
+        break
+      case 'pending_authorization':
+        actions = options?.canAuthorizeInternal ? ['authorize_internal'] : []
+        break
+      default:
+        actions = []
+        break
+    }
   }
-  switch (normalized) {
-    case 'new':
-      return ['approve', 'reject']
-    case 'approved':
-      return ['schedule', 'mark_paid']
-    case 'scheduled':
-      return ['complete']
-    case 'paid':
-      return ['schedule', 'complete']
-    default:
-      return []
+  if (normalized !== 'new' && normalized !== 'completed' && normalized !== 'cancelled') {
+    actions = ['cancel', ...actions]
   }
+  return actions
 }
 
 export type TripDetailLockOptions = {

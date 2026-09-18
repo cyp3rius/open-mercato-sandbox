@@ -46,4 +46,4 @@ When running shell commands in this project:
 - This project uses Yarn Classic (1.x), configured in `.yarnrc`
 - Node version is specified in `.nvmrc` (v20)
 - Always source nvm before using it in non-interactive shells
-- **`yarn build`:** use `NODE_OPTIONS='--max-old-space-size=8192'` (or higher). Default heap often OOMs during app TypeScript. Before commits, see **`.cursor/rules/pre-commit-build.mdc`**.
+- **`yarn build`:** use `NODE_OPTIONS='--max-old-space-size=8192'` (or higher). Default heap often OOMs during app TypeScript. Before commits: typecheck → build → commit (and push only if asked) — see **`.cursor/rules/pre-commit-build.mdc`**.

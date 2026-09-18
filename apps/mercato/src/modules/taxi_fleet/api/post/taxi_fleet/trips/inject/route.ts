@@ -100,6 +100,7 @@ export async function POST(req: Request) {
     )
   } catch (err) {
     if (err instanceof z.ZodError) {
+      console.warn('[taxi_fleet/trips/inject] validation failed', err.flatten())
       return NextResponse.json({ error: err.flatten() }, { status: 400 })
     }
     if (err instanceof CrudHttpError) {

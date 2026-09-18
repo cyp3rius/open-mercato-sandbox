@@ -125,7 +125,12 @@ export async function syncTripGoogleCalendarEvent(
 
   const existingEventId = readGoogleCalendarEventId(trip.metadata ?? null)
   const status = normalizeTripStatus(trip.status)
-  const shouldDelete = Boolean(trip.deletedAt) || status === 'cancelled' || !trip.startedAt
+  // Only "Ready for fulfillment" (scheduled) trips belong on Google Calendar.
+  const shouldDelete =
+    Boolean(trip.deletedAt) ||
+    status === 'cancelled' ||
+    status !== 'scheduled' ||
+    !trip.startedAt
 
   try {
     const client = await createCalendarClient({

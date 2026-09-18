@@ -48,7 +48,11 @@ type TripCrudFormBaseProps = TripCrudFormSharedOptions & {
   extraActions?: React.ReactNode
   /** Rendered in CrudForm column 2 (sidebar), below status/pricing groups. */
   sidebarExtra?: React.ReactNode
+  /** Rendered in column 2 after pricing, before `sidebarExtra` (e.g. PayPal payment). */
+  sidebarAfterPricing?: React.ReactNode
   onSubmitReadyChange?: (ready: boolean) => void
+  /** Live form values for detail-header status shortcuts (save-then-transition). */
+  onLiveValuesChange?: (values: TripFormValues) => void
 }
 
 type TripCrudFormPageProps = TripCrudFormBaseProps & {
@@ -77,7 +81,9 @@ export function TripCrudForm(props: TripCrudFormProps) {
     submitLabel,
     extraActions,
     sidebarExtra,
+    sidebarAfterPricing,
     onSubmitReadyChange,
+    onLiveValuesChange,
     driverProfiles,
     resolveDriverName,
     driverLocked = false,
@@ -155,17 +161,28 @@ export function TripCrudForm(props: TripCrudFormProps) {
             (group) =>
               group.id === tripFormTabGroupId(activeTab) || group.id === TRIP_FORM_SYNC_GROUP_ID,
           )
-    if (!sidebarExtra || layout !== 'page') return base
-    return [
-      ...base,
-      {
+    if (layout !== 'page') return base
+    const next = [...base]
+    if (sidebarAfterPricing) {
+      const pricingIndex = next.findIndex((group) => group.id === 'pricing')
+      const insertAt = pricingIndex >= 0 ? pricingIndex + 1 : next.length
+      next.splice(insertAt, 0, {
+        id: 'trip-sidebar-after-pricing',
+        column: 2 as const,
+        bare: true,
+        component: () => sidebarAfterPricing,
+      })
+    }
+    if (sidebarExtra) {
+      next.push({
         id: 'trip-sidebar-extra',
         column: 2 as const,
         bare: true,
         component: () => sidebarExtra,
-      },
-    ]
-  }, [activeTab, allGroups, layout, sidebarExtra])
+      })
+    }
+    return next
+  }, [activeTab, allGroups, layout, sidebarAfterPricing, sidebarExtra])
 
   const requireDriver = !(driverLocked && lockedTeamMemberId?.trim().length)
   const validationOptions = React.useMemo(
@@ -192,7 +209,8 @@ export function TripCrudForm(props: TripCrudFormProps) {
     const issues = listTripFormBlockingIssues(initialValues, t, validationOptions)
     setBlockingIssues(issues)
     onSubmitReadyChange?.(issues.length === 0)
-  }, [formKey, initialValues, onSubmitReadyChange, t, validationOptions])
+    onLiveValuesChange?.(initialValues)
+  }, [formKey, initialValues, onLiveValuesChange, onSubmitReadyChange, t, validationOptions])
 
   const handleValuesChange = React.useCallback(
     (values: TripFormValues) => {
@@ -202,8 +220,9 @@ export function TripCrudForm(props: TripCrudFormProps) {
       const issues = listTripFormBlockingIssues(values, t, validationOptions)
       setBlockingIssues(issues)
       onSubmitReadyChange?.(issues.length === 0)
+      onLiveValuesChange?.(values)
     },
-    [onSubmitReadyChange, t, validationOptions],
+    [onLiveValuesChange, onSubmitReadyChange, t, validationOptions],
   )
 
   const showBlockingHint = !readOnly && mode === 'create' && blockingIssues.length > 0
@@ -248,12 +267,13 @@ export function TripCrudForm(props: TripCrudFormProps) {
     </span>
   )
 
-  const mergedExtraActions = (
-    <>
-      {blockingFooterIcon}
-      {extraActions}
-    </>
-  )
+  const mergedExtraActions =
+    blockingFooterIcon || extraActions ? (
+      <>
+        {blockingFooterIcon}
+        {extraActions}
+      </>
+    ) : undefined
 
   const crudFormProps = {
     fields,

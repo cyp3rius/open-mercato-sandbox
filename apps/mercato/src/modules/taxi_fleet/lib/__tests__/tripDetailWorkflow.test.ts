@@ -2,9 +2,51 @@ import {
   isCompletedTripReceiptSupplementUpdate,
   isTripDetailFieldEditable,
   isTripDriverChangeAllowed,
+  tripDetailActionsForStatus,
+  tripDetailActionTargetStatus,
   tripDetailAllowsDriverEdit,
   tripDetailLockMode,
+  tripHasDriverForSchedule,
 } from '../tripDetailWorkflow'
+
+describe('tripHasDriverForSchedule', () => {
+  it('requires a non-empty teamMemberId', () => {
+    expect(tripHasDriverForSchedule({ teamMemberId: null })).toBe(false)
+    expect(tripHasDriverForSchedule({ teamMemberId: '' })).toBe(false)
+    expect(tripHasDriverForSchedule({ teamMemberId: '   ' })).toBe(false)
+    expect(
+      tripHasDriverForSchedule({ teamMemberId: '11111111-1111-4111-8111-111111111111' }),
+    ).toBe(true)
+  })
+})
+
+describe('tripDetailActionTargetStatus', () => {
+  it('maps header shortcuts to statuses', () => {
+    expect(tripDetailActionTargetStatus('approve')).toBe('approved')
+    expect(tripDetailActionTargetStatus('reject')).toBe('cancelled')
+    expect(tripDetailActionTargetStatus('schedule')).toBe('scheduled')
+    expect(tripDetailActionTargetStatus('mark_paid')).toBe('paid')
+    expect(tripDetailActionTargetStatus('complete')).toBe('completed')
+    expect(tripDetailActionTargetStatus('cancel')).toBe('cancelled')
+  })
+})
+
+describe('tripDetailActionsForStatus', () => {
+  it('exposes status-specific CRM shortcuts', () => {
+    expect(tripDetailActionsForStatus('new')).toEqual(['reject', 'approve'])
+    expect(tripDetailActionsForStatus('approved')).toEqual(['cancel', 'schedule'])
+    expect(tripDetailActionsForStatus('paid')).toEqual(['cancel', 'schedule'])
+    expect(tripDetailActionsForStatus('scheduled')).toEqual(['cancel', 'complete'])
+    expect(
+      tripDetailActionsForStatus('pending_authorization', {
+        tripType: 'internal',
+        canAuthorizeInternal: true,
+      }),
+    ).toEqual(['cancel', 'authorize_internal'])
+    expect(tripDetailActionsForStatus('completed')).toEqual([])
+    expect(tripDetailActionsForStatus('cancelled')).toEqual([])
+  })
+})
 
 describe('tripDetailLockMode', () => {
   it('locks completed trips by default', () => {

@@ -14,7 +14,8 @@ type QuoteAuthScope = {
 }
 
 /**
- * Resolves org/tenant scope and checks any-of quote features (view | driver | trips.inject).
+ * Resolves org/tenant scope and checks any-of quote features
+ * (pricing.quote | view | driver | trips.inject).
  */
 export async function resolveFleetQuoteRequestScope(
   req: Request,
