@@ -57,14 +57,46 @@ describe('tripSearchFields', () => {
       companyName: '',
       customerDisplayName: 'Firma X',
       orderingPersonDisplayName: 'Jan Kowalski',
+      customerPhone: '500600700',
+      customerNip: '5252445767',
+      customerPersonName: '',
+      orderingPersonPhone: '501502503',
+      orderingPersonPersonName: 'Jan Kowalski',
     })
     expect(lines).toEqual([
       'From: Start',
       'To: End',
       'Stops: Stop 1',
       'Customer: Firma X',
+      'Customer phone: 500600700',
+      'Customer NIP: 5252445767',
       'Ordering party: Jan Kowalski',
+      'Ordering person: Jan Kowalski',
+      'Ordering phone: 501502503',
     ])
+  })
+
+  it('uses enrichment object for customer phone and NIP', () => {
+    const flat = extractTripSearchFlatFields(
+      { customerCompanyId: 'c1' },
+      {
+        displayName: 'ACME',
+        phone: '111',
+        nip: '5252445767',
+        personName: '',
+      },
+      {
+        displayName: 'Anna Nowak',
+        phone: '222',
+        nip: '',
+        personName: 'Anna Nowak',
+      },
+    )
+    expect(flat.customerDisplayName).toBe('ACME')
+    expect(flat.customerPhone).toBe('111')
+    expect(flat.customerNip).toBe('5252445767')
+    expect(flat.orderingPersonDisplayName).toBe('Anna Nowak')
+    expect(flat.orderingPersonPhone).toBe('222')
   })
 
   it('reads ordering person id from camelCase or snake_case', () => {

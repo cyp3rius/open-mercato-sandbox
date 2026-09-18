@@ -28,6 +28,7 @@ export async function GET(req: Request) {
     const search = (url.searchParams.get('search') ?? '').trim()
     const kindRaw = (url.searchParams.get('kind') ?? '').trim()
     const kind = kindRaw === 'person' || kindRaw === 'company' ? kindRaw : undefined
+    const companyEntityId = (url.searchParams.get('companyEntityId') ?? '').trim()
     const em = container.resolve('em') as EntityManager
 
     if (id.length) {
@@ -44,6 +45,7 @@ export async function GET(req: Request) {
       search,
       limit: 20,
       kind,
+      ...(companyEntityId && kind === 'person' ? { companyEntityId } : {}),
     })
     return NextResponse.json({ items })
   } catch (err) {

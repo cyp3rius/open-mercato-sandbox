@@ -304,6 +304,7 @@
   "taxi_fleet.trips.orderingPersonSearch": "Search person…",
   "taxi_fleet.trips.orderingPersonEmptySearch": "No people found.",
   "taxi_fleet.trips.orderingPersonHelp": "Optional. Person who ordered the trip when the customer is a company.",
+  "taxi_fleet.trips.orderingPersonLinked": "Linked to this company",
   "taxi_fleet.trips.errors.orderingPersonRequiresCompany": "Ordering party can only be set when the customer is a company.",
   "taxi_fleet.trips.errors.customerRequired": "Select a customer (person or company).",
   "taxi_fleet.trips.errors.customerNotFound": "Customer not found.",

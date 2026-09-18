@@ -2,6 +2,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import {
   CustomerCompanyProfile,
   CustomerEntity,
+  CustomerPersonProfile,
 } from '@open-mercato/core/modules/customers/data/entities'
 import { findWithDecryption, findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { hashToken, tokenizeText } from '@open-mercato/shared/lib/search/tokenize'
@@ -21,6 +22,7 @@ export type FleetCustomerSearchItem = {
   kind: 'person' | 'company' | string
   label: string
   description?: string
+  linkedToCompany?: boolean
 }
 
 function digitsOnly(value: string): string {
@@ -180,6 +182,96 @@ async function findCustomerEntityIdsByDisplayName(
   return rows.map((row) => row.id)
 }
 
+function mapCustomerEntityToSearchItem(
+  row: CustomerEntity,
+  options?: { linkedToCompany?: boolean },
+): FleetCustomerSearchItem | null {
+  const label = row.displayName?.trim() || row.id
+  if (looksEncryptedLabel(label)) return null
+  const phone = row.primaryPhone?.trim() || ''
+  const email = row.primaryEmail?.trim() || ''
+  const nip = normalizeNipDigits(row.companyProfile?.nip ?? '') || ''
+  const descriptionParts: string[] = []
+  if (phone && !looksEncryptedLabel(phone)) descriptionParts.push(phone)
+  if (nip) descriptionParts.push(`NIP ${nip}`)
+  if (!descriptionParts.length && email && !looksEncryptedLabel(email)) {
+    descriptionParts.push(email)
+  }
+  return {
+    id: row.id,
+    kind: row.kind,
+    label,
+    description: descriptionParts.length ? descriptionParts.join(' · ') : undefined,
+    ...(options?.linkedToCompany ? { linkedToCompany: true } : {}),
+  }
+}
+
+function matchesSearchQuery(item: FleetCustomerSearchItem, search: string): boolean {
+  const q = search.trim().toLowerCase()
+  if (!q.length) return true
+  const haystack = `${item.label} ${item.description ?? ''}`.toLowerCase()
+  return haystack.includes(q)
+}
+
+async function listFleetPeopleLinkedToCompany(
+  em: EntityManager,
+  params: {
+    tenantId: string
+    organizationId: string
+    companyEntityId: string
+    search: string
+    limit: number
+  },
+): Promise<FleetCustomerSearchItem[]> {
+  const companyEntityId = params.companyEntityId.trim()
+  if (!companyEntityId) return []
+
+  const profiles = await em.find(
+    CustomerPersonProfile,
+    {
+      tenantId: params.tenantId,
+      organizationId: params.organizationId,
+      company: companyEntityId,
+    },
+    {
+      limit: Math.max(params.limit * 2, 40),
+      orderBy: { updatedAt: 'DESC' },
+    },
+  )
+  const entityIds = profiles
+    .map((profile) => {
+      const entity = profile.entity
+      if (typeof entity === 'string') return entity
+      if (entity && typeof entity === 'object' && typeof entity.id === 'string') return entity.id
+      return ''
+    })
+    .filter((id) => id.length > 0)
+  if (!entityIds.length) return []
+
+  const scope = { tenantId: params.tenantId, organizationId: params.organizationId }
+  const rows = await findWithDecryption(
+    em,
+    CustomerEntity,
+    {
+      id: { $in: entityIds },
+      tenantId: params.tenantId,
+      organizationId: params.organizationId,
+      deletedAt: null,
+      kind: 'person',
+    },
+    { limit: entityIds.length },
+    scope,
+  )
+  const order = new Map(entityIds.map((id, index) => [id, index]))
+  return rows
+    .slice()
+    .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
+    .map((row) => mapCustomerEntityToSearchItem(row, { linkedToCompany: true }))
+    .filter((item): item is FleetCustomerSearchItem => item !== null)
+    .filter((item) => matchesSearchQuery(item, params.search))
+    .slice(0, params.limit)
+}
+
 export async function searchFleetCustomerEntities(
   em: EntityManager,
   params: {
@@ -188,20 +280,39 @@ export async function searchFleetCustomerEntities(
     search: string
     limit?: number
     kind?: 'person' | 'company'
+    companyEntityId?: string
   },
 ): Promise<FleetCustomerSearchItem[]> {
   const limit = params.limit ?? 20
   const search = params.search.trim()
   const minLen = resolveSearchConfig().minTokenLength
-  if (search.length < minLen) return []
+  const companyEntityId = params.companyEntityId?.trim() || ''
+  const preferCompanyPeople = Boolean(companyEntityId) && params.kind === 'person'
+
+  const linkedPeople = preferCompanyPeople
+    ? await listFleetPeopleLinkedToCompany(em, {
+        tenantId: params.tenantId,
+        organizationId: params.organizationId,
+        companyEntityId,
+        search,
+        limit,
+      })
+    : []
+
+  if (search.length < minLen) {
+    return linkedPeople.slice(0, limit)
+  }
 
   const [tokenIds, contactIds, nameIds] = await Promise.all([
     findCustomerEntityIdsBySearchTokens(em, { ...params, search, limit }),
     findCustomerEntityIdsByPhoneOrNip(em, { ...params, search, limit }),
     findCustomerEntityIdsByDisplayName(em, { ...params, search, limit }),
   ])
-  const matchedIds = [...new Set([...contactIds, ...tokenIds, ...nameIds])].slice(0, limit)
-  if (!matchedIds.length) return []
+  const linkedIds = new Set(linkedPeople.map((item) => item.id))
+  const matchedIds = [...new Set([...contactIds, ...tokenIds, ...nameIds])]
+    .filter((id) => !linkedIds.has(id))
+    .slice(0, limit)
+  if (!matchedIds.length) return linkedPeople.slice(0, limit)
 
   const scope = { tenantId: params.tenantId, organizationId: params.organizationId }
   const kindFilter = params.kind
@@ -221,29 +332,13 @@ export async function searchFleetCustomerEntities(
     scope,
   )
   const order = new Map(matchedIds.map((id, index) => [id, index]))
-  return rows
+  const others = rows
     .slice()
     .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
-    .map((row): FleetCustomerSearchItem | null => {
-      const label = row.displayName?.trim() || row.id
-      if (looksEncryptedLabel(label)) return null
-      const phone = row.primaryPhone?.trim() || ''
-      const email = row.primaryEmail?.trim() || ''
-      const nip = normalizeNipDigits(row.companyProfile?.nip ?? '') || ''
-      const descriptionParts: string[] = []
-      if (phone && !looksEncryptedLabel(phone)) descriptionParts.push(phone)
-      if (nip) descriptionParts.push(`NIP ${nip}`)
-      if (!descriptionParts.length && email && !looksEncryptedLabel(email)) {
-        descriptionParts.push(email)
-      }
-      return {
-        id: row.id,
-        kind: row.kind,
-        label,
-        description: descriptionParts.length ? descriptionParts.join(' · ') : undefined,
-      }
-    })
+    .map((row) => mapCustomerEntityToSearchItem(row))
     .filter((item): item is FleetCustomerSearchItem => item !== null)
+
+  return [...linkedPeople, ...others].slice(0, limit)
 }
 
 export async function resolveFleetCustomerEntityLabel(

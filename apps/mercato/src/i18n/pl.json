@@ -304,6 +304,7 @@
   "taxi_fleet.trips.orderingPersonSearch": "Szukaj osoby…",
   "taxi_fleet.trips.orderingPersonEmptySearch": "Nie znaleziono osób.",
   "taxi_fleet.trips.orderingPersonHelp": "Opcjonalne. Osoba, która zamówiła kurs, gdy klientem jest firma.",
+  "taxi_fleet.trips.orderingPersonLinked": "Powiązana z tą firmą",
   "taxi_fleet.trips.errors.orderingPersonRequiresCompany": "Zamawiającego można ustawić tylko gdy klientem jest firma.",
   "taxi_fleet.trips.errors.customerRequired": "Wybierz klienta (osobę lub firmę).",
   "taxi_fleet.trips.errors.customerNotFound": "Nie znaleziono klienta.",

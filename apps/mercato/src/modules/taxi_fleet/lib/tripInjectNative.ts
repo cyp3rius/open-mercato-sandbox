@@ -5,6 +5,7 @@ import {
   tripInjectServiceTypeSchema,
 } from '../data/validators'
 import type { TripRequestDetails } from './tripRequestForm'
+import { tripPaymentTypeNotesLabelPl } from './tripRequestForm'
 import {
   buildTripScheduleFromStrapi,
   mapStrapiPayloadToTaxiRequest,
@@ -193,7 +194,9 @@ export function buildTripNotesFromInjectInput(input: TripInjectInput): string {
     input.distanceKm != null && input.distanceKm > 0 ? `Dystans: ${input.distanceKm} km` : null,
     input.passengers ? `Pasażerowie: ${input.passengers}` : null,
     input.flightNumber?.trim() ? `Lot: ${input.flightNumber.trim()}` : null,
-    input.paymentType ? `Płatność: ${input.paymentType}` : null,
+    input.paymentType
+      ? `Płatność: ${tripPaymentTypeNotesLabelPl(input.paymentType) ?? input.paymentType}`
+      : null,
   ].filter((line): line is string => Boolean(line?.length))
   return lines.join('\n')
 }

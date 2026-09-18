@@ -60487,6 +60487,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "ordering_person_id": {
+          "name": "ordering_person_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
       "name": "taxi_fleet_trips",
@@ -60500,6 +60516,18 @@
           "composite": true,
           "constraint": false,
           "keyName": "taxi_fleet_trips_member_idx",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "tenant_id",
+            "organization_id",
+            "ordering_person_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "taxi_fleet_trips_ordering_person_idx",
           "unique": false,
           "primary": false
         },

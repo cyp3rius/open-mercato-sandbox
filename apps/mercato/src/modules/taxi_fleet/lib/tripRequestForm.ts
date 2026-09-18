@@ -62,6 +62,26 @@ export type TripRequestDetails = {
   referringPartnerEntityId: string
 }
 
+/** Polish labels for auto-generated CRM trip notes (notes body is PL by convention). */
+export const TRIP_PAYMENT_TYPE_NOTES_LABELS_PL: Record<TripRequestPaymentType, string> = {
+  electronic: 'PayPal',
+  cash: 'U kierowcy — gotówka',
+  card: 'U kierowcy — karta',
+  transfer: 'Przelew',
+  loyalty_program: 'Program lojalnościowy',
+  platform_app: 'Aplikacja platformy',
+  other: 'Inne',
+}
+
+export function tripPaymentTypeNotesLabelPl(paymentType: string | null | undefined): string | null {
+  const raw = typeof paymentType === 'string' ? paymentType.trim() : ''
+  if (!raw) return null
+  if (raw in TRIP_PAYMENT_TYPE_NOTES_LABELS_PL) {
+    return TRIP_PAYMENT_TYPE_NOTES_LABELS_PL[raw as TripRequestPaymentType]
+  }
+  return raw
+}
+
 export type TripRequestFormSlice = TripRequestDetails
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -258,7 +278,9 @@ export function buildTripRouteNotes(details: TripRequestDetails): string | null 
     details.durationText.trim() ? `Czas: ${details.durationText.trim()}` : null,
     `Pasażerowie: ${Math.max(1, Number(details.passengers) || 1)}`,
     details.flightNumber.trim() ? `Lot: ${details.flightNumber.trim()}` : null,
-    details.paymentType ? `Płatność: ${details.paymentType}` : null,
+    details.paymentType
+      ? `Płatność: ${tripPaymentTypeNotesLabelPl(details.paymentType) ?? details.paymentType}`
+      : null,
   ].filter((line): line is string => Boolean(line?.length))
   return lines.length ? lines.join('\n') : null
 }

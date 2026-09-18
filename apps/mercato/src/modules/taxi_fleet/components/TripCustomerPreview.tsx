@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ExternalLink } from 'lucide-react'
 import { fetchProcurementCustomerAssociationPreview } from '@open-mercato/core/modules/procurement/lib/procurementEntitySearch'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { resolveFleetCustomerDisplayLabel } from '../lib/fleetCustomerEntitySearch'
 
 const UUID_LIKE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -12,6 +13,7 @@ const UUID_LIKE =
 type TripCustomerPreviewProps = {
   customerPersonId?: string | null
   customerCompanyId?: string | null
+  orderingPersonId?: string | null
   fallbackLabel?: string
   openInNewWindow?: boolean
 }
@@ -22,6 +24,7 @@ type PreviewState = {
 } | null
 
 const previewCache = new Map<string, PreviewState>()
+const orderingLabelCache = new Map<string, string>()
 
 function isUnresolvedLabel(value: string | null | undefined): boolean {
   if (!value) return true
@@ -31,17 +34,22 @@ function isUnresolvedLabel(value: string | null | undefined): boolean {
 export function TripCustomerPreview({
   customerPersonId,
   customerCompanyId,
+  orderingPersonId,
   fallbackLabel,
   openInNewWindow = false,
 }: TripCustomerPreviewProps) {
   const t = useT()
   const entityId = customerPersonId ?? customerCompanyId ?? null
+  const orderingId = orderingPersonId?.trim() || null
   const unresolvedLabel =
     fallbackLabel ?? t('taxi_fleet.trips.customerUnknown', 'Unknown customer')
   const [preview, setPreview] = React.useState<PreviewState>(() =>
     entityId ? previewCache.get(entityId) ?? null : null,
   )
   const [loading, setLoading] = React.useState(() => Boolean(entityId) && !previewCache.has(entityId ?? ''))
+  const [orderingLabel, setOrderingLabel] = React.useState(() =>
+    orderingId ? orderingLabelCache.get(orderingId) ?? '' : '',
+  )
 
   React.useEffect(() => {
     let cancelled = false
@@ -74,19 +82,40 @@ export function TripCustomerPreview({
     }
   }, [entityId, unresolvedLabel])
 
+  React.useEffect(() => {
+    let cancelled = false
+    if (!orderingId) {
+      setOrderingLabel('')
+      return
+    }
+    const cached = orderingLabelCache.get(orderingId)
+    if (cached) {
+      setOrderingLabel(cached)
+      return
+    }
+    void resolveFleetCustomerDisplayLabel(orderingId).then((label) => {
+      if (cancelled) return
+      const next = label && !isUnresolvedLabel(label) ? label.trim() : ''
+      if (next) orderingLabelCache.set(orderingId, next)
+      setOrderingLabel(next)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [orderingId])
+
   if (!entityId) return <>{fallbackLabel ?? '—'}</>
   if (loading || !preview) {
     return <span className="text-muted-foreground">…</span>
   }
 
   const label = isUnresolvedLabel(preview.title) ? unresolvedLabel : preview.title
+  const showOrdering = Boolean(orderingId && orderingLabel)
 
-  if (preview.recordHref === '#') {
-    return <span className="truncate">{label}</span>
-  }
-
-  if (openInNewWindow) {
-    return (
+  const customerLink =
+    preview.recordHref === '#' ? (
+      <span className="truncate">{label}</span>
+    ) : openInNewWindow ? (
       <Link
         href={preview.recordHref}
         target="_blank"
@@ -98,16 +127,22 @@ export function TripCustomerPreview({
         <span className="min-w-0 truncate">{label}</span>
         <ExternalLink className="size-3.5 shrink-0" aria-hidden />
       </Link>
+    ) : (
+      <Link
+        href={preview.recordHref}
+        className="text-primary hover:underline"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {label}
+      </Link>
     )
-  }
+
+  if (!showOrdering) return customerLink
 
   return (
-    <Link
-      href={preview.recordHref}
-      className="text-primary hover:underline"
-      onClick={(event) => event.stopPropagation()}
-    >
-      {label}
-    </Link>
+    <div className="min-w-0 flex flex-col gap-0.5">
+      {customerLink}
+      <span className="truncate text-[11px] text-muted-foreground">{orderingLabel}</span>
+    </div>
   )
 }

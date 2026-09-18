@@ -1,4 +1,5 @@
 import type { TripRequestDetails } from './tripRequestForm'
+import { tripPaymentTypeNotesLabelPl } from './tripRequestForm'
 
 export const STRAPI_TAXI_REQUEST_SOURCE = 'rsmototaxi-strapi'
 
@@ -225,7 +226,9 @@ export function buildTripNotesFromStrapi(mapped: MappedStrapiTaxiRequest): strin
     mapped.durationText ? `Czas: ${mapped.durationText}` : null,
     mapped.passengers ? `Pasażerowie: ${mapped.passengers}` : null,
     mapped.flightNumber ? `Lot: ${mapped.flightNumber}` : null,
-    mapped.paymentType ? `Płatność: ${mapped.paymentType}` : null,
+    mapped.paymentType
+      ? `Płatność: ${tripPaymentTypeNotesLabelPl(mapped.paymentType) ?? mapped.paymentType}`
+      : null,
   ].filter((line): line is string => Boolean(line?.length))
   return lines.join('\n')
 }

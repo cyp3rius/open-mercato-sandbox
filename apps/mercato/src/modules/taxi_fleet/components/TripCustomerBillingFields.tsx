@@ -146,7 +146,14 @@ export function TripCustomerBillingFields({
               }
               selectedDisplayOverride={orderingOptionLabel || undefined}
               onRemoteSearch={async (query) => {
-                const rows = await remoteSearchFleetCustomers(query, kindLabels, { kind: 'person' })
+                const rows = await remoteSearchFleetCustomers(query, kindLabels, {
+                  kind: 'person',
+                  companyEntityId: customerEntityId,
+                  linkedToCompanyLabel: t(
+                    'taxi_fleet.trips.orderingPersonLinked',
+                    'Linked to this company',
+                  ),
+                })
                 return mergeEntitySearchOption(rows, orderingPersonId, orderingOptionLabel)
               }}
               placeholder={t('taxi_fleet.trips.orderingPersonSearch', 'Search person…')}

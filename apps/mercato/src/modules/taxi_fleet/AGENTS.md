@@ -112,7 +112,7 @@ Vendor JSON items are normalized by `lib/platformSync/adapters/mapVendorTrip.ts`
 
 - DataTable search on `/backend/taxi-fleet/trips` → `?search=` on `GET /api/taxi_fleet/trips`
 - Indexed entity: `taxi_fleet:taxi_fleet_trip` via `search.ts` (fulltext + vector + tokens)
-- Searchable text: `metadata.tripRequest` from/to/stops + CRM customer `display_name` + optional ordering person (`ordering_person_id`) + contact/company fallbacks
+- Searchable text: `metadata.tripRequest` from/to/stops + CRM customer `display_name` / person name / phone / NIP + optional ordering person (name/phone) + contact/company fallbacks
 - Customer filter (`customerEntityId`) matches `customerPersonId` **or** `customerCompanyId` **or** `orderingPersonId`
 - List applies SearchService hits as `id $in`, then AND with FilterBar filters; SQL fallback when SearchService is unavailable
 - Indexing on create/update/delete via `emitTripIndexerSideEffects` in trip / platform / inject commands

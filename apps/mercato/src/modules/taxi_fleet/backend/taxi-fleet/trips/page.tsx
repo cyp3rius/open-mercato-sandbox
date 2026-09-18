@@ -76,6 +76,7 @@ type TripRow = {
   resourceId?: string | null
   customerPersonId?: string | null
   customerCompanyId?: string | null
+  orderingPersonId?: string | null
   paymentType?: string | null
   revenueAmount?: string | null
   currencyCode?: string | null
@@ -534,6 +535,7 @@ export default function TaxiFleetTripsPage() {
           <TripCustomerPreview
             customerPersonId={row.original.customerPersonId}
             customerCompanyId={row.original.customerCompanyId}
+            orderingPersonId={row.original.orderingPersonId}
           />
         ),
       },
