@@ -1,4 +1,6 @@
 export type TripDiscountSnapshot = {
+  /** Discount code entity id when known (newer injects). */
+  id?: string
   code: string
   discountType?: 'percent' | 'amount' | string
   value?: number
@@ -22,7 +24,9 @@ export function readTripDiscountSnapshot(
   const code = typeof discount.code === 'string' ? discount.code.trim() : ''
   const discountAmount = Number(discount.discountAmount)
   if (!code || !Number.isFinite(discountAmount) || discountAmount <= 0) return null
+  const idRaw = typeof discount.id === 'string' ? discount.id.trim() : ''
   return {
+    ...(idRaw ? { id: idRaw } : {}),
     code,
     discountType: typeof discount.discountType === 'string' ? discount.discountType : undefined,
     value: Number.isFinite(Number(discount.value)) ? Number(discount.value) : undefined,

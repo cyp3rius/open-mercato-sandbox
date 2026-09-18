@@ -6,6 +6,7 @@ import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { TaxiFleetDiscountCode } from '../data/entities'
 
 export type DiscountCodeValidationResult = {
+  id: string
   code: string
   discountType: 'percent' | 'amount'
   value: number
@@ -103,6 +104,7 @@ export async function validateDiscountCode(
   }
 
   return {
+    id: row.id,
     code: row.code,
     discountType: row.discountType,
     value,

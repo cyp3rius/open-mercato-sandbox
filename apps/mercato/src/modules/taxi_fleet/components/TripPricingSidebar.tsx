@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Loader2, RefreshCw } from 'lucide-react'
+import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { formatMoneyDisplay } from '@open-mercato/shared/lib/numeric'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -9,6 +9,7 @@ import { MoneyInputField } from '@open-mercato/ui/backend/inputs/MoneyInputField
 import { IconButton } from '@open-mercato/ui/primitives/icon-button'
 import { recalculateTripFinalPrice } from './route/TripQuoteSync'
 import { TripQuoteWarningList } from './TripQuoteWarningList'
+import { resolveDiscountCodeDetailHref } from '../lib/discountCodeNav'
 import { parseTripDiscountJson, tripHasAppliedDiscount } from '../lib/tripDiscount'
 import type { TripFormValues } from './tripFormConfig'
 
@@ -132,6 +133,7 @@ export function TripPricingSidebar({
   readOnly = false,
 }: TripPricingSidebarProps) {
   const t = useT()
+  const [openingDiscount, setOpeningDiscount] = React.useState(false)
   const snapshot = readQuoteSnapshot(values)
   const currency = snapshot?.currency ?? 'PLN'
   const finalRaw = typeof values.revenueAmount === 'string' ? values.revenueAmount : ''
@@ -158,6 +160,24 @@ export function TripPricingSidebar({
       ? discount.totalBefore
       : calculatedTotal
   const hasCalculatedDisplay = Number.isFinite(displayCalculated) && displayCalculated > 0
+
+  async function handleOpenDiscountCode() {
+    if (!discount || openingDiscount) return
+    setOpeningDiscount(true)
+    try {
+      const href = await resolveDiscountCodeDetailHref(discount)
+      if (!href) {
+        flash(
+          t('taxi_fleet.trips.form.quote.discountCodeNotFound', 'Discount code was not found.'),
+          'error',
+        )
+        return
+      }
+      window.open(href, '_blank', 'noopener,noreferrer')
+    } finally {
+      setOpeningDiscount(false)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -197,9 +217,27 @@ export function TripPricingSidebar({
 
           {discount ? (
             <dl className="space-y-2 border-t pt-3 text-muted-foreground">
-              <div className="flex items-baseline justify-between gap-3">
+              <div className="flex items-center justify-between gap-3">
                 <dt>{t('taxi_fleet.trips.form.quote.discountCode', 'Discount code')}</dt>
-                <dd className="font-mono font-medium text-foreground">{discount.code}</dd>
+                <dd className="flex min-w-0 items-center gap-1.5">
+                  <span className="font-mono font-medium text-foreground">{discount.code}</span>
+                  <IconButton
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className="shrink-0"
+                    disabled={openingDiscount}
+                    aria-label={t('common.open', 'Open')}
+                    title={t('taxi_fleet.trips.form.quote.openDiscountCode', 'Open discount code')}
+                    onClick={() => void handleOpenDiscountCode()}
+                  >
+                    {openingDiscount ? (
+                      <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                    ) : (
+                      <ExternalLink className="size-3.5" aria-hidden />
+                    )}
+                  </IconButton>
+                </dd>
               </div>
               <div className="flex items-baseline justify-between gap-3">
                 <dt>{t('taxi_fleet.trips.form.quote.discountAmount', 'Discount')}</dt>

@@ -1082,6 +1082,7 @@ export const discountCodeValidateQuerySchema = z.object({
 })
 
 export const discountCodeValidateResponseSchema = z.object({
+  id: z.string().uuid().optional(),
   code: z.string(),
   discountType: discountCodeTypeSchema,
   value: z.number(),
