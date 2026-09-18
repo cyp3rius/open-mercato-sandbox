@@ -7,6 +7,7 @@ export type TripSearchFlatFields = {
   contactName: string
   companyName: string
   customerDisplayName: string
+  orderingPersonDisplayName: string
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -28,9 +29,18 @@ export function readTripCustomerEntityId(record: Record<string, unknown>): strin
   return companyId || null
 }
 
+export function readTripOrderingPersonId(record: Record<string, unknown>): string | null {
+  const id =
+    (typeof record.orderingPersonId === 'string' && record.orderingPersonId.trim()) ||
+    (typeof record.ordering_person_id === 'string' && record.ordering_person_id.trim()) ||
+    ''
+  return id || null
+}
+
 export function extractTripSearchFlatFields(
   record: Record<string, unknown>,
   customerDisplayName?: string | null,
+  orderingPersonDisplayName?: string | null,
 ): TripSearchFlatFields {
   const metadata = asRecord(record.metadata)
   const details = tripRequestDetailsFromMetadata(metadata, {
@@ -43,6 +53,7 @@ export function extractTripSearchFlatFields(
     contactName: details.contactName,
     companyName: details.companyName,
     customerDisplayName: (customerDisplayName ?? '').trim(),
+    orderingPersonDisplayName: (orderingPersonDisplayName ?? '').trim(),
   }
 }
 
@@ -53,14 +64,16 @@ export function extractTripSearchFlatFields(
 export function enrichTripRecordForSearch(
   record: Record<string, unknown>,
   customerDisplayName?: string | null,
+  orderingPersonDisplayName?: string | null,
 ): TripSearchFlatFields {
-  const flat = extractTripSearchFlatFields(record, customerDisplayName)
+  const flat = extractTripSearchFlatFields(record, customerDisplayName, orderingPersonDisplayName)
   record.fromAddress = flat.fromAddress
   record.toAddress = flat.toAddress
   record.waypointAddresses = flat.waypointAddresses
   record.contactName = flat.contactName
   record.companyName = flat.companyName
   record.customerDisplayName = flat.customerDisplayName
+  record.orderingPersonDisplayName = flat.orderingPersonDisplayName
   return flat
 }
 
@@ -78,6 +91,7 @@ export function buildTripSearchTextLines(
   append('To', flat.toAddress)
   append('Stops', flat.waypointAddresses)
   append('Customer', flat.customerDisplayName)
+  append('Ordering party', flat.orderingPersonDisplayName)
   append('Contact', flat.contactName)
   append('Company', flat.companyName)
   if (extras?.notes) append('Notes', extras.notes)
@@ -91,6 +105,7 @@ export const TRIP_SEARCH_FIELD_POLICY_SEARCHABLE = [
   'toAddress',
   'waypointAddresses',
   'customerDisplayName',
+  'orderingPersonDisplayName',
   'contactName',
   'companyName',
   'notes',

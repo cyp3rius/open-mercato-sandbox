@@ -107,6 +107,7 @@ async function buildTripListFilters(
     filters.$or = [
       { customerPersonId: query.customerEntityId },
       { customerCompanyId: query.customerEntityId },
+      { orderingPersonId: query.customerEntityId },
     ]
   }
   if (query.paymentType) {

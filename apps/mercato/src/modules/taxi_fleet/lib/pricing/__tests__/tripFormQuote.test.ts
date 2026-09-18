@@ -22,6 +22,7 @@ function formValues(overrides: Partial<TripFormValues> = {}): TripFormValues {
     teamMemberId: '',
     resourceId: '',
     customerEntityId: '',
+    orderingPersonId: '',
     tripType: 'client',
     platform: '',
     startedAtLocal: `${WEEKDAY}T10:00`,

@@ -3,6 +3,7 @@ import {
   enrichTripRecordForSearch,
   extractTripSearchFlatFields,
   readTripCustomerEntityId,
+  readTripOrderingPersonId,
 } from '../tripSearchFields'
 import { intersectIdLists, mergeIdFilter } from '../tripListSearch'
 
@@ -55,13 +56,20 @@ describe('tripSearchFields', () => {
       contactName: '',
       companyName: '',
       customerDisplayName: 'Firma X',
+      orderingPersonDisplayName: 'Jan Kowalski',
     })
     expect(lines).toEqual([
       'From: Start',
       'To: End',
       'Stops: Stop 1',
       'Customer: Firma X',
+      'Ordering party: Jan Kowalski',
     ])
+  })
+
+  it('reads ordering person id from camelCase or snake_case', () => {
+    expect(readTripOrderingPersonId({ orderingPersonId: 'op1' })).toBe('op1')
+    expect(readTripOrderingPersonId({ ordering_person_id: 'op2' })).toBe('op2')
   })
 
   it('prefers person id over company id for customer entity resolution', () => {

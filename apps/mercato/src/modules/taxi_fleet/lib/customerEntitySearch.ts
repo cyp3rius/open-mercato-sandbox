@@ -182,7 +182,13 @@ async function findCustomerEntityIdsByDisplayName(
 
 export async function searchFleetCustomerEntities(
   em: EntityManager,
-  params: { tenantId: string; organizationId: string; search: string; limit?: number },
+  params: {
+    tenantId: string
+    organizationId: string
+    search: string
+    limit?: number
+    kind?: 'person' | 'company'
+  },
 ): Promise<FleetCustomerSearchItem[]> {
   const limit = params.limit ?? 20
   const search = params.search.trim()
@@ -198,6 +204,9 @@ export async function searchFleetCustomerEntities(
   if (!matchedIds.length) return []
 
   const scope = { tenantId: params.tenantId, organizationId: params.organizationId }
+  const kindFilter = params.kind
+    ? params.kind
+    : ({ $in: ['person', 'company'] as const })
   const rows = await findWithDecryption(
     em,
     CustomerEntity,
@@ -206,7 +215,7 @@ export async function searchFleetCustomerEntities(
       tenantId: params.tenantId,
       organizationId: params.organizationId,
       deletedAt: null,
-      kind: { $in: ['person', 'company'] },
+      kind: kindFilter,
     },
     { limit, populate: ['companyProfile'] as never },
     scope,
@@ -241,6 +250,14 @@ export async function resolveFleetCustomerEntityLabel(
   em: EntityManager,
   params: { tenantId: string; organizationId: string; entityId: string },
 ): Promise<string | null> {
+  const resolved = await resolveFleetCustomerEntity(em, params)
+  return resolved?.label ?? null
+}
+
+export async function resolveFleetCustomerEntity(
+  em: EntityManager,
+  params: { tenantId: string; organizationId: string; entityId: string },
+): Promise<{ label: string; kind: 'person' | 'company' | string } | null> {
   const entityId = params.entityId.trim()
   if (!entityId.length) return null
   const scope = { tenantId: params.tenantId, organizationId: params.organizationId }
@@ -273,5 +290,5 @@ export async function resolveFleetCustomerEntityLabel(
   if (!row) return null
   const label = row.displayName?.trim() || ''
   if (!label.length || looksEncryptedLabel(label)) return null
-  return label
+  return { label, kind: row.kind }
 }

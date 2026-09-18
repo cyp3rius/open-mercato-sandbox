@@ -204,6 +204,10 @@ export class TaxiFleetTrip {
   @Property({ name: 'customer_company_id', type: 'uuid', nullable: true })
   customerCompanyId?: string | null
 
+  /** CRM-only: person who ordered the trip when the paying customer is a company. */
+  @Property({ name: 'ordering_person_id', type: 'uuid', nullable: true })
+  orderingPersonId?: string | null
+
   @Property({ type: 'text', default: 'new' })
   status: string = 'new'
 

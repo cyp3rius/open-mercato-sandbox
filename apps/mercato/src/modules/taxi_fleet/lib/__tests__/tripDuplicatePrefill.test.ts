@@ -6,6 +6,7 @@ describe('tripFormValuesFromDuplicateSource', () => {
       teamMemberId: 'driver-1',
       resourceId: 'vehicle-1',
       customerEntityId: 'customer-1',
+      orderingPersonId: 'ordering-1',
       tripType: 'client',
       platform: 'bolt',
       startedAtLocal: '2026-03-10T10:00',
@@ -53,6 +54,7 @@ describe('tripFormValuesFromDuplicateSource', () => {
 
     const next = tripFormValuesFromDuplicateSource(source as never, { defaultStatus: 'scheduled' })
     expect(next.customerEntityId).toBe('customer-1')
+    expect(next.orderingPersonId).toBe('ordering-1')
     expect(next.fromAddress).toBe('A')
     expect(next.toAddress).toBe('B')
     expect(next.distanceKm).toBe('15')

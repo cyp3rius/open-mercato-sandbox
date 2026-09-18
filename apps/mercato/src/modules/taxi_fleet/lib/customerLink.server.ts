@@ -76,3 +76,19 @@ export async function resolveTripCustomerLink(
 
   return { customerPersonId: null, customerCompanyId: null }
 }
+
+/** Validates optional CRM ordering person (must be a person entity). */
+export async function resolveTripOrderingPersonId(
+  em: EntityManager,
+  orderingPersonId: string | null | undefined,
+  scope: CustomerScope,
+  options?: { requireCompanyCustomer?: boolean; hasCompanyCustomer?: boolean },
+): Promise<string | null> {
+  const personId = orderingPersonId?.trim() || null
+  if (!personId) return null
+  if (options?.requireCompanyCustomer && !options.hasCompanyCustomer) {
+    throw new CrudHttpError(400, { error: 'taxi_fleet.trips.errors.orderingPersonRequiresCompany' })
+  }
+  await enforceCustomerEntity(em, personId, scope, 'person')
+  return personId
+}

@@ -39,6 +39,7 @@ const RECEIPT_SUPPLEMENT_DISALLOWED_UPDATE_KEYS = [
   'customerPersonId',
   'customerCompanyId',
   'customerEntityId',
+  'orderingPersonId',
   'status',
   'notes',
 ] as const

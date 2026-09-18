@@ -332,6 +332,7 @@ export const tripCreateSchema = z
     customerPersonId: optionalUuid,
     customerCompanyId: optionalUuid,
     customerEntityId: optionalUuid,
+    orderingPersonId: optionalUuid,
     customerPrimaryPhone: z.string().trim().min(5).max(50).optional().nullable(),
     status: tripStatusSchema.optional().default('new'),
     notes: z.string().max(10000).optional().nullable(),
@@ -347,6 +348,13 @@ export const tripCreateSchema = z
         code: 'custom',
         message: 'taxi_fleet.trips.errors.customerConflict',
         path: ['customerEntityId'],
+      })
+    }
+    if (data.orderingPersonId && hasPerson && !hasCompany && !hasEntity) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'taxi_fleet.trips.errors.orderingPersonRequiresCompany',
+        path: ['orderingPersonId'],
       })
     }
     if (
@@ -382,6 +390,7 @@ export const tripUpdateSchema = z
     customerPersonId: optionalUuid,
     customerCompanyId: optionalUuid,
     customerEntityId: optionalUuid,
+    orderingPersonId: optionalUuid,
     customerPrimaryPhone: z.string().trim().min(5).max(50).optional().nullable(),
     status: tripStatusSchema.optional(),
     notes: z.string().max(10000).optional().nullable(),
@@ -403,6 +412,13 @@ export const tripUpdateSchema = z
         code: 'custom',
         message: 'taxi_fleet.trips.errors.customerConflict',
         path: ['customerEntityId'],
+      })
+    }
+    if (data.orderingPersonId && hasPerson && !hasCompany && !hasEntity) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'taxi_fleet.trips.errors.orderingPersonRequiresCompany',
+        path: ['orderingPersonId'],
       })
     }
     if (!hasPerson && !hasCompany && !hasEntity && !hasPhone) {

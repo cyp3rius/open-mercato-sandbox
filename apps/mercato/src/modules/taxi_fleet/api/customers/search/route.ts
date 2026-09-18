@@ -5,7 +5,7 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import {
-  resolveFleetCustomerEntityLabel,
+  resolveFleetCustomerEntity,
   searchFleetCustomerEntities,
 } from '@/modules/taxi_fleet/lib/customerEntitySearch'
 
@@ -26,12 +26,16 @@ export async function GET(req: Request) {
     const url = new URL(req.url)
     const id = (url.searchParams.get('id') ?? '').trim()
     const search = (url.searchParams.get('search') ?? '').trim()
+    const kindRaw = (url.searchParams.get('kind') ?? '').trim()
+    const kind = kindRaw === 'person' || kindRaw === 'company' ? kindRaw : undefined
     const em = container.resolve('em') as EntityManager
 
     if (id.length) {
-      const label = await resolveFleetCustomerEntityLabel(em, { tenantId, organizationId, entityId: id })
-      if (!label) return NextResponse.json({ items: [] })
-      return NextResponse.json({ items: [{ id, label }] })
+      const resolved = await resolveFleetCustomerEntity(em, { tenantId, organizationId, entityId: id })
+      if (!resolved) return NextResponse.json({ items: [] })
+      return NextResponse.json({
+        items: [{ id, label: resolved.label, kind: resolved.kind }],
+      })
     }
 
     const items = await searchFleetCustomerEntities(em, {
@@ -39,6 +43,7 @@ export async function GET(req: Request) {
       organizationId,
       search,
       limit: 20,
+      kind,
     })
     return NextResponse.json({ items })
   } catch (err) {

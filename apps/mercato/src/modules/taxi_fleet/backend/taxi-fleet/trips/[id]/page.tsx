@@ -44,6 +44,7 @@ type TripRow = {
   externalTripId?: string | null
   customerPersonId?: string | null
   customerCompanyId?: string | null
+  orderingPersonId?: string | null
   startedAt?: string | null
   endedAt?: string | null
   revenueAmount?: string | null

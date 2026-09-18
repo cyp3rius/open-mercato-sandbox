@@ -5,7 +5,7 @@ import { z } from 'zod'
 import type { TranslateFn } from '@open-mercato/shared/lib/i18n/context'
 import type { CrudField, CrudFormGroup } from '@open-mercato/ui/backend/CrudForm'
 import { LookupSelect, type LookupSelectItem } from '@open-mercato/ui/backend/inputs/LookupSelect'
-import { TripCustomerField } from './TripCustomerField'
+import { TripCustomerBillingFields } from './TripCustomerBillingFields'
 import { TripDateTimeLocalField } from './TripDateTimeLocalField'
 import { TripDriverField } from './TripDriverField'
 import { TripVehicleField } from './TripVehicleField'
@@ -52,6 +52,7 @@ export type TripFormValues = {
   teamMemberId: string
   resourceId: string
   customerEntityId: string
+  orderingPersonId: string
   tripType: string
   platform: string
   startedAtLocal: string
@@ -130,6 +131,7 @@ export function defaultTripFormValues(reference = new Date()): TripFormValues {
     teamMemberId: '',
     resourceId: '',
     customerEntityId: '',
+    orderingPersonId: '',
     tripType: 'client',
     platform: '',
     startedAtLocal,
@@ -237,6 +239,7 @@ export function tripFormSchema(t: TranslateFn, options?: TripFormValidationOptio
           }),
         ])
         .optional(),
+      orderingPersonId: z.union([z.string().uuid(), z.literal('')]).optional(),
       tripType: z.enum(['client', 'private', 'internal', 'empty', 'event', 'other', 'platform']),
       platform: z.string(),
       startedAtLocal: z.string().min(1),
@@ -435,6 +438,7 @@ const ASSIGNMENT_FIELD_IDS = [
 ]
 const CUSTOMER_FIELD_IDS = [
   'customerEntityId',
+  'orderingPersonId',
   'contactName',
   'contactEmail',
   'contactPhone',
@@ -447,6 +451,7 @@ const CUSTOMER_FIELD_IDS = [
 ]
 const PAGE_CUSTOMER_FIELD_IDS = [
   'customerEntityId',
+  'orderingPersonId',
   'contactName',
   'contactEmail',
   'contactPhone',
@@ -706,7 +711,7 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
     {
       id: 'customerEntityId',
       type: 'custom',
-      label: t('taxi_fleet.trips.customer', 'Customer'),
+      label: '',
       required: false,
       layout: 'full',
       component: ({ value, setValue, disabled, readOnly: fieldReadOnly, values, setFormValue }) => {
@@ -714,21 +719,33 @@ export function buildTripFormFields(t: TranslateFn, options: TripFormOptions): C
           typeof values?.companyName === 'string' ? values.companyName.trim() : ''
         const contactName =
           typeof values?.contactName === 'string' ? values.contactName.trim() : ''
+        const orderingPersonId =
+          typeof values?.orderingPersonId === 'string' ? values.orderingPersonId : ''
         return (
-          <TripCustomerField
-            value={typeof value === 'string' ? value : ''}
-            onChange={(next) => {
+          <TripCustomerBillingFields
+            customerEntityId={typeof value === 'string' ? value : ''}
+            orderingPersonId={orderingPersonId}
+            onCustomerChange={(next) => {
               setValue(next)
               const pendingPhone = decodePendingTripCustomerPhone(next)
               if (pendingPhone) {
                 setFormValue?.('contactPhone', pendingPhone)
               }
             }}
+            onOrderingPersonChange={(next) => setFormValue?.('orderingPersonId', next)}
             disabled={disabled || fieldReadOnly || readOnly}
             fallbackLabel={companyName || contactName || undefined}
           />
         )
       },
+    },
+    {
+      id: 'orderingPersonId',
+      type: 'custom',
+      label: '',
+      layout: 'full',
+      visibleWhen: () => false,
+      component: () => null,
     },
     ...buildTripRequestFormFields(t, { readOnly, currentPaymentType }).filter((field) =>
       ['contactName', 'contactPhone', 'contactEmail', 'paymentType', 'referringPartnerEntityId'].includes(
@@ -891,6 +908,7 @@ export function mapTripRowToFormValues(row: {
   resourceId: string
   customerPersonId?: string | null
   customerCompanyId?: string | null
+  orderingPersonId?: string | null
   tripType: string
   platform?: string | null
   startedAt?: string | null
@@ -917,6 +935,7 @@ export function mapTripRowToFormValues(row: {
       customerPersonId: row.customerPersonId ?? null,
       customerCompanyId: row.customerCompanyId ?? null,
     }) ?? '',
+    orderingPersonId: row.orderingPersonId?.trim() || '',
     tripType: row.tripType,
     platform: row.platform ?? '',
     startedAtLocal: row.startedAt ? normalizeDateTimeLocalInput(isoToDateTimeLocalValue(row.startedAt)) : '',
@@ -993,12 +1012,14 @@ export function tripFormValuesToPayload(
   const extras = buildTripPayloadExtras(values)
   const assignmentId = options?.assignmentId?.trim()
   const customerFields = resolveTripCustomerPayloadFields(values.customerEntityId)
+  const orderingPersonId = values.orderingPersonId?.trim() || null
   return {
     tenantId: scope.tenantId,
     organizationId: scope.organizationId,
     teamMemberId: values.teamMemberId,
     resourceId: values.resourceId,
     ...customerFields,
+    orderingPersonId,
     tripType: values.tripType,
     platform: values.platform?.trim() ? values.platform : null,
     startedAt: startedAt.toISOString(),
@@ -1017,6 +1038,7 @@ export function tripFormValuesToUpdatePayload(id: string, values: TripFormValues
   const endedAt = new Date(values.endedAtLocal)
   const extras = buildTripPayloadExtras(values)
   const customerFields = resolveTripCustomerPayloadFields(values.customerEntityId)
+  const orderingPersonId = values.orderingPersonId?.trim() || null
   return {
     id,
     teamMemberId: values.teamMemberId,
@@ -1027,8 +1049,9 @@ export function tripFormValuesToUpdatePayload(id: string, values: TripFormValues
           customerEntityId: null,
           customerPersonId: null,
           customerCompanyId: null,
+          orderingPersonId: null,
         }
-      : customerFields),
+      : { ...customerFields, orderingPersonId }),
     tripType: values.tripType,
     platform: values.platform?.trim() ? values.platform : null,
     startedAt: startedAt.toISOString(),

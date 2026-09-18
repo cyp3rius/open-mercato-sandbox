@@ -38,6 +38,7 @@ type TripRow = {
   status: string
   customerPersonId?: string | null
   customerCompanyId?: string | null
+  orderingPersonId?: string | null
   startedAt?: string | null
   endedAt?: string | null
   revenueAmount?: string | null
@@ -223,6 +224,7 @@ export function TripCalendarDetailsPanel({ open, item, onOpenChange }: TripCalen
         resourceId: row.resourceId ?? '',
         customerPersonId: row.customerPersonId,
         customerCompanyId: row.customerCompanyId,
+        orderingPersonId: row.orderingPersonId,
         tripType: row.tripType,
         startedAt: row.startedAt,
         endedAt: row.endedAt,

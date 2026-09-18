@@ -131,6 +131,7 @@ async function searchViaSqlFallback(
       $or: [
         { customerPersonId: { $in: customerIds } },
         { customerCompanyId: { $in: customerIds } },
+        { orderingPersonId: { $in: customerIds } },
       ],
     }
     if (orgIds.length === 1) {

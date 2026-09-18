@@ -112,7 +112,8 @@ Vendor JSON items are normalized by `lib/platformSync/adapters/mapVendorTrip.ts`
 
 - DataTable search on `/backend/taxi-fleet/trips` → `?search=` on `GET /api/taxi_fleet/trips`
 - Indexed entity: `taxi_fleet:taxi_fleet_trip` via `search.ts` (fulltext + vector + tokens)
-- Searchable text: `metadata.tripRequest` from/to/stops + CRM customer `display_name` (+ contact/company fallbacks)
+- Searchable text: `metadata.tripRequest` from/to/stops + CRM customer `display_name` + optional ordering person (`ordering_person_id`) + contact/company fallbacks
+- Customer filter (`customerEntityId`) matches `customerPersonId` **or** `customerCompanyId` **or** `orderingPersonId`
 - List applies SearchService hits as `id $in`, then AND with FilterBar filters; SQL fallback when SearchService is unavailable
 - Indexing on create/update/delete via `emitTripIndexerSideEffects` in trip / platform / inject commands
 - After deploy or bulk import, reindex existing trips:
@@ -120,6 +121,13 @@ Vendor JSON items are normalized by `lib/platformSync/adapters/mapVendorTrip.ts`
 ```bash
 yarn mercato search reindex --tenant <tenantId> --entity taxi_fleet:taxi_fleet_trip --purgeFirst
 ```
+
+## Ordering party (Zamawiający)
+
+- Optional `ordering_person_id` on `taxi_fleet_trips` — CRM person who ordered the trip when **customer is a company**
+- CRM form: shown beside Customer only when selected customer kind is company; person-only search; not required
+- Driver app: unchanged (no ordering field)
+- Receipt OCR **Nadpisz → Klient**: if trip customer was a person, that person is moved to `orderingPersonId` and NIP company becomes customer
 
 ## Receipt OCR (trips + expenses)
 

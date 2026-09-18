@@ -42,10 +42,12 @@ function mapItem(
 export async function remoteSearchFleetCustomers(
   query: string,
   kindLabels: { person: string; company: string },
+  options?: { kind?: 'person' | 'company' },
 ): Promise<EntitySearchComboboxOption[]> {
   const params = new URLSearchParams()
   const q = query.trim()
   if (q.length) params.set('search', q)
+  if (options?.kind) params.set('kind', options.kind)
   const call = await apiCall<{ items?: SearchItem[] }>(
     `/api/taxi_fleet/customers/search?${params.toString()}`,
   )
@@ -77,6 +79,20 @@ export async function resolveFleetCustomerDisplayLabel(entityId: string): Promis
   const preview = await fetchProcurementCustomerAssociationPreview(id)
   if (preview?.title && isUsableLabel(preview.title)) return preview.title.trim()
 
+  return null
+}
+
+export async function resolveFleetCustomerKind(
+  entityId: string,
+): Promise<'person' | 'company' | null> {
+  const id = entityId.trim()
+  if (!id.length) return null
+  const call = await apiCall<{ items?: SearchItem[] }>(
+    `/api/taxi_fleet/customers/search?id=${encodeURIComponent(id)}`,
+  )
+  if (!call.ok || !Array.isArray(call.result?.items) || !call.result.items[0]) return null
+  const kind = call.result.items[0].kind
+  if (kind === 'person' || kind === 'company') return kind
   return null
 }
 

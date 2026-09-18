@@ -22,7 +22,7 @@ import {
   type TripUpdateInput,
 } from '../data/validators'
 import { assertTeamMemberHasDriverProfile } from '../lib/driverProfileGuard'
-import { resolveTripCustomerLink } from '../lib/customerLink.server'
+import { resolveTripCustomerLink, resolveTripOrderingPersonId } from '../lib/customerLink.server'
 import { ensureTripCustomerPersonFromPhone } from '../lib/ensureTripCustomerFromPhone'
 import { resolveFleetBackendActor } from '../lib/backendFleetActor'
 import { normalizeTripStatus } from '../lib/tripStatuses'
@@ -167,6 +167,15 @@ const createTripCommand: CommandHandler<TripCreateInput, { tripId: string }> = {
       },
       { required: parsed.tripType === 'client' },
     )
+    const orderingPersonId = await resolveTripOrderingPersonId(
+      em,
+      parsed.orderingPersonId,
+      { tenantId: parsed.tenantId, organizationId: parsed.organizationId },
+      {
+        requireCompanyCustomer: true,
+        hasCompanyCustomer: Boolean(customer.customerCompanyId),
+      },
+    )
     const initialStatus = coerceTripStatusForPersistence({
       tripType: parsed.tripType,
       requestedStatus: parsed.status ?? 'new',
@@ -239,6 +248,7 @@ const createTripCommand: CommandHandler<TripCreateInput, { tripId: string }> = {
       currencyCode: parsed.currencyCode ?? 'PLN',
       customerPersonId: customer.customerPersonId,
       customerCompanyId: customer.customerCompanyId,
+      orderingPersonId,
       status: initialStatus,
       notes: parsed.notes ?? null,
       metadata: parsed.metadata ?? null,
@@ -358,6 +368,20 @@ const updateTripCommand: CommandHandler<TripUpdateInput, { tripId: string }> = {
       )
       row.customerPersonId = customer.customerPersonId
       row.customerCompanyId = customer.customerCompanyId
+      if (!customer.customerCompanyId) {
+        row.orderingPersonId = null
+      }
+    }
+    if (parsed.orderingPersonId !== undefined) {
+      row.orderingPersonId = await resolveTripOrderingPersonId(
+        em,
+        parsed.orderingPersonId,
+        { tenantId: row.tenantId, organizationId: row.organizationId },
+        {
+          requireCompanyCustomer: true,
+          hasCompanyCustomer: Boolean(row.customerCompanyId),
+        },
+      )
     }
     if (parsed.notes !== undefined) row.notes = parsed.notes
     if (parsed.metadata !== undefined) row.metadata = parsed.metadata

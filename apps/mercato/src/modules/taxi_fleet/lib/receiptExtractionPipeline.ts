@@ -1164,7 +1164,11 @@ export async function applyReceiptOcrFieldToTrip(
     }
 
     trip.customerCompanyId = companyEntityId
+    const previousPersonId = trip.customerPersonId?.trim() || null
     trip.customerPersonId = null
+    if (previousPersonId) {
+      trip.orderingPersonId = previousPersonId
+    }
     if (trip.tripType !== 'client') trip.tripType = 'client'
     trip.updatedAt = now
     warnings = clearCustomerNipConflictWarnings(warnings)

@@ -12,6 +12,7 @@ import {
   buildTripSearchTextLines,
   enrichTripRecordForSearch,
   readTripCustomerEntityId,
+  readTripOrderingPersonId,
   TRIP_SEARCH_FIELD_POLICY_SEARCHABLE,
 } from './lib/tripSearchFields'
 
@@ -33,8 +34,10 @@ function formatSubtitle(...parts: Array<unknown>): string | undefined {
   return text.join(' · ')
 }
 
-async function loadCustomerDisplayName(ctx: SearchBuildContext): Promise<string | null> {
-  const entityId = readTripCustomerEntityId(ctx.record)
+async function loadCustomerEntityDisplayName(
+  ctx: SearchBuildContext,
+  entityId: string | null,
+): Promise<string | null> {
   if (!entityId || !ctx.queryEngine || !ctx.tenantId) return null
   const queryEngine = ctx.queryEngine as QueryEngine
   try {
@@ -67,7 +70,12 @@ function buildTripPresenter(
       : pickString(flat.fromAddress, flat.toAddress, flat.waypointAddresses)
   return {
     title: String(customerLabel),
-    subtitle: formatSubtitle(route, record.status, record.tripType ?? record.trip_type),
+    subtitle: formatSubtitle(
+      route,
+      flat.orderingPersonDisplayName,
+      record.status,
+      record.tripType ?? record.trip_type,
+    ),
     icon: 'car',
     badge,
   }
@@ -76,8 +84,11 @@ function buildTripPresenter(
 async function buildTripIndexSource(ctx: SearchBuildContext): Promise<SearchIndexSource | null> {
   const { t } = await resolveTranslations()
   const badge = t('taxi_fleet.search.badge.trip', 'Trip')
-  const customerDisplayName = await loadCustomerDisplayName(ctx)
-  const flat = enrichTripRecordForSearch(ctx.record, customerDisplayName)
+  const [customerDisplayName, orderingPersonDisplayName] = await Promise.all([
+    loadCustomerEntityDisplayName(ctx, readTripCustomerEntityId(ctx.record)),
+    loadCustomerEntityDisplayName(ctx, readTripOrderingPersonId(ctx.record)),
+  ])
+  const flat = enrichTripRecordForSearch(ctx.record, customerDisplayName, orderingPersonDisplayName)
   const notes = typeof ctx.record.notes === 'string' ? ctx.record.notes : null
   const lines = buildTripSearchTextLines(flat, {
     notes,
@@ -101,10 +112,12 @@ async function buildTripIndexSource(ctx: SearchBuildContext): Promise<SearchInde
         notes: ctx.record.notes,
         customerPersonId: ctx.record.customerPersonId ?? ctx.record.customer_person_id,
         customerCompanyId: ctx.record.customerCompanyId ?? ctx.record.customer_company_id,
+        orderingPersonId: ctx.record.orderingPersonId ?? ctx.record.ordering_person_id,
         status: ctx.record.status,
         tripType: ctx.record.tripType ?? ctx.record.trip_type,
       },
       customerDisplayName: flat.customerDisplayName,
+      orderingPersonDisplayName: flat.orderingPersonDisplayName,
       customFields: ctx.customFields,
     },
   }
@@ -120,8 +133,15 @@ export const searchConfig: SearchModuleConfig = {
       formatResult: async (ctx) => {
         const { t } = await resolveTranslations()
         const badge = t('taxi_fleet.search.badge.trip', 'Trip')
-        const customerDisplayName = await loadCustomerDisplayName(ctx)
-        const flat = enrichTripRecordForSearch(ctx.record, customerDisplayName)
+        const [customerDisplayName, orderingPersonDisplayName] = await Promise.all([
+          loadCustomerEntityDisplayName(ctx, readTripCustomerEntityId(ctx.record)),
+          loadCustomerEntityDisplayName(ctx, readTripOrderingPersonId(ctx.record)),
+        ])
+        const flat = enrichTripRecordForSearch(
+          ctx.record,
+          customerDisplayName,
+          orderingPersonDisplayName,
+        )
         return buildTripPresenter(badge, flat, ctx.record)
       },
       resolveUrl: async (ctx) => {
