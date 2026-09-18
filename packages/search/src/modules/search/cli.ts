@@ -708,6 +708,61 @@ async function reindexCommand(rest: string[]): Promise<void> {
     }
 
     const defaultPurge = purgeFlag === true && !skipPurgeFlag
+    const strategyRaw = stringOpt(args, 'strategy', 'strategies')
+    const strategies = new Set(
+      (strategyRaw ?? 'vector')
+        .split(',')
+        .map((part) => part.trim().toLowerCase())
+        .filter((part) => part.length > 0),
+    )
+    const wantsTokens = strategies.has('tokens') || strategies.has('all')
+    const wantsVector = strategies.has('vector') || strategies.has('all') || !strategyRaw
+
+    if (wantsTokens) {
+      if (!tenantId) {
+        console.error('--tenant is required when reindexing with --strategy tokens')
+        return
+      }
+      const tokenEntities = entityId
+        ? enabledEntities.has(entityId)
+          ? [entityId]
+          : []
+        : searchIndexer.listEnabledEntities()
+      if (entityId && tokenEntities.length === 0) {
+        console.error(`Entity ${entityId} is not enabled for search.`)
+        return
+      }
+      if (!tokenEntities.length) {
+        console.log('No entities enabled for search token reindex.')
+      } else {
+        console.log(
+          `Reindexing search strategies (tokens/fulltext via SearchIndexer) for ${tokenEntities.length} entit${tokenEntities.length === 1 ? 'y' : 'ies'}...`,
+        )
+        for (const id of tokenEntities) {
+          console.log(`  -> ${id}${defaultPurge ? ' [purge]' : ''}`)
+          const result = await searchIndexer.reindexEntity({
+            entityId: id as EntityId,
+            tenantId,
+            organizationId: organizationId ?? null,
+            purgeFirst: defaultPurge,
+          })
+          if (!result.success) {
+            const firstError = result.errors[0]?.error ?? 'unknown error'
+            console.error(`     failed: ${firstError}`)
+          } else {
+            console.log(`     indexed ${result.recordsIndexed.toLocaleString()} record(s)`)
+          }
+        }
+        console.log('Search strategy reindex completed.')
+      }
+      if (!wantsVector) {
+        return
+      }
+    }
+
+    if (!wantsVector) {
+      return
+    }
 
     if (entityId) {
       if (!enabledEntities.has(entityId)) {
@@ -754,16 +809,23 @@ const reindexHelpCli: ModuleCli = {
   command: 'reindex-help',
   async run() {
     console.log('Usage: yarn mercato search reindex [options]')
-    console.log('  --tenant <id>           Optional tenant scope (required for purge & coverage).')
+    console.log('  --tenant <id>           Optional tenant scope (required for purge, coverage, and --strategy tokens).')
     console.log('  --org <id>              Optional organization scope (requires tenant).')
     console.log('  --entity <module:entity> Reindex a single entity (defaults to all enabled entities).')
+    console.log('  --strategy <list>       Comma-separated: tokens, vector, all (default: vector).')
+    console.log('                          Use tokens when vector/Meilisearch are unavailable (local default).')
     console.log('  --partitions <n>        Number of partitions to process in parallel (default from query index).')
     console.log('  --partition <idx>       Restrict to a specific partition index.')
     console.log('  --batch <n>             Override batch size per chunk.')
     console.log('  --force                 Force reindex even if another job is running.')
-    console.log('  --purgeFirst            Purge vector rows before reindexing (defaults to skip).')
-    console.log('  --skipPurge             Explicitly skip purging vector rows.')
+    console.log('  --purgeFirst            Purge existing index rows before reindexing (defaults to skip).')
+    console.log('  --skipPurge             Explicitly skip purging index rows.')
     console.log('  --skipResetCoverage     Keep existing coverage snapshots.')
+    console.log('')
+    console.log('Notes:')
+    console.log('  - Default path rebuilds vector embeddings via query_index (needs OPENAI_API_KEY).')
+    console.log('  - --strategy tokens rebuilds search_tokens via SearchIndexer (buildSource enrichment).')
+    console.log('  - backend/query-indexes shows query_index coverage, not search vector rows.')
   },
 }
 

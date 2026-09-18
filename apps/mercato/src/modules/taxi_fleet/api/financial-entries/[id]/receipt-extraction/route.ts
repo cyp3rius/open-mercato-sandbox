@@ -13,6 +13,7 @@ import {
 } from '@/modules/taxi_fleet/data/entities'
 import {
   applyReceiptOcrFieldToFinancialEntry,
+  ignoreReceiptExtractionErrors,
   overwriteReceiptExtraction,
   processReceiptExtraction,
 } from '@/modules/taxi_fleet/lib/receiptExtractionPipeline'
@@ -119,7 +120,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
 }
 
 const postSchema = z.object({
-  action: z.enum(['retry', 'overwrite', 'apply_field']),
+  action: z.enum(['retry', 'overwrite', 'apply_field', 'ignore_errors']),
   documentNumber: z.string().trim().min(1).max(120).optional(),
   field: z.enum(['amount', 'documentNumber', 'vatRatePercent']).optional(),
 })
@@ -155,6 +156,12 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
       await em.flush()
       await processReceiptExtraction(em, extraction.id)
       extraction = await em.findOne(TaxiFleetReceiptExtraction, { id: extraction.id })
+    } else if (body.action === 'ignore_errors') {
+      extraction = await ignoreReceiptExtractionErrors(em, {
+        extractionId: extraction.id,
+        tenantId: entry.tenantId,
+        organizationId: entry.organizationId,
+      })
     } else if (body.action === 'apply_field') {
       if (!body.field) {
         throw new CrudHttpError(400, {

@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { ExternalLink, Loader2, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { ExternalLink, Loader2, Ban, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -10,6 +10,7 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Separator } from '@open-mercato/ui/primitives/separator'
 import { formatReceiptOcrWarningLabel } from '../lib/receiptOcrWarningLabel'
+import { receiptExtractionHasDismissibleIssues } from '../lib/receiptExtractionRules'
 import { useTaxiFleetPermissions } from './useTaxiFleetPermissions'
 
 type ExtractionItem = {
@@ -129,6 +130,45 @@ export function TripReceiptOcrPanel({
       }
       setItem(call.result.item)
       flash(t('taxi_fleet.receiptOcr.actionSuccess', 'Receipt OCR updated.'), 'success')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runIgnoreErrors = async () => {
+    if (!canManage) return
+    const ok = await confirm({
+      title: t('taxi_fleet.receiptOcr.ignoreErrorsConfirmTitle', 'Ignore OCR errors?'),
+      text: t(
+        'taxi_fleet.receiptOcr.ignoreErrorsConfirmDescription',
+        'All OCR warnings and errors will be dismissed and the receipt will be marked as accepted. Form values are not changed.',
+      ),
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      const call = await apiCall<{ item: ExtractionItem; error?: string }>(
+        `/api/taxi_fleet/trips/${encodeURIComponent(tripId)}/receipt-extraction`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'ignore_errors' }),
+        },
+      )
+      if (!call.ok || !call.result?.item) {
+        flash(
+          (typeof call.result?.error === 'string' && call.result.error) ||
+            t('taxi_fleet.receiptOcr.actionFailed', 'Could not update receipt OCR.'),
+          'error',
+        )
+        return
+      }
+      setItem(call.result.item)
+      flash(
+        t('taxi_fleet.receiptOcr.ignoreErrorsSuccess', 'OCR errors ignored. Receipt accepted.'),
+        'success',
+      )
+      onApplied?.()
     } finally {
       setBusy(false)
     }
@@ -292,6 +332,13 @@ export function TripReceiptOcrPanel({
   const distanceMismatch = hasWarningCode(item, 'distance_mismatch_trip')
   const amountMismatch = hasAmountConflict(item)
   const customerConflict = hasCustomerConflict(item)
+  const canIgnoreErrors =
+    canManage &&
+    receiptExtractionHasDismissibleIssues({
+      status: item.status,
+      warningsJson: item.warnings,
+      errorMessage: item.errorMessage,
+    })
   const showOverwriteSection =
     canManage &&
     (Boolean(item.ocrDistanceKm) ||
@@ -433,6 +480,19 @@ export function TripReceiptOcrPanel({
               >
                 <RefreshCw className="mr-1.5 size-3.5" aria-hidden />
                 {t('taxi_fleet.receiptOcr.retry', 'Retry OCR')}
+              </Button>
+            ) : null}
+            {canIgnoreErrors ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={`${groupButtonClass} bg-amber-50 text-amber-950`}
+                disabled={busy}
+                onClick={() => void runIgnoreErrors()}
+              >
+                <Ban className="mr-1.5 size-3.5" aria-hidden />
+                {t('taxi_fleet.receiptOcr.ignoreErrors', 'Ignore errors')}
               </Button>
             ) : null}
           </div>

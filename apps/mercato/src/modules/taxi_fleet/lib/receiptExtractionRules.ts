@@ -53,6 +53,18 @@ export function isHighConfidenceReceiptOcr(confidence: number | null | undefined
   )
 }
 
+/** True when an operator can dismiss OCR warnings / failed review and accept the receipt. */
+export function receiptExtractionHasDismissibleIssues(row: {
+  status: string
+  warningsJson?: unknown
+  errorMessage?: string | null
+}): boolean {
+  if (row.status === 'pending' || row.status === 'processing') return false
+  if (row.status === 'needs_review' || row.status === 'failed') return true
+  if (typeof row.errorMessage === 'string' && row.errorMessage.trim().length > 0) return true
+  return Array.isArray(row.warningsJson) && row.warningsJson.length > 0
+}
+
 export function shouldAutoApplyHighConfidenceOcr(params: {
   confidence?: number | null
   warnings?: Array<{ code?: string } | null | undefined> | null

@@ -18,6 +18,7 @@ import {
 } from '../data/entities'
 import {
   buildReceiptExtractionMerge,
+  receiptExtractionHasDismissibleIssues,
   shouldAutoApplyHighConfidenceOcr,
   type ReceiptOcrWarning,
 } from './receiptExtractionRules'
@@ -1094,6 +1095,54 @@ export async function overwriteReceiptExtraction(
   return refreshed
 }
 
+/**
+ * Operator action: dismiss OCR warnings / failed status and mark the receipt as accepted
+ * without overwriting trip/expense field values.
+ */
+export async function ignoreReceiptExtractionErrors(
+  em: EntityManager,
+  params: {
+    extractionId: string
+    tenantId: string
+    organizationId: string
+  },
+): Promise<TaxiFleetReceiptExtraction> {
+  const row = await em.findOne(TaxiFleetReceiptExtraction, {
+    id: params.extractionId,
+    tenantId: params.tenantId,
+    organizationId: params.organizationId,
+    deletedAt: null,
+  })
+  if (!row) throw new Error('Receipt extraction not found')
+  if (!receiptExtractionHasDismissibleIssues(row)) {
+    return row
+  }
+
+  const documentNumber =
+    row.appliedDocumentNumber?.trim() ||
+    row.ocrDocumentNumber?.trim() ||
+    row.driverDocumentNumber?.trim() ||
+    null
+  if (documentNumber && !row.appliedDocumentNumber?.trim()) {
+    row.appliedDocumentNumber = documentNumber
+  }
+
+  row.warningsJson = []
+  row.errorMessage = null
+  row.status = resolveFinalStatus({
+    force: Boolean(documentNumber),
+    documentNumber,
+    mergeNeedsReview: false,
+    warnings: [],
+  })
+  row.updatedAt = new Date()
+  await em.flush()
+
+  const refreshed = await em.findOne(TaxiFleetReceiptExtraction, { id: row.id })
+  if (!refreshed) throw new Error('Receipt extraction not found')
+  return refreshed
+}
+
 export type ReceiptOcrApplyField = 'distance' | 'amount' | 'documentNumber' | 'vatRatePercent' | 'customer'
 
 /**
@@ -1131,7 +1180,7 @@ export async function applyReceiptOcrFieldToTrip(
 
   if (params.field === 'customer') {
     const nip = row.ocrBuyerNip?.trim() || null
-    if (!nip) throw new Error('OCR buyer NIP is not available')
+    if (!nip) throw new Error('taxi_fleet.receiptOcr.errors.buyerNipMissing')
 
     let companyEntityId = row.resolvedCompanyId
     if (!companyEntityId) {
@@ -1144,20 +1193,22 @@ export async function applyReceiptOcrFieldToTrip(
               tenantId: row.tenantId,
               organizationId: row.organizationId,
               buyerNip: nip,
+              createStubIfNotInRegistry: true,
             })
           : await ensureCrmCompanyFromBuyerNipEm(em, {
               tenantId: row.tenantId,
               organizationId: row.organizationId,
               buyerNip: nip,
+              createStubIfNotInRegistry: true,
             })
       if (!ensured.companyEntityId) {
         if (ensured.warningCode === 'nip_invalid') {
-          throw new Error('OCR buyer NIP is invalid')
+          throw new Error('taxi_fleet.receiptOcr.errors.buyerNipInvalid')
         }
         if (ensured.warningCode === 'nip_lookup_failed') {
-          throw new Error('Could not verify buyer NIP in the registry')
+          throw new Error('taxi_fleet.receiptOcr.errors.buyerNipLookupFailed')
         }
-        throw new Error('Buyer NIP was not found in the registry')
+        throw new Error('taxi_fleet.receiptOcr.errors.buyerNipNotFound')
       }
       companyEntityId = ensured.companyEntityId
       row.resolvedCompanyId = companyEntityId

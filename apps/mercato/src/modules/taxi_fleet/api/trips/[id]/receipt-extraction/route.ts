@@ -10,6 +10,7 @@ import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { TaxiFleetReceiptExtraction, TaxiFleetTrip } from '@/modules/taxi_fleet/data/entities'
 import {
   applyReceiptOcrFieldToTrip,
+  ignoreReceiptExtractionErrors,
   overwriteReceiptExtraction,
   processReceiptExtraction,
 } from '@/modules/taxi_fleet/lib/receiptExtractionPipeline'
@@ -124,7 +125,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
 }
 
 const postSchema = z.object({
-  action: z.enum(['retry', 'overwrite', 'apply_field']),
+  action: z.enum(['retry', 'overwrite', 'apply_field', 'ignore_errors']),
   documentNumber: z.string().trim().min(1).max(120).optional(),
   field: z.enum(['distance', 'amount', 'documentNumber', 'customer']).optional(),
 })
@@ -159,6 +160,12 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
       await em.flush()
       await processReceiptExtraction(em, extraction.id)
       extraction = await em.findOne(TaxiFleetReceiptExtraction, { id: extraction.id })
+    } else if (body.action === 'ignore_errors') {
+      extraction = await ignoreReceiptExtractionErrors(em, {
+        extractionId: extraction.id,
+        tenantId: trip.tenantId,
+        organizationId: trip.organizationId,
+      })
     } else if (body.action === 'apply_field') {
       if (!body.field) {
         throw new CrudHttpError(400, {
@@ -176,9 +183,23 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
           ctx: context,
         })
       } catch (error) {
-        throw new CrudHttpError(400, {
-          error: error instanceof Error ? error.message : String(error),
-        })
+        const raw = error instanceof Error ? error.message : String(error)
+        const translated =
+          raw.startsWith('taxi_fleet.')
+            ? translate(
+                raw,
+                raw === 'taxi_fleet.receiptOcr.errors.buyerNipMissing'
+                  ? 'OCR buyer NIP is not available.'
+                  : raw === 'taxi_fleet.receiptOcr.errors.buyerNipInvalid'
+                    ? 'OCR buyer NIP is invalid.'
+                    : raw === 'taxi_fleet.receiptOcr.errors.buyerNipLookupFailed'
+                      ? 'Could not verify buyer NIP in the registry.'
+                      : raw === 'taxi_fleet.receiptOcr.errors.buyerNipNotFound'
+                        ? 'Buyer NIP was not found in the VAT registry.'
+                        : raw,
+              )
+            : raw
+        throw new CrudHttpError(400, { error: translated })
       }
       if (body.field === 'documentNumber') {
         const commandBus = context.container.resolve('commandBus') as CommandBus

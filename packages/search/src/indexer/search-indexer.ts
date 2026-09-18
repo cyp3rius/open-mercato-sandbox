@@ -156,6 +156,22 @@ export class SearchIndexer {
   }
 
   /**
+   * Prefer organization id from the record document when the caller did not scope the reindex.
+   * Token search filters by organization_id; indexing with null org breaks org-scoped list search.
+   */
+  private resolveRecordOrganizationId(
+    record: Record<string, unknown>,
+    fallback: string | null | undefined,
+  ): string | null {
+    const fromRecord =
+      (typeof record.organizationId === 'string' && record.organizationId.trim()) ||
+      (typeof record.organization_id === 'string' && record.organization_id.trim()) ||
+      ''
+    if (fromRecord) return fromRecord
+    return fallback ?? null
+  }
+
+  /**
    * Get the entity config for a given entity ID.
    */
   getEntityConfig(entityId: EntityId): SearchEntityConfig | undefined {
@@ -201,11 +217,14 @@ export class SearchIndexer {
     let links: SearchResultLink[] | undefined
     let checksumSource: unknown | undefined
 
+    let sourceFields: Record<string, unknown> | undefined
+
     if (config.buildSource) {
       try {
         const source = await config.buildSource(buildContext)
         if (source) {
           text = source.text
+          if (source.fields) sourceFields = source.fields
           if (source.presenter) presenter = source.presenter
           if (source.links) links = source.links
           if (source.checksumSource !== undefined) checksumSource = source.checksumSource
@@ -261,13 +280,17 @@ export class SearchIndexer {
       }
     }
 
+    // Merge buildSource.fields so token strategies see flattened/enriched values
+    // (e.g. trip addresses nested under metadata) without dropping base record keys.
+    const fields = sourceFields ? { ...params.record, ...sourceFields } : params.record
+
     // Build IndexableRecord
     const indexableRecord: IndexableRecord = {
       entityId: params.entityId,
       recordId: params.recordId,
       tenantId: params.tenantId,
       organizationId: params.organizationId,
-      fields: params.record,
+      fields,
       presenter,
       url,
       links,
@@ -325,7 +348,7 @@ export class SearchIndexer {
         entityId: params.entityId,
         recordId: params.recordId,
         tenantId: params.tenantId,
-        organizationId: params.organizationId,
+        organizationId: this.resolveRecordOrganizationId(record, params.organizationId),
         record,
         customFields,
       })
@@ -1083,12 +1106,14 @@ export class SearchIndexer {
       let url: string | undefined
       let links: SearchResultLink[] | undefined
       let checksumSource: unknown | undefined
+      let sourceFields: Record<string, unknown> | undefined
 
       if (config.buildSource) {
         try {
           const source = await config.buildSource(buildContext)
           if (source) {
             text = source.text
+            if (source.fields) sourceFields = source.fields
             if (source.presenter) presenter = source.presenter
             if (source.links) links = source.links
             if (source.checksumSource !== undefined) checksumSource = source.checksumSource
@@ -1136,8 +1161,8 @@ export class SearchIndexer {
         entityId,
         recordId,
         tenantId,
-        organizationId,
-        fields: item,
+        organizationId: this.resolveRecordOrganizationId(item, organizationId),
+        fields: sourceFields ? { ...item, ...sourceFields } : item,
         presenter,
         url,
         links,

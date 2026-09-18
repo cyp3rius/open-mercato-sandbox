@@ -101,7 +101,17 @@ function parseSubject(subject: MfSubject | null | undefined): MfRegistryCompanyD
 }
 
 function registryDateParam(): string {
-  return new Date().toISOString().slice(0, 10)
+  // MF whitelist is day-scoped in Europe/Warsaw; UTC midnight can be the wrong calendar day.
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Warsaw',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date())
+  } catch {
+    return new Date().toISOString().slice(0, 10)
+  }
 }
 
 /**
@@ -125,7 +135,10 @@ export async function fetchCompanyFromMfVatRegistry(params: {
     headers: { accept: 'application/json' },
   })
 
-  if (!response.ok) return null
+  if (response.status === 404) return null
+  if (!response.ok) {
+    throw new Error(`MF VAT registry request failed with status ${response.status}`)
+  }
 
   const json = (await response.json()) as { result?: { subject?: MfSubject } }
   const subject = json?.result?.subject

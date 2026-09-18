@@ -16,6 +16,7 @@ import { isKnownFleetIssuerNip } from '@/modules/taxi_fleet/lib/receiptOcrSaniti
 export type EnsureCompanyResult = {
   companyEntityId: string | null
   reusedExisting: boolean
+  createdFromStub?: boolean
   warningCode?: 'nip_invalid' | 'nip_not_found' | 'nip_lookup_failed'
   mf?: MfRegistryCompanyData | null
 }
@@ -118,12 +119,23 @@ export async function createCompanyFromMfRegistry(
   return entity.id
 }
 
+function stubMfDataForNip(nip: string): MfRegistryCompanyData {
+  return {
+    displayName: `NIP ${nip}`,
+    legalName: `NIP ${nip}`,
+    nip,
+    regon: null,
+  }
+}
+
 export async function ensureCrmCompanyFromBuyerNipEm(
   em: EntityManager,
   params: {
     tenantId: string
     organizationId: string
     buyerNip: string
+    /** When true (operator Nadpisz→Klient), create CRM company from NIP even if MF has no subject. */
+    createStubIfNotInRegistry?: boolean
   },
 ): Promise<EnsureCompanyResult> {
   const normalizedNip = normalizeNipDigits(params.buyerNip)
@@ -144,7 +156,14 @@ export async function ensureCrmCompanyFromBuyerNipEm(
   } catch {
     return { companyEntityId: null, reusedExisting: false, warningCode: 'nip_lookup_failed' }
   }
-  if (!mf) return { companyEntityId: null, reusedExisting: false, warningCode: 'nip_not_found' }
+  let createdFromStub = false
+  if (!mf) {
+    if (!params.createStubIfNotInRegistry) {
+      return { companyEntityId: null, reusedExisting: false, warningCode: 'nip_not_found' }
+    }
+    mf = stubMfDataForNip(normalizedNip)
+    createdFromStub = true
+  }
 
   const racedId = await findCompanyEntityIdByNip(em, {
     tenantId: params.tenantId,
@@ -159,7 +178,7 @@ export async function ensureCrmCompanyFromBuyerNipEm(
     nip: normalizedNip,
     mf,
   })
-  return { companyEntityId, reusedExisting: false, mf }
+  return { companyEntityId, reusedExisting: false, createdFromStub, mf }
 }
 
 export async function ensureCrmCompanyFromBuyerNip(params: {
@@ -169,6 +188,7 @@ export async function ensureCrmCompanyFromBuyerNip(params: {
   tenantId: string
   organizationId: string
   buyerNip: string
+  createStubIfNotInRegistry?: boolean
 }): Promise<EnsureCompanyResult> {
   const normalizedNip = normalizeNipDigits(params.buyerNip)
   if (!normalizedNip || !isValidNip(normalizedNip)) {
@@ -188,7 +208,14 @@ export async function ensureCrmCompanyFromBuyerNip(params: {
   } catch {
     return { companyEntityId: null, reusedExisting: false, warningCode: 'nip_lookup_failed' }
   }
-  if (!mf) return { companyEntityId: null, reusedExisting: false, warningCode: 'nip_not_found' }
+  let createdFromStub = false
+  if (!mf) {
+    if (!params.createStubIfNotInRegistry) {
+      return { companyEntityId: null, reusedExisting: false, warningCode: 'nip_not_found' }
+    }
+    mf = stubMfDataForNip(normalizedNip)
+    createdFromStub = true
+  }
 
   const racedId = await findCompanyEntityIdByNip(params.em, {
     tenantId: params.tenantId,
@@ -218,7 +245,7 @@ export async function ensureCrmCompanyFromBuyerNip(params: {
       result && typeof result === 'object' && 'entityId' in result
         ? String((result as { entityId: string }).entityId)
         : null
-    if (entityId) return { companyEntityId: entityId, reusedExisting: false, mf }
+    if (entityId) return { companyEntityId: entityId, reusedExisting: false, createdFromStub, mf }
   } catch {
     // Fall back to EM create if command path fails (e.g. feature ACL in worker-less context)
   }
@@ -236,7 +263,7 @@ export async function ensureCrmCompanyFromBuyerNip(params: {
     nip: normalizedNip,
     mf,
   })
-  return { companyEntityId, reusedExisting: false, mf }
+  return { companyEntityId, reusedExisting: false, createdFromStub, mf }
 }
 
 function stripBuyerNipInvalidWarning(

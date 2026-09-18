@@ -114,12 +114,22 @@ Vendor JSON items are normalized by `lib/platformSync/adapters/mapVendorTrip.ts`
 - Indexed entity: `taxi_fleet:taxi_fleet_trip` via `search.ts` (fulltext + vector + tokens)
 - Searchable text: `metadata.tripRequest` from/to/stops + CRM customer `display_name` / person name / phone / NIP + optional ordering person (name/phone) + contact/company fallbacks
 - Customer filter (`customerEntityId`) matches `customerPersonId` **or** `customerCompanyId` **or** `orderingPersonId`
-- List applies SearchService hits as `id $in`, then AND with FilterBar filters; SQL fallback when SearchService is unavailable
+- List applies SearchService hits as `id $in`, then AND with FilterBar filters; SQL fallback when SearchService is unavailable **or returns no hits** (needed when only `tokens` is available and the index is empty/partial)
 - Indexing on create/update/delete via `emitTripIndexerSideEffects` in trip / platform / inject commands
-- After deploy or bulk import, reindex existing trips:
+- After deploy or bulk import, reindex existing trips for **token** search (local default — no OpenAI/Meilisearch):
 
 ```bash
-yarn mercato search reindex --tenant <tenantId> --entity taxi_fleet:taxi_fleet_trip --purgeFirst
+# After editing @open-mercato/search, rebuild so CLI picks up dist:
+yarn workspace @open-mercato/search build
+
+yarn mercato search reindex --tenant <tenantId> --entity taxi_fleet:taxi_fleet_trip --purgeFirst --strategy tokens
+```
+
+- `yarn mercato search reindex` **without** `--strategy tokens` only rebuilds **vector** embeddings (needs `OPENAI_API_KEY`). That does **not** populate `backend/query-indexes` the way you might expect for trip list search.
+- `backend/query-indexes` is **query_index** coverage (`entity_index_coverage`), not SearchService. Refresh with:
+
+```bash
+yarn mercato query_index reindex --tenant <tenantId> --entity taxi_fleet:taxi_fleet_trip
 ```
 
 ## Ordering party (Zamawiający)
@@ -137,6 +147,7 @@ yarn mercato search reindex --tenant <tenantId> --entity taxi_fleet:taxi_fleet_t
 - Link on create/update: `linkReceiptExtractionToFinancialEntry` (also in `financial_entries` commands)
 - Trip OCR panel: `GET|POST /api/taxi_fleet/trips/[id]/receipt-extraction`
 - Expense OCR panel: `GET|POST /api/taxi_fleet/financial-entries/[id]/receipt-extraction`
+- CRM action **Ignoruj błędy** (`action: ignore_errors`): clears warnings/`errorMessage`, sets status to `applied` (or `extracted` without document number) so the receipt is accepted without overwriting form fields
 - Company from NIP: **buyer** when extraction has `tripId`; **seller (issuer) only** for expense uploads (never buyer/fleet NIP; WZ/Polcard not flagged as non-receipt)
 - Expense OCR may set `resourceId` from registration plate; CRM dialog shows company name + vehicle picker
 - VAT%: OCR rate or derived from `vatAmount` + gross (snapped to 8/23)

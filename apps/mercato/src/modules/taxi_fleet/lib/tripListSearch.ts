@@ -265,7 +265,9 @@ async function searchViaSqlFallback(
 
 /**
  * Resolve trip IDs matching a free-text search (addresses + customer / ordering party).
- * Prefers SearchService (fulltext/vector/tokens); falls back to SQL when unavailable.
+ * Prefers SearchService (fulltext/vector/tokens); falls back to SQL when the service is
+ * unavailable or the token/vector index has no hits (common when only tokens are enabled
+ * and trips have not been reindexed via SearchIndexer).
  */
 export async function resolveTripListSearchIds(
   params: ResolveTripListSearchIdsParams,
@@ -274,7 +276,7 @@ export async function resolveTripListSearchIds(
   if (!term) return []
 
   const viaSearch = await searchViaSearchService(params, term)
-  if (viaSearch !== null) return viaSearch
+  if (viaSearch !== null && viaSearch.length > 0) return viaSearch
 
   return searchViaSqlFallback(params, term)
 }
