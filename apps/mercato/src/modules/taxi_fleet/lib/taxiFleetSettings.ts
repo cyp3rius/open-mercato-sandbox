@@ -159,7 +159,7 @@ export const taxiFleetSettingsSchema = z.object({
   hoursBeforeShift: z.coerce.number().int().min(0).max(48).default(3),
   hoursAfterShift: z.coerce.number().int().min(0).max(48).default(3),
   customerEmailFrom: z.string().max(500).optional().default(''),
-  /** Public fleet contact — CC + reply-to on customer trip emails. */
+  /** Public fleet contact — reply-to on customer trip emails (no CC; Resend bills per recipient). */
   publicContactEmail: z.string().max(500).optional().default(''),
   tripStatuses: tripStatusDictionarySchema.default(defaultTripStatusDictionary()),
   pricing: taxiFleetPricingSettingsSchema.default(defaultFleetPricingConfig() as never),

@@ -45,6 +45,7 @@ import { TripQuoteAmountField, TripQuoteSync } from './route/TripQuoteSync'
 import { TripFinalPriceInput, TripPricingSidebar } from './TripPricingSidebar'
 import { TripStatusField } from './TripStatusField'
 import { readQuoteSnapshotFromMetadata } from '../lib/pricing/tripFormQuote'
+import { readTripDiscountSnapshot } from '../lib/tripDiscount'
 import { buildTripRequestFormFields, pickTripRequestDetails } from './tripRequestFormFields'
 import { isTripDetailFieldEditable } from '../lib/tripDetailWorkflow'
 import { TAXI_FLEET_TRIP_PLATFORMS } from '../lib/tripPlatforms'
@@ -67,6 +68,8 @@ export type TripFormValues = {
   toLat: string
   routeWaypointMeta: string
   quoteSnapshotJson: string
+  /** JSON of metadata.discount from inject (locks auto-quote when set). */
+  discountJson: string
   routeDurationSeconds: string
   routeSyncedFingerprint: string
   /** '1' when the user edited end time — blocks create-form auto end updates. */
@@ -146,6 +149,7 @@ export function defaultTripFormValues(reference = new Date()): TripFormValues {
     toLat: '',
     routeWaypointMeta: '',
     quoteSnapshotJson: '',
+    discountJson: '',
     routeDurationSeconds: '',
     routeSyncedFingerprint: buildTripRouteFingerprint(request),
     endedAtManual: '0',
@@ -254,6 +258,7 @@ export function tripFormSchema(t: TranslateFn, options?: TripFormValidationOptio
       toLat: z.string().optional(),
       routeWaypointMeta: z.string().optional(),
       quoteSnapshotJson: z.string().optional(),
+      discountJson: z.string().optional(),
       routeDurationSeconds: z.string().optional(),
       routeSyncedFingerprint: z.string().optional(),
       endedAtManual: z.string().optional(),
@@ -412,6 +417,7 @@ const INTERNAL_TRIP_FORM_FIELD_IDS = [
   'toLat',
   'routeWaypointMeta',
   'quoteSnapshotJson',
+  'discountJson',
   'routeDurationSeconds',
   'routeSyncedFingerprint',
   'endedAtManual',
@@ -950,6 +956,10 @@ export function mapTripRowToFormValues(row: {
     toLat: '',
     routeWaypointMeta: '',
     quoteSnapshotJson: quoteSnapshot ? JSON.stringify(quoteSnapshot) : '',
+    discountJson: (() => {
+      const discount = readTripDiscountSnapshot(row.metadata ?? null)
+      return discount ? JSON.stringify(discount) : ''
+    })(),
     routeDurationSeconds: '',
     routeSyncedFingerprint: '',
     endedAtManual: '1',
@@ -980,6 +990,17 @@ function buildTripPayloadExtras(values: TripFormValues) {
       }
     } catch {
       // ignore invalid quote snapshot payload
+    }
+  }
+  const discountRaw = values.discountJson.trim()
+  if (discountRaw.length) {
+    try {
+      metadata = {
+        ...metadata,
+        discount: JSON.parse(discountRaw) as Record<string, unknown>,
+      }
+    } catch {
+      // ignore invalid discount payload
     }
   }
   if (values.routeSyncedFingerprint.trim() && distanceKm != null && distanceKm > 0) {

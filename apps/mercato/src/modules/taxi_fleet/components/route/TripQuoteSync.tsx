@@ -6,6 +6,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { MoneyInputField } from '@open-mercato/ui/backend/inputs/MoneyInputField'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { buildQuoteInputFromTripForm } from '../../lib/pricing/tripFormQuote'
+import { tripHasAppliedDiscount } from '../../lib/tripDiscount'
 import type { TripFormValues } from '../tripFormConfig'
 
 const QUOTE_DEBOUNCE_MS = 500
@@ -60,6 +61,8 @@ export function TripQuoteSync({ values, setFormValue, disabled = false }: TripQu
 
   React.useEffect(() => {
     if (!setFormValue || disabled) return
+    // Discount code locked the inject total — do not overwrite final price or snapshot.
+    if (tripHasAppliedDiscount(values as TripFormValues)) return
 
     clearTimeout(debounceRef.current)
     abortRef.current?.abort()
@@ -140,7 +143,7 @@ export function TripQuoteSync({ values, setFormValue, disabled = false }: TripQu
       clearTimeout(debounceRef.current)
       abortRef.current?.abort()
     }
-  }, [disabled, fingerprint, setFormValue])
+  }, [disabled, fingerprint, setFormValue, values.discountJson])
 
   return null
 }
@@ -152,7 +155,13 @@ export async function recalculateTripFinalPrice(params: {
   values: TripFormValues
   setFormValue: (id: string, value: unknown) => void
   signal?: AbortSignal
-}): Promise<{ ok: true; totalPrice: number } | { ok: false; reason: 'incomplete' | 'failed' }> {
+}): Promise<
+  | { ok: true; totalPrice: number }
+  | { ok: false; reason: 'incomplete' | 'failed' | 'discount_locked' }
+> {
+  if (tripHasAppliedDiscount(params.values)) {
+    return { ok: false, reason: 'discount_locked' }
+  }
   const quoteInput = buildQuoteInputFromTripForm(params.values)
   if (!quoteInput) return { ok: false, reason: 'incomplete' }
 

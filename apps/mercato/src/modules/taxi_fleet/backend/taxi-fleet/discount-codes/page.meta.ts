@@ -11,7 +11,7 @@ export const metadata = {
   pageGroupKey: 'backend.nav.section.fleet',
   pageGroup: 'Fleet',
   navFlat: true,
-  pageOrder: 4605,
+  pageOrder: 4609,
   icon,
   breadcrumb: [
     { label: 'Dashboard', labelKey: 'taxi_fleet.hub.dashboardTitle', href: '/backend/taxi-fleet' },

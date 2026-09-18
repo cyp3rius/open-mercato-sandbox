@@ -699,7 +699,7 @@ export function TaxiFleetModuleSettings() {
           <p className="text-xs text-muted-foreground">
             {t(
               'taxi_fleet.config.emails.publicContactHelp',
-              'CC and reply-to on customer trip emails (e.g. office@…).',
+              'Reply-to on customer trip emails (e.g. office@…). Not CC — avoids extra Resend quota.',
             )}
           </p>
         </div>

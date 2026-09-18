@@ -230,7 +230,7 @@ Preferencje użytkownika: `/backend/profile/notifications` (`NotificationPrefere
 - **PayPal runtime:** approve (`new` → `approved`) creates PayPal order + Strapi-style HTML payment-link email for `electronic`; cash/card stays `approved` with offline confirmation email. Public `GET /api/taxi_fleet/trips/payment/confirm/[hash]` captures → `paid`.
 - **Statuses:** never skip to `paid` on approve; operator then Mark paid (cash/card) or PayPal confirm; then Schedule (`scheduled`).
 - **Google Calendar:** upsert only when status is `scheduled`; delete otherwise.
-- **Discount codes:** entity + Fleet menu CRUD + `GET /api/taxi_fleet/discount-codes/validate` (feature `trips.inject`).
+- **Discount codes:** entity + Daily work → Fleet CRUD (before communications, `pageOrder: 4609`) + `GET /api/taxi_fleet/discount-codes/validate` (feature `trips.inject`).
 - **Quote:** calculator uses `POST /api/taxi_fleet/pricing/quote` (CRM is source of truth).
 
 | GET/PUT | `/api/taxi_fleet/settings` | Ustawienia organizacji (flota, integracje, szablony maili) |

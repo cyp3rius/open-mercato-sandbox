@@ -47,6 +47,7 @@ export function tripFormValuesFromDuplicateSource(
     revenueAmount: '',
     basePrice: '',
     quoteSnapshotJson: '',
+    discountJson: '',
     receiptDocumentNumber: '',
     receiptAttachmentId: '',
     routeDurationSeconds: source.routeDurationSeconds || '',

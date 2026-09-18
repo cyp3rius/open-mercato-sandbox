@@ -46,7 +46,7 @@ Deep links: trips `/driver/trips/{id}`, assignments `/driver/assignments`, weekl
 - Limits: title ≤80, body ≤180; kinds `info|service|direct` (urgency normal/high/high)
 - Status: `draft|scheduled|sending|sent|cancelled`
 - ACL: `taxi_fleet.manage_driver_communications`
-- Nav: `/backend/taxi-fleet/communications` — `pageGroupKey: backend.nav.section.fleet`, `navFlat: true`, `pageOrder: 4610`; also in Daily work → Fleet (last item) via `MERCATO_SIDEBAR_DEDUPE_HREFS` / `fleetChildren`. Hub shows last 5 sent.
+- Nav: `/backend/taxi-fleet/communications` — `pageGroupKey: backend.nav.section.fleet`, `navFlat: true`, `pageOrder: 4610`; also in Daily work → Fleet (after discount codes) via `MERCATO_SIDEBAR_DEDUPE_HREFS` / `fleetChildren`. Hub shows last 5 sent.
 - APIs: CRUD, send, schedule, cancel, recipient retry, driver `POST .../communications/ack`
 - Cron `* * * * *` → queue `taxi-fleet-driver-communications`
 

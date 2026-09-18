@@ -34,8 +34,8 @@ function resolveFromAddress(settings: TaxiFleetSettings): string {
   return resolved
 }
 
-/** Public fleet contact for CC + reply-to; skip when empty or same as recipient. */
-function resolvePublicContactCc(
+/** Public fleet contact for reply-to only (no CC — Resend bills per recipient). */
+function resolvePublicContactReplyTo(
   settings: TaxiFleetSettings,
   recipient: string,
 ): string | undefined {
@@ -50,7 +50,6 @@ async function sendHtmlEmail(params: {
   subject: string
   html: string
   from: string
-  cc?: string
   replyTo?: string
   kind: 'payment_link' | 'paid'
   tripId: string
@@ -83,7 +82,6 @@ async function sendHtmlEmail(params: {
     tripId: params.tripId,
     to: params.to,
     from: params.from,
-    cc: params.cc ?? null,
     replyTo: params.replyTo ?? null,
     subject: params.subject,
     htmlBytes: Buffer.byteLength(params.html, 'utf8'),
@@ -95,7 +93,6 @@ async function sendHtmlEmail(params: {
     subject: params.subject,
     from: params.from,
     html: params.html,
-    ...(params.cc ? { cc: params.cc } : {}),
     ...(params.replyTo ? { reply_to: params.replyTo } : {}),
   })
   const err = (result as { error?: unknown }).error
@@ -146,7 +143,7 @@ export async function sendPaymentLinkCustomerEmail(params: {
     currency,
     paymentLink: params.paymentLink,
   })
-  const publicContact = resolvePublicContactCc(settings, to)
+  const publicContact = resolvePublicContactReplyTo(settings, to)
   taxiFleetDebugLog('customer_email', 'payment_link prepared', {
     tripId: params.trip.id,
     paymentLink: params.paymentLink,
@@ -157,7 +154,6 @@ export async function sendPaymentLinkCustomerEmail(params: {
     subject: message.subject,
     html: message.html,
     from: resolveFromAddress(settings),
-    cc: publicContact,
     replyTo: publicContact,
     kind: 'payment_link',
     tripId: params.trip.id,
@@ -188,7 +184,7 @@ export async function sendPaidCustomerEmail(params: {
     driverPayment: params.driverPayment,
     confirmationUrl: params.confirmationUrl,
   })
-  const publicContact = resolvePublicContactCc(settings, to)
+  const publicContact = resolvePublicContactReplyTo(settings, to)
   taxiFleetDebugLog('customer_email', 'paid confirmation prepared', {
     tripId: params.trip.id,
     driverPayment: params.driverPayment,
@@ -200,7 +196,6 @@ export async function sendPaidCustomerEmail(params: {
     subject: message.subject,
     html: message.html,
     from: resolveFromAddress(settings),
-    cc: publicContact,
     replyTo: publicContact,
     kind: 'paid',
     tripId: params.trip.id,

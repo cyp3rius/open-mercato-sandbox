@@ -20,6 +20,8 @@ type TripCustomerEmailHtmlInput = {
   sections: TripEmailDetailSection[]
   cta?: EmailCta
   footerNote?: string
+  /** Absolute HTTPS URL to brand mark PNG. When omitted, resolved from APP_URL. */
+  logoUrl?: string | null
 }
 
 const BRAND_GOLD = '#C9A227'
@@ -27,6 +29,19 @@ const BRAND_DARK = '#1C1917'
 const TEXT_MUTED = '#57534E'
 const BORDER = '#E7E5E4'
 const BG = '#F5F5F4'
+const BRAND_LOGO_PATH = '/driver/logo-rs-moto-taxi.png'
+
+export function resolveCustomerEmailLogoUrl(explicit?: string | null): string | null {
+  if (explicit === null) return null
+  const trimmed = explicit?.trim()
+  if (trimmed) return trimmed
+  const base =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.APP_URL?.trim() ||
+    ''
+  if (!base) return null
+  return `${base.replace(/\/$/, '')}${BRAND_LOGO_PATH}`
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -80,13 +95,31 @@ function renderCta(cta: EmailCta): string {
 </p>`
 }
 
+function renderBrandHeader(logoUrl: string | null, heading: string): string {
+  const logo = logoUrl
+    ? `<img src="${escapeHtml(logoUrl)}" alt="RS Moto Taxi" width="120" height="159" style="display:block;margin:0 auto 16px;width:120px;max-width:40%;height:auto;border:0;" />`
+    : `<p style="margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${BRAND_GOLD};">RS Moto Taxi</p>`
+
+  return `<tr>
+  <td align="center" style="padding:28px 28px 12px;background:#FFFFFF;border-bottom:3px solid ${BRAND_GOLD};">
+    ${logo}
+  </td>
+</tr>
+<tr>
+  <td align="center" style="padding:22px 28px 20px;background:${BRAND_DARK};">
+    <h1 style="margin:0;font-size:24px;line-height:1.3;font-weight:600;color:#FFFFFF;text-align:center;">${escapeHtml(heading)}</h1>
+  </td>
+</tr>`
+}
+
 export function buildTripCustomerEmailHtml(input: TripCustomerEmailHtmlInput): string {
-  const { locale, preheader, heading, intro, sections, cta, footerNote } = input
+  const { locale, preheader, heading, intro, sections, cta, footerNote, logoUrl } = input
   const footer =
     footerNote ??
     (locale === 'en'
       ? 'This is an automated message from RS Moto Taxi.'
       : 'To wiadomość automatyczna od RS Moto Taxi.')
+  const resolvedLogoUrl = resolveCustomerEmailLogoUrl(logoUrl)
 
   return `<!DOCTYPE html>
 <html lang="${locale}">
@@ -103,12 +136,7 @@ export function buildTripCustomerEmailHtml(input: TripCustomerEmailHtmlInput): s
     <tr>
       <td align="center">
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#FFFFFF;border:1px solid ${BORDER};border-radius:16px;overflow:hidden;">
-          <tr>
-            <td align="center" style="padding:28px 28px 20px;background:${BRAND_DARK};">
-              <p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${BRAND_GOLD};">RS Moto Taxi</p>
-              <h1 style="margin:0;font-size:24px;line-height:1.3;font-weight:600;color:#FFFFFF;text-align:center;">${escapeHtml(heading)}</h1>
-            </td>
-          </tr>
+          ${renderBrandHeader(resolvedLogoUrl, heading)}
           <tr>
             <td style="padding:28px;">
               ${renderParagraphs(intro)}

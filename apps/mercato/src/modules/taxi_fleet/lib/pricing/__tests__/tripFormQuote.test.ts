@@ -36,6 +36,7 @@ function formValues(overrides: Partial<TripFormValues> = {}): TripFormValues {
     toLat: '',
     routeWaypointMeta: '',
     quoteSnapshotJson: '',
+    discountJson: '',
     routeDurationSeconds: '',
     routeSyncedFingerprint: '',
     endedAtManual: '0',

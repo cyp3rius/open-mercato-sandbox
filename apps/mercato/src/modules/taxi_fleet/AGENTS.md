@@ -167,5 +167,6 @@ yarn mercato query_index reindex --tenant <tenantId> --entity taxi_fleet:taxi_fl
 - Assign push: `subscribers/trip-assigned-notification.ts` after in-app notify
 - T−1h reminders: cron `*/5` → queue `taxi-fleet-driver-push-reminders` → stamps `trips.driver_reminder_push_sent_at`
 - UX: `useDriverPush` + banner/badge in `DriverShell`
+- CRM discount codes: `/backend/taxi-fleet/discount-codes` in Daily work → Fleet (before communications); list/create/detail CRUD.
 - CRM communications: `/backend/taxi-fleet/communications` in Daily work → Fleet (last); hub widget shows last 5 sent; list filters status/kind/dates + server search. Spec: `.ai/specs/2026-09-15-taxi-fleet-driver-push-communications.md`
 

@@ -9,6 +9,7 @@ import { MoneyInputField } from '@open-mercato/ui/backend/inputs/MoneyInputField
 import { IconButton } from '@open-mercato/ui/primitives/icon-button'
 import { recalculateTripFinalPrice } from './route/TripQuoteSync'
 import { TripQuoteWarningList } from './TripQuoteWarningList'
+import { parseTripDiscountJson, tripHasAppliedDiscount } from '../lib/tripDiscount'
 import type { TripFormValues } from './tripFormConfig'
 
 type QuoteSnapshot = {
@@ -52,9 +53,10 @@ export function TripFinalPriceInput({
   const snapshot = readQuoteSnapshot(values)
   const currency = snapshot?.currency ?? 'PLN'
   const finalRaw = typeof values.revenueAmount === 'string' ? values.revenueAmount : ''
+  const discountLocked = tripHasAppliedDiscount(values)
 
   async function handleRecalculate() {
-    if (!setFormValue || disabled || readOnly || busy) return
+    if (!setFormValue || disabled || readOnly || busy || discountLocked) return
     setBusy(true)
     try {
       const result = await recalculateTripFinalPrice({
@@ -63,12 +65,17 @@ export function TripFinalPriceInput({
       })
       if (!result.ok) {
         flash(
-          result.reason === 'incomplete'
+          result.reason === 'discount_locked'
             ? t(
-                'taxi_fleet.trips.form.quote.pending',
-                'Fill route, schedule, and passengers to calculate the price automatically.',
+                'taxi_fleet.trips.form.quote.discountLocked',
+                'Final price is locked because a discount code was applied.',
               )
-            : t('taxi_fleet.trips.form.quote.recalculateFailed', 'Could not recalculate the price.'),
+            : result.reason === 'incomplete'
+              ? t(
+                  'taxi_fleet.trips.form.quote.pending',
+                  'Fill route, schedule, and passengers to calculate the price automatically.',
+                )
+              : t('taxi_fleet.trips.form.quote.recalculateFailed', 'Could not recalculate the price.'),
           'error',
         )
         return
@@ -89,7 +96,7 @@ export function TripFinalPriceInput({
         readOnly={readOnly}
         currency={currency}
       />
-      {!readOnly ? (
+      {!readOnly && !discountLocked ? (
         <IconButton
           type="button"
           variant="outline"
@@ -143,6 +150,14 @@ export function TripPricingSidebar({
 
   const distanceKm = typeof values.distanceKm === 'string' ? values.distanceKm.trim() : ''
   const durationText = typeof values.durationText === 'string' ? values.durationText.trim() : ''
+  const discount = parseTripDiscountJson(
+    typeof values.discountJson === 'string' ? values.discountJson : '',
+  )
+  const displayCalculated =
+    discount && typeof discount.totalBefore === 'number' && Number.isFinite(discount.totalBefore)
+      ? discount.totalBefore
+      : calculatedTotal
+  const hasCalculatedDisplay = Number.isFinite(displayCalculated) && displayCalculated > 0
 
   return (
     <div className="space-y-4">
@@ -158,7 +173,7 @@ export function TripPricingSidebar({
         />
       </div>
 
-      {!hasCalculated ? (
+      {!hasCalculatedDisplay && !discount ? (
         <p className="text-sm text-muted-foreground">
           {t(
             'taxi_fleet.trips.form.quote.pending',
@@ -167,10 +182,41 @@ export function TripPricingSidebar({
         </p>
       ) : (
         <div className="space-y-3 text-sm">
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="font-medium">{t('taxi_fleet.trips.form.quote.calculated', 'Calculated total')}</span>
-            <span className="text-base font-semibold tabular-nums">{formatMoney(calculatedTotal, currency)}</span>
-          </div>
+          {hasCalculatedDisplay ? (
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="font-medium">
+                {discount
+                  ? t('taxi_fleet.trips.form.quote.beforeDiscount', 'Total before discount')
+                  : t('taxi_fleet.trips.form.quote.calculated', 'Calculated total')}
+              </span>
+              <span className="text-base font-semibold tabular-nums">
+                {formatMoney(displayCalculated, currency)}
+              </span>
+            </div>
+          ) : null}
+
+          {discount ? (
+            <dl className="space-y-2 border-t pt-3 text-muted-foreground">
+              <div className="flex items-baseline justify-between gap-3">
+                <dt>{t('taxi_fleet.trips.form.quote.discountCode', 'Discount code')}</dt>
+                <dd className="font-mono font-medium text-foreground">{discount.code}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt>{t('taxi_fleet.trips.form.quote.discountAmount', 'Discount')}</dt>
+                <dd className="tabular-nums font-medium text-emerald-700 dark:text-emerald-400">
+                  −{formatMoney(discount.discountAmount, currency)}
+                </dd>
+              </div>
+              {typeof discount.totalAfter === 'number' && Number.isFinite(discount.totalAfter) ? (
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt>{t('taxi_fleet.trips.form.quote.afterDiscount', 'Total after discount')}</dt>
+                  <dd className="tabular-nums font-semibold text-foreground">
+                    {formatMoney(discount.totalAfter, currency)}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          ) : null}
 
           <dl className="space-y-2 border-t pt-3 text-muted-foreground">
             {vehicleCategory ? (
@@ -223,7 +269,16 @@ export function TripPricingSidebar({
             <TripQuoteWarningList warnings={snapshot.warnings} />
           ) : null}
 
-          {Number.isFinite(finalAmount) && hasCalculated && Math.abs(finalAmount - calculatedTotal) > 0.009 ? (
+          {discount ? (
+            <p className="border-t pt-3 text-xs text-muted-foreground">
+              {t(
+                'taxi_fleet.trips.form.quote.discountLockedHint',
+                'A discount code was applied at booking. Automatic recalculation is disabled.',
+              )}
+            </p>
+          ) : Number.isFinite(finalAmount) &&
+            hasCalculated &&
+            Math.abs(finalAmount - calculatedTotal) > 0.009 ? (
             <p className="border-t pt-3 text-xs text-muted-foreground">
               {t(
                 'taxi_fleet.trips.form.quote.finalDiffers',
